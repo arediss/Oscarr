@@ -38,7 +38,8 @@ export async function adminRoutes(app: FastifyInstance) {
     await requireAdmin(request, reply);
     const body = request.body as {
       defaultQualityProfile?: number;
-      defaultRootFolder?: string;
+      defaultMovieFolder?: string;
+      defaultTvFolder?: string;
       subscriptionPrice?: number;
       subscriptionDuration?: number;
       plexMachineId?: string;
@@ -48,7 +49,8 @@ export async function adminRoutes(app: FastifyInstance) {
       where: { id: 1 },
       update: {
         defaultQualityProfile: body.defaultQualityProfile ?? undefined,
-        defaultRootFolder: body.defaultRootFolder ?? undefined,
+        defaultMovieFolder: body.defaultMovieFolder ?? undefined,
+        defaultTvFolder: body.defaultTvFolder ?? undefined,
         subscriptionPrice: body.subscriptionPrice ?? undefined,
         subscriptionDuration: body.subscriptionDuration ?? undefined,
         plexMachineId: body.plexMachineId ?? undefined,
@@ -56,7 +58,8 @@ export async function adminRoutes(app: FastifyInstance) {
       create: {
         id: 1,
         defaultQualityProfile: body.defaultQualityProfile,
-        defaultRootFolder: body.defaultRootFolder,
+        defaultMovieFolder: body.defaultMovieFolder,
+        defaultTvFolder: body.defaultTvFolder,
         subscriptionPrice: body.subscriptionPrice ?? 0,
         subscriptionDuration: body.subscriptionDuration ?? 30,
         plexMachineId: body.plexMachineId,
@@ -107,6 +110,38 @@ export async function adminRoutes(app: FastifyInstance) {
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
     }
+  });
+
+  // === GENRE-FOLDER MAPPINGS ===
+
+  app.get('/genre-mappings', async (request, reply) => {
+    await requireAdmin(request, reply);
+    return prisma.genreFolderMapping.findMany({ orderBy: [{ mediaType: 'asc' }, { genreName: 'asc' }] });
+  });
+
+  app.post('/genre-mappings', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { genreId, genreName, mediaType, folderPath } = request.body as {
+      genreId: number; genreName: string; mediaType: string; folderPath: string;
+    };
+    if (!genreId || !genreName || !mediaType || !folderPath) {
+      return reply.status(400).send({ error: 'Tous les champs sont requis' });
+    }
+    const mapping = await prisma.genreFolderMapping.upsert({
+      where: { genreId_mediaType: { genreId, mediaType } },
+      update: { folderPath, genreName },
+      create: { genreId, genreName, mediaType, folderPath },
+    });
+    return reply.status(201).send(mapping);
+  });
+
+  app.delete('/genre-mappings/:id', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { id } = request.params as { id: string };
+    const mappingId = parseId(id);
+    if (!mappingId) return reply.status(400).send({ error: 'ID invalide' });
+    await prisma.genreFolderMapping.delete({ where: { id: mappingId } });
+    return reply.send({ ok: true });
   });
 
   // === USER MANAGEMENT ===

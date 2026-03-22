@@ -17,8 +17,7 @@ import api from '@/lib/api';
 import { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import MediaRow from '@/components/MediaRow';
-import { FolderOpen } from 'lucide-react';
-import type { TmdbMedia, Media, RootFolder } from '@/types';
+import type { TmdbMedia, Media } from '@/types';
 
 interface Props {
   type: 'movie' | 'tv';
@@ -33,8 +32,6 @@ export default function MediaDetailPage({ type }: Props) {
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
-  const [rootFolders, setRootFolders] = useState<RootFolder[]>([]);
-  const [selectedRootFolder, setSelectedRootFolder] = useState('');
   const [scrollOpacity, setScrollOpacity] = useState(0);
 
   const handleScroll = useCallback(() => {
@@ -55,13 +52,6 @@ export default function MediaDetailPage({ type }: Props) {
     setMedia(null);
     setDbMedia(null);
     setSelectedSeasons([]);
-    setSelectedRootFolder('');
-
-    // Fetch root folders for admins
-    if (user?.role === 'admin') {
-      const endpoint = type === 'movie' ? '/admin/radarr/rootfolders' : '/admin/sonarr/rootfolders';
-      api.get(endpoint).then(({ data }) => setRootFolders(data)).catch(() => {});
-    }
 
     async function fetchData() {
       try {
@@ -93,9 +83,6 @@ export default function MediaDetailPage({ type }: Props) {
       const body: Record<string, unknown> = { tmdbId: media.id, mediaType: type };
       if (type === 'tv' && selectedSeasons.length > 0) {
         body.seasons = selectedSeasons;
-      }
-      if (selectedRootFolder) {
-        body.rootFolder = selectedRootFolder;
       }
       await api.post('/requests', body);
       // Refresh DB media state
@@ -372,25 +359,6 @@ export default function MediaDetailPage({ type }: Props) {
               </div>
             )}
 
-            {/* Root folder selector (admin or if folders available) */}
-            {rootFolders.length > 1 && !userHasRequest && (
-              <div className="mt-6">
-                <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <FolderOpen className="w-4 h-4" />
-                  Dossier de destination
-                </h3>
-                <select
-                  value={selectedRootFolder}
-                  onChange={(e) => setSelectedRootFolder(e.target.value)}
-                  className="input text-sm"
-                >
-                  <option value="">Par défaut</option>
-                  {rootFolders.map((f) => (
-                    <option key={f.path} value={f.path}>{f.path}</option>
-                  ))}
-                </select>
-              </div>
-            )}
           </div>
         </div>
 

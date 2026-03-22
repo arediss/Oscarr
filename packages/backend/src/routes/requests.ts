@@ -170,7 +170,7 @@ export async function requestRoutes(app: FastifyInstance) {
     if (user.role === 'admin') {
       const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { plexUsername: true, email: true } });
       const tagName = dbUser?.plexUsername || dbUser?.email || `user-${user.id}`;
-      await sendToService(media, validMediaType, tagName, validSeasons, typeof rootFolder === 'string' ? rootFolder : undefined);
+      await sendToService(media, validMediaType, tagName, validSeasons);
     }
 
     return reply.status(201).send(mediaRequest);
@@ -198,7 +198,7 @@ export async function requestRoutes(app: FastifyInstance) {
 
     const seasons = mediaRequest.seasons ? JSON.parse(mediaRequest.seasons) : undefined;
     const tagName = mediaRequest.user.plexUsername || mediaRequest.user.email || `user-${mediaRequest.user.id}`;
-    await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, seasons, mediaRequest.rootFolder ?? undefined);
+    await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, seasons);
 
     const updated = await prisma.mediaRequest.update({
       where: { id: requestId },
@@ -252,29 +252,66 @@ export async function requestRoutes(app: FastifyInstance) {
   });
 }
 
+async function resolveFolder(mediaType: string, tmdbId: number, defaultFolder: string | null | undefined): Promise<string> {
+  // Check genre-folder mappings
+  const dbMedia = await prisma.media.findUnique({
+    where: { tmdbId_mediaType: { tmdbId, mediaType } },
+    select: { genres: true },
+  });
+
+  if (dbMedia?.genres) {
+    const mappings = await prisma.genreFolderMapping.findMany({
+      where: { mediaType },
+    });
+
+    if (mappings.length > 0) {
+      // Parse genre names from the media
+      const genreNames: string[] = JSON.parse(dbMedia.genres);
+
+      // Find the first matching genre mapping
+      for (const mapping of mappings) {
+        if (genreNames.some(g => g.toLowerCase() === mapping.genreName.toLowerCase())) {
+          return mapping.folderPath;
+        }
+      }
+    }
+  }
+
+  // Fallback to default
+  if (defaultFolder) return defaultFolder;
+
+  // Last resort: first available folder from service
+  if (mediaType === 'movie') {
+    const folders = await radarr.getRootFolders();
+    return folders[0]?.path ?? '/movies';
+  } else {
+    const folders = await sonarr.getRootFolders();
+    return folders[0]?.path ?? '/tv';
+  }
+}
+
 async function sendToService(
   media: { tmdbId: number; tvdbId: number | null; title: string },
   mediaType: string,
   username: string,
   seasons?: number[],
-  rootFolderOverride?: string
 ) {
   try {
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
     const defaultProfileId = settings?.defaultQualityProfile ?? null;
-    const defaultRootFolder = rootFolderOverride || settings?.defaultRootFolder;
+    const defaultFolder = mediaType === 'movie' ? settings?.defaultMovieFolder : settings?.defaultTvFolder;
+    const folderPath = await resolveFolder(mediaType, media.tmdbId, defaultFolder);
 
     if (mediaType === 'movie') {
       const tagId = await radarr.getOrCreateTag(username);
       const existing = await radarr.getMovieByTmdbId(media.tmdbId);
       if (!existing) {
         const profiles = await radarr.getQualityProfiles();
-        const folders = await radarr.getRootFolders();
         await radarr.addMovie({
           title: media.title,
           tmdbId: media.tmdbId,
           qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,
-          rootFolderPath: defaultRootFolder ?? folders[0]?.path ?? '/movies',
+          rootFolderPath: folderPath,
           tags: [tagId],
           searchForMovie: true,
         });
@@ -284,12 +321,11 @@ async function sendToService(
       const existing = await sonarr.getSeriesByTvdbId(media.tvdbId);
       if (!existing) {
         const profiles = await sonarr.getQualityProfiles();
-        const folders = await sonarr.getRootFolders();
         await sonarr.addSeries({
           title: media.title,
           tvdbId: media.tvdbId,
           qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,
-          rootFolderPath: defaultRootFolder ?? folders[0]?.path ?? '/tv',
+          rootFolderPath: folderPath,
           seasons: seasons ?? [],
           tags: [tagId],
           searchForMissingEpisodes: true,

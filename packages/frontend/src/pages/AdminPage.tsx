@@ -274,53 +274,72 @@ function UsersTab() {
   );
 }
 
+interface GenreMapping {
+  id: number;
+  genreId: number;
+  genreName: string;
+  mediaType: string;
+  folderPath: string;
+}
+
+const GENRE_LIST = [
+  { id: 28, name: 'Action' }, { id: 12, name: 'Aventure' }, { id: 16, name: 'Animation' },
+  { id: 35, name: 'Comédie' }, { id: 80, name: 'Crime' }, { id: 99, name: 'Documentaire' },
+  { id: 18, name: 'Drame' }, { id: 10751, name: 'Familial' }, { id: 14, name: 'Fantastique' },
+  { id: 36, name: 'Histoire' }, { id: 27, name: 'Horreur' }, { id: 10402, name: 'Musique' },
+  { id: 9648, name: 'Mystère' }, { id: 10749, name: 'Romance' }, { id: 878, name: 'Science-Fiction' },
+  { id: 53, name: 'Thriller' }, { id: 10752, name: 'Guerre' }, { id: 37, name: 'Western' },
+];
+
 function SettingsTab() {
-  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [radarrProfiles, setRadarrProfiles] = useState<QualityProfile[]>([]);
   const [radarrFolders, setRadarrFolders] = useState<RootFolder[]>([]);
-  const [sonarrProfiles, setSonarrProfiles] = useState<QualityProfile[]>([]);
   const [sonarrFolders, setSonarrFolders] = useState<RootFolder[]>([]);
+  const [genreMappings, setGenreMappings] = useState<GenreMapping[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Form state
-  const [qualityProfile, setQualityProfile] = useState<string>('');
-  const [rootFolder, setRootFolder] = useState('');
+  const [qualityProfile, setQualityProfile] = useState('');
+  const [movieFolder, setMovieFolder] = useState('');
+  const [tvFolder, setTvFolder] = useState('');
   const [subPrice, setSubPrice] = useState('');
   const [subDuration, setSubDuration] = useState('');
   const [plexMachineId, setPlexMachineId] = useState('');
 
+  // Genre mapping form
+  const [newGenreId, setNewGenreId] = useState('');
+  const [newMediaType, setNewMediaType] = useState('movie');
+  const [newFolderPath, setNewFolderPath] = useState('');
+
   useEffect(() => {
-    async function fetch() {
+    async function load() {
       try {
-        const [settingsRes, rProfiles, rFolders, sProfiles, sFolders] = await Promise.all([
+        const [settingsRes, rProfiles, rFolders, sFolders, mappingsRes] = await Promise.all([
           api.get('/admin/settings'),
           api.get('/admin/radarr/profiles').catch(() => ({ data: [] })),
           api.get('/admin/radarr/rootfolders').catch(() => ({ data: [] })),
-          api.get('/admin/sonarr/profiles').catch(() => ({ data: [] })),
           api.get('/admin/sonarr/rootfolders').catch(() => ({ data: [] })),
+          api.get('/admin/genre-mappings').catch(() => ({ data: [] })),
         ]);
-
         const s = settingsRes.data;
-        setSettings(s);
         setQualityProfile(s.defaultQualityProfile?.toString() || '');
-        setRootFolder(s.defaultRootFolder || '');
+        setMovieFolder(s.defaultMovieFolder || '');
+        setTvFolder(s.defaultTvFolder || '');
         setSubPrice(s.subscriptionPrice?.toString() || '0');
         setSubDuration(s.subscriptionDuration?.toString() || '30');
         setPlexMachineId(s.plexMachineId || '');
-
         setRadarrProfiles(rProfiles.data);
         setRadarrFolders(rFolders.data);
-        setSonarrProfiles(sProfiles.data);
         setSonarrFolders(sFolders.data);
+        setGenreMappings(mappingsRes.data);
       } catch (err) {
         console.error('Failed to load settings:', err);
       } finally {
         setLoading(false);
       }
     }
-    fetch();
+    load();
   }, []);
 
   const handleSave = async () => {
@@ -329,7 +348,8 @@ function SettingsTab() {
     try {
       await api.put('/admin/settings', {
         defaultQualityProfile: qualityProfile ? parseInt(qualityProfile) : null,
-        defaultRootFolder: rootFolder || null,
+        defaultMovieFolder: movieFolder || null,
+        defaultTvFolder: tvFolder || null,
         subscriptionPrice: parseFloat(subPrice) || 0,
         subscriptionDuration: parseInt(subDuration) || 30,
         plexMachineId: plexMachineId || null,
@@ -343,8 +363,34 @@ function SettingsTab() {
     }
   };
 
-  // Merge profiles (Radarr + Sonarr can have different profiles, we'll show Radarr by default)
-  const allProfiles = radarrProfiles.length > 0 ? radarrProfiles : sonarrProfiles;
+  const addMapping = async () => {
+    if (!newGenreId || !newFolderPath) return;
+    const genre = GENRE_LIST.find(g => g.id === parseInt(newGenreId));
+    if (!genre) return;
+    try {
+      const { data } = await api.post('/admin/genre-mappings', {
+        genreId: genre.id,
+        genreName: genre.name,
+        mediaType: newMediaType,
+        folderPath: newFolderPath,
+      });
+      setGenreMappings(prev => [...prev.filter(m => !(m.genreId === genre.id && m.mediaType === newMediaType)), data]);
+      setNewGenreId('');
+      setNewFolderPath('');
+    } catch (err) {
+      console.error('Failed to add mapping:', err);
+    }
+  };
+
+  const deleteMapping = async (id: number) => {
+    try {
+      await api.delete(`/admin/genre-mappings/${id}`);
+      setGenreMappings(prev => prev.filter(m => m.id !== id));
+    } catch (err) {
+      console.error('Failed to delete mapping:', err);
+    }
+  };
+
   const allFolders = [...new Map([...radarrFolders, ...sonarrFolders].map(f => [f.path, f])).values()];
 
   if (loading) {
@@ -352,106 +398,135 @@ function SettingsTab() {
   }
 
   return (
-    <div className="max-w-2xl">
-      <div className="space-y-6">
-        {/* Quality Profile */}
-        <div className="card p-6">
-          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Radarr / Sonarr</h3>
-
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm text-ndp-text mb-1 block">Profil de qualité par défaut</label>
-              <select value={qualityProfile} onChange={(e) => setQualityProfile(e.target.value)} className="input w-full">
-                <option value="">Automatique (premier disponible)</option>
-                {allProfiles.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-ndp-text mb-1 block">Dossier racine par défaut</label>
-              <select value={rootFolder} onChange={(e) => setRootFolder(e.target.value)} className="input w-full">
-                <option value="">Automatique (premier disponible)</option>
-                {allFolders.map((f) => (
-                  <option key={f.path} value={f.path}>
-                    {f.path} ({formatBytes(f.freeSpace)} libre)
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Subscription */}
-        <div className="card p-6">
-          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Abonnement</h3>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm text-ndp-text mb-1 block">Prix (€)</label>
-              <input
-                type="number"
-                value={subPrice}
-                onChange={(e) => setSubPrice(e.target.value)}
-                className="input w-full"
-                min="0"
-                step="0.01"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-ndp-text mb-1 block">Durée (jours)</label>
-              <input
-                type="number"
-                value={subDuration}
-                onChange={(e) => setSubDuration(e.target.value)}
-                className="input w-full"
-                min="1"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Plex */}
-        <div className="card p-6">
-          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Plex</h3>
-
-          <div>
-            <label className="text-sm text-ndp-text mb-1 block">Machine ID du serveur Plex</label>
-            <input
-              type="text"
-              value={plexMachineId}
-              onChange={(e) => setPlexMachineId(e.target.value)}
-              placeholder="Laissez vide pour désactiver la vérification"
-              className="input w-full"
-            />
-            <p className="text-xs text-ndp-text-dim mt-1">
-              Accédez à <code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">http://IP_PLEX:32400/identity</code> et copiez le champ <code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">machineIdentifier</code>. Si vide, la vérification d'accès serveur est désactivée.
-            </p>
-          </div>
-        </div>
-
-        {/* Save */}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className={clsx(
-            'flex items-center gap-2 font-medium px-6 py-3 rounded-xl transition-all',
-            saved
-              ? 'bg-ndp-success/10 text-ndp-success'
-              : 'btn-primary'
-          )}
-        >
-          {saving ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : saved ? (
-            <CheckCircle className="w-4 h-4" />
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
-          {saved ? 'Sauvegardé !' : 'Sauvegarder'}
-        </button>
+    <div className="max-w-2xl space-y-6">
+      {/* Quality Profile */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Profil de qualité</h3>
+        <select value={qualityProfile} onChange={(e) => setQualityProfile(e.target.value)} className="input w-full">
+          <option value="">Automatique (premier disponible)</option>
+          {radarrProfiles.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
       </div>
+
+      {/* Default folders */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Dossiers par défaut</h3>
+        <p className="text-xs text-ndp-text-dim mb-4">Dossier utilisé quand aucun mapping de genre ne correspond.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm text-ndp-text mb-1 block">Films</label>
+            <select value={movieFolder} onChange={(e) => setMovieFolder(e.target.value)} className="input w-full">
+              <option value="">Auto (premier disponible)</option>
+              {radarrFolders.map((f) => (
+                <option key={f.path} value={f.path}>{f.path} ({formatBytes(f.freeSpace)})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm text-ndp-text mb-1 block">Séries</label>
+            <select value={tvFolder} onChange={(e) => setTvFolder(e.target.value)} className="input w-full">
+              <option value="">Auto (premier disponible)</option>
+              {sonarrFolders.map((f) => (
+                <option key={f.path} value={f.path}>{f.path} ({formatBytes(f.freeSpace)})</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Genre-Folder Mappings */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-2">Mapping genres → dossiers</h3>
+        <p className="text-xs text-ndp-text-dim mb-4">
+          Associez un genre à un dossier spécifique. Ex : Animation → /animes, Documentaire → /docs. Si un média a un genre mappé, il ira dans ce dossier au lieu du dossier par défaut.
+        </p>
+
+        {/* Existing mappings */}
+        {genreMappings.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {genreMappings.map((m) => (
+              <div key={m.id} className="flex items-center gap-3 bg-white/5 rounded-lg px-3 py-2">
+                <span className="text-xs bg-ndp-accent/10 text-ndp-accent px-2 py-0.5 rounded">{m.mediaType === 'movie' ? 'Film' : 'Série'}</span>
+                <span className="text-sm text-ndp-text font-medium">{m.genreName}</span>
+                <span className="text-ndp-text-dim">→</span>
+                <span className="text-sm text-ndp-text-muted flex-1 truncate">{m.folderPath}</span>
+                <button onClick={() => deleteMapping(m.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
+                  <XCircle className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add new mapping */}
+        <div className="flex flex-wrap items-end gap-2">
+          <div>
+            <label className="text-xs text-ndp-text-dim block mb-1">Type</label>
+            <select value={newMediaType} onChange={(e) => setNewMediaType(e.target.value)} className="input text-sm py-2">
+              <option value="movie">Film</option>
+              <option value="tv">Série</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-[140px]">
+            <label className="text-xs text-ndp-text-dim block mb-1">Genre</label>
+            <select value={newGenreId} onChange={(e) => setNewGenreId(e.target.value)} className="input text-sm py-2 w-full">
+              <option value="">Choisir...</option>
+              {GENRE_LIST.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-xs text-ndp-text-dim block mb-1">Dossier</label>
+            <select value={newFolderPath} onChange={(e) => setNewFolderPath(e.target.value)} className="input text-sm py-2 w-full">
+              <option value="">Choisir...</option>
+              {allFolders.map((f) => (
+                <option key={f.path} value={f.path}>{f.path}</option>
+              ))}
+            </select>
+          </div>
+          <button onClick={addMapping} disabled={!newGenreId || !newFolderPath} className="btn-primary text-sm py-2">
+            Ajouter
+          </button>
+        </div>
+      </div>
+
+      {/* Subscription */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Abonnement</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm text-ndp-text mb-1 block">Prix (€)</label>
+            <input type="number" value={subPrice} onChange={(e) => setSubPrice(e.target.value)} className="input w-full" min="0" step="0.01" />
+          </div>
+          <div>
+            <label className="text-sm text-ndp-text mb-1 block">Durée (jours)</label>
+            <input type="number" value={subDuration} onChange={(e) => setSubDuration(e.target.value)} className="input w-full" min="1" />
+          </div>
+        </div>
+      </div>
+
+      {/* Plex */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Plex</h3>
+        <label className="text-sm text-ndp-text mb-1 block">Machine ID du serveur Plex</label>
+        <input type="text" value={plexMachineId} onChange={(e) => setPlexMachineId(e.target.value)} placeholder="Laissez vide pour désactiver" className="input w-full" />
+        <p className="text-xs text-ndp-text-dim mt-1">
+          Accédez à <code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">http://IP_PLEX:32400/identity</code> et copiez <code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">machineIdentifier</code>.
+        </p>
+      </div>
+
+      {/* Save */}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className={clsx('flex items-center gap-2 font-medium px-6 py-3 rounded-xl transition-all', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}
+      >
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+        {saved ? 'Sauvegardé !' : 'Sauvegarder'}
+      </button>
     </div>
   );
 }
