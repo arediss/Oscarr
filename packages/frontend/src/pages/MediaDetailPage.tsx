@@ -17,6 +17,7 @@ import api from '@/lib/api';
 import { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import MediaRow from '@/components/MediaRow';
+import { useDownloadForMedia, useOnDownloadComplete } from '@/hooks/useDownloads';
 import type { TmdbMedia, Media } from '@/types';
 
 interface Props {
@@ -28,6 +29,8 @@ export default function MediaDetailPage({ type }: Props) {
   const { user } = useAuth();
   const [media, setMedia] = useState<TmdbMedia | null>(null);
   const [dbMedia, setDbMedia] = useState<Media | null>(null);
+  const [sonarrSeasons, setSonarrSeasons] = useState<{ seasonNumber: number; episodeFileCount: number; episodeCount: number; totalEpisodeCount: number }[]>([]);
+  const [inLibrary, setInLibrary] = useState(false);
   const [recommendations, setRecommendations] = useState<TmdbMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
@@ -47,10 +50,19 @@ export default function MediaDetailPage({ type }: Props) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
 
+  const applyDbData = useCallback((data: Record<string, unknown>) => {
+    if (data.id) setDbMedia(data as unknown as Media);
+    if (data.sonarrSeasons) setSonarrSeasons(data.sonarrSeasons as typeof sonarrSeasons);
+    if (data.inLibrary) setInLibrary(true);
+    if (data.status === 'available' && !data.id) setInLibrary(true);
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     setMedia(null);
     setDbMedia(null);
+    setSonarrSeasons([]);
+    setInLibrary(false);
     setSelectedSeasons([]);
 
     async function fetchData() {
@@ -62,10 +74,10 @@ export default function MediaDetailPage({ type }: Props) {
         setMedia(detailRes.data);
         setRecommendations(recoRes.data.results?.map((r: TmdbMedia) => ({ ...r, media_type: type })) || []);
 
-        // Check if media exists in our DB
+        // Check DB + live Radarr/Sonarr status
         try {
           const { data } = await api.get(`/media/tmdb/${id}/${type}`);
-          if (data.id) setDbMedia(data);
+          applyDbData(data);
         } catch { /* not in DB yet */ }
       } catch (err) {
         console.error('Failed to fetch media details:', err);
@@ -74,7 +86,7 @@ export default function MediaDetailPage({ type }: Props) {
       }
     }
     fetchData();
-  }, [id, type]);
+  }, [id, type, applyDbData]);
 
   const handleRequest = async () => {
     if (!media) return;
@@ -87,7 +99,7 @@ export default function MediaDetailPage({ type }: Props) {
       await api.post('/requests', body);
       // Refresh DB media state
       const { data } = await api.get(`/media/tmdb/${id}/${type}`);
-      if (data.id) setDbMedia(data);
+      applyDbData(data);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erreur';
       console.error('Request failed:', message);
@@ -96,17 +108,44 @@ export default function MediaDetailPage({ type }: Props) {
     }
   };
 
-  const isAvailable = dbMedia?.status === 'available';
-  const isPartiallyAvailable = dbMedia?.status === 'processing' && type === 'tv';
+  const download = useDownloadForMedia(media?.id, type);
+
+  // Auto-refresh when download completes (disappears from queue)
+  useOnDownloadComplete(media?.id, () => {
+    if (!id) return;
+    api.get(`/media/tmdb/${id}/${type}`).then(({ data }) => applyDbData(data)).catch(() => {});
+  });
+
+  const isAvailable = dbMedia?.status === 'available' || inLibrary;
+  const isPartiallyAvailable = !isAvailable && dbMedia?.status === 'processing' && type === 'tv';
   const isUpcoming = dbMedia?.status === 'upcoming';
   const isSearching = dbMedia?.status === 'searching';
+  const isDownloading = !!download;
   const userHasRequest = dbMedia?.requests?.some(
     (r) => r.user?.id === user?.id && ['pending', 'approved', 'processing'].includes(r.status)
   );
 
+  const formatTimeLeft = (tl: string) => {
+    if (!tl) return '';
+    const m = tl.match(/(\d+):(\d+):(\d+)/);
+    if (!m) return tl;
+    const [, h, min] = m;
+    if (parseInt(h) > 0) return `~${parseInt(h)}h${min}min`;
+    return `~${parseInt(min)}min`;
+  };
+
   const getStatusBadge = () => {
     if (isAvailable) {
       return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-success/10 text-ndp-success">Disponible</span>;
+    }
+    if (isDownloading) {
+      return (
+        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 flex items-center gap-1.5">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Téléchargement {download.progress}%
+          {download.timeLeft && <span className="opacity-70">· {formatTimeLeft(download.timeLeft)}</span>}
+        </span>
+      );
     }
     if (isUpcoming) {
       return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400">Prochainement</span>;
@@ -277,6 +316,18 @@ export default function MediaDetailPage({ type }: Props) {
                   <Check className="w-4 h-4" />
                   Disponible
                 </button>
+              ) : isDownloading ? (
+                <div className="flex items-center gap-3">
+                  <button disabled className="btn-secondary flex items-center gap-2 cursor-default">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Téléchargement en cours
+                  </button>
+                  <div className="flex-1 min-w-[120px] max-w-[200px]">
+                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{ width: `${download.progress}%` }} />
+                    </div>
+                  </div>
+                </div>
               ) : isUpcoming ? (
                 <button disabled className="btn-secondary flex items-center gap-2 cursor-default opacity-60">
                   <Clock className="w-4 h-4" />
@@ -308,53 +359,70 @@ export default function MediaDetailPage({ type }: Props) {
               )}
             </div>
 
-            {/* Season selection for TV */}
-            {type === 'tv' && media.seasons && media.seasons.length > 0 && !userHasRequest && (
+            {/* Seasons */}
+            {type === 'tv' && media.seasons && media.seasons.length > 0 && (
               <div className="mt-6">
                 <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">
-                  Saisons à demander
+                  {sonarrSeasons.length > 0 ? 'Saisons' : 'Saisons à demander'}
                 </h3>
                 <div className="flex flex-wrap gap-2">
-                  {/* All seasons button */}
-                  <button
-                    onClick={() => {
-                      const allNums = media.seasons!.filter(s => s.season_number > 0).map(s => s.season_number);
-                      setSelectedSeasons(prev =>
-                        prev.length === allNums.length ? [] : allNums
-                      );
-                    }}
-                    className={clsx(
-                      'px-4 py-2 rounded-xl text-sm font-semibold transition-all',
-                      selectedSeasons.length === media.seasons.filter(s => s.season_number > 0).length
-                        ? 'bg-ndp-accent text-white'
-                        : 'bg-white/5 text-ndp-text-muted hover:bg-white/10 border border-dashed border-white/10'
-                    )}
-                  >
-                    Toutes les saisons
-                  </button>
+                  {/* All seasons button (only if can request) */}
+                  {!isAvailable && !userHasRequest && (
+                    <button
+                      onClick={() => {
+                        const allNums = media.seasons!.filter(s => s.season_number > 0).map(s => s.season_number);
+                        setSelectedSeasons(prev =>
+                          prev.length === allNums.length ? [] : allNums
+                        );
+                      }}
+                      className={clsx(
+                        'px-4 py-2 rounded-xl text-sm font-semibold transition-all',
+                        selectedSeasons.length === media.seasons.filter(s => s.season_number > 0).length
+                          ? 'bg-ndp-accent text-white'
+                          : 'bg-white/5 text-ndp-text-muted hover:bg-white/10 border border-dashed border-white/10'
+                      )}
+                    >
+                      Toutes les saisons
+                    </button>
+                  )}
                   {media.seasons
                     .filter((s) => s.season_number > 0)
-                    .map((season) => (
-                      <button
-                        key={season.season_number}
-                        onClick={() =>
-                          setSelectedSeasons((prev) =>
+                    .map((season) => {
+                      const sonarrSeason = sonarrSeasons.find((ss) => ss.seasonNumber === season.season_number);
+                      const hasStats = !!sonarrSeason;
+                      const fileCount = sonarrSeason?.episodeFileCount ?? 0;
+                      const totalCount = sonarrSeason?.totalEpisodeCount ?? season.episode_count;
+                      const isFull = hasStats && fileCount >= totalCount && totalCount > 0;
+                      const isPartial = hasStats && fileCount > 0 && fileCount < totalCount;
+                      const isEmpty = !hasStats || fileCount === 0;
+                      const canSelect = !isFull && !userHasRequest;
+
+                      return (
+                        <button
+                          key={season.season_number}
+                          onClick={() => canSelect && setSelectedSeasons((prev) =>
                             prev.includes(season.season_number)
                               ? prev.filter((s) => s !== season.season_number)
                               : [...prev, season.season_number]
-                          )
-                        }
-                        className={clsx(
-                          'px-4 py-2 rounded-xl text-sm font-medium transition-all',
-                          selectedSeasons.includes(season.season_number)
-                            ? 'bg-ndp-accent text-white'
-                            : 'bg-white/5 text-ndp-text-muted hover:bg-white/10'
-                        )}
-                      >
-                        S{String(season.season_number).padStart(2, '0')}
-                        <span className="text-xs ml-1 opacity-60">({season.episode_count} ép.)</span>
-                      </button>
-                    ))}
+                          )}
+                          className={clsx(
+                            'px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2',
+                            selectedSeasons.includes(season.season_number)
+                              ? 'bg-ndp-accent text-white'
+                              : isFull
+                                ? 'bg-ndp-success/10 text-ndp-success border border-ndp-success/20 cursor-default'
+                                : isPartial
+                                  ? 'bg-ndp-warning/10 text-ndp-warning border border-ndp-warning/20 hover:bg-ndp-warning/20'
+                                  : 'bg-white/5 text-ndp-text-muted hover:bg-white/10'
+                          )}
+                        >
+                          S{String(season.season_number).padStart(2, '0')}
+                          <span className="text-xs opacity-60">
+                            {hasStats ? `${fileCount}/${totalCount}` : `${season.episode_count} ép.`}
+                          </span>
+                        </button>
+                      );
+                    })}
                 </div>
               </div>
             )}

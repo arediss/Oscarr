@@ -22,6 +22,7 @@ import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useDownloadForMedia } from '@/hooks/useDownloads';
 import type { MediaRequest } from '@/types';
 
 const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: string; bg: string }> = {
@@ -206,6 +207,7 @@ function RequestCard({
   onAction: (id: number, action: 'approve' | 'decline') => void;
   onDelete: (id: number) => void;
 }) {
+  const download = useDownloadForMedia(req.media?.tmdbId, req.mediaType);
   const status = STATUS_CONFIG[req.status] || STATUS_CONFIG.pending;
   const mediaLink = `/${req.mediaType}/${req.media?.tmdbId}`;
   const year = req.media?.releaseDate?.slice(0, 4);
@@ -259,9 +261,16 @@ function RequestCard({
 
           <div className="flex items-center gap-2 mt-2">
             <span className="text-xs text-white/50">Status</span>
-            <span className={clsx('px-2 py-0.5 rounded text-[11px] font-semibold text-white', status.bg)}>
-              {status.label}
-            </span>
+            {download ? (
+              <span className="px-2 py-0.5 rounded text-[11px] font-semibold text-white bg-blue-500 flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Téléchargement {download.progress}%
+              </span>
+            ) : (
+              <span className={clsx('px-2 py-0.5 rounded text-[11px] font-semibold text-white', status.bg)}>
+                {status.label}
+              </span>
+            )}
 
             {/* Admin actions */}
             {isAdmin && req.status === 'pending' && (
@@ -315,6 +324,13 @@ function RequestCard({
           </div>
         </div>
       </div>
+
+      {/* Download progress bar */}
+      {download && (
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
+          <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${download.progress}%` }} />
+        </div>
+      )}
     </Link>
   );
 }

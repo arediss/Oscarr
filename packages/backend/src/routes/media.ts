@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
+import { getRadarr } from '../services/radarr.js';
+import { getSonarr } from '../services/sonarr.js';
 
 const VALID_MEDIA_TYPES = ['movie', 'tv'];
 
@@ -101,7 +103,65 @@ export async function mediaRoutes(app: FastifyInstance) {
       },
     });
 
-    return media || { exists: false };
+    // Live check against Radarr/Sonarr
+    let sonarrSeasonStats: { seasonNumber: number; episodeFileCount: number; episodeCount: number; totalEpisodeCount: number }[] | null = null;
+    let liveAvailable = false;
+
+    try {
+      if (mediaType === 'movie') {
+        const radarrMovie = await getRadarr().getMovieByTmdbId(tmdbIdNum);
+        if (radarrMovie?.hasFile) liveAvailable = true;
+      } else if (mediaType === 'tv') {
+        // Try to find in Sonarr by tvdbId (from DB) or by looking up tvdbId via TMDB
+        let tvdbId = media?.tvdbId;
+        if (!tvdbId) {
+          const { getTvDetails } = await import('../services/tmdb.js');
+          const tmdbData = await getTvDetails(tmdbIdNum);
+          tvdbId = tmdbData.external_ids?.tvdb_id ?? null;
+        }
+        if (tvdbId) {
+          const sonarrSeries = await getSonarr().getSeriesByTvdbId(tvdbId);
+          if (sonarrSeries) {
+            if (sonarrSeries.statistics?.episodeFileCount > 0) liveAvailable = true;
+            sonarrSeasonStats = sonarrSeries.seasons
+              .filter((s) => s.seasonNumber > 0)
+              .map((s) => ({
+                seasonNumber: s.seasonNumber,
+                episodeFileCount: s.statistics?.episodeFileCount ?? 0,
+                episodeCount: s.statistics?.episodeCount ?? 0,
+                totalEpisodeCount: s.statistics?.totalEpisodeCount ?? 0,
+              }));
+          }
+        }
+      }
+    } catch { /* Radarr/Sonarr unreachable, use DB state */ }
+
+    if (!media) {
+      // Media not in our DB but may exist in Radarr/Sonarr
+      const result: Record<string, unknown> = { exists: false };
+      if (liveAvailable) result.status = 'available';
+      if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
+      if (liveAvailable) result.inLibrary = true;
+      return result;
+    }
+
+    // Update DB if newly available
+    if (liveAvailable && media.status !== 'available') {
+      await prisma.media.update({ where: { id: media.id }, data: { status: 'available' } });
+      await prisma.mediaRequest.updateMany({
+        where: { mediaId: media.id, status: { in: ['approved', 'processing'] } },
+        data: { status: 'available' },
+      });
+      media.status = 'available';
+      media.requests = media.requests.map((r) =>
+        ['approved', 'processing'].includes(r.status) ? { ...r, status: 'available' } : r
+      );
+    }
+
+    const result: Record<string, unknown> = { ...media };
+    if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
+    if (liveAvailable) result.inLibrary = true;
+    return result;
   });
 
   // Recently added media (from Radarr/Sonarr sync)

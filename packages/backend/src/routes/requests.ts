@@ -36,6 +36,15 @@ export async function requestRoutes(app: FastifyInstance) {
     }
     if (status && VALID_STATUSES.includes(status)) where.status = status;
 
+    // Quick sync: update stale request statuses where media is already available
+    await prisma.mediaRequest.updateMany({
+      where: {
+        status: { in: ['approved', 'processing'] },
+        media: { status: 'available' },
+      },
+      data: { status: 'available' },
+    });
+
     const [requests, total] = await Promise.all([
       prisma.mediaRequest.findMany({
         where,

@@ -54,6 +54,64 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
     }));
   });
 
+  // Combined download queue mapped to tmdbId
+  app.get('/downloads', { preHandler: [app.authenticate] }, async () => {
+    try {
+      const [radarrQueue, sonarrQueue] = await Promise.all([
+        getRadarr().getQueue().catch(() => ({ records: [] })),
+        getSonarr().getQueue().catch(() => ({ records: [] })),
+      ]);
+
+      const downloads: {
+        tmdbId: number; mediaType: string; title: string;
+        progress: number; timeLeft: string; estimatedCompletion: string;
+        size: number; sizeLeft: number; status: string;
+        episode?: { seasonNumber: number; episodeNumber: number; title: string };
+      }[] = [];
+
+      for (const item of radarrQueue.records) {
+        const movie = (item as Record<string, unknown>).movie as { tmdbId?: number } | undefined;
+        if (!movie?.tmdbId) continue;
+        downloads.push({
+          tmdbId: movie.tmdbId,
+          mediaType: 'movie',
+          title: item.title,
+          progress: item.size > 0 ? Math.round(((item.size - item.sizeleft) / item.size) * 100) : 0,
+          timeLeft: item.timeleft,
+          estimatedCompletion: item.estimatedCompletionTime,
+          size: item.size,
+          sizeLeft: item.sizeleft,
+          status: item.status,
+        });
+      }
+
+      for (const item of sonarrQueue.records) {
+        const series = (item as Record<string, unknown>).series as { tvdbId?: number } | undefined;
+        if (!series?.tvdbId) continue;
+        // Look up tmdbId from our DB via tvdbId
+        const { prisma } = await import('../utils/prisma.js');
+        const media = await prisma.media.findFirst({ where: { tvdbId: series.tvdbId, mediaType: 'tv' }, select: { tmdbId: true } });
+        if (!media) continue;
+        downloads.push({
+          tmdbId: media.tmdbId,
+          mediaType: 'tv',
+          title: item.title,
+          progress: item.size > 0 ? Math.round(((item.size - item.sizeleft) / item.size) * 100) : 0,
+          timeLeft: item.timeleft,
+          estimatedCompletion: item.estimatedCompletionTime,
+          size: item.size,
+          sizeLeft: item.sizeleft,
+          status: item.status,
+          episode: item.episode ? { seasonNumber: item.episode.seasonNumber, episodeNumber: item.episode.episodeNumber, title: item.episode.title } : undefined,
+        });
+      }
+
+      return downloads;
+    } catch {
+      return [];
+    }
+  });
+
   // Library stats
   app.get('/stats', { preHandler: [app.authenticate] }, async () => {
     try {

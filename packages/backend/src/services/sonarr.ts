@@ -4,6 +4,7 @@ export interface SonarrSeries {
   id: number;
   title: string;
   tvdbId: number;
+  tmdbId?: number;
   imdbId: string;
   titleSlug: string;
   monitored: boolean;
@@ -154,7 +155,7 @@ class SonarrService {
   }
 
   async getOrCreateTag(username: string): Promise<number> {
-    const label = `ndp - ${username}`.toLowerCase();
+    const label = `ndp-${username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
     const tags = await this.getTags();
     const existing = tags.find((t) => t.label === label);
     if (existing) return existing.id;
