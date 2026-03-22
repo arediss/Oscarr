@@ -103,4 +103,43 @@ export async function mediaRoutes(app: FastifyInstance) {
 
     return media || { exists: false };
   });
+
+  // Batch lookup: check availability for multiple TMDB IDs
+  app.post('/batch-status', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { ids } = request.body as { ids?: unknown };
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return reply.status(400).send({ error: 'ids requis (array of {tmdbId, mediaType})' });
+    }
+
+    // Limit to 50 per request
+    const limited = ids.slice(0, 50) as { tmdbId: number; mediaType: string }[];
+
+    const results: Record<string, { status: string; requestStatus?: string }> = {};
+
+    const media = await prisma.media.findMany({
+      where: {
+        OR: limited.map((item) => ({
+          tmdbId: item.tmdbId,
+          mediaType: item.mediaType,
+        })),
+      },
+      include: {
+        requests: {
+          select: { status: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    for (const m of media) {
+      const key = `${m.mediaType}:${m.tmdbId}`;
+      results[key] = {
+        status: m.status,
+        requestStatus: m.requests[0]?.status,
+      };
+    }
+
+    return results;
+  });
 }

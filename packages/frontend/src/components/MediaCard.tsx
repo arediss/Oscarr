@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Star } from 'lucide-react';
+import { Star, CheckCircle, Clock, Film, Tv } from 'lucide-react';
 import { posterUrl } from '@/lib/api';
 import type { TmdbMedia } from '@/types';
 import { clsx } from 'clsx';
@@ -7,13 +7,16 @@ import { clsx } from 'clsx';
 interface MediaCardProps {
   media: TmdbMedia;
   className?: string;
+  availability?: { status: string; requestStatus?: string } | null;
 }
 
-export default function MediaCard({ media, className }: MediaCardProps) {
+export default function MediaCard({ media, className, availability }: MediaCardProps) {
   const title = media.title || media.name || 'Sans titre';
   const year = (media.release_date || media.first_air_date || '').slice(0, 4);
   const type = media.media_type || (media.title ? 'movie' : 'tv');
   const link = `/${type}/${media.id}`;
+
+  const statusBadge = getAvailabilityBadge(availability);
 
   return (
     <Link
@@ -56,15 +59,73 @@ export default function MediaCard({ media, className }: MediaCardProps) {
         </span>
       </div>
 
-      {/* Badge rating always visible */}
+      {/* Top-left: media type badge */}
+      <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm rounded-md p-1">
+        {type === 'movie' ? (
+          <Film className="w-3 h-3 text-white/80" />
+        ) : (
+          <Tv className="w-3 h-3 text-white/80" />
+        )}
+      </div>
+
+      {/* Top-right: rating */}
       {media.vote_average > 0 && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/70 backdrop-blur-sm px-1.5 py-0.5 rounded-md">
+        <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded-md">
           <Star className="w-3 h-3 fill-ndp-gold text-ndp-gold" />
           <span className="text-xs font-medium text-white">{media.vote_average.toFixed(1)}</span>
         </div>
       )}
+
+      {/* Bottom-right: availability status */}
+      {statusBadge && (
+        <div className={clsx(
+          'absolute bottom-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold backdrop-blur-sm',
+          statusBadge.bgClass
+        )}>
+          <statusBadge.icon className="w-3 h-3" />
+          {statusBadge.label}
+        </div>
+      )}
     </Link>
   );
+}
+
+function getAvailabilityBadge(availability?: { status: string; requestStatus?: string } | null) {
+  if (!availability || availability.status === 'unknown') return null;
+
+  if (availability.status === 'available') {
+    return {
+      label: 'Dispo',
+      icon: CheckCircle,
+      bgClass: 'bg-ndp-success/80 text-white',
+    };
+  }
+
+  if (availability.status === 'processing') {
+    return {
+      label: 'Partiel',
+      icon: Clock,
+      bgClass: 'bg-ndp-accent/80 text-white',
+    };
+  }
+
+  if (availability.requestStatus === 'pending') {
+    return {
+      label: 'Demandé',
+      icon: Clock,
+      bgClass: 'bg-ndp-warning/80 text-white',
+    };
+  }
+
+  if (availability.requestStatus === 'approved') {
+    return {
+      label: 'En cours',
+      icon: Clock,
+      bgClass: 'bg-ndp-accent/80 text-white',
+    };
+  }
+
+  return null;
 }
 
 export function MediaCardSkeleton() {

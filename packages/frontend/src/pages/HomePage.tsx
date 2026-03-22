@@ -4,7 +4,7 @@ import { Info, Star } from 'lucide-react';
 import api from '@/lib/api';
 import { backdropUrl } from '@/lib/api';
 import MediaRow from '@/components/MediaRow';
-import GenreRow, { MOVIE_GENRES, TV_GENRES } from '@/components/GenreRow';
+import GenreRow from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
 
 export default function HomePage() {
@@ -150,9 +150,8 @@ export default function HomePage() {
       <div className="space-y-10 pb-16 -mt-8 relative z-10">
         <MediaRow title="Tendances de la semaine" media={trending} loading={loading} href="/category/trending" />
         <MediaRow title="Films populaires" media={popularMovies.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-popular" />
-        <GenreRow title="Genres Films" genres={MOVIE_GENRES} mediaType="movie" />
         <MediaRow title="Séries populaires" media={popularTv.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/tv-popular" />
-        <GenreRow title="Genres Séries" genres={TV_GENRES} mediaType="tv" />
+        <GenreRow />
         <MediaRow title="Prochainement au cinéma" media={upcoming.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-upcoming" />
       </div>
     </div>

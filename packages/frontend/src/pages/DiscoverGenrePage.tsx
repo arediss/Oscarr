@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
-import MediaCard, { MediaCardSkeleton } from '@/components/MediaCard';
-import { MOVIE_GENRES, TV_GENRES } from '@/components/GenreRow';
+import MediaGrid from '@/components/MediaGrid';
+import { ALL_GENRES } from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
 
 export default function DiscoverGenrePage() {
@@ -14,8 +14,8 @@ export default function DiscoverGenrePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const allGenres = mediaType === 'movie' ? MOVIE_GENRES : TV_GENRES;
-  const genre = allGenres.find((g) => g.id === parseInt(genreId || '0'));
+  const gid = parseInt(genreId || '0');
+  const genre = ALL_GENRES.find((g) => g.id === gid && g.mediaType === mediaType);
   const genreName = genre?.name || 'Genre inconnu';
 
   useEffect(() => {
@@ -62,13 +62,7 @@ export default function DiscoverGenrePage() {
       </div>
 
       {/* Results grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
-        {loading
-          ? Array.from({ length: 14 }).map((_, i) => <MediaCardSkeleton key={i} />)
-          : results.map((media) => (
-              <MediaCard key={`${media.media_type}-${media.id}`} media={media} />
-            ))}
-      </div>
+      <MediaGrid media={results} loading={loading} />
 
       {/* Load more */}
       {!loading && page < totalPages && (

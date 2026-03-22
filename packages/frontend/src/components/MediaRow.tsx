@@ -2,17 +2,19 @@ import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import MediaCard, { MediaCardSkeleton } from './MediaCard';
+import { useMediaStatus, getStatusForMedia } from '@/hooks/useMediaStatus';
 import type { TmdbMedia } from '@/types';
 
 interface MediaRowProps {
   title: string;
   media: TmdbMedia[];
   loading?: boolean;
-  href?: string; // Link to "see more" page
+  href?: string;
 }
 
 export default function MediaRow({ title, media, loading, href }: MediaRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const statuses = useMediaStatus(media);
 
   const scroll = (direction: 'left' | 'right') => {
     if (!scrollRef.current) return;
@@ -61,13 +63,17 @@ export default function MediaRow({ title, media, loading, href }: MediaRowProps)
             ? Array.from({ length: 8 }).map((_, i) => (
                 <MediaCardSkeleton key={i} />
               ))
-            : media.map((item) => (
-                <MediaCard
-                  key={`${item.media_type || 'media'}-${item.id}`}
-                  media={item}
-                  className="w-[140px] sm:w-[160px] lg:w-[180px]"
-                />
-              ))}
+            : media.map((item) => {
+                const type = item.media_type || (item.title ? 'movie' : 'tv');
+                return (
+                  <MediaCard
+                    key={`${type}-${item.id}`}
+                    media={item}
+                    className="w-[140px] sm:w-[160px] lg:w-[180px]"
+                    availability={getStatusForMedia(statuses, item.id, type)}
+                  />
+                );
+              })}
         </div>
       </div>
     </section>

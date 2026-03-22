@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import api from '@/lib/api';
-import MediaCard, { MediaCardSkeleton } from '@/components/MediaCard';
+import MediaGrid from '@/components/MediaGrid';
 import type { TmdbMedia } from '@/types';
 
 export default function SearchPage() {
@@ -41,13 +41,7 @@ export default function SearchPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
-        {loading
-          ? Array.from({ length: 14 }).map((_, i) => <MediaCardSkeleton key={i} />)
-          : results.map((media) => (
-              <MediaCard key={`${media.media_type}-${media.id}`} media={media} />
-            ))}
-      </div>
+      <MediaGrid media={results} loading={loading} />
 
       {!loading && results.length === 0 && q && (
         <div className="text-center py-20">

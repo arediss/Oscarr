@@ -109,11 +109,20 @@ export default function MediaDetailPage({ type }: Props) {
     }
   };
 
+  const isAvailable = dbMedia?.status === 'available';
+  const isPartiallyAvailable = dbMedia?.status === 'processing';
   const userHasRequest = dbMedia?.requests?.some(
     (r) => r.user?.id === user?.id && ['pending', 'approved', 'processing'].includes(r.status)
   );
 
   const getStatusBadge = () => {
+    // Show media availability first
+    if (isAvailable) {
+      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-success/10 text-ndp-success">Disponible</span>;
+    }
+    if (isPartiallyAvailable) {
+      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-accent/10 text-ndp-accent">Partiellement disponible</span>;
+    }
     if (!dbMedia?.requests?.length) return null;
     const latestRequest = dbMedia.requests[0];
     const statusMap: Record<string, { label: string; color: string }> = {
@@ -269,7 +278,12 @@ export default function MediaDetailPage({ type }: Props) {
                 </a>
               )}
 
-              {userHasRequest ? (
+              {isAvailable ? (
+                <button disabled className="btn-success flex items-center gap-2 cursor-default">
+                  <Check className="w-4 h-4" />
+                  Disponible
+                </button>
+              ) : userHasRequest ? (
                 <button disabled className="btn-success flex items-center gap-2 cursor-default">
                   <Check className="w-4 h-4" />
                   Déjà demandé
@@ -285,7 +299,7 @@ export default function MediaDetailPage({ type }: Props) {
                   ) : (
                     <Plus className="w-4 h-4" />
                   )}
-                  Demander
+                  {isPartiallyAvailable ? 'Demander le reste' : 'Demander'}
                 </button>
               )}
             </div>
