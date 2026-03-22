@@ -80,6 +80,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   const hasBanner = banner && !bannerDismissed;
 
   return (
@@ -95,7 +104,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <nav className={clsx('fixed left-0 right-0 z-50 glass border-b border-white/5', hasBanner ? 'top-10' : 'top-0')}>
+      <nav className={clsx(
+        'fixed left-0 right-0 z-50 transition-all duration-300',
+        scrolled ? 'glass border-none' : 'bg-transparent',
+        hasBanner ? 'top-10' : 'top-0'
+      )}>
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6">
           <div className="relative flex items-center justify-between h-16">
 
