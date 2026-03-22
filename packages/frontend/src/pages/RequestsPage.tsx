@@ -10,6 +10,13 @@ import {
   Film,
   Search,
   CalendarClock,
+  LayoutGrid,
+  Hourglass,
+  ThumbsUp,
+  CircleCheck,
+  Cog,
+  Ban,
+  type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
@@ -42,6 +49,7 @@ export default function RequestsPage() {
   const [requests, setRequests] = useState<MediaRequest[]>([]);
   const [stats, setStats] = useState<RequestStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [filtering, setFiltering] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<string>('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
@@ -53,42 +61,39 @@ export default function RequestsPage() {
     api.get('/requests/stats').then(({ data }) => setStats(data)).catch(() => {});
   }, []);
 
-  const fetchRequests = useCallback(async (reset = true) => {
-    if (reset) setLoading(true);
+  const fetchRequests = useCallback(async (pageNum: number, append = false) => {
+    if (!append) setFiltering(true);
     try {
       const params = new URLSearchParams();
       if (filter) params.set('status', filter);
-      params.set('page', reset ? '1' : String(page));
+      params.set('page', String(pageNum));
       const { data } = await api.get(`/requests?${params}`);
-      if (reset) {
-        setRequests(data.results);
-        setPage(1);
-      } else {
+      if (append) {
         setRequests((prev) => [...prev, ...data.results]);
+      } else {
+        setRequests(data.results);
       }
       setTotalPages(data.totalPages);
       setTotal(data.total);
+      setPage(pageNum);
     } catch (err) {
       console.error('Failed to fetch requests:', err);
     } finally {
       setLoading(false);
+      setFiltering(false);
       setLoadingMore(false);
     }
-  }, [filter, page]);
+  }, [filter]);
 
   useEffect(() => {
-    fetchRequests(true);
+    fetchRequests(1);
   }, [filter]);
 
   const loadMore = () => {
     if (loadingMore || page >= totalPages) return;
     setLoadingMore(true);
-    setPage((p) => p + 1);
+    fetchRequests(page + 1, true);
   };
-
-  useEffect(() => {
-    if (page > 1) fetchRequests(false);
-  }, [page]);
 
   const handleAction = async (id: number, action: 'approve' | 'decline') => {
     setActionLoading(id);
@@ -119,36 +124,23 @@ export default function RequestsPage() {
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-          <StatCard label="Total" value={stats.total} color="text-ndp-text" bg="bg-white/5" />
-          <StatCard label="En attente" value={stats.pending} color="text-ndp-warning" bg="bg-ndp-warning/5" />
-          <StatCard label="Approuvées" value={stats.approved} color="text-ndp-accent" bg="bg-ndp-accent/5" />
-          <StatCard label="Disponibles" value={stats.available} color="text-ndp-success" bg="bg-ndp-success/5" />
-          <StatCard label="En cours" value={stats.processing} color="text-blue-400" bg="bg-blue-500/5" />
-          <StatCard label="Refusées" value={stats.declined} color="text-ndp-danger" bg="bg-ndp-danger/5" />
+          <StatCard label="Total" value={stats.total} icon={LayoutGrid} color="text-ndp-text" bg="bg-white/5" active={filter === ''} onClick={() => setFilter('')} />
+          <StatCard label="En attente" value={stats.pending} icon={Hourglass} color="text-ndp-warning" bg="bg-ndp-warning/5" active={filter === 'pending'} onClick={() => setFilter(filter === 'pending' ? '' : 'pending')} />
+          <StatCard label="Approuvées" value={stats.approved} icon={ThumbsUp} color="text-ndp-accent" bg="bg-ndp-accent/5" active={filter === 'approved'} onClick={() => setFilter(filter === 'approved' ? '' : 'approved')} />
+          <StatCard label="Disponibles" value={stats.available} icon={CircleCheck} color="text-ndp-success" bg="bg-ndp-success/5" active={filter === 'available'} onClick={() => setFilter(filter === 'available' ? '' : 'available')} />
+          <StatCard label="En cours" value={stats.processing} icon={Cog} color="text-blue-400" bg="bg-blue-500/5" />
+          <StatCard label="Refusées" value={stats.declined} icon={Ban} color="text-ndp-danger" bg="bg-ndp-danger/5" active={filter === 'declined'} onClick={() => setFilter(filter === 'declined' ? '' : 'declined')} />
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-ndp-text">Demandes</h1>
-          {!loading && total > 0 && (
-            <span className="text-sm text-ndp-text-dim bg-white/5 px-2.5 py-0.5 rounded-full">{total}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-ndp-text-dim" />
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="input text-sm py-2"
-          >
-            <option value="">Toutes</option>
-            <option value="pending">En attente</option>
-            <option value="approved">Approuvées</option>
-            <option value="declined">Refusées</option>
-            <option value="available">Disponibles</option>
-          </select>
-        </div>
+      <div className="flex items-center gap-3 mb-8">
+        <h1 className="text-2xl font-bold text-ndp-text">Demandes</h1>
+        {filter && (
+          <button onClick={() => setFilter('')} className="text-xs text-ndp-text-dim hover:text-ndp-text bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-full transition-colors flex items-center gap-1">
+            <XCircle className="w-3 h-3" />
+            Effacer le filtre
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -165,7 +157,12 @@ export default function RequestsPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+          <div
+            className={clsx(
+              'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 transition-opacity duration-300',
+              filtering ? 'opacity-40' : 'opacity-100'
+            )}
+          >
             {requests.map((req) => (
               <RequestCard
                 key={req.id}
@@ -322,11 +319,30 @@ function RequestCard({
   );
 }
 
-function StatCard({ label, value, color, bg }: { label: string; value: number; color: string; bg: string }) {
+function StatCard({ label, value, icon: Icon, color, bg, active, onClick }: {
+  label: string;
+  value: number;
+  icon: LucideIcon;
+  color: string;
+  bg: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <div className={clsx('rounded-xl p-4 border border-white/5', bg)}>
-      <p className={clsx('text-2xl font-bold', color)}>{value}</p>
-      <p className="text-xs text-ndp-text-dim mt-0.5">{label}</p>
-    </div>
+    <button
+      onClick={onClick}
+      className={clsx(
+        'rounded-xl p-4 border text-left transition-all duration-200',
+        active ? 'border-white/20 ring-1 ring-white/10 scale-[1.02]' : 'border-white/5 hover:border-white/10',
+        bg,
+        onClick && 'cursor-pointer'
+      )}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <Icon className={clsx('w-4 h-4', color)} />
+        <p className={clsx('text-2xl font-bold', color)}>{value}</p>
+      </div>
+      <p className="text-xs text-ndp-text-dim">{label}</p>
+    </button>
   );
 }
