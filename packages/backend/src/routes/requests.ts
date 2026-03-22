@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { radarr } from '../services/radarr.js';
 import { sonarr } from '../services/sonarr.js';
-import { getMovieDetails, getTvDetails, isAnime } from '../services/tmdb.js';
+import { getMovieDetails, getTvDetails } from '../services/tmdb.js';
+import { matchFolderRule } from '../services/folderRules.js';
 
 const VALID_STATUSES = ['pending', 'approved', 'declined', 'processing', 'available', 'failed'];
 const VALID_MEDIA_TYPES = ['movie', 'tv'];
@@ -252,49 +253,6 @@ export async function requestRoutes(app: FastifyInstance) {
   });
 }
 
-async function resolveFolder(
-  mediaType: string,
-  tmdbId: number,
-  anime: boolean,
-  settings: { defaultMovieFolder: string | null; defaultTvFolder: string | null; defaultAnimeFolder: string | null } | null
-): Promise<string> {
-  // Anime gets its own folder
-  if (anime && settings?.defaultAnimeFolder) {
-    return settings.defaultAnimeFolder;
-  }
-
-  // Check genre-folder mappings
-  const dbMedia = await prisma.media.findUnique({
-    where: { tmdbId_mediaType: { tmdbId, mediaType } },
-    select: { genres: true },
-  });
-
-  if (dbMedia?.genres) {
-    const mappings = await prisma.genreFolderMapping.findMany({ where: { mediaType } });
-    if (mappings.length > 0) {
-      const genreNames: string[] = JSON.parse(dbMedia.genres);
-      for (const mapping of mappings) {
-        if (genreNames.some(g => g.toLowerCase() === mapping.genreName.toLowerCase())) {
-          return mapping.folderPath;
-        }
-      }
-    }
-  }
-
-  // Fallback to default
-  const defaultFolder = mediaType === 'movie' ? settings?.defaultMovieFolder : settings?.defaultTvFolder;
-  if (defaultFolder) return defaultFolder;
-
-  // Last resort
-  if (mediaType === 'movie') {
-    const folders = await radarr.getRootFolders();
-    return folders[0]?.path ?? '/movies';
-  } else {
-    const folders = await sonarr.getRootFolders();
-    return folders[0]?.path ?? '/tv';
-  }
-}
-
 async function sendToService(
   media: { tmdbId: number; tvdbId: number | null; title: string },
   mediaType: string,
@@ -305,8 +263,17 @@ async function sendToService(
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
     const defaultProfileId = settings?.defaultQualityProfile ?? null;
 
+    // Fetch TMDB details for rule matching
+    const tmdbData = mediaType === 'movie'
+      ? await getMovieDetails(media.tmdbId)
+      : await getTvDetails(media.tmdbId);
+
+    // Match folder rules
+    const ruleMatch = await matchFolderRule(mediaType as 'movie' | 'tv', tmdbData);
+    const defaultFolder = mediaType === 'movie' ? settings?.defaultMovieFolder : settings?.defaultTvFolder;
+
     if (mediaType === 'movie') {
-      const folderPath = await resolveFolder('movie', media.tmdbId, false, settings);
+      const folderPath = ruleMatch?.folderPath || defaultFolder || (await radarr.getRootFolders())[0]?.path || '/movies';
       const tagId = await radarr.getOrCreateTag(username);
       const existing = await radarr.getMovieByTmdbId(media.tmdbId);
       if (!existing) {
@@ -321,10 +288,9 @@ async function sendToService(
         });
       }
     } else if (mediaType === 'tv' && media.tvdbId) {
-      // Detect anime via TMDB
-      const tvDetails = await getTvDetails(media.tmdbId);
-      const anime = isAnime(tvDetails);
-      const folderPath = await resolveFolder('tv', media.tmdbId, anime, settings);
+      const animeFolder = settings?.defaultAnimeFolder;
+      const folderPath = ruleMatch?.folderPath || defaultFolder || (await sonarr.getRootFolders())[0]?.path || '/tv';
+      const seriesType = (ruleMatch?.seriesType as 'anime' | 'standard' | 'daily') || 'standard';
 
       const tagId = await sonarr.getOrCreateTag(username);
       const existing = await sonarr.getSeriesByTvdbId(media.tvdbId);
@@ -335,7 +301,7 @@ async function sendToService(
           tvdbId: media.tvdbId,
           qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,
           rootFolderPath: folderPath,
-          seriesType: anime ? 'anime' : 'standard',
+          seriesType,
           seasons: seasons ?? [],
           tags: [tagId],
           searchForMissingEpisodes: true,

@@ -115,35 +115,62 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   });
 
-  // === GENRE-FOLDER MAPPINGS ===
+  // === FOLDER RULES ===
 
-  app.get('/genre-mappings', async (request, reply) => {
+  app.get('/folder-rules', async (request, reply) => {
     await requireAdmin(request, reply);
-    return prisma.genreFolderMapping.findMany({ orderBy: [{ mediaType: 'asc' }, { genreName: 'asc' }] });
+    return prisma.folderRule.findMany({ orderBy: { priority: 'asc' } });
   });
 
-  app.post('/genre-mappings', async (request, reply) => {
+  app.post('/folder-rules', async (request, reply) => {
     await requireAdmin(request, reply);
-    const { genreId, genreName, mediaType, folderPath } = request.body as {
-      genreId: number; genreName: string; mediaType: string; folderPath: string;
+    const { name, mediaType, conditions, folderPath, seriesType, priority } = request.body as {
+      name: string; mediaType: string; conditions: unknown[]; folderPath: string; seriesType?: string; priority?: number;
     };
-    if (!genreId || !genreName || !mediaType || !folderPath) {
+    if (!name || !mediaType || !conditions || !folderPath) {
       return reply.status(400).send({ error: 'Tous les champs sont requis' });
     }
-    const mapping = await prisma.genreFolderMapping.upsert({
-      where: { genreId_mediaType: { genreId, mediaType } },
-      update: { folderPath, genreName },
-      create: { genreId, genreName, mediaType, folderPath },
+    const rule = await prisma.folderRule.create({
+      data: {
+        name,
+        mediaType,
+        conditions: JSON.stringify(conditions),
+        folderPath,
+        seriesType: seriesType || null,
+        priority: priority ?? 0,
+      },
     });
-    return reply.status(201).send(mapping);
+    return reply.status(201).send(rule);
   });
 
-  app.delete('/genre-mappings/:id', async (request, reply) => {
+  app.put('/folder-rules/:id', async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
-    const mappingId = parseId(id);
-    if (!mappingId) return reply.status(400).send({ error: 'ID invalide' });
-    await prisma.genreFolderMapping.delete({ where: { id: mappingId } });
+    const ruleId = parseId(id);
+    if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
+    const { name, mediaType, conditions, folderPath, seriesType, priority } = request.body as {
+      name?: string; mediaType?: string; conditions?: unknown[]; folderPath?: string; seriesType?: string; priority?: number;
+    };
+    const rule = await prisma.folderRule.update({
+      where: { id: ruleId },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(mediaType !== undefined ? { mediaType } : {}),
+        ...(conditions !== undefined ? { conditions: JSON.stringify(conditions) } : {}),
+        ...(folderPath !== undefined ? { folderPath } : {}),
+        ...(seriesType !== undefined ? { seriesType: seriesType || null } : {}),
+        ...(priority !== undefined ? { priority } : {}),
+      },
+    });
+    return reply.send(rule);
+  });
+
+  app.delete('/folder-rules/:id', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { id } = request.params as { id: string };
+    const ruleId = parseId(id);
+    if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
+    await prisma.folderRule.delete({ where: { id: ruleId } });
     return reply.send({ ok: true });
   });
 

@@ -106,15 +106,15 @@ model AppSettings {
   updatedAt             DateTime  @updatedAt
 }
 
-model GenreFolderMapping {
+model FolderRule {
   id            Int       @id @default(autoincrement())
-  genreId       Int       // TMDB genre ID
-  genreName     String    // Display name (e.g. "Animation", "Documentaire")
-  mediaType     String    // "movie" | "tv"
-  folderPath    String    // Root folder path in Radarr/Sonarr
+  name          String    // Display name (e.g. "Animes", "Documentaires Film")
+  priority      Int       @default(0) // Lower = evaluated first
+  mediaType     String    // "movie" | "tv" | "all"
+  conditions    String    // JSON array: [{ field, operator, value }]
+  folderPath    String    // Target root folder path
+  seriesType    String?   // Sonarr series type override: "anime" | "standard" | "daily"
   createdAt     DateTime  @default(now())
-
-  @@unique([genreId, mediaType])
 }
 
 model TmdbCache {
