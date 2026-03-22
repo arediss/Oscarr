@@ -257,8 +257,23 @@ export function startSyncScheduler(intervalHours = 6) {
 
 function getMovieStatus(movie: RadarrMovie): string {
   if (movie.hasFile) return 'available';
-  if (movie.monitored) return 'pending';
-  return 'unknown';
+  if (!movie.monitored) return 'unknown';
+
+  // Check if the movie is released yet
+  const now = new Date();
+  const digitalRelease = movie.digitalRelease ? new Date(movie.digitalRelease) : null;
+  const physicalRelease = movie.physicalRelease ? new Date(movie.physicalRelease) : null;
+  const inCinemas = movie.inCinemas ? new Date(movie.inCinemas) : null;
+  const releaseDate = movie.releaseDate ? new Date(movie.releaseDate) : null;
+
+  // A movie is "released" for download when digital/physical release is past
+  const effectiveRelease = digitalRelease || physicalRelease || releaseDate || inCinemas;
+
+  if (effectiveRelease && effectiveRelease > now) {
+    return 'upcoming'; // Not released yet
+  }
+
+  return 'searching'; // Released but not yet downloaded
 }
 
 function getSeriesStatus(show: SonarrSeries): string {

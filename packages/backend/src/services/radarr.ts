@@ -14,6 +14,10 @@ export interface RadarrMovie {
   path: string;
   qualityProfileId: number;
   images: { coverType: string; remoteUrl: string }[];
+  digitalRelease?: string;
+  physicalRelease?: string;
+  inCinemas?: string;
+  releaseDate?: string;
 }
 
 export interface RadarrQueueItem {

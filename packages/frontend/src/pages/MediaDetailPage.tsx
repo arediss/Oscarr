@@ -111,14 +111,21 @@ export default function MediaDetailPage({ type }: Props) {
 
   const isAvailable = dbMedia?.status === 'available';
   const isPartiallyAvailable = dbMedia?.status === 'processing' && type === 'tv';
+  const isUpcoming = dbMedia?.status === 'upcoming';
+  const isSearching = dbMedia?.status === 'searching';
   const userHasRequest = dbMedia?.requests?.some(
     (r) => r.user?.id === user?.id && ['pending', 'approved', 'processing'].includes(r.status)
   );
 
   const getStatusBadge = () => {
-    // Show media availability first
     if (isAvailable) {
       return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-success/10 text-ndp-success">Disponible</span>;
+    }
+    if (isUpcoming) {
+      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400">Prochainement</span>;
+    }
+    if (isSearching) {
+      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-accent/10 text-ndp-accent">Recherche en cours</span>;
     }
     if (isPartiallyAvailable) {
       return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-accent/10 text-ndp-accent">Partiellement disponible</span>;
@@ -282,6 +289,16 @@ export default function MediaDetailPage({ type }: Props) {
                 <button disabled className="btn-success flex items-center gap-2 cursor-default">
                   <Check className="w-4 h-4" />
                   Disponible
+                </button>
+              ) : isUpcoming ? (
+                <button disabled className="btn-secondary flex items-center gap-2 cursor-default opacity-60">
+                  <Clock className="w-4 h-4" />
+                  Prochainement
+                </button>
+              ) : isSearching ? (
+                <button disabled className="btn-secondary flex items-center gap-2 cursor-default opacity-60">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Recherche en cours
                 </button>
               ) : userHasRequest ? (
                 <button disabled className="btn-success flex items-center gap-2 cursor-default">

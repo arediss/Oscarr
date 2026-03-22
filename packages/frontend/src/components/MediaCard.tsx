@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Star, CheckCircle, Clock, Film, Tv } from 'lucide-react';
+import { Star, CheckCircle, Clock, Film, Tv, Search, CalendarClock } from 'lucide-react';
 import { posterUrl } from '@/lib/api';
 import type { TmdbMedia } from '@/types';
 import { clsx } from 'clsx';
@@ -102,6 +102,22 @@ function getAvailabilityBadge(availability?: { status: string; requestStatus?: s
       label: 'Dispo',
       icon: CheckCircle,
       bgClass: 'bg-ndp-success/80 text-white',
+    };
+  }
+
+  if (availability.status === 'upcoming') {
+    return {
+      label: 'Prochainement',
+      icon: CalendarClock,
+      bgClass: 'bg-purple-600/80 text-white',
+    };
+  }
+
+  if (availability.status === 'searching') {
+    return {
+      label: 'Recherche',
+      icon: Search,
+      bgClass: 'bg-ndp-accent/80 text-white',
     };
   }
 
