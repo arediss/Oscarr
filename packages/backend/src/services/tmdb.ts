@@ -171,3 +171,16 @@ export async function getTvRecommendations(tvId: number) {
     return data;
   }, 24);
 }
+
+export async function discoverByGenre(mediaType: 'movie' | 'tv', genreId: number, page = 1) {
+  return cachedRequest(`discover:${mediaType}:genre:${genreId}:${page}`, async () => {
+    const { data } = await tmdbApi.get(`/discover/${mediaType}`, {
+      params: {
+        with_genres: genreId,
+        sort_by: 'popularity.desc',
+        page,
+      },
+    });
+    return data;
+  }, 12);
+}

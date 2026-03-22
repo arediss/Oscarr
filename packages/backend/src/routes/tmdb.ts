@@ -9,6 +9,7 @@ import {
   getTvDetails,
   getMovieRecommendations,
   getTvRecommendations,
+  discoverByGenre,
 } from '../services/tmdb.js';
 
 function parsePage(value?: string): number {
@@ -76,5 +77,17 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const tvId = parseId(id);
     if (!tvId) return reply.status(400).send({ error: 'ID invalide' });
     return getTvRecommendations(tvId);
+  });
+
+  // Discover by genre
+  app.get('/discover/:mediaType/genre/:genreId', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { mediaType, genreId } = request.params as { mediaType: string; genreId: string };
+    const { page } = request.query as { page?: string };
+    if (mediaType !== 'movie' && mediaType !== 'tv') {
+      return reply.status(400).send({ error: 'mediaType invalide' });
+    }
+    const gid = parseId(genreId);
+    if (!gid) return reply.status(400).send({ error: 'genreId invalide' });
+    return discoverByGenre(mediaType, gid, parsePage(page));
   });
 }
