@@ -5,6 +5,7 @@ import { getSonarr } from '../services/sonarr.js';
 import { syncRadarr, syncSonarr, runFullSync } from '../services/sync.js';
 import { getPlexFriends } from '../services/plex.js';
 import { syncRequestsFromTags } from '../services/requestSync.js';
+import { testDiscord, testTelegram, testEmail, sendNotification } from '../services/notifications.js';
 
 function parseId(value: string): number | null {
   const id = parseInt(value, 10);
@@ -46,6 +47,12 @@ export async function adminRoutes(app: FastifyInstance) {
       subscriptionDuration?: number;
       plexMachineId?: string;
       discordWebhookUrl?: string;
+      telegramBotToken?: string;
+      telegramChatId?: string;
+      resendApiKey?: string;
+      resendFromEmail?: string;
+      resendToEmail?: string;
+      notificationMatrix?: string;
     };
 
     const settings = await prisma.appSettings.upsert({
@@ -59,6 +66,12 @@ export async function adminRoutes(app: FastifyInstance) {
         subscriptionDuration: body.subscriptionDuration ?? undefined,
         plexMachineId: body.plexMachineId ?? undefined,
         discordWebhookUrl: body.discordWebhookUrl ?? undefined,
+        telegramBotToken: body.telegramBotToken ?? undefined,
+        telegramChatId: body.telegramChatId ?? undefined,
+        resendApiKey: body.resendApiKey ?? undefined,
+        resendFromEmail: body.resendFromEmail ?? undefined,
+        resendToEmail: body.resendToEmail ?? undefined,
+        notificationMatrix: body.notificationMatrix ?? undefined,
       },
       create: {
         id: 1,
@@ -70,6 +83,12 @@ export async function adminRoutes(app: FastifyInstance) {
         subscriptionDuration: body.subscriptionDuration ?? 30,
         plexMachineId: body.plexMachineId,
         discordWebhookUrl: body.discordWebhookUrl,
+        telegramBotToken: body.telegramBotToken,
+        telegramChatId: body.telegramChatId,
+        resendApiKey: body.resendApiKey,
+        resendFromEmail: body.resendFromEmail,
+        resendToEmail: body.resendToEmail,
+        notificationMatrix: body.notificationMatrix,
         updatedAt: new Date(),
       },
     });
@@ -129,6 +148,9 @@ export async function adminRoutes(app: FastifyInstance) {
       update: { incidentBanner: banner || null },
       create: { id: 1, incidentBanner: banner || null, updatedAt: new Date() },
     });
+    if (banner) {
+      sendNotification('incident_banner', { title: 'Incident', message: banner });
+    }
     return { ok: true };
   });
 
@@ -452,5 +474,43 @@ export async function adminRoutes(app: FastifyInstance) {
     await requireAdmin(request, reply);
     const result = await syncRequestsFromTags();
     return result;
+  });
+
+  // === NOTIFICATION TESTS ===
+
+  app.post('/notifications/test/discord', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { webhookUrl } = request.body as { webhookUrl: string };
+    if (!webhookUrl) return reply.status(400).send({ error: 'URL webhook requise' });
+    try {
+      await testDiscord(webhookUrl);
+      return { ok: true };
+    } catch (err) {
+      return reply.status(502).send({ error: 'Échec de l\'envoi Discord' });
+    }
+  });
+
+  app.post('/notifications/test/telegram', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { botToken, chatId } = request.body as { botToken: string; chatId: string };
+    if (!botToken || !chatId) return reply.status(400).send({ error: 'Bot token et chat ID requis' });
+    try {
+      await testTelegram(botToken, chatId);
+      return { ok: true };
+    } catch (err) {
+      return reply.status(502).send({ error: 'Échec de l\'envoi Telegram' });
+    }
+  });
+
+  app.post('/notifications/test/email', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { apiKey, from, to } = request.body as { apiKey: string; from: string; to: string };
+    if (!apiKey || !from || !to) return reply.status(400).send({ error: 'API key, from et to requis' });
+    try {
+      await testEmail(apiKey, from, to);
+      return { ok: true };
+    } catch (err) {
+      return reply.status(502).send({ error: 'Échec de l\'envoi email' });
+    }
   });
 }

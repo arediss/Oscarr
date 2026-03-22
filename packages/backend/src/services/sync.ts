@@ -1,6 +1,7 @@
 import { prisma } from '../utils/prisma.js';
 import { getRadarr, type RadarrMovie } from './radarr.js';
 import { getSonarr, type SonarrSeries } from './sonarr.js';
+import { sendNotification } from './notifications.js';
 
 export interface SyncResult {
   added: number;
@@ -39,6 +40,13 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
         const backdropPath = fanart ? extractTmdbPath(fanart) : null;
 
         if (existing) {
+          if (status === 'available' && existing.status !== 'available') {
+            sendNotification('media_available', {
+              title: existing.title || movie.title,
+              mediaType: 'movie',
+              posterPath: posterPath || existing.posterPath,
+            });
+          }
           await prisma.media.update({
             where: { id: existing.id },
             data: {
@@ -129,6 +137,13 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
         });
 
         if (existing) {
+          if (status === 'available' && existing.status !== 'available') {
+            sendNotification('media_available', {
+              title: existing.title || show.title,
+              mediaType: 'tv',
+              posterPath: posterPath || existing.posterPath,
+            });
+          }
           await prisma.media.update({
             where: { id: existing.id },
             data: {

@@ -12,6 +12,7 @@ import { adminRoutes } from './routes/admin.js';
 import { supportRoutes } from './routes/support.js';
 import { authenticate } from './middleware/auth.js';
 import { startSyncScheduler } from './services/sync.js';
+import { checkExpiringSubscriptions } from './services/subscriptionCheck.js';
 import { prisma } from './utils/prisma.js';
 
 const app = Fastify({ logger: true });
@@ -54,6 +55,10 @@ async function start() {
   // Start media sync scheduler
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
   startSyncScheduler(settings?.syncIntervalHours ?? 0.5);
+
+  // Check expiring subscriptions daily (first check after 30s, then every 24h)
+  setTimeout(() => checkExpiringSubscriptions().catch(console.error), 30_000);
+  setInterval(() => checkExpiringSubscriptions().catch(console.error), 24 * 60 * 60 * 1000);
 }
 
 start().catch((err) => {

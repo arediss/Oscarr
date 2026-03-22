@@ -14,9 +14,11 @@ import {
   Clock,
   FolderTree,
   Bell,
+  MessageSquare,
   ScrollText,
   Plus,
   Trash2,
+  Send,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -24,11 +26,12 @@ import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import type { AdminUser, QualityProfile, RootFolder } from '@/types';
 
-type Tab = 'users' | 'support' | 'paths' | 'jobs' | 'logs' | 'general';
+type Tab = 'users' | 'support' | 'notifications' | 'paths' | 'jobs' | 'logs' | 'general';
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'users', label: 'Utilisateurs', icon: Users },
-  { id: 'support', label: 'Support', icon: Bell },
+  { id: 'support', label: 'Support', icon: MessageSquare },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'paths', label: 'Chemins & Règles', icon: FolderTree },
   { id: 'jobs', label: 'Jobs & Sync', icon: RefreshCw },
   { id: 'logs', label: 'Logs', icon: ScrollText },
@@ -67,6 +70,7 @@ export default function AdminPage() {
 
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'support' && <SupportAdminTab />}
+      {activeTab === 'notifications' && <NotificationsTab />}
       {activeTab === 'paths' && <PathsTab />}
       {activeTab === 'jobs' && <JobsTab />}
       {activeTab === 'logs' && <LogsTab />}
@@ -660,6 +664,222 @@ function LogsTab() {
   );
 }
 
+// ============ NOTIFICATIONS TAB ============
+const EVENT_TYPES = [
+  { key: 'request_new', label: 'Nouvelle demande' },
+  { key: 'request_approved', label: 'Demande approuvée' },
+  { key: 'request_declined', label: 'Demande refusée' },
+  { key: 'media_available', label: 'Média disponible' },
+  { key: 'subscription_expiring', label: "Expiration d'abonnement" },
+  { key: 'incident_banner', label: "Bandeau d'incident" },
+] as const;
+
+const DEFAULT_MATRIX: Record<string, { discord: boolean; telegram: boolean; email: boolean }> = {
+  request_new: { discord: true, telegram: true, email: false },
+  request_approved: { discord: true, telegram: true, email: false },
+  request_declined: { discord: true, telegram: true, email: false },
+  media_available: { discord: true, telegram: true, email: false },
+  subscription_expiring: { discord: false, telegram: false, email: true },
+  incident_banner: { discord: true, telegram: true, email: false },
+};
+
+function NotificationsTab() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Channel credentials
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
+  const [telegramBotToken, setTelegramBotToken] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [resendApiKey, setResendApiKey] = useState('');
+  const [resendFromEmail, setResendFromEmail] = useState('');
+  const [resendToEmail, setResendToEmail] = useState('');
+
+  // Matrix
+  const [matrix, setMatrix] = useState<Record<string, { discord: boolean; telegram: boolean; email: boolean }>>(DEFAULT_MATRIX);
+
+  // Test states
+  const [testingDiscord, setTestingDiscord] = useState(false);
+  const [testingTelegram, setTestingTelegram] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testResult, setTestResult] = useState<{ channel: string; ok: boolean; message?: string } | null>(null);
+
+  useEffect(() => {
+    api.get('/admin/settings').then(({ data }) => {
+      setDiscordWebhookUrl(data.discordWebhookUrl || '');
+      setTelegramBotToken(data.telegramBotToken || '');
+      setTelegramChatId(data.telegramChatId || '');
+      setResendApiKey(data.resendApiKey || '');
+      setResendFromEmail(data.resendFromEmail || '');
+      setResendToEmail(data.resendToEmail || '');
+      if (data.notificationMatrix) {
+        try { setMatrix({ ...DEFAULT_MATRIX, ...JSON.parse(data.notificationMatrix) }); } catch {}
+      }
+    }).catch(console.error).finally(() => setLoading(false));
+  }, []);
+
+  const toggleMatrix = (event: string, channel: 'discord' | 'telegram' | 'email') => {
+    setMatrix(prev => ({
+      ...prev,
+      [event]: { ...prev[event], [channel]: !prev[event][channel] },
+    }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true); setSaved(false);
+    try {
+      await api.put('/admin/settings', {
+        discordWebhookUrl: discordWebhookUrl || null,
+        telegramBotToken: telegramBotToken || null,
+        telegramChatId: telegramChatId || null,
+        resendApiKey: resendApiKey || null,
+        resendFromEmail: resendFromEmail || null,
+        resendToEmail: resendToEmail || null,
+        notificationMatrix: JSON.stringify(matrix),
+      });
+      setSaved(true); setTimeout(() => setSaved(false), 3000);
+    } catch (err) { console.error(err); } finally { setSaving(false); }
+  };
+
+  const testChannel = async (channel: 'discord' | 'telegram' | 'email') => {
+    setTestResult(null);
+    try {
+      if (channel === 'discord') {
+        setTestingDiscord(true);
+        await api.post('/admin/notifications/test/discord', { webhookUrl: discordWebhookUrl });
+      } else if (channel === 'telegram') {
+        setTestingTelegram(true);
+        await api.post('/admin/notifications/test/telegram', { botToken: telegramBotToken, chatId: telegramChatId });
+      } else {
+        setTestingEmail(true);
+        await api.post('/admin/notifications/test/email', { apiKey: resendApiKey, from: resendFromEmail, to: resendToEmail });
+      }
+      setTestResult({ channel, ok: true });
+    } catch {
+      setTestResult({ channel, ok: false, message: 'Échec de l\'envoi' });
+    } finally {
+      setTestingDiscord(false); setTestingTelegram(false); setTestingEmail(false);
+      setTimeout(() => setTestResult(null), 4000);
+    }
+  };
+
+  if (loading) return <Spinner />;
+
+  const hasDiscord = !!discordWebhookUrl;
+  const hasTelegram = !!telegramBotToken && !!telegramChatId;
+  const hasEmail = !!resendApiKey && !!resendFromEmail && !!resendToEmail;
+
+  return (
+    <div className="space-y-6">
+      {/* Channel Configuration */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Discord */}
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Discord</h3>
+          <label className="text-xs text-ndp-text-dim block mb-1">Webhook URL</label>
+          <input type="text" value={discordWebhookUrl} onChange={(e) => setDiscordWebhookUrl(e.target.value)} placeholder="https://discord.com/api/webhooks/..." className="input w-full text-sm mb-3" />
+          <button onClick={() => testChannel('discord')} disabled={!hasDiscord || testingDiscord} className="btn-secondary text-xs flex items-center gap-1.5">
+            {testingDiscord ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Tester
+          </button>
+          {testResult?.channel === 'discord' && (
+            <p className={clsx('text-xs mt-2', testResult.ok ? 'text-ndp-success' : 'text-ndp-danger')}>
+              {testResult.ok ? 'Envoyé !' : testResult.message}
+            </p>
+          )}
+        </div>
+
+        {/* Telegram */}
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Telegram</h3>
+          <label className="text-xs text-ndp-text-dim block mb-1">Bot Token</label>
+          <input type="text" value={telegramBotToken} onChange={(e) => setTelegramBotToken(e.target.value)} placeholder="123456:ABC-DEF..." className="input w-full text-sm mb-2" />
+          <label className="text-xs text-ndp-text-dim block mb-1">Chat ID</label>
+          <input type="text" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} placeholder="-1001234567890" className="input w-full text-sm mb-3" />
+          <button onClick={() => testChannel('telegram')} disabled={!hasTelegram || testingTelegram} className="btn-secondary text-xs flex items-center gap-1.5">
+            {testingTelegram ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Tester
+          </button>
+          {testResult?.channel === 'telegram' && (
+            <p className={clsx('text-xs mt-2', testResult.ok ? 'text-ndp-success' : 'text-ndp-danger')}>
+              {testResult.ok ? 'Envoyé !' : testResult.message}
+            </p>
+          )}
+        </div>
+
+        {/* Email (Resend) */}
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Email (Resend)</h3>
+          <label className="text-xs text-ndp-text-dim block mb-1">API Key</label>
+          <input type="password" value={resendApiKey} onChange={(e) => setResendApiKey(e.target.value)} placeholder="re_..." className="input w-full text-sm mb-2" />
+          <label className="text-xs text-ndp-text-dim block mb-1">Email expéditeur</label>
+          <input type="text" value={resendFromEmail} onChange={(e) => setResendFromEmail(e.target.value)} placeholder="Netflix du Pauvre <notifs@domain.com>" className="input w-full text-sm mb-2" />
+          <label className="text-xs text-ndp-text-dim block mb-1">Email destinataire</label>
+          <input type="text" value={resendToEmail} onChange={(e) => setResendToEmail(e.target.value)} placeholder="admin@domain.com" className="input w-full text-sm mb-3" />
+          <button onClick={() => testChannel('email')} disabled={!hasEmail || testingEmail} className="btn-secondary text-xs flex items-center gap-1.5">
+            {testingEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Tester
+          </button>
+          {testResult?.channel === 'email' && (
+            <p className={clsx('text-xs mt-2', testResult.ok ? 'text-ndp-success' : 'text-ndp-danger')}>
+              {testResult.ok ? 'Envoyé !' : testResult.message}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Event Matrix */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Matrice d'événements</h3>
+        <p className="text-xs text-ndp-text-dim mb-4">Choisissez quels canaux reçoivent chaque type de notification.</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/5 text-ndp-text-dim text-xs">
+                <th className="text-left px-4 py-3">Événement</th>
+                <th className="text-center px-4 py-3">
+                  <span className={clsx(!hasDiscord && 'opacity-40')}>Discord</span>
+                </th>
+                <th className="text-center px-4 py-3">
+                  <span className={clsx(!hasTelegram && 'opacity-40')}>Telegram</span>
+                </th>
+                <th className="text-center px-4 py-3">
+                  <span className={clsx(!hasEmail && 'opacity-40')}>Email</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {EVENT_TYPES.map(({ key, label }) => (
+                <tr key={key} className="border-b border-white/5">
+                  <td className="px-4 py-3 text-ndp-text">{label}</td>
+                  {(['discord', 'telegram', 'email'] as const).map((ch) => {
+                    const disabled = (ch === 'discord' && !hasDiscord) || (ch === 'telegram' && !hasTelegram) || (ch === 'email' && !hasEmail);
+                    return (
+                      <td key={ch} className="text-center px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={matrix[key]?.[ch] ?? false}
+                          onChange={() => toggleMatrix(key, ch)}
+                          disabled={disabled}
+                          className="w-4 h-4 rounded accent-ndp-accent disabled:opacity-30"
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Save */}
+      <button onClick={handleSave} disabled={saving} className={clsx('flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-xl transition-all', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+        {saved ? 'Sauvegardé' : 'Sauvegarder'}
+      </button>
+    </div>
+  );
+}
+
 // ============ GENERAL TAB ============
 function GeneralTab() {
   const [saving, setSaving] = useState(false);
@@ -667,7 +887,6 @@ function GeneralTab() {
   const [subPrice, setSubPrice] = useState('');
   const [subDuration, setSubDuration] = useState('');
   const [plexMachineId, setPlexMachineId] = useState('');
-  const [discordWebhook, setDiscordWebhook] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -675,14 +894,13 @@ function GeneralTab() {
       setSubPrice(data.subscriptionPrice?.toString() || '0');
       setSubDuration(data.subscriptionDuration?.toString() || '30');
       setPlexMachineId(data.plexMachineId || '');
-      setDiscordWebhook(data.discordWebhookUrl || '');
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const handleSave = async () => {
     setSaving(true); setSaved(false);
     try {
-      await api.put('/admin/settings', { subscriptionPrice: parseFloat(subPrice) || 0, subscriptionDuration: parseInt(subDuration) || 30, plexMachineId: plexMachineId || null, discordWebhookUrl: discordWebhook || null });
+      await api.put('/admin/settings', { subscriptionPrice: parseFloat(subPrice) || 0, subscriptionDuration: parseInt(subDuration) || 30, plexMachineId: plexMachineId || null });
       setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch (err) { console.error(err); } finally { setSaving(false); }
   };
@@ -691,7 +909,7 @@ function GeneralTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card p-6">
           <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Abonnement</h3>
           <div className="grid grid-cols-2 gap-4">
@@ -704,12 +922,6 @@ function GeneralTab() {
           <label className="text-sm text-ndp-text mb-1 block">Machine ID du serveur</label>
           <input type="text" value={plexMachineId} onChange={(e) => setPlexMachineId(e.target.value)} placeholder="Laissez vide pour désactiver" className="input w-full" />
           <p className="text-xs text-ndp-text-dim mt-1"><code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">http://IP:32400/identity</code> → machineIdentifier</p>
-        </div>
-        <div className="card p-6">
-          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Notifications Discord</h3>
-          <label className="text-sm text-ndp-text mb-1 block">Webhook URL</label>
-          <input type="text" value={discordWebhook} onChange={(e) => setDiscordWebhook(e.target.value)} placeholder="https://discord.com/api/webhooks/..." className="input w-full" />
-          <p className="text-xs text-ndp-text-dim mt-1">Notifie les nouvelles demandes, approbations et refus</p>
         </div>
       </div>
       <button onClick={handleSave} disabled={saving} className={clsx('flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-xl transition-all', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>

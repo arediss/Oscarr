@@ -117,6 +117,12 @@ model AppSettings {
   lastSonarrSync        DateTime? // Last Sonarr sync timestamp
   syncIntervalHours     Int       @default(6) // Auto-sync interval in hours
   discordWebhookUrl     String?   // Discord webhook URL for notifications
+  telegramBotToken      String?
+  telegramChatId        String?
+  resendApiKey          String?
+  resendFromEmail       String?
+  resendToEmail         String?
+  notificationMatrix    String?
   incidentBanner        String?   // Global incident banner text (null = no banner)
   updatedAt             DateTime  @updatedAt
 }
