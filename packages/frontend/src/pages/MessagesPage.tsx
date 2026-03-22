@@ -8,7 +8,6 @@ import {
   HeadphonesIcon,
   Loader2,
   MessageSquare,
-  ArrowLeft,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
@@ -20,7 +19,6 @@ interface Channel {
   type: 'general' | 'announcements' | 'support';
   isPrivate: boolean;
   messageCount: number;
-  lastMessage: { content: string; user: { plexUsername: string }; createdAt: string } | null;
 }
 
 interface ChatMsg {
@@ -50,6 +48,7 @@ export default function MessagesPage() {
     try {
       const { data } = await api.get('/chat/channels');
       setChannels(data);
+      if (!activeChannel && data.length > 0) setActiveChannel(data[0]);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, []);
@@ -60,16 +59,11 @@ export default function MessagesPage() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) return;
-
     let cancelled = false;
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${proto}//${window.location.host}/api/chat/ws`);
     wsRef.current = ws;
-
-    ws.onopen = () => {
-      if (cancelled) { ws.close(); return; }
-      ws.send(JSON.stringify({ type: 'auth', token }));
-    };
+    ws.onopen = () => { if (cancelled) { ws.close(); return; } ws.send(JSON.stringify({ type: 'auth', token })); };
     ws.onmessage = (event) => {
       if (cancelled) return;
       const msg = JSON.parse(event.data);
@@ -80,7 +74,6 @@ export default function MessagesPage() {
       }
     };
     ws.onclose = () => { if (!cancelled) setWsConnected(false); };
-
     return () => { cancelled = true; ws.close(); };
   }, []);
 
@@ -119,10 +112,10 @@ export default function MessagesPage() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
-  const channelIcon = (type: string, isPrivate: boolean) => {
-    if (type === 'support') return <HeadphonesIcon className="w-4 h-4" />;
-    if (type === 'announcements') return <Megaphone className="w-4 h-4" />;
-    if (isPrivate) return <Lock className="w-4 h-4" />;
+  const channelIcon = (ch: Channel) => {
+    if (ch.type === 'support') return <HeadphonesIcon className="w-4 h-4" />;
+    if (ch.type === 'announcements') return <Megaphone className="w-4 h-4" />;
+    if (ch.isPrivate) return <Lock className="w-4 h-4" />;
     return <Hash className="w-4 h-4" />;
   };
 
@@ -140,111 +133,58 @@ export default function MessagesPage() {
     return <div className="flex items-center justify-center h-[calc(100vh-4rem)]"><Loader2 className="w-8 h-8 text-ndp-accent animate-spin" /></div>;
   }
 
-  // Messenger-style: conversation list OR chat view
-  const showChat = !!activeChannel;
-
   return (
-    <div className="max-w-4xl mx-auto h-[calc(100vh-4rem)] flex flex-col">
-      {!showChat ? (
-        /* ===== CONVERSATION LIST ===== */
-        <div className="flex-1 flex flex-col">
-          <div className="px-6 py-5 flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-ndp-text">Messages</h1>
-              <div className="flex items-center gap-1.5 mt-1">
-                <div className={clsx('w-2 h-2 rounded-full', wsConnected ? 'bg-ndp-success' : 'bg-ndp-danger')} />
-                <span className="text-xs text-ndp-text-dim">{wsConnected ? 'En ligne' : 'Hors ligne'}</span>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowNewSupport(true)}
-              className="btn-primary text-sm flex items-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" /> Nouveau ticket
-            </button>
-          </div>
-
-          {/* New support form */}
-          {showNewSupport && (
-            <div className="mx-6 mb-4 p-4 card border border-ndp-accent/20 animate-slide-up">
-              <p className="text-sm font-semibold text-ndp-text mb-2">Demande de support</p>
-              <input
-                value={supportSubject}
-                onChange={(e) => setSupportSubject(e.target.value)}
-                placeholder="Décrivez votre problème..."
-                className="input text-sm w-full mb-3"
-                onKeyDown={(e) => e.key === 'Enter' && createSupportTicket()}
-                autoFocus
-              />
-              <div className="flex gap-2">
-                <button onClick={createSupportTicket} disabled={!supportSubject.trim()} className="btn-primary text-sm">Créer</button>
-                <button onClick={() => setShowNewSupport(false)} className="btn-secondary text-sm">Annuler</button>
-              </div>
-            </div>
-          )}
-
-          {/* Channel list */}
-          <div className="flex-1 overflow-y-auto">
-            {channels.length === 0 ? (
-              <div className="text-center py-16">
-                <MessageSquare className="w-12 h-12 text-ndp-text-dim mx-auto mb-3" />
-                <p className="text-ndp-text-muted">Aucune conversation</p>
-              </div>
-            ) : (
-              channels.map((ch) => (
-                <button
-                  key={ch.id}
-                  onClick={() => setActiveChannel(ch)}
-                  className="w-full flex items-center gap-4 px-6 py-4 hover:bg-white/5 transition-colors text-left border-b border-white/5"
-                >
-                  <div className={clsx(
-                    'w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0',
-                    ch.type === 'support' ? 'bg-ndp-warning/10 text-ndp-warning' :
-                    ch.type === 'announcements' ? 'bg-ndp-accent/10 text-ndp-accent' :
-                    'bg-white/5 text-ndp-text-muted'
-                  )}>
-                    {channelIcon(ch.type, ch.isPrivate)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-ndp-text truncate">{ch.name}</p>
-                      {ch.lastMessage && (
-                        <span className="text-[10px] text-ndp-text-dim flex-shrink-0 ml-2">{formatTime(ch.lastMessage.createdAt)}</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-ndp-text-dim truncate mt-0.5">
-                      {ch.lastMessage ? `${ch.lastMessage.user.plexUsername}: ${ch.lastMessage.content}` : 'Aucun message'}
-                    </p>
-                  </div>
-                </button>
-              ))
-            )}
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col h-[calc(100vh-4rem)]">
+      {/* Header */}
+      <div className="flex items-center justify-between py-4">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold text-ndp-text">Messages</h1>
+          <div className="flex items-center gap-1.5">
+            <div className={clsx('w-2 h-2 rounded-full', wsConnected ? 'bg-ndp-success' : 'bg-ndp-danger')} />
+            <span className="text-[10px] text-ndp-text-dim">{wsConnected ? 'En ligne' : 'Hors ligne'}</span>
           </div>
         </div>
-      ) : (
-        /* ===== CHAT VIEW ===== */
-        <div className="flex-1 flex flex-col">
-          {/* Header */}
-          <div className="px-4 py-3 border-b border-white/5 flex items-center gap-3">
-            <button onClick={() => setActiveChannel(null)} className="p-2 hover:bg-white/5 rounded-lg transition-colors">
-              <ArrowLeft className="w-5 h-5 text-ndp-text-muted" />
-            </button>
-            <div className={clsx(
-              'w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0',
-              activeChannel.type === 'support' ? 'bg-ndp-warning/10 text-ndp-warning' :
-              activeChannel.type === 'announcements' ? 'bg-ndp-accent/10 text-ndp-accent' :
-              'bg-white/5 text-ndp-text-muted'
-            )}>
-              {channelIcon(activeChannel.type, activeChannel.isPrivate)}
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-ndp-text">{activeChannel.name}</h3>
-              <span className="text-[10px] text-ndp-text-dim">{activeChannel.messageCount} messages</span>
-            </div>
-          </div>
+        <button onClick={() => setShowNewSupport(!showNewSupport)} className="btn-primary text-sm flex items-center gap-1.5">
+          <Plus className="w-4 h-4" /> Support
+        </button>
+      </div>
 
+      {/* Support ticket form */}
+      {showNewSupport && (
+        <div className="mb-4 p-4 card border border-ndp-accent/20 animate-slide-up">
+          <p className="text-sm font-semibold text-ndp-text mb-2">Demande de support</p>
+          <input value={supportSubject} onChange={(e) => setSupportSubject(e.target.value)} placeholder="Décrivez votre problème..." className="input text-sm w-full mb-3" onKeyDown={(e) => e.key === 'Enter' && createSupportTicket()} autoFocus />
+          <div className="flex gap-2">
+            <button onClick={createSupportTicket} disabled={!supportSubject.trim()} className="btn-primary text-sm">Créer</button>
+            <button onClick={() => setShowNewSupport(false)} className="btn-secondary text-sm">Annuler</button>
+          </div>
+        </div>
+      )}
+
+      {/* Channel tabs */}
+      <div className="flex gap-1 overflow-x-auto pb-1 mb-1" style={{ scrollbarWidth: 'none' }}>
+        {channels.map((ch) => (
+          <button
+            key={ch.id}
+            onClick={() => setActiveChannel(ch)}
+            className={clsx(
+              'flex items-center gap-2 px-4 py-2 rounded-t-xl text-sm font-medium transition-all whitespace-nowrap border-b-2',
+              activeChannel?.id === ch.id
+                ? 'bg-ndp-surface border-ndp-accent text-ndp-accent'
+                : 'bg-transparent border-transparent text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
+            )}
+          >
+            {channelIcon(ch)}
+            <span>{ch.name}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Chat area */}
+      {activeChannel ? (
+        <div className="flex-1 flex flex-col card rounded-t-none border-t-0 overflow-hidden min-h-0">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
             {loadingMsgs ? (
               <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 text-ndp-accent animate-spin" /></div>
             ) : messages.length === 0 ? (
@@ -260,7 +200,7 @@ export default function MessagesPage() {
 
                 return (
                   <div key={msg.id} className={clsx('flex', isMe ? 'justify-end' : 'justify-start')}>
-                    <div className={clsx('max-w-[75%]', isMe ? 'items-end' : 'items-start')}>
+                    <div className="max-w-[75%]">
                       {showMeta && !isMe && (
                         <div className="flex items-center gap-2 mb-1 ml-1">
                           {msg.user.avatar ? (
@@ -276,9 +216,7 @@ export default function MessagesPage() {
                       )}
                       <div className={clsx(
                         'px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words',
-                        isMe
-                          ? 'bg-ndp-accent text-white rounded-br-md'
-                          : 'bg-ndp-surface-light text-ndp-text rounded-bl-md'
+                        isMe ? 'bg-ndp-accent text-white rounded-br-md' : 'bg-ndp-surface-light text-ndp-text rounded-bl-md'
                       )}>
                         {msg.content}
                       </div>
@@ -296,13 +234,13 @@ export default function MessagesPage() {
           </div>
 
           {/* Input */}
-          <div className="px-4 py-3 border-t border-white/5">
+          <div className="px-5 py-3 border-t border-white/5">
             <div className="flex gap-2 items-center">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Écrire un message..."
+                placeholder={`Message dans #${activeChannel.name}...`}
                 className="input flex-1 text-sm rounded-full px-5"
               />
               <button onClick={sendMessage} disabled={!input.trim()}
@@ -313,6 +251,13 @@ export default function MessagesPage() {
                 <Send className="w-4 h-4" />
               </button>
             </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center card">
+          <div className="text-center">
+            <MessageSquare className="w-12 h-12 text-ndp-text-dim mx-auto mb-3" />
+            <p className="text-ndp-text-muted">Aucun canal disponible</p>
           </div>
         </div>
       )}
