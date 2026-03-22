@@ -151,8 +151,12 @@ function getAvailabilityBadge(availability?: { status: string; requestStatus?: s
 
 export function MediaCardSkeleton() {
   return (
-    <div className="flex-shrink-0 rounded-xl overflow-hidden">
+    <div className="flex-shrink-0 w-[140px] sm:w-[160px] lg:w-[180px] rounded-xl overflow-hidden">
       <div className="aspect-[2/3] skeleton" />
+      <div className="mt-2 space-y-1.5">
+        <div className="skeleton h-3 w-3/4 rounded" />
+        <div className="skeleton h-2.5 w-1/2 rounded" />
+      </div>
     </div>
   );
 }

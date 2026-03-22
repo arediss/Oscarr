@@ -178,7 +178,10 @@ export default function HomePage() {
 
       {/* Content rows */}
       <div className="space-y-10 pb-16 -mt-8 relative z-10">
-        {recentlyAdded.length > 0 && (
+        {loading && (
+          <MediaRow title="Récemment ajoutés" media={[]} loading={true} />
+        )}
+        {!loading && recentlyAdded.length > 0 && (
           <MediaRow title="Récemment ajoutés" media={recentlyAdded} />
         )}
         <MediaRow title="Tendances de la semaine" media={trending} loading={loading} href="/category/trending" />
