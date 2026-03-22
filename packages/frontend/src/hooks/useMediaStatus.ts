@@ -58,7 +58,7 @@ export function useMediaStatus(media: TmdbMedia[]): StatusMap {
     const currentId = ++idRef.current;
 
     const items = media
-      .filter((m) => m.id && (m.media_type || m.title))
+      .filter((m) => m.id && (m.media_type || m.title || m.name))
       .map((m) => ({
         tmdbId: m.id,
         mediaType: m.media_type || (m.title ? 'movie' : 'tv'),

@@ -212,6 +212,21 @@ export async function getCollection(collectionId: number): Promise<TmdbCollectio
   }, 48);
 }
 
+export async function findByTvdbId(tvdbId: number): Promise<{ tmdbId: number; posterPath: string | null; backdropPath: string | null } | null> {
+  return cachedRequest(`find:tvdb:${tvdbId}`, async () => {
+    const { data } = await getTmdbApi().get(`/find/${tvdbId}`, {
+      params: { external_source: 'tvdb_id' },
+    });
+    const result = data.tv_results?.[0];
+    if (!result) return null;
+    return {
+      tmdbId: result.id,
+      posterPath: result.poster_path,
+      backdropPath: result.backdrop_path,
+    };
+  }, 168); // Cache 7 days — tvdb→tmdb mapping doesn't change
+}
+
 export async function discoverByGenre(mediaType: 'movie' | 'tv', genreId: number, page = 1) {
   return cachedRequest(`discover:${mediaType}:genre:${genreId}:${page}`, async () => {
     const { data } = await getTmdbApi().get(`/discover/${mediaType}`, {

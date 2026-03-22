@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Layout from '@/components/Layout';
 import HomePage from '@/pages/HomePage';
@@ -39,6 +39,15 @@ function LoadingScreen() {
   );
 }
 
+function PageTransition({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  return (
+    <div key={location.pathname} className="animate-fade-in">
+      {children}
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <Routes>
@@ -48,24 +57,26 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Layout>
-              <Routes>
-                {/* These pages require full access (server + subscription) */}
-                <Route path="/" element={<RequireAccess><HomePage /></RequireAccess>} />
-                <Route path="/search" element={<RequireAccess><SearchPage /></RequireAccess>} />
-                <Route path="/movie/:id" element={<RequireAccess><MediaDetailPage type="movie" /></RequireAccess>} />
-                <Route path="/tv/:id" element={<RequireAccess><MediaDetailPage type="tv" /></RequireAccess>} />
-                <Route path="/requests" element={<RequireAccess><RequestsPage /></RequireAccess>} />
+              <PageTransition>
+                <Routes>
+                  {/* These pages require full access (server + subscription) */}
+                  <Route path="/" element={<RequireAccess><HomePage /></RequireAccess>} />
+                  <Route path="/search" element={<RequireAccess><SearchPage /></RequireAccess>} />
+                  <Route path="/movie/:id" element={<RequireAccess><MediaDetailPage type="movie" /></RequireAccess>} />
+                  <Route path="/tv/:id" element={<RequireAccess><MediaDetailPage type="tv" /></RequireAccess>} />
+                  <Route path="/requests" element={<RequireAccess><RequestsPage /></RequireAccess>} />
 
-                <Route path="/discover/:mediaType/genre/:genreId" element={<RequireAccess><DiscoverGenrePage /></RequireAccess>} />
-                <Route path="/category/:slug" element={<RequireAccess><CategoryPage /></RequireAccess>} />
-                <Route path="/calendar" element={<RequireAccess><CalendarPage /></RequireAccess>} />
+                  <Route path="/discover/:mediaType/genre/:genreId" element={<RequireAccess><DiscoverGenrePage /></RequireAccess>} />
+                  <Route path="/category/:slug" element={<RequireAccess><CategoryPage /></RequireAccess>} />
+                  <Route path="/calendar" element={<RequireAccess><CalendarPage /></RequireAccess>} />
 
-                {/* Support accessible even without full access */}
-                <Route path="/support" element={<MessagesPage />} />
+                  {/* Support accessible even without full access */}
+                  <Route path="/support" element={<MessagesPage />} />
 
-                {/* Admin only */}
-                <Route path="/admin" element={<AdminPage />} />
-              </Routes>
+                  {/* Admin only */}
+                  <Route path="/admin" element={<AdminPage />} />
+                </Routes>
+              </PageTransition>
             </Layout>
           </ProtectedRoute>
         }

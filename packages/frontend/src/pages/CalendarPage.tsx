@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Film, Tv, Loader2, CheckCircle, Star } from 'lucide-react';
+import { Calendar, Film, Tv, CheckCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { posterUrl } from '@/lib/api';
@@ -73,7 +73,23 @@ export default function CalendarPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 text-ndp-accent animate-spin" /></div>
+        <div className="space-y-10">
+          {[0, 1].map((s) => (
+            <section key={s}>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="h-5 w-40 bg-ndp-surface-light rounded animate-pulse" />
+                <div className="flex-1 h-px bg-white/5" />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <div key={i} className="rounded-xl overflow-hidden">
+                    <div className="aspect-[2/3] bg-ndp-surface-light animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       ) : items.length === 0 ? (
         <div className="text-center py-20">
           <Calendar className="w-12 h-12 text-ndp-text-dim mx-auto mb-3" />

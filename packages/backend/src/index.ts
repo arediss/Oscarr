@@ -53,7 +53,7 @@ async function start() {
 
   // Start media sync scheduler
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-  startSyncScheduler(settings?.syncIntervalHours ?? 6);
+  startSyncScheduler(settings?.syncIntervalHours ?? 0.5);
 }
 
 start().catch((err) => {

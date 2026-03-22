@@ -106,17 +106,8 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
 
     for (const show of filtered) {
       try {
-        // Try to find by tvdbId first, then by tmdbId=tvdbId as fallback
-        const existing = await prisma.media.findFirst({
-          where: {
-            mediaType: 'tv',
-            OR: [
-              { tvdbId: show.tvdbId },
-              { tmdbId: show.tvdbId },
-            ],
-          },
-          include: { seasons: true },
-        });
+        // Sonarr gives us tmdbId directly — no need for external API calls
+        const tmdbId = show.tmdbId || null;
 
         const status = getSeriesStatus(show);
         const poster = show.images?.find((i) => i.coverType === 'poster')?.remoteUrl;
@@ -124,12 +115,27 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
         const posterPath = poster ? extractImagePath(poster) : null;
         const backdropPath = fanart ? extractImagePath(fanart) : null;
 
+        // Try to find existing entry: by tmdbId (preferred), tvdbId, or negative placeholder
+        const existing = await prisma.media.findFirst({
+          where: {
+            mediaType: 'tv',
+            OR: [
+              ...(tmdbId ? [{ tmdbId }] : []),
+              { tvdbId: show.tvdbId },
+              { tmdbId: -(show.tvdbId) }, // old negative placeholder
+            ],
+          },
+          include: { seasons: true },
+        });
+
         if (existing) {
           await prisma.media.update({
             where: { id: existing.id },
             data: {
               sonarrId: show.id,
               tvdbId: show.tvdbId,
+              // Fix negative placeholder tmdbId with real one from Sonarr
+              ...(tmdbId && existing.tmdbId < 0 ? { tmdbId } : {}),
               status,
               title: existing.title || show.title,
               ...(posterPath && !existing.posterPath ? { posterPath } : {}),
@@ -137,7 +143,7 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
             },
           });
 
-          // Sync seasons in a single transaction
+          // Sync seasons
           await prisma.$transaction(
             show.seasons
               .filter((s) => s.seasonNumber !== 0)
@@ -165,13 +171,12 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
           );
           updated++;
         } else {
-          // Use negative tvdbId as tmdbId placeholder to avoid unique constraint conflicts
-          // Will be updated with real tmdbId when user views detail page
-          const placeholderTmdbId = -(show.tvdbId);
+          // New series — use tmdbId from Sonarr, fallback to negative placeholder
+          const finalTmdbId = tmdbId || -(show.tvdbId);
 
           const media = await prisma.media.create({
             data: {
-              tmdbId: placeholderTmdbId,
+              tmdbId: finalTmdbId,
               tvdbId: show.tvdbId,
               mediaType: 'tv',
               title: show.title,
@@ -182,7 +187,7 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
             },
           });
 
-          // Create seasons in a single transaction
+          // Create seasons
           await prisma.$transaction(
             show.seasons
               .filter((s) => s.seasonNumber !== 0)
