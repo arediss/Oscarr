@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   Star,
@@ -35,6 +35,20 @@ export default function MediaDetailPage({ type }: Props) {
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
   const [rootFolders, setRootFolders] = useState<RootFolder[]>([]);
   const [selectedRootFolder, setSelectedRootFolder] = useState('');
+  const [scrollOpacity, setScrollOpacity] = useState(0);
+
+  const handleScroll = useCallback(() => {
+    const scrollY = window.scrollY;
+    const fadeStart = 100;
+    const fadeEnd = 500;
+    const opacity = Math.min(1, Math.max(0, (scrollY - fadeStart) / (fadeEnd - fadeStart)));
+    setScrollOpacity(opacity);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
 
   useEffect(() => {
     setLoading(true);
@@ -139,26 +153,31 @@ export default function MediaDetailPage({ type }: Props) {
 
   return (
     <div className="min-h-screen">
-      {/* Backdrop */}
-      <div className="relative h-[60vh] min-h-[400px]">
-        <div className="absolute inset-0">
-          {media.backdrop_path ? (
-            <img src={backdropUrl(media.backdrop_path)} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-ndp-surface" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-ndp-bg via-ndp-bg/60 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-r from-ndp-bg/80 to-transparent" />
-        </div>
-
-        {/* Back button */}
-        <Link to="/" className="absolute top-6 left-4 sm:left-8 z-10 p-2 glass rounded-xl hover:bg-white/10 transition-colors">
-          <ArrowLeft className="w-5 h-5 text-white" />
-        </Link>
+      {/* Fixed backdrop */}
+      <div className="fixed inset-0 h-screen z-0">
+        {media.backdrop_path ? (
+          <img src={backdropUrl(media.backdrop_path)} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-ndp-surface" />
+        )}
+        {/* Base gradients */}
+        <div className="absolute inset-0 bg-gradient-to-t from-ndp-bg via-ndp-bg/40 to-ndp-bg/20" />
+        <div className="absolute inset-0 bg-gradient-to-r from-ndp-bg/70 to-transparent" />
+        {/* Scroll-driven fade to bg color */}
+        <div
+          className="absolute inset-0 bg-ndp-bg transition-none"
+          style={{ opacity: scrollOpacity }}
+        />
       </div>
 
-      {/* Content */}
-      <div className="relative -mt-48 z-10 max-w-[1400px] mx-auto px-4 sm:px-8">
+      {/* Back button - fixed */}
+      <Link to="/" className="fixed top-20 left-4 sm:left-8 z-20 p-2 glass rounded-xl hover:bg-white/10 transition-colors">
+        <ArrowLeft className="w-5 h-5 text-white" />
+      </Link>
+
+      {/* Scrollable content */}
+      <div className="relative z-10 pt-[45vh] min-h-screen">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-8">
         <div className="flex flex-col md:flex-row gap-8">
           {/* Poster */}
           <div className="flex-shrink-0 w-48 sm:w-56 mx-auto md:mx-0">
@@ -379,6 +398,7 @@ export default function MediaDetailPage({ type }: Props) {
             <MediaRow title="Recommandations" media={recommendations} />
           </div>
         )}
+        </div>
       </div>
     </div>
   );
