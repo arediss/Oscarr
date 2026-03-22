@@ -474,13 +474,18 @@ function JobsTab() {
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  const runSync = async (type: 'full' | 'radarr' | 'sonarr') => {
+  const runSync = async (type: 'full' | 'force' | 'radarr' | 'sonarr') => {
     setRunning(type);
     setLastResult(null);
     try {
-      const endpoint = type === 'full' ? '/admin/sync/run' : `/admin/sync/${type}`;
-      const { data } = await api.post(endpoint);
-      if (type === 'full') {
+      const endpoints: Record<string, string> = {
+        full: '/admin/sync/run',
+        force: '/admin/sync/force',
+        radarr: '/admin/sync/radarr',
+        sonarr: '/admin/sync/sonarr',
+      };
+      const { data } = await api.post(endpoints[type]);
+      if (type === 'full' || type === 'force') {
         setLastResult(data);
       } else {
         setLastResult({ [type]: data });
@@ -560,6 +565,14 @@ function JobsTab() {
           >
             {running === 'sonarr' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Sync Sonarr
+          </button>
+          <button
+            onClick={() => runSync('force')}
+            disabled={running !== null}
+            className="btn-danger flex items-center gap-2 text-sm"
+          >
+            {running === 'force' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Force sync (tout reimporter)
           </button>
         </div>
 

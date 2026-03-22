@@ -230,11 +230,26 @@ export async function adminRoutes(app: FastifyInstance) {
     };
   });
 
-  // Trigger full sync (both Radarr + Sonarr)
+  // Trigger incremental sync
   app.post('/sync/run', async (request, reply) => {
     await requireAdmin(request, reply);
     const result = await runFullSync();
     return result;
+  });
+
+  // Force full sync (reset timestamps, re-import everything)
+  app.post('/sync/force', async (request, reply) => {
+    await requireAdmin(request, reply);
+    await prisma.appSettings.upsert({
+      where: { id: 1 },
+      update: { lastRadarrSync: null, lastSonarrSync: null },
+      create: { id: 1, lastRadarrSync: null, lastSonarrSync: null, updatedAt: new Date() },
+    });
+    const [radarrResult, sonarrResult] = await Promise.all([
+      syncRadarr(null),
+      syncSonarr(null),
+    ]);
+    return { radarr: radarrResult, sonarr: sonarrResult };
   });
 
   // Trigger Radarr sync only
