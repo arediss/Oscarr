@@ -111,6 +111,7 @@ export async function mediaRoutes(app: FastifyInstance) {
 
     const media = await prisma.media.findMany({
       where: {
+        tmdbId: { gt: 0 },
         status: { in: ['available', 'searching', 'upcoming', 'processing'] },
         OR: [
           { radarrId: { not: null } },

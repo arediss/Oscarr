@@ -33,6 +33,11 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
 
         const status = getMovieStatus(movie);
 
+        const poster = movie.images?.find((i) => i.coverType === 'poster')?.remoteUrl;
+        const fanart = movie.images?.find((i) => i.coverType === 'fanart')?.remoteUrl;
+        const posterPath = poster ? extractTmdbPath(poster) : null;
+        const backdropPath = fanart ? extractTmdbPath(fanart) : null;
+
         if (existing) {
           await prisma.media.update({
             where: { id: existing.id },
@@ -40,16 +45,12 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
               radarrId: movie.id,
               status,
               title: existing.title || movie.title,
+              ...(posterPath && !existing.posterPath ? { posterPath } : {}),
+              ...(backdropPath && !existing.backdropPath ? { backdropPath } : {}),
             },
           });
           updated++;
         } else {
-          // We need poster/backdrop from TMDB - use what Radarr provides
-          const poster = movie.images?.find((i) => i.coverType === 'poster')?.remoteUrl;
-          const fanart = movie.images?.find((i) => i.coverType === 'fanart')?.remoteUrl;
-          const posterPath = poster ? extractTmdbPath(poster) : null;
-          const backdropPath = fanart ? extractTmdbPath(fanart) : null;
-
           await prisma.media.create({
             data: {
               tmdbId: movie.tmdbId,
@@ -118,6 +119,10 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
         });
 
         const status = getSeriesStatus(show);
+        const poster = show.images?.find((i) => i.coverType === 'poster')?.remoteUrl;
+        const fanart = show.images?.find((i) => i.coverType === 'fanart')?.remoteUrl;
+        const posterPath = poster ? extractImagePath(poster) : null;
+        const backdropPath = fanart ? extractImagePath(fanart) : null;
 
         if (existing) {
           await prisma.media.update({
@@ -127,6 +132,8 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
               tvdbId: show.tvdbId,
               status,
               title: existing.title || show.title,
+              ...(posterPath && !existing.posterPath ? { posterPath } : {}),
+              ...(backdropPath && !existing.backdropPath ? { backdropPath } : {}),
             },
           });
 
@@ -155,11 +162,6 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
           }
           updated++;
         } else {
-          const poster = show.images?.find((i) => i.coverType === 'poster')?.remoteUrl;
-          const fanart = show.images?.find((i) => i.coverType === 'fanart')?.remoteUrl;
-          const posterPath = poster ? extractTvdbPosterPath(poster) : null;
-          const backdropPath = fanart ? extractTvdbPosterPath(fanart) : null;
-
           // Use negative tvdbId as tmdbId placeholder to avoid unique constraint conflicts
           // Will be updated with real tmdbId when user views detail page
           const placeholderTmdbId = -(show.tvdbId);
@@ -295,12 +297,15 @@ function getSeasonStatus(season: { monitored: boolean; statistics?: { percentOfE
 
 function extractTmdbPath(url: string): string | null {
   // Extract /path.jpg from https://image.tmdb.org/t/p/original/path.jpg
-  const match = url.match(/\/t\/p\/\w+(\/.+)$/);
+  const match = url.match(/\/t\/p\/\w+(\/.+?)(?:\?|$)/);
   return match ? match[1] : null;
 }
 
-function extractTvdbPosterPath(url: string): string | null {
-  // For TVDB URLs, we just store the full URL since we can't use TMDB proxy
-  // But we'll return null and let the frontend use TMDB lookup instead
+function extractImagePath(url: string): string | null {
+  // Try TMDB format first
+  const tmdb = extractTmdbPath(url);
+  if (tmdb) return tmdb;
+  // For TVDB/other URLs, store the full URL as-is
+  if (url.startsWith('http')) return url;
   return null;
 }

@@ -41,7 +41,7 @@ export default function MediaCard({ media, className, availability }: MediaCardP
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-ndp-text-dim">
-            <span className="text-4xl">🎬</span>
+            <Film className="w-10 h-10" />
           </div>
         )}
       </div>

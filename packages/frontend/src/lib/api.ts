@@ -35,10 +35,12 @@ const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
 export function posterUrl(path: string | null, size = 'w500'): string {
   if (!path) return '/placeholder-poster.svg';
+  if (path.startsWith('http')) return path; // Full URL (TVDB etc.)
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
 }
 
 export function backdropUrl(path: string | null, size = 'original'): string {
   if (!path) return '';
+  if (path.startsWith('http')) return path;
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
 }
