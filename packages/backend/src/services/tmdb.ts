@@ -51,10 +51,26 @@ export interface TmdbTv {
   number_of_seasons: number;
   number_of_episodes: number;
   status?: string;
+  origin_country?: string[];
+  original_language?: string;
   seasons?: TmdbSeason[];
   credits?: { cast: TmdbCast[]; crew: TmdbCrew[] };
   external_ids?: { imdb_id: string; tvdb_id: number };
   videos?: { results: TmdbVideo[] };
+}
+
+const ANIME_COUNTRIES = ['JP', 'KR', 'CN', 'TW'];
+const ANIMATION_GENRE_ID = 16;
+
+export function isAnime(tv: TmdbTv): boolean {
+  const isAnimation = tv.genres?.some(g => g.id === ANIMATION_GENRE_ID)
+    || tv.genre_ids?.includes(ANIMATION_GENRE_ID)
+    || false;
+
+  const isAsianOrigin = tv.origin_country?.some(c => ANIME_COUNTRIES.includes(c))
+    || (tv.original_language ? ['ja', 'ko', 'zh'].includes(tv.original_language) : false);
+
+  return isAnimation && isAsianOrigin;
 }
 
 export interface TmdbSeason {

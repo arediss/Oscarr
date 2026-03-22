@@ -40,6 +40,7 @@ export async function adminRoutes(app: FastifyInstance) {
       defaultQualityProfile?: number;
       defaultMovieFolder?: string;
       defaultTvFolder?: string;
+      defaultAnimeFolder?: string;
       subscriptionPrice?: number;
       subscriptionDuration?: number;
       plexMachineId?: string;
@@ -51,6 +52,7 @@ export async function adminRoutes(app: FastifyInstance) {
         defaultQualityProfile: body.defaultQualityProfile ?? undefined,
         defaultMovieFolder: body.defaultMovieFolder ?? undefined,
         defaultTvFolder: body.defaultTvFolder ?? undefined,
+        defaultAnimeFolder: body.defaultAnimeFolder ?? undefined,
         subscriptionPrice: body.subscriptionPrice ?? undefined,
         subscriptionDuration: body.subscriptionDuration ?? undefined,
         plexMachineId: body.plexMachineId ?? undefined,
@@ -60,6 +62,7 @@ export async function adminRoutes(app: FastifyInstance) {
         defaultQualityProfile: body.defaultQualityProfile,
         defaultMovieFolder: body.defaultMovieFolder,
         defaultTvFolder: body.defaultTvFolder,
+        defaultAnimeFolder: body.defaultAnimeFolder,
         subscriptionPrice: body.subscriptionPrice ?? 0,
         subscriptionDuration: body.subscriptionDuration ?? 30,
         plexMachineId: body.plexMachineId,

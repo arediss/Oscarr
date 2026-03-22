@@ -83,6 +83,7 @@ class SonarrService {
     qualityProfileId: number;
     rootFolderPath: string;
     seasons: number[];
+    seriesType?: 'standard' | 'anime' | 'daily';
     tags?: number[];
     monitored?: boolean;
     searchForMissingEpisodes?: boolean;
@@ -99,6 +100,7 @@ class SonarrService {
       ...lookupData,
       qualityProfileId: options.qualityProfileId,
       rootFolderPath: options.rootFolderPath,
+      seriesType: options.seriesType ?? 'standard',
       tags: options.tags ?? [],
       monitored: options.monitored ?? true,
       seasons,

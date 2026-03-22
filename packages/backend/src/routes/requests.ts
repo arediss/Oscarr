@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { radarr } from '../services/radarr.js';
 import { sonarr } from '../services/sonarr.js';
-import { getMovieDetails, getTvDetails } from '../services/tmdb.js';
+import { getMovieDetails, getTvDetails, isAnime } from '../services/tmdb.js';
 
 const VALID_STATUSES = ['pending', 'approved', 'declined', 'processing', 'available', 'failed'];
 const VALID_MEDIA_TYPES = ['movie', 'tv'];
@@ -252,7 +252,17 @@ export async function requestRoutes(app: FastifyInstance) {
   });
 }
 
-async function resolveFolder(mediaType: string, tmdbId: number, defaultFolder: string | null | undefined): Promise<string> {
+async function resolveFolder(
+  mediaType: string,
+  tmdbId: number,
+  anime: boolean,
+  settings: { defaultMovieFolder: string | null; defaultTvFolder: string | null; defaultAnimeFolder: string | null } | null
+): Promise<string> {
+  // Anime gets its own folder
+  if (anime && settings?.defaultAnimeFolder) {
+    return settings.defaultAnimeFolder;
+  }
+
   // Check genre-folder mappings
   const dbMedia = await prisma.media.findUnique({
     where: { tmdbId_mediaType: { tmdbId, mediaType } },
@@ -260,15 +270,9 @@ async function resolveFolder(mediaType: string, tmdbId: number, defaultFolder: s
   });
 
   if (dbMedia?.genres) {
-    const mappings = await prisma.genreFolderMapping.findMany({
-      where: { mediaType },
-    });
-
+    const mappings = await prisma.genreFolderMapping.findMany({ where: { mediaType } });
     if (mappings.length > 0) {
-      // Parse genre names from the media
       const genreNames: string[] = JSON.parse(dbMedia.genres);
-
-      // Find the first matching genre mapping
       for (const mapping of mappings) {
         if (genreNames.some(g => g.toLowerCase() === mapping.genreName.toLowerCase())) {
           return mapping.folderPath;
@@ -278,9 +282,10 @@ async function resolveFolder(mediaType: string, tmdbId: number, defaultFolder: s
   }
 
   // Fallback to default
+  const defaultFolder = mediaType === 'movie' ? settings?.defaultMovieFolder : settings?.defaultTvFolder;
   if (defaultFolder) return defaultFolder;
 
-  // Last resort: first available folder from service
+  // Last resort
   if (mediaType === 'movie') {
     const folders = await radarr.getRootFolders();
     return folders[0]?.path ?? '/movies';
@@ -299,10 +304,9 @@ async function sendToService(
   try {
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
     const defaultProfileId = settings?.defaultQualityProfile ?? null;
-    const defaultFolder = mediaType === 'movie' ? settings?.defaultMovieFolder : settings?.defaultTvFolder;
-    const folderPath = await resolveFolder(mediaType, media.tmdbId, defaultFolder);
 
     if (mediaType === 'movie') {
+      const folderPath = await resolveFolder('movie', media.tmdbId, false, settings);
       const tagId = await radarr.getOrCreateTag(username);
       const existing = await radarr.getMovieByTmdbId(media.tmdbId);
       if (!existing) {
@@ -317,6 +321,11 @@ async function sendToService(
         });
       }
     } else if (mediaType === 'tv' && media.tvdbId) {
+      // Detect anime via TMDB
+      const tvDetails = await getTvDetails(media.tmdbId);
+      const anime = isAnime(tvDetails);
+      const folderPath = await resolveFolder('tv', media.tmdbId, anime, settings);
+
       const tagId = await sonarr.getOrCreateTag(username);
       const existing = await sonarr.getSeriesByTvdbId(media.tvdbId);
       if (!existing) {
@@ -326,6 +335,7 @@ async function sendToService(
           tvdbId: media.tvdbId,
           qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,
           rootFolderPath: folderPath,
+          seriesType: anime ? 'anime' : 'standard',
           seasons: seasons ?? [],
           tags: [tagId],
           searchForMissingEpisodes: true,

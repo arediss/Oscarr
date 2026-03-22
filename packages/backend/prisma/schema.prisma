@@ -96,6 +96,7 @@ model AppSettings {
   defaultQualityProfile Int?      // Quality profile ID from Radarr/Sonarr
   defaultMovieFolder    String?   // Default root folder for movies
   defaultTvFolder       String?   // Default root folder for TV series
+  defaultAnimeFolder    String?   // Default root folder for anime
   subscriptionPrice     Float     @default(0)
   subscriptionDuration  Int       @default(30) // Days
   plexMachineId         String?   // Plex server machine identifier for access verification

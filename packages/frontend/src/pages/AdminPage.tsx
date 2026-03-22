@@ -303,6 +303,7 @@ function SettingsTab() {
   const [qualityProfile, setQualityProfile] = useState('');
   const [movieFolder, setMovieFolder] = useState('');
   const [tvFolder, setTvFolder] = useState('');
+  const [animeFolder, setAnimeFolder] = useState('');
   const [subPrice, setSubPrice] = useState('');
   const [subDuration, setSubDuration] = useState('');
   const [plexMachineId, setPlexMachineId] = useState('');
@@ -326,6 +327,7 @@ function SettingsTab() {
         setQualityProfile(s.defaultQualityProfile?.toString() || '');
         setMovieFolder(s.defaultMovieFolder || '');
         setTvFolder(s.defaultTvFolder || '');
+        setAnimeFolder(s.defaultAnimeFolder || '');
         setSubPrice(s.subscriptionPrice?.toString() || '0');
         setSubDuration(s.subscriptionDuration?.toString() || '30');
         setPlexMachineId(s.plexMachineId || '');
@@ -350,6 +352,7 @@ function SettingsTab() {
         defaultQualityProfile: qualityProfile ? parseInt(qualityProfile) : null,
         defaultMovieFolder: movieFolder || null,
         defaultTvFolder: tvFolder || null,
+        defaultAnimeFolder: animeFolder || null,
         subscriptionPrice: parseFloat(subPrice) || 0,
         subscriptionDuration: parseInt(subDuration) || 30,
         plexMachineId: plexMachineId || null,
@@ -400,7 +403,7 @@ function SettingsTab() {
   return (
     <div className="max-w-5xl space-y-6">
       {/* Top row: quality profile + default folders */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="card p-6">
           <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Profil de qualité</h3>
           <select value={qualityProfile} onChange={(e) => setQualityProfile(e.target.value)} className="input w-full">
@@ -427,6 +430,16 @@ function SettingsTab() {
               <option key={f.path} value={f.path}>{f.path} ({formatBytes(f.freeSpace)})</option>
             ))}
           </select>
+        </div>
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Dossier Animes</h3>
+          <select value={animeFolder} onChange={(e) => setAnimeFolder(e.target.value)} className="input w-full">
+            <option value="">Auto (premier dispo)</option>
+            {sonarrFolders.map((f) => (
+              <option key={f.path} value={f.path}>{f.path} ({formatBytes(f.freeSpace)})</option>
+            ))}
+          </select>
+          <p className="text-xs text-ndp-text-dim mt-2">Animation JP/KR/CN détectée auto via TMDB</p>
         </div>
       </div>
 
