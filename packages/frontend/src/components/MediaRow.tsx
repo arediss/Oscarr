@@ -1,5 +1,6 @@
 import { useRef } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import MediaCard, { MediaCardSkeleton } from './MediaCard';
 import type { TmdbMedia } from '@/types';
 
@@ -7,9 +8,10 @@ interface MediaRowProps {
   title: string;
   media: TmdbMedia[];
   loading?: boolean;
+  href?: string; // Link to "see more" page
 }
 
-export default function MediaRow({ title, media, loading }: MediaRowProps) {
+export default function MediaRow({ title, media, loading, href }: MediaRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scroll = (direction: 'left' | 'right') => {
@@ -23,10 +25,20 @@ export default function MediaRow({ title, media, loading }: MediaRowProps) {
 
   return (
     <section className="relative group/row">
-      <h2 className="text-xl font-bold text-ndp-text mb-4 px-4 sm:px-8">{title}</h2>
+      <div className="flex items-center gap-2 mb-4 px-4 sm:px-8">
+        <h2 className="text-xl font-bold text-ndp-text">{title}</h2>
+        {href && (
+          <Link
+            to={href}
+            className="flex items-center gap-1 text-ndp-text-dim hover:text-ndp-accent transition-colors group/link"
+            title="Voir plus"
+          >
+            <ArrowRight className="w-5 h-5 group-hover/link:translate-x-0.5 transition-transform" />
+          </Link>
+        )}
+      </div>
 
       <div className="relative">
-        {/* Scroll buttons */}
         <button
           onClick={() => scroll('left')}
           className="absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r from-ndp-bg to-transparent flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity"
@@ -40,7 +52,6 @@ export default function MediaRow({ title, media, loading }: MediaRowProps) {
           <ChevronRight className="w-6 h-6 text-white" />
         </button>
 
-        {/* Scrollable row */}
         <div
           ref={scrollRef}
           className="flex gap-3 overflow-x-auto scrollbar-hide px-4 sm:px-8 pb-2"

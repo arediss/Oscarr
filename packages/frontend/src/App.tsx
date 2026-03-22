@@ -11,6 +11,7 @@ import DownloadsPage from '@/pages/DownloadsPage';
 import AdminPage from '@/pages/AdminPage';
 import NoAccessPage from '@/pages/NoAccessPage';
 import DiscoverGenrePage from '@/pages/DiscoverGenrePage';
+import CategoryPage from '@/pages/CategoryPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -55,6 +56,7 @@ export default function App() {
                 <Route path="/requests" element={<RequireAccess><RequestsPage /></RequireAccess>} />
                 <Route path="/downloads" element={<RequireAccess><DownloadsPage /></RequireAccess>} />
                 <Route path="/discover/:mediaType/genre/:genreId" element={<RequireAccess><DiscoverGenrePage /></RequireAccess>} />
+                <Route path="/category/:slug" element={<RequireAccess><CategoryPage /></RequireAccess>} />
 
                 {/* Messages accessible even without full access (support) */}
                 <Route path="/messages" element={<MessagesPage />} />
