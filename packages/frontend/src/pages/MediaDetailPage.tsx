@@ -39,8 +39,8 @@ export default function MediaDetailPage({ type }: Props) {
 
   const handleScroll = useCallback(() => {
     const scrollY = window.scrollY;
-    const fadeStart = 50;
-    const fadeEnd = 300;
+    const fadeStart = 70;
+    const fadeEnd = 375;
     const opacity = Math.min(1, Math.max(0, (scrollY - fadeStart) / (fadeEnd - fadeStart)));
     setScrollOpacity(opacity);
   }, []);
