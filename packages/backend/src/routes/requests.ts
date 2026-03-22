@@ -145,7 +145,9 @@ export async function requestRoutes(app: FastifyInstance) {
     });
 
     if (user.role === 'admin') {
-      await sendToService(media, validMediaType, validSeasons, typeof rootFolder === 'string' ? rootFolder : undefined);
+      const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { plexUsername: true, email: true } });
+      const tagName = dbUser?.plexUsername || dbUser?.email || `user-${user.id}`;
+      await sendToService(media, validMediaType, tagName, validSeasons, typeof rootFolder === 'string' ? rootFolder : undefined);
     }
 
     return reply.status(201).send(mediaRequest);
@@ -163,7 +165,7 @@ export async function requestRoutes(app: FastifyInstance) {
 
     const mediaRequest = await prisma.mediaRequest.findUnique({
       where: { id: requestId },
-      include: { media: true },
+      include: { media: true, user: { select: { plexUsername: true, email: true, id: true } } },
     });
 
     if (!mediaRequest) return reply.status(404).send({ error: 'Demande introuvable' });
@@ -172,7 +174,8 @@ export async function requestRoutes(app: FastifyInstance) {
     }
 
     const seasons = mediaRequest.seasons ? JSON.parse(mediaRequest.seasons) : undefined;
-    await sendToService(mediaRequest.media, mediaRequest.mediaType, seasons, mediaRequest.rootFolder ?? undefined);
+    const tagName = mediaRequest.user.plexUsername || mediaRequest.user.email || `user-${mediaRequest.user.id}`;
+    await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, seasons, mediaRequest.rootFolder ?? undefined);
 
     const updated = await prisma.mediaRequest.update({
       where: { id: requestId },
@@ -229,16 +232,17 @@ export async function requestRoutes(app: FastifyInstance) {
 async function sendToService(
   media: { tmdbId: number; tvdbId: number | null; title: string },
   mediaType: string,
+  username: string,
   seasons?: number[],
   rootFolderOverride?: string
 ) {
   try {
-    // Get admin default settings
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
     const defaultProfileId = settings?.defaultQualityProfile ?? null;
     const defaultRootFolder = rootFolderOverride || settings?.defaultRootFolder;
 
     if (mediaType === 'movie') {
+      const tagId = await radarr.getOrCreateTag(username);
       const existing = await radarr.getMovieByTmdbId(media.tmdbId);
       if (!existing) {
         const profiles = await radarr.getQualityProfiles();
@@ -248,10 +252,12 @@ async function sendToService(
           tmdbId: media.tmdbId,
           qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,
           rootFolderPath: defaultRootFolder ?? folders[0]?.path ?? '/movies',
+          tags: [tagId],
           searchForMovie: true,
         });
       }
     } else if (mediaType === 'tv' && media.tvdbId) {
+      const tagId = await sonarr.getOrCreateTag(username);
       const existing = await sonarr.getSeriesByTvdbId(media.tvdbId);
       if (!existing) {
         const profiles = await sonarr.getQualityProfiles();
@@ -262,6 +268,7 @@ async function sendToService(
           qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,
           rootFolderPath: defaultRootFolder ?? folders[0]?.path ?? '/tv',
           seasons: seasons ?? [],
+          tags: [tagId],
           searchForMissingEpisodes: true,
         });
       }

@@ -82,6 +82,7 @@ class SonarrService {
     qualityProfileId: number;
     rootFolderPath: string;
     seasons: number[];
+    tags?: number[];
     monitored?: boolean;
     searchForMissingEpisodes?: boolean;
   }): Promise<SonarrSeries> {
@@ -97,6 +98,7 @@ class SonarrService {
       ...lookupData,
       qualityProfileId: options.qualityProfileId,
       rootFolderPath: options.rootFolderPath,
+      tags: options.tags ?? [],
       monitored: options.monitored ?? true,
       seasons,
       addOptions: {
@@ -131,6 +133,24 @@ class SonarrService {
   async getSystemStatus(): Promise<{ version: string }> {
     const { data } = await this.api.get('/system/status');
     return data;
+  }
+
+  async getTags(): Promise<{ id: number; label: string }[]> {
+    const { data } = await this.api.get('/tag');
+    return data;
+  }
+
+  async createTag(label: string): Promise<{ id: number; label: string }> {
+    const { data } = await this.api.post('/tag', { label });
+    return data;
+  }
+
+  async getOrCreateTag(label: string): Promise<number> {
+    const tags = await this.getTags();
+    const existing = tags.find((t) => t.label.toLowerCase() === label.toLowerCase());
+    if (existing) return existing.id;
+    const created = await this.createTag(label);
+    return created.id;
   }
 }
 

@@ -61,6 +61,7 @@ class RadarrService {
     tmdbId: number;
     qualityProfileId: number;
     rootFolderPath: string;
+    tags?: number[];
     monitored?: boolean;
     searchForMovie?: boolean;
   }): Promise<RadarrMovie> {
@@ -69,12 +70,31 @@ class RadarrService {
       tmdbId: options.tmdbId,
       qualityProfileId: options.qualityProfileId,
       rootFolderPath: options.rootFolderPath,
+      tags: options.tags ?? [],
       monitored: options.monitored ?? true,
       addOptions: {
         searchForMovie: options.searchForMovie ?? true,
       },
     });
     return data;
+  }
+
+  async getTags(): Promise<{ id: number; label: string }[]> {
+    const { data } = await this.api.get('/tag');
+    return data;
+  }
+
+  async createTag(label: string): Promise<{ id: number; label: string }> {
+    const { data } = await this.api.post('/tag', { label });
+    return data;
+  }
+
+  async getOrCreateTag(label: string): Promise<number> {
+    const tags = await this.getTags();
+    const existing = tags.find((t) => t.label.toLowerCase() === label.toLowerCase());
+    if (existing) return existing.id;
+    const created = await this.createTag(label);
+    return created.id;
   }
 
   async getQueue(): Promise<{ records: RadarrQueueItem[] }> {
