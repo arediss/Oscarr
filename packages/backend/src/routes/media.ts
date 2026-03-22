@@ -104,6 +104,36 @@ export async function mediaRoutes(app: FastifyInstance) {
     return media || { exists: false };
   });
 
+  // Recently added media (from Radarr/Sonarr sync)
+  app.get('/recent', { preHandler: [app.authenticate] }, async (request) => {
+    const { limit } = request.query as { limit?: string };
+    const take = Math.min(parseInt(limit || '20', 10) || 20, 50);
+
+    const media = await prisma.media.findMany({
+      where: {
+        status: { in: ['available', 'searching', 'upcoming', 'processing'] },
+        OR: [
+          { radarrId: { not: null } },
+          { sonarrId: { not: null } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: {
+        tmdbId: true,
+        mediaType: true,
+        title: true,
+        posterPath: true,
+        backdropPath: true,
+        releaseDate: true,
+        voteAverage: true,
+        status: true,
+      },
+    });
+
+    return media;
+  });
+
   // Batch lookup: check availability for multiple TMDB IDs
   app.post('/batch-status', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { ids } = request.body as { ids?: unknown };

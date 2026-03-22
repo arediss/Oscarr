@@ -8,6 +8,7 @@ import GenreRow from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
 
 export default function HomePage() {
+  const [recentlyAdded, setRecentlyAdded] = useState<TmdbMedia[]>([]);
   const [trending, setTrending] = useState<TmdbMedia[]>([]);
   const [popularMovies, setPopularMovies] = useState<TmdbMedia[]>([]);
   const [popularTv, setPopularTv] = useState<TmdbMedia[]>([]);
@@ -20,12 +21,27 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [trendingRes, moviesRes, tvRes, upcomingRes] = await Promise.all([
+        const [recentRes, trendingRes, moviesRes, tvRes, upcomingRes] = await Promise.all([
+          api.get('/media/recent?limit=20'),
           api.get('/tmdb/trending'),
           api.get('/tmdb/movies/popular'),
           api.get('/tmdb/tv/popular'),
           api.get('/tmdb/movies/upcoming'),
         ]);
+        // Map DB media to TmdbMedia shape for MediaRow
+        setRecentlyAdded(recentRes.data.map((m: { tmdbId: number; mediaType: string; title: string; posterPath: string | null; backdropPath: string | null; releaseDate: string | null; voteAverage: number | null }) => ({
+          id: m.tmdbId > 0 ? m.tmdbId : 0,
+          title: m.mediaType === 'movie' ? m.title : undefined,
+          name: m.mediaType === 'tv' ? m.title : undefined,
+          poster_path: m.posterPath,
+          backdrop_path: m.backdropPath,
+          release_date: m.mediaType === 'movie' ? m.releaseDate : undefined,
+          first_air_date: m.mediaType === 'tv' ? m.releaseDate : undefined,
+          vote_average: m.voteAverage ?? 0,
+          vote_count: 0,
+          overview: '',
+          media_type: m.mediaType,
+        })));
         setTrending(trendingRes.data.results);
         setPopularMovies(moviesRes.data.results);
         setPopularTv(tvRes.data.results);
@@ -148,6 +164,9 @@ export default function HomePage() {
 
       {/* Content rows */}
       <div className="space-y-10 pb-16 -mt-8 relative z-10">
+        {recentlyAdded.length > 0 && (
+          <MediaRow title="Récemment ajoutés" media={recentlyAdded} />
+        )}
         <MediaRow title="Tendances de la semaine" media={trending} loading={loading} href="/category/trending" />
         <MediaRow title="Films populaires" media={popularMovies.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-popular" />
         <MediaRow title="Séries populaires" media={popularTv.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/tv-popular" />
