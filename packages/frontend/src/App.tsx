@@ -8,11 +8,20 @@ import MediaDetailPage from '@/pages/MediaDetailPage';
 import RequestsPage from '@/pages/RequestsPage';
 import MessagesPage from '@/pages/MessagesPage';
 import DownloadsPage from '@/pages/DownloadsPage';
+import AdminPage from '@/pages/AdminPage';
+import NoAccessPage from '@/pages/NoAccessPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+function RequireAccess({ children }: { children: React.ReactNode }) {
+  const { hasAccess, user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (!hasAccess) return <NoAccessPage />;
   return <>{children}</>;
 }
 
@@ -37,13 +46,19 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/search" element={<SearchPage />} />
-                <Route path="/movie/:id" element={<MediaDetailPage type="movie" />} />
-                <Route path="/tv/:id" element={<MediaDetailPage type="tv" />} />
-                <Route path="/requests" element={<RequestsPage />} />
+                {/* These pages require full access (server + subscription) */}
+                <Route path="/" element={<RequireAccess><HomePage /></RequireAccess>} />
+                <Route path="/search" element={<RequireAccess><SearchPage /></RequireAccess>} />
+                <Route path="/movie/:id" element={<RequireAccess><MediaDetailPage type="movie" /></RequireAccess>} />
+                <Route path="/tv/:id" element={<RequireAccess><MediaDetailPage type="tv" /></RequireAccess>} />
+                <Route path="/requests" element={<RequireAccess><RequestsPage /></RequireAccess>} />
+                <Route path="/downloads" element={<RequireAccess><DownloadsPage /></RequireAccess>} />
+
+                {/* Messages accessible even without full access (support) */}
                 <Route path="/messages" element={<MessagesPage />} />
-                <Route path="/downloads" element={<DownloadsPage />} />
+
+                {/* Admin only */}
+                <Route path="/admin" element={<AdminPage />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

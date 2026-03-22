@@ -17,7 +17,8 @@ import api from '@/lib/api';
 import { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import MediaRow from '@/components/MediaRow';
-import type { TmdbMedia, Media } from '@/types';
+import { FolderOpen } from 'lucide-react';
+import type { TmdbMedia, Media, RootFolder } from '@/types';
 
 interface Props {
   type: 'movie' | 'tv';
@@ -32,12 +33,21 @@ export default function MediaDetailPage({ type }: Props) {
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
+  const [rootFolders, setRootFolders] = useState<RootFolder[]>([]);
+  const [selectedRootFolder, setSelectedRootFolder] = useState('');
 
   useEffect(() => {
     setLoading(true);
     setMedia(null);
     setDbMedia(null);
     setSelectedSeasons([]);
+    setSelectedRootFolder('');
+
+    // Fetch root folders for admins
+    if (user?.role === 'admin') {
+      const endpoint = type === 'movie' ? '/admin/radarr/rootfolders' : '/admin/sonarr/rootfolders';
+      api.get(endpoint).then(({ data }) => setRootFolders(data)).catch(() => {});
+    }
 
     async function fetchData() {
       try {
@@ -69,6 +79,9 @@ export default function MediaDetailPage({ type }: Props) {
       const body: Record<string, unknown> = { tmdbId: media.id, mediaType: type };
       if (type === 'tv' && selectedSeasons.length > 0) {
         body.seasons = selectedSeasons;
+      }
+      if (selectedRootFolder) {
+        body.rootFolder = selectedRootFolder;
       }
       await api.post('/requests', body);
       // Refresh DB media state
@@ -265,6 +278,23 @@ export default function MediaDetailPage({ type }: Props) {
                   Saisons à demander
                 </h3>
                 <div className="flex flex-wrap gap-2">
+                  {/* All seasons button */}
+                  <button
+                    onClick={() => {
+                      const allNums = media.seasons!.filter(s => s.season_number > 0).map(s => s.season_number);
+                      setSelectedSeasons(prev =>
+                        prev.length === allNums.length ? [] : allNums
+                      );
+                    }}
+                    className={clsx(
+                      'px-4 py-2 rounded-xl text-sm font-semibold transition-all',
+                      selectedSeasons.length === media.seasons.filter(s => s.season_number > 0).length
+                        ? 'bg-ndp-accent text-white'
+                        : 'bg-white/5 text-ndp-text-muted hover:bg-white/10 border border-dashed border-white/10'
+                    )}
+                  >
+                    Toutes les saisons
+                  </button>
                   {media.seasons
                     .filter((s) => s.season_number > 0)
                     .map((season) => (
@@ -289,6 +319,26 @@ export default function MediaDetailPage({ type }: Props) {
                       </button>
                     ))}
                 </div>
+              </div>
+            )}
+
+            {/* Root folder selector (admin or if folders available) */}
+            {rootFolders.length > 1 && !userHasRequest && (
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <FolderOpen className="w-4 h-4" />
+                  Dossier de destination
+                </h3>
+                <select
+                  value={selectedRootFolder}
+                  onChange={(e) => setSelectedRootFolder(e.target.value)}
+                  className="input text-sm"
+                >
+                  <option value="">Par défaut</option>
+                  {rootFolders.map((f) => (
+                    <option key={f.path} value={f.path}>{f.path}</option>
+                  ))}
+                </select>
               </div>
             )}
           </div>

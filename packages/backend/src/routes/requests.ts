@@ -55,10 +55,11 @@ export async function requestRoutes(app: FastifyInstance) {
   // Create a new request
   app.post('/', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
-    const { tmdbId, mediaType, seasons } = request.body as {
+    const { tmdbId, mediaType, seasons, rootFolder } = request.body as {
       tmdbId: unknown;
       mediaType: unknown;
       seasons?: unknown;
+      rootFolder?: string;
     };
 
     if (typeof tmdbId !== 'number' || !Number.isFinite(tmdbId) || tmdbId < 1) {
@@ -133,6 +134,7 @@ export async function requestRoutes(app: FastifyInstance) {
         userId: user.id,
         mediaType: validMediaType,
         seasons: validSeasons ? JSON.stringify(validSeasons) : null,
+        rootFolder: typeof rootFolder === 'string' ? rootFolder : null,
         status: user.role === 'admin' ? 'approved' : 'pending',
         approvedById: user.role === 'admin' ? user.id : null,
       },
@@ -143,7 +145,7 @@ export async function requestRoutes(app: FastifyInstance) {
     });
 
     if (user.role === 'admin') {
-      await sendToService(media, validMediaType, validSeasons);
+      await sendToService(media, validMediaType, validSeasons, typeof rootFolder === 'string' ? rootFolder : undefined);
     }
 
     return reply.status(201).send(mediaRequest);
@@ -170,7 +172,7 @@ export async function requestRoutes(app: FastifyInstance) {
     }
 
     const seasons = mediaRequest.seasons ? JSON.parse(mediaRequest.seasons) : undefined;
-    await sendToService(mediaRequest.media, mediaRequest.mediaType, seasons);
+    await sendToService(mediaRequest.media, mediaRequest.mediaType, seasons, mediaRequest.rootFolder ?? undefined);
 
     const updated = await prisma.mediaRequest.update({
       where: { id: requestId },
@@ -227,9 +229,15 @@ export async function requestRoutes(app: FastifyInstance) {
 async function sendToService(
   media: { tmdbId: number; tvdbId: number | null; title: string },
   mediaType: string,
-  seasons?: number[]
+  seasons?: number[],
+  rootFolderOverride?: string
 ) {
   try {
+    // Get admin default settings
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    const defaultProfileId = settings?.defaultQualityProfile ?? null;
+    const defaultRootFolder = rootFolderOverride || settings?.defaultRootFolder;
+
     if (mediaType === 'movie') {
       const existing = await radarr.getMovieByTmdbId(media.tmdbId);
       if (!existing) {
@@ -238,8 +246,8 @@ async function sendToService(
         await radarr.addMovie({
           title: media.title,
           tmdbId: media.tmdbId,
-          qualityProfileId: profiles[0]?.id ?? 1,
-          rootFolderPath: folders[0]?.path ?? '/movies',
+          qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,
+          rootFolderPath: defaultRootFolder ?? folders[0]?.path ?? '/movies',
           searchForMovie: true,
         });
       }
@@ -251,8 +259,8 @@ async function sendToService(
         await sonarr.addSeries({
           title: media.title,
           tvdbId: media.tvdbId,
-          qualityProfileId: profiles[0]?.id ?? 1,
-          rootFolderPath: folders[0]?.path ?? '/tv',
+          qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,
+          rootFolderPath: defaultRootFolder ?? folders[0]?.path ?? '/tv',
           seasons: seasons ?? [],
           searchForMissingEpisodes: true,
         });

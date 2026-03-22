@@ -1,18 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { getPlexUser, createPlexPin, checkPlexPin } from '../services/plex.js';
+import { getPlexUser, createPlexPin, checkPlexPin, checkPlexServerAccess } from '../services/plex.js';
 
 const PLEX_CLIENT_ID = 'netflix-du-pauvre-client';
 
 export async function authRoutes(app: FastifyInstance) {
-  // Create a Plex PIN for OAuth flow
   app.post('/plex/pin', async (_request, reply) => {
     const pin = await createPlexPin(PLEX_CLIENT_ID);
     const authUrl = `https://app.plex.tv/auth#?clientID=${PLEX_CLIENT_ID}&code=${pin.code}&context%5Bdevice%5D%5Bproduct%5D=Netflix%20du%20Pauvre`;
     return reply.send({ pin, authUrl });
   });
 
-  // Check if PIN has been authenticated, then login/create user
   app.post('/plex/callback', async (request, reply) => {
     const { pinId } = request.body as { pinId: unknown };
 
@@ -27,7 +25,10 @@ export async function authRoutes(app: FastifyInstance) {
 
     const plexAccount = await getPlexUser(authToken);
 
-    // Find or create user
+    // Check Plex server access
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    const hasServerAccess = await checkPlexServerAccess(authToken, settings?.plexMachineId);
+
     let user = await prisma.user.findFirst({
       where: {
         OR: [
@@ -38,6 +39,7 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     const userCount = await prisma.user.count();
+    const isFirstUser = userCount === 0;
 
     if (!user) {
       user = await prisma.user.create({
@@ -47,7 +49,10 @@ export async function authRoutes(app: FastifyInstance) {
           plexToken: authToken,
           plexUsername: plexAccount.username,
           avatar: plexAccount.thumb,
-          role: userCount === 0 ? 'admin' : 'user',
+          role: isFirstUser ? 'admin' : 'user',
+          hasPlexServerAccess: isFirstUser || hasServerAccess,
+          // First user gets unlimited subscription
+          subscriptionEndDate: isFirstUser ? new Date('2099-12-31') : null,
         },
       });
     } else {
@@ -58,9 +63,13 @@ export async function authRoutes(app: FastifyInstance) {
           plexId: plexAccount.id,
           plexUsername: plexAccount.username,
           avatar: plexAccount.thumb,
+          hasPlexServerAccess: user.role === 'admin' || hasServerAccess,
         },
       });
     }
+
+    const isSubscriptionActive = user.role === 'admin' ||
+      (user.subscriptionEndDate && new Date(user.subscriptionEndDate) > new Date());
 
     const token = app.jwt.sign(
       { id: user.id, email: user.email, role: user.role },
@@ -82,12 +91,14 @@ export async function authRoutes(app: FastifyInstance) {
           plexUsername: user.plexUsername,
           avatar: user.avatar,
           role: user.role,
+          hasPlexServerAccess: user.hasPlexServerAccess,
+          subscriptionActive: isSubscriptionActive,
+          subscriptionEndDate: user.subscriptionEndDate,
         },
         token,
       });
   });
 
-  // Get current user
   app.get('/me', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.user as { id: number };
     const user = await prisma.user.findUnique({
@@ -98,14 +109,23 @@ export async function authRoutes(app: FastifyInstance) {
         plexUsername: true,
         avatar: true,
         role: true,
+        hasPlexServerAccess: true,
+        subscriptionEndDate: true,
+        lastPaymentDate: true,
         createdAt: true,
       },
     });
     if (!user) return reply.status(404).send({ error: 'Utilisateur introuvable' });
-    return reply.send(user);
+
+    const isSubscriptionActive = user.role === 'admin' ||
+      (user.subscriptionEndDate && new Date(user.subscriptionEndDate) > new Date());
+
+    return reply.send({
+      ...user,
+      subscriptionActive: isSubscriptionActive,
+    });
   });
 
-  // Logout
   app.post('/logout', async (_request, reply) => {
     reply.clearCookie('token', { path: '/' }).send({ ok: true });
   });

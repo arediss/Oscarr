@@ -8,6 +8,9 @@ interface AuthContextType {
   login: (token: string, user: User) => void;
   logout: () => Promise<void>;
   isAdmin: boolean;
+  hasAccess: boolean; // Has both Plex server access AND active subscription
+  hasPlexServerAccess: boolean;
+  isSubscriptionActive: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -53,8 +56,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const isAdmin = user?.role === 'admin';
+  const hasPlexServerAccess = user?.hasPlexServerAccess ?? false;
+  const isSubscriptionActive = isAdmin || (user?.subscriptionActive ?? false);
+  const hasAccess = isAdmin || (hasPlexServerAccess && isSubscriptionActive);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin: user?.role === 'admin' }}>
+    <AuthContext.Provider value={{
+      user, loading, login, logout,
+      isAdmin, hasAccess, hasPlexServerAccess, isSubscriptionActive,
+    }}>
       {children}
     </AuthContext.Provider>
   );

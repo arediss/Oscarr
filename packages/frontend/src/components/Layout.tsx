@@ -71,10 +71,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {/* User */}
             <div className="flex items-center gap-3">
               {isAdmin && (
-                <span className="hidden sm:flex items-center gap-1 text-xs text-ndp-accent bg-ndp-accent/10 px-2.5 py-1 rounded-full">
+                <Link
+                  to="/admin"
+                  className={clsx(
+                    'hidden sm:flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-colors',
+                    location.pathname === '/admin'
+                      ? 'bg-ndp-accent text-white'
+                      : 'text-ndp-accent bg-ndp-accent/10 hover:bg-ndp-accent/20'
+                  )}
+                >
                   <Shield className="w-3 h-3" />
                   Admin
-                </span>
+                </Link>
               )}
               <div className="flex items-center gap-2">
                 {user?.avatar ? (

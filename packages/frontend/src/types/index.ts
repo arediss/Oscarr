@@ -4,7 +4,36 @@ export interface User {
   plexUsername: string | null;
   avatar: string | null;
   role: 'admin' | 'user';
+  hasPlexServerAccess?: boolean;
+  subscriptionActive?: boolean;
+  subscriptionEndDate?: string | null;
+  lastPaymentDate?: string | null;
   createdAt?: string;
+}
+
+export interface AdminUser extends User {
+  lastPaymentAmount?: number | null;
+  requestCount?: number;
+}
+
+export interface AppSettings {
+  id: number;
+  defaultQualityProfile: number | null;
+  defaultRootFolder: string | null;
+  subscriptionPrice: number;
+  subscriptionDuration: number;
+  plexMachineId: string | null;
+}
+
+export interface RootFolder {
+  id: number;
+  path: string;
+  freeSpace: number;
+}
+
+export interface QualityProfile {
+  id: number;
+  name: string;
 }
 
 export interface TmdbMedia {
@@ -101,6 +130,7 @@ export interface MediaRequest {
   status: 'pending' | 'approved' | 'declined' | 'processing' | 'available' | 'failed';
   mediaType: 'movie' | 'tv';
   seasons: string | null;
+  rootFolder: string | null;
   approvedById: number | null;
   createdAt: string;
   updatedAt: string;

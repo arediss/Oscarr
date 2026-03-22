@@ -72,3 +72,33 @@ export async function checkPlexPin(pinId: number, clientId: string): Promise<str
   });
   return data.authToken || null;
 }
+
+/**
+ * Check if a user has access to a specific Plex server by checking
+ * the server's friend list (shared users).
+ */
+export async function checkPlexServerAccess(
+  userPlexToken: string,
+  serverMachineId?: string | null
+): Promise<boolean> {
+  if (!serverMachineId) return true; // No server configured, skip check
+
+  try {
+    const { data } = await axios.get('https://plex.tv/api/v2/resources', {
+      headers: {
+        Accept: 'application/json',
+        'X-Plex-Token': userPlexToken,
+        'X-Plex-Client-Identifier': 'netflix-du-pauvre-client',
+      },
+      params: { includeHttps: 1, includeRelay: 1 },
+    });
+
+    // Check if user has access to the server with this machine ID
+    return Array.isArray(data) && data.some(
+      (resource: { clientIdentifier: string; provides: string }) =>
+        resource.clientIdentifier === serverMachineId && resource.provides?.includes('server')
+    );
+  } catch {
+    return false;
+  }
+}

@@ -9,6 +9,7 @@ import { requestRoutes } from './routes/requests.js';
 import { mediaRoutes } from './routes/media.js';
 import { messageRoutes } from './routes/messages.js';
 import { radarrSonarrRoutes } from './routes/radarr-sonarr.js';
+import { adminRoutes } from './routes/admin.js';
 import { authenticate } from './middleware/auth.js';
 
 const app = Fastify({ logger: true });
@@ -39,6 +40,7 @@ async function start() {
   await app.register(mediaRoutes, { prefix: '/api/media' });
   await app.register(messageRoutes, { prefix: '/api/messages' });
   await app.register(radarrSonarrRoutes, { prefix: '/api/services' });
+  await app.register(adminRoutes, { prefix: '/api/admin' });
 
   const port = parseInt(process.env.PORT || '3001', 10);
   if (Number.isNaN(port)) {
