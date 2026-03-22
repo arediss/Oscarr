@@ -11,6 +11,7 @@ export interface SonarrSeries {
   path: string;
   qualityProfileId: number;
   seasonFolder: boolean;
+  tags: number[];
   seasons: SonarrSeason[];
   images: { coverType: string; remoteUrl: string }[];
   statistics: {
@@ -145,9 +146,10 @@ class SonarrService {
     return data;
   }
 
-  async getOrCreateTag(label: string): Promise<number> {
+  async getOrCreateTag(username: string): Promise<number> {
+    const label = `ndp - ${username}`.toLowerCase();
     const tags = await this.getTags();
-    const existing = tags.find((t) => t.label.toLowerCase() === label.toLowerCase());
+    const existing = tags.find((t) => t.label === label);
     if (existing) return existing.id;
     const created = await this.createTag(label);
     return created.id;

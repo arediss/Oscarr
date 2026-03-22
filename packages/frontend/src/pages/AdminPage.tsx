@@ -474,7 +474,7 @@ function JobsTab() {
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  const runSync = async (type: 'full' | 'force' | 'radarr' | 'sonarr') => {
+  const runSync = async (type: 'full' | 'force' | 'radarr' | 'sonarr' | 'requests') => {
     setRunning(type);
     setLastResult(null);
     try {
@@ -483,9 +483,10 @@ function JobsTab() {
         force: '/admin/sync/force',
         radarr: '/admin/sync/radarr',
         sonarr: '/admin/sync/sonarr',
+        requests: '/admin/sync/requests',
       };
       const { data } = await api.post(endpoints[type]);
-      if (type === 'full' || type === 'force') {
+      if (type === 'full' || type === 'force' || type === 'requests') {
         setLastResult(data);
       } else {
         setLastResult({ [type]: data });
@@ -574,20 +575,38 @@ function JobsTab() {
             {running === 'force' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Force sync (tout reimporter)
           </button>
+          <button
+            onClick={() => runSync('requests')}
+            disabled={running !== null}
+            className="btn-secondary flex items-center gap-2 text-sm"
+          >
+            {running === 'requests' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Importer demandes (tags)
+          </button>
         </div>
 
         {/* Last result */}
         {lastResult && (
           <div className="mt-4 p-4 bg-ndp-success/5 border border-ndp-success/20 rounded-xl animate-fade-in">
             <p className="text-sm font-semibold text-ndp-success mb-2">Sync terminé</p>
-            {lastResult.radarr && (
+            {lastResult.radarr && 'added' in lastResult.radarr && (
               <p className="text-xs text-ndp-text-muted">
-                Radarr : +{lastResult.radarr.added} ajoutés, ~{lastResult.radarr.updated} mis à jour ({lastResult.radarr.duration}ms)
+                Radarr : +{lastResult.radarr.added} ajoutés, ~{lastResult.radarr.updated ?? 0} mis à jour {lastResult.radarr.duration ? `(${lastResult.radarr.duration}ms)` : ''}
               </p>
             )}
-            {lastResult.sonarr && (
+            {lastResult.radarr && 'imported' in lastResult.radarr && (
               <p className="text-xs text-ndp-text-muted">
-                Sonarr : +{lastResult.sonarr.added} ajoutés, ~{lastResult.sonarr.updated} mis à jour ({lastResult.sonarr.duration}ms)
+                Radarr : +{(lastResult.radarr as unknown as {imported:number}).imported} demandes importées, {(lastResult.radarr as unknown as {skipped:number}).skipped} ignorées
+              </p>
+            )}
+            {lastResult.sonarr && 'added' in lastResult.sonarr && (
+              <p className="text-xs text-ndp-text-muted">
+                Sonarr : +{lastResult.sonarr.added} ajoutés, ~{lastResult.sonarr.updated ?? 0} mis à jour {lastResult.sonarr.duration ? `(${lastResult.sonarr.duration}ms)` : ''}
+              </p>
+            )}
+            {lastResult.sonarr && 'imported' in lastResult.sonarr && (
+              <p className="text-xs text-ndp-text-muted">
+                Sonarr : +{(lastResult.sonarr as unknown as {imported:number}).imported} demandes importées, {(lastResult.sonarr as unknown as {skipped:number}).skipped} ignorées
               </p>
             )}
           </div>

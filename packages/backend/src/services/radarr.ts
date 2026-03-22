@@ -13,6 +13,7 @@ export interface RadarrMovie {
   sizeOnDisk: number;
   path: string;
   qualityProfileId: number;
+  tags: number[];
   images: { coverType: string; remoteUrl: string }[];
   digitalRelease?: string;
   physicalRelease?: string;
@@ -89,9 +90,10 @@ class RadarrService {
     return data;
   }
 
-  async getOrCreateTag(label: string): Promise<number> {
+  async getOrCreateTag(username: string): Promise<number> {
+    const label = `ndp - ${username}`.toLowerCase();
     const tags = await this.getTags();
-    const existing = tags.find((t) => t.label.toLowerCase() === label.toLowerCase());
+    const existing = tags.find((t) => t.label === label);
     if (existing) return existing.id;
     const created = await this.createTag(label);
     return created.id;

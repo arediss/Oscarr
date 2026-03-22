@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { radarr } from '../services/radarr.js';
 import { sonarr } from '../services/sonarr.js';
 import { syncRadarr, syncSonarr, runFullSync } from '../services/sync.js';
+import { syncRequestsFromTags } from '../services/requestSync.js';
 
 function parseId(value: string): number | null {
   const id = parseInt(value, 10);
@@ -281,5 +282,12 @@ export async function adminRoutes(app: FastifyInstance) {
       create: { id: 1, syncIntervalHours: hours, updatedAt: new Date() },
     });
     return { ok: true, syncIntervalHours: hours };
+  });
+
+  // Import historical requests from Radarr/Sonarr tags
+  app.post('/sync/requests', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const result = await syncRequestsFromTags();
+    return result;
   });
 }
