@@ -43,21 +43,21 @@ export default function MediaRow({ title, media, loading, href }: MediaRowProps)
       <div className="relative">
         <button
           onClick={() => scroll('left')}
-          className="absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r from-ndp-bg to-transparent flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity"
+          className="absolute left-0 top-0 bottom-0 z-20 w-12 bg-gradient-to-r from-ndp-bg to-transparent flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity"
         >
           <ChevronLeft className="w-6 h-6 text-white" />
         </button>
         <button
           onClick={() => scroll('right')}
-          className="absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l from-ndp-bg to-transparent flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity"
+          className="absolute right-0 top-0 bottom-0 z-20 w-12 bg-gradient-to-l from-ndp-bg to-transparent flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity"
         >
           <ChevronRight className="w-6 h-6 text-white" />
         </button>
 
         <div
           ref={scrollRef}
-          className="flex gap-3 overflow-x-auto scrollbar-hide px-4 sm:px-8 pb-2"
-          style={{ scrollbarWidth: 'none' }}
+          className="flex gap-3 overflow-x-auto px-4 sm:px-8 py-4 -my-4"
+          style={{ scrollbarWidth: 'none', overflowY: 'visible', clipPath: 'inset(-100px 0)' }}
         >
           {loading
             ? Array.from({ length: 8 }).map((_, i) => (

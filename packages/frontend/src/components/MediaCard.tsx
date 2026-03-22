@@ -63,8 +63,8 @@ export default function MediaCard({ media, className, availability }: MediaCardP
         </span>
       </div>
 
-      {/* Top-left: media type badge */}
-      <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm rounded-md p-1">
+      {/* Top-left: media type badge (hidden on hover) */}
+      <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm rounded-md p-1 transition-opacity duration-300 group-hover:opacity-0">
         {type === 'movie' ? (
           <Film className="w-3 h-3 text-white/80" />
         ) : (
@@ -72,18 +72,18 @@ export default function MediaCard({ media, className, availability }: MediaCardP
         )}
       </div>
 
-      {/* Top-right: rating */}
+      {/* Top-right: rating (hidden on hover) */}
       {media.vote_average > 0 && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded-md">
+        <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded-md transition-opacity duration-300 group-hover:opacity-0">
           <Star className="w-3 h-3 fill-ndp-gold text-ndp-gold" />
           <span className="text-xs font-medium text-white">{media.vote_average.toFixed(1)}</span>
         </div>
       )}
 
-      {/* Bottom-right: availability status */}
+      {/* Bottom-right: availability status (hidden on hover) */}
       {statusBadge && (
         <div className={clsx(
-          'absolute bottom-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold backdrop-blur-sm',
+          'absolute bottom-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold backdrop-blur-sm transition-opacity duration-300 group-hover:opacity-0',
           statusBadge.bgClass
         )}>
           <statusBadge.icon className="w-3 h-3" />

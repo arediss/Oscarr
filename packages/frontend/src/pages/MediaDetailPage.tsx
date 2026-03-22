@@ -192,7 +192,7 @@ export default function MediaDetailPage({ type }: Props) {
       </Link>
 
       {/* Scrollable content */}
-      <div className="relative z-10 pt-[45vh] min-h-screen">
+      <div className="relative z-10 pt-[35vh] min-h-screen">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-8">
         <div className="flex flex-col md:flex-row gap-8">
           {/* Poster */}
