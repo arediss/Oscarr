@@ -60,11 +60,18 @@ export default function MessagesPage() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) return;
+
+    let cancelled = false;
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${proto}//${window.location.host}/api/chat/ws`);
     wsRef.current = ws;
-    ws.onopen = () => { ws.send(JSON.stringify({ type: 'auth', token })); };
+
+    ws.onopen = () => {
+      if (cancelled) { ws.close(); return; }
+      ws.send(JSON.stringify({ type: 'auth', token }));
+    };
     ws.onmessage = (event) => {
+      if (cancelled) return;
       const msg = JSON.parse(event.data);
       if (msg.type === 'auth_ok') { setWsConnected(true); return; }
       if (msg.type === 'message') {
@@ -72,8 +79,9 @@ export default function MessagesPage() {
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
       }
     };
-    ws.onclose = () => { setWsConnected(false); };
-    return () => { ws.close(); };
+    ws.onclose = () => { if (!cancelled) setWsConnected(false); };
+
+    return () => { cancelled = true; ws.close(); };
   }, []);
 
   // Join channel

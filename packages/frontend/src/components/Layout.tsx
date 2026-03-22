@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { AlertTriangle, X as XIcon } from 'lucide-react';
+import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import {
   Home,
