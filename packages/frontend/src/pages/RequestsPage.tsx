@@ -138,31 +138,33 @@ export default function RequestsPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-          {requests.map((req) => (
-            <RequestCard
-              key={req.id}
-              request={req}
-              isAdmin={isAdmin}
-              actionLoading={actionLoading}
-              onAction={handleAction}
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
-
-        {page < totalPages && (
-          <div className="flex justify-center mt-8">
-            <button
-              onClick={loadMore}
-              disabled={loadingMore}
-              className="btn-secondary flex items-center gap-2"
-            >
-              {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
-              Charger plus ({requests.length}/{total})
-            </button>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+            {requests.map((req) => (
+              <RequestCard
+                key={req.id}
+                request={req}
+                isAdmin={isAdmin}
+                actionLoading={actionLoading}
+                onAction={handleAction}
+                onDelete={handleDelete}
+              />
+            ))}
           </div>
-        )}
+
+          {page < totalPages && (
+            <div className="flex justify-center mt-8">
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="btn-secondary flex items-center gap-2"
+              >
+                {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
+                Charger plus ({requests.length}/{total})
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
