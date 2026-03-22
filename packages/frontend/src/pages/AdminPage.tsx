@@ -398,41 +398,35 @@ function SettingsTab() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      {/* Quality Profile */}
-      <div className="card p-6">
-        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Profil de qualité</h3>
-        <select value={qualityProfile} onChange={(e) => setQualityProfile(e.target.value)} className="input w-full">
-          <option value="">Automatique (premier disponible)</option>
-          {radarrProfiles.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Default folders */}
-      <div className="card p-6">
-        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Dossiers par défaut</h3>
-        <p className="text-xs text-ndp-text-dim mb-4">Dossier utilisé quand aucun mapping de genre ne correspond.</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm text-ndp-text mb-1 block">Films</label>
-            <select value={movieFolder} onChange={(e) => setMovieFolder(e.target.value)} className="input w-full">
-              <option value="">Auto (premier disponible)</option>
-              {radarrFolders.map((f) => (
-                <option key={f.path} value={f.path}>{f.path} ({formatBytes(f.freeSpace)})</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-sm text-ndp-text mb-1 block">Séries</label>
-            <select value={tvFolder} onChange={(e) => setTvFolder(e.target.value)} className="input w-full">
-              <option value="">Auto (premier disponible)</option>
-              {sonarrFolders.map((f) => (
-                <option key={f.path} value={f.path}>{f.path} ({formatBytes(f.freeSpace)})</option>
-              ))}
-            </select>
-          </div>
+    <div className="max-w-5xl space-y-6">
+      {/* Top row: quality profile + default folders */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Profil de qualité</h3>
+          <select value={qualityProfile} onChange={(e) => setQualityProfile(e.target.value)} className="input w-full">
+            <option value="">Auto (premier dispo)</option>
+            {radarrProfiles.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Dossier Films</h3>
+          <select value={movieFolder} onChange={(e) => setMovieFolder(e.target.value)} className="input w-full">
+            <option value="">Auto (premier dispo)</option>
+            {radarrFolders.map((f) => (
+              <option key={f.path} value={f.path}>{f.path} ({formatBytes(f.freeSpace)})</option>
+            ))}
+          </select>
+        </div>
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Dossier Séries</h3>
+          <select value={tvFolder} onChange={(e) => setTvFolder(e.target.value)} className="input w-full">
+            <option value="">Auto (premier dispo)</option>
+            {sonarrFolders.map((f) => (
+              <option key={f.path} value={f.path}>{f.path} ({formatBytes(f.freeSpace)})</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -493,29 +487,30 @@ function SettingsTab() {
         </div>
       </div>
 
-      {/* Subscription */}
-      <div className="card p-6">
-        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Abonnement</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm text-ndp-text mb-1 block">Prix (€)</label>
-            <input type="number" value={subPrice} onChange={(e) => setSubPrice(e.target.value)} className="input w-full" min="0" step="0.01" />
-          </div>
-          <div>
-            <label className="text-sm text-ndp-text mb-1 block">Durée (jours)</label>
-            <input type="number" value={subDuration} onChange={(e) => setSubDuration(e.target.value)} className="input w-full" min="1" />
+      {/* Bottom row: subscription + Plex */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Abonnement</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm text-ndp-text mb-1 block">Prix (€)</label>
+              <input type="number" value={subPrice} onChange={(e) => setSubPrice(e.target.value)} className="input w-full" min="0" step="0.01" />
+            </div>
+            <div>
+              <label className="text-sm text-ndp-text mb-1 block">Durée (jours)</label>
+              <input type="number" value={subDuration} onChange={(e) => setSubDuration(e.target.value)} className="input w-full" min="1" />
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Plex */}
-      <div className="card p-6">
-        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Plex</h3>
-        <label className="text-sm text-ndp-text mb-1 block">Machine ID du serveur Plex</label>
-        <input type="text" value={plexMachineId} onChange={(e) => setPlexMachineId(e.target.value)} placeholder="Laissez vide pour désactiver" className="input w-full" />
-        <p className="text-xs text-ndp-text-dim mt-1">
-          Accédez à <code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">http://IP_PLEX:32400/identity</code> et copiez <code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">machineIdentifier</code>.
-        </p>
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Plex</h3>
+          <label className="text-sm text-ndp-text mb-1 block">Machine ID du serveur</label>
+          <input type="text" value={plexMachineId} onChange={(e) => setPlexMachineId(e.target.value)} placeholder="Laissez vide pour désactiver" className="input w-full" />
+          <p className="text-xs text-ndp-text-dim mt-1">
+            Accédez à <code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">http://IP:32400/identity</code> → <code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">machineIdentifier</code>
+          </p>
+        </div>
       </div>
 
       {/* Save */}
