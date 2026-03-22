@@ -89,7 +89,7 @@ export default function HomePage() {
     <div className="min-h-screen">
       {/* Hero skeleton */}
       {loading && (
-        <div className="relative h-[60vh] min-h-[420px] bg-ndp-surface">
+        <div className="relative h-[70vh] min-h-[500px] bg-ndp-surface">
           <div className="absolute inset-0 bg-gradient-to-r from-ndp-bg via-ndp-bg/80 to-transparent" />
           <div className="relative h-full flex flex-col justify-end pb-12 px-4 sm:px-8 max-w-3xl">
             <div className="skeleton w-20 h-4 mb-3 rounded" />
@@ -103,7 +103,7 @@ export default function HomePage() {
 
       {/* Hero section */}
       {!loading && hero && (
-        <div className="relative h-[60vh] min-h-[420px] overflow-hidden">
+        <div className="relative h-[70vh] min-h-[500px] overflow-hidden">
           {/* Background image with crossfade */}
           <div className="absolute inset-0">
             <div

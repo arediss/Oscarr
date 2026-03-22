@@ -276,7 +276,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         )}
       </nav>
 
-      <main className={clsx('min-h-screen', hasBanner ? 'pt-[104px]' : 'pt-16')}>
+      <main className={clsx('min-h-screen', location.pathname === '/' ? '' : hasBanner ? 'pt-[104px]' : 'pt-16')}>
         {children}
       </main>
     </div>

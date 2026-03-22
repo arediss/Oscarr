@@ -447,7 +447,6 @@ function CollectionSection({ collection }: { collection: { id: number; name: str
   const totalCount = parts.length;
   const allAvailable = totalCount > 0 && availableCount === totalCount;
   const someAvailable = availableCount > 0 && availableCount < totalCount;
-  const noneAvailable = availableCount === 0;
 
   const buttonLabel = result
     ? `${result.requested} demandés, ${result.skipped} ignorés`
