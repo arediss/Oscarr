@@ -18,6 +18,7 @@ import { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import MediaRow from '@/components/MediaRow';
 import { useDownloadForMedia, useOnDownloadComplete } from '@/hooks/useDownloads';
+import { invalidateMediaStatus } from '@/hooks/useMediaStatus';
 import type { TmdbMedia, Media } from '@/types';
 
 interface Props {
@@ -97,6 +98,8 @@ export default function MediaDetailPage({ type }: Props) {
         body.seasons = selectedSeasons;
       }
       await api.post('/requests', body);
+      // Invalidate badge cache so homepage updates without F5
+      invalidateMediaStatus(media.id, type);
       // Refresh DB media state
       const { data } = await api.get(`/media/tmdb/${id}/${type}`);
       applyDbData(data);
@@ -112,7 +115,8 @@ export default function MediaDetailPage({ type }: Props) {
 
   // Auto-refresh when download completes (disappears from queue)
   useOnDownloadComplete(media?.id, () => {
-    if (!id) return;
+    if (!id || !media) return;
+    invalidateMediaStatus(media.id, type);
     api.get(`/media/tmdb/${id}/${type}`).then(({ data }) => applyDbData(data)).catch(() => {});
   });
 

@@ -10,9 +10,15 @@ interface MediaRowProps {
   media: TmdbMedia[];
   loading?: boolean;
   href?: string;
+  size?: 'default' | 'large';
 }
 
-export default function MediaRow({ title, media, loading, href }: MediaRowProps) {
+const SIZE_CLASSES = {
+  default: 'w-[140px] sm:w-[160px] lg:w-[180px]',
+  large: 'w-[180px] sm:w-[210px] lg:w-[240px]',
+};
+
+export default function MediaRow({ title, media, loading, href, size = 'default' }: MediaRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const statuses = useMediaStatus(media);
 
@@ -61,7 +67,7 @@ export default function MediaRow({ title, media, loading, href }: MediaRowProps)
         >
           {loading
             ? Array.from({ length: 8 }).map((_, i) => (
-                <MediaCardSkeleton key={i} />
+                <MediaCardSkeleton key={i} className={SIZE_CLASSES[size]} />
               ))
             : media.map((item, i) => {
                 const type = item.media_type || (item.title ? 'movie' : 'tv');
@@ -69,7 +75,7 @@ export default function MediaRow({ title, media, loading, href }: MediaRowProps)
                   <MediaCard
                     key={`${type}-${item.id}`}
                     media={item}
-                    className="w-[140px] sm:w-[160px] lg:w-[180px]"
+                    className={SIZE_CLASSES[size]}
                     availability={getStatusForMedia(statuses, item.id, type)}
                     index={i}
                   />

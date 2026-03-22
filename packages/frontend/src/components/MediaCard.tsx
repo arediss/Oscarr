@@ -155,9 +155,9 @@ function getAvailabilityBadge(availability?: { status: string; requestStatus?: s
   return null;
 }
 
-export function MediaCardSkeleton() {
+export function MediaCardSkeleton({ className }: { className?: string }) {
   return (
-    <div className="flex-shrink-0 w-[140px] sm:w-[160px] lg:w-[180px] rounded-xl overflow-hidden">
+    <div className={clsx('flex-shrink-0 rounded-xl overflow-hidden', className || 'w-[140px] sm:w-[160px] lg:w-[180px]')}>
       <div className="aspect-[2/3] skeleton" />
       <div className="mt-2 space-y-1.5">
         <div className="skeleton h-3 w-3/4 rounded" />

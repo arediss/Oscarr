@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getRadarr } from '../services/radarr.js';
 import { getSonarr } from '../services/sonarr.js';
+import { prisma } from '../utils/prisma.js';
 
 export async function radarrSonarrRoutes(app: FastifyInstance) {
   // Radarr status
@@ -153,6 +154,19 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
         getSonarr().getCalendar(start, end),
       ]);
 
+      // Resolve tvdbId → tmdbId for episodes via DB
+      const tvdbIds = [...new Set(episodes.map((e) => e.series?.tvdbId).filter(Boolean))] as number[];
+      const tvdbToTmdb = new Map<number, number>();
+      if (tvdbIds.length > 0) {
+        const dbMedia = await prisma.media.findMany({
+          where: { tvdbId: { in: tvdbIds }, mediaType: 'tv', tmdbId: { gt: 0 } },
+          select: { tvdbId: true, tmdbId: true },
+        });
+        for (const m of dbMedia) {
+          if (m.tvdbId) tvdbToTmdb.set(m.tvdbId, m.tmdbId);
+        }
+      }
+
       const items = [
         ...movies.map((m) => ({
           type: 'movie' as const,
@@ -170,7 +184,9 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
           episode: e.episodeNumber,
           date: e.airDateUtc,
           tvdbId: e.series?.tvdbId,
+          tmdbId: e.series?.tvdbId ? tvdbToTmdb.get(e.series.tvdbId) ?? undefined : undefined,
           poster: e.series?.images?.find((i: { coverType: string }) => i.coverType === 'poster')?.remoteUrl || null,
+          hasFile: !!(e as unknown as { hasFile?: boolean }).hasFile,
         })),
       ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 

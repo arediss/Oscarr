@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Layout from '@/components/Layout';
@@ -41,6 +42,9 @@ function LoadingScreen() {
 
 function PageTransition({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [location.pathname]);
   return (
     <div key={location.pathname} className="animate-fade-in">
       {children}

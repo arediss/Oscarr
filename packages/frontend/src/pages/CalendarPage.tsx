@@ -125,7 +125,9 @@ export default function CalendarPage() {
 
 function CalendarCard({ item }: { item: CalendarItem }) {
   const poster = extractPosterPath(item.poster);
-  const link = item.type === 'movie' && item.tmdbId ? `/movie/${item.tmdbId}` : null;
+  const link = item.tmdbId
+    ? item.type === 'movie' ? `/movie/${item.tmdbId}` : `/tv/${item.tmdbId}`
+    : null;
   const isEpisode = item.type === 'episode';
 
   const inner = (

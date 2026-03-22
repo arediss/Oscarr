@@ -205,7 +205,7 @@ export default function HomePage() {
           {!loading && recentlyAdded.length > 0 && (
             <MediaRow title="Récemment ajoutés" media={recentlyAdded} />
           )}
-          <MediaRow title="Tendances de la semaine" media={trending} loading={loading} href="/category/trending" />
+          <MediaRow title="Tendances de la semaine" media={trending} loading={loading} href="/category/trending" size="large" />
           <MediaRow title="Films populaires" media={popularMovies.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-popular" />
           <MediaRow title="Séries populaires" media={popularTv.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/tv-popular" />
           <GenreRow />

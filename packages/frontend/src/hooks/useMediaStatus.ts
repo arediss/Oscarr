@@ -9,11 +9,36 @@ interface MediaStatus {
 
 type StatusMap = Record<string, MediaStatus>;
 
-// Global cache to avoid redundant requests across components
+// Global cache with TTL (30s) to allow re-fetching after changes
 const globalCache: StatusMap = {};
+const cacheTimes: Record<string, number> = {};
+const CACHE_TTL = 30_000;
+const BATCH_SIZE = 50;
+
 let pendingIds: { tmdbId: number; mediaType: string }[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let listeners: (() => void)[] = [];
+
+function isCacheValid(key: string): boolean {
+  return key in cacheTimes && Date.now() - cacheTimes[key] < CACHE_TTL;
+}
+
+async function sendBatch(items: { tmdbId: number; mediaType: string }[]) {
+  const { data } = await api.post('/media/batch-status', { ids: items });
+  const now = Date.now();
+  Object.assign(globalCache, data);
+  for (const key of Object.keys(data)) {
+    cacheTimes[key] = now;
+  }
+  // Mark items not returned by the server as "unknown"
+  for (const item of items) {
+    const key = `${item.mediaType}:${item.tmdbId}`;
+    if (!(key in data)) {
+      globalCache[key] = { status: 'unknown' };
+      cacheTimes[key] = now;
+    }
+  }
+}
 
 function scheduleFlush() {
   if (flushTimer) return;
@@ -29,25 +54,34 @@ function scheduleFlush() {
       arr.findIndex((b) => b.tmdbId === item.tmdbId && b.mediaType === item.mediaType) === i
     );
 
-    // Only request ones we don't have cached
-    const uncached = unique.filter((item) => !((`${item.mediaType}:${item.tmdbId}`) in globalCache));
+    // Only request ones we don't have cached or whose cache expired
+    const uncached = unique.filter((item) => !isCacheValid(`${item.mediaType}:${item.tmdbId}`));
     if (uncached.length === 0) return;
 
     try {
-      const { data } = await api.post('/media/batch-status', { ids: uncached });
-      Object.assign(globalCache, data);
-      // Mark items not found as "unknown"
-      for (const item of uncached) {
-        const key = `${item.mediaType}:${item.tmdbId}`;
-        if (!(key in globalCache)) {
-          globalCache[key] = { status: 'unknown' };
-        }
+      // Send in chunks of BATCH_SIZE to respect server limit
+      for (let i = 0; i < uncached.length; i += BATCH_SIZE) {
+        await sendBatch(uncached.slice(i, i + BATCH_SIZE));
       }
       listeners.forEach((cb) => cb());
     } catch {
       // Silently fail
     }
-  }, 150); // Debounce 150ms to batch requests
+  }, 150);
+}
+
+/** Invalidate cache for a specific media, forcing re-fetch on next render */
+export function invalidateMediaStatus(tmdbId: number, mediaType: string) {
+  const key = `${mediaType}:${tmdbId}`;
+  delete cacheTimes[key];
+  delete globalCache[key];
+}
+
+/** Invalidate all cached statuses */
+export function invalidateAllMediaStatuses() {
+  for (const key of Object.keys(cacheTimes)) {
+    delete cacheTimes[key];
+  }
 }
 
 export function useMediaStatus(media: TmdbMedia[]): StatusMap {
