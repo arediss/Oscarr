@@ -28,9 +28,19 @@ const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: 
   failed: { label: 'Échec', icon: AlertCircle, color: 'text-ndp-danger', bg: 'bg-ndp-danger' },
 };
 
+interface RequestStats {
+  total: number;
+  pending: number;
+  approved: number;
+  available: number;
+  declined: number;
+  processing: number;
+}
+
 export default function RequestsPage() {
   const { isAdmin } = useAuth();
   const [requests, setRequests] = useState<MediaRequest[]>([]);
+  const [stats, setStats] = useState<RequestStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<string>('');
@@ -38,6 +48,10 @@ export default function RequestsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    api.get('/requests/stats').then(({ data }) => setStats(data)).catch(() => {});
+  }, []);
 
   const fetchRequests = useCallback(async (reset = true) => {
     if (reset) setLoading(true);
@@ -102,6 +116,18 @@ export default function RequestsPage() {
 
   return (
     <div className="max-w-[1800px] mx-auto px-4 sm:px-8 py-8">
+      {/* Stats */}
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+          <StatCard label="Total" value={stats.total} color="text-ndp-text" bg="bg-white/5" />
+          <StatCard label="En attente" value={stats.pending} color="text-ndp-warning" bg="bg-ndp-warning/5" />
+          <StatCard label="Approuvées" value={stats.approved} color="text-ndp-accent" bg="bg-ndp-accent/5" />
+          <StatCard label="Disponibles" value={stats.available} color="text-ndp-success" bg="bg-ndp-success/5" />
+          <StatCard label="En cours" value={stats.processing} color="text-blue-400" bg="bg-blue-500/5" />
+          <StatCard label="Refusées" value={stats.declined} color="text-ndp-danger" bg="bg-ndp-danger/5" />
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-ndp-text">Demandes</h1>
@@ -293,5 +319,14 @@ function RequestCard({
         </div>
       </div>
     </Link>
+  );
+}
+
+function StatCard({ label, value, color, bg }: { label: string; value: number; color: string; bg: string }) {
+  return (
+    <div className={clsx('rounded-xl p-4 border border-white/5', bg)}>
+      <p className={clsx('text-2xl font-bold', color)}>{value}</p>
+      <p className="text-xs text-ndp-text-dim mt-0.5">{label}</p>
+    </div>
   );
 }

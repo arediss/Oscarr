@@ -13,6 +13,7 @@ export interface RadarrMovie {
   sizeOnDisk: number;
   path: string;
   qualityProfileId: number;
+  added: string;
   tags: number[];
   images: { coverType: string; remoteUrl: string }[];
   digitalRelease?: string;

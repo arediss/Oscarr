@@ -81,13 +81,14 @@ async function syncRadarrRequests(usernameMap: Map<string, number>): Promise<Syn
             continue;
           }
 
-          // Create the request
+          // Create the request with original added date from Radarr
           await prisma.mediaRequest.create({
             data: {
               mediaId: media.id,
               userId,
               mediaType: 'movie',
               status: movie.hasFile ? 'available' : 'approved',
+              createdAt: movie.added ? new Date(movie.added) : undefined,
             },
           });
           imported++;
@@ -161,12 +162,14 @@ async function syncSonarrRequests(usernameMap: Map<string, number>): Promise<Syn
             : stats && stats.episodeFileCount > 0 ? 'approved'
             : 'approved';
 
+          const addedDate = (show as unknown as { added?: string }).added;
           await prisma.mediaRequest.create({
             data: {
               mediaId: media.id,
               userId,
               mediaType: 'tv',
               status,
+              createdAt: addedDate ? new Date(addedDate) : undefined,
             },
           });
           imported++;

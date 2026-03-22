@@ -57,6 +57,24 @@ export async function requestRoutes(app: FastifyInstance) {
     };
   });
 
+  // Stats for the current user (or all if admin)
+  app.get('/stats', { preHandler: [app.authenticate] }, async (request) => {
+    const user = request.user as { id: number; role: string };
+    const userFilter = user.role !== 'admin' ? { userId: user.id } : {};
+
+    const [total, pending, approved, available, declined, searching, upcoming] = await Promise.all([
+      prisma.mediaRequest.count({ where: userFilter }),
+      prisma.mediaRequest.count({ where: { ...userFilter, status: 'pending' } }),
+      prisma.mediaRequest.count({ where: { ...userFilter, status: 'approved' } }),
+      prisma.mediaRequest.count({ where: { ...userFilter, status: 'available' } }),
+      prisma.mediaRequest.count({ where: { ...userFilter, status: 'declined' } }),
+      prisma.mediaRequest.count({ where: { ...userFilter, status: { in: ['searching'] } } }),
+      prisma.mediaRequest.count({ where: { ...userFilter, status: 'upcoming' } }),
+    ]);
+
+    return { total, pending, approved, available, declined, processing: searching + upcoming };
+  });
+
   // Create a new request
   app.post('/', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
