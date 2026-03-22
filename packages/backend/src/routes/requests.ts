@@ -20,13 +20,18 @@ function parsePage(value?: string): number {
 export async function requestRoutes(app: FastifyInstance) {
   app.get('/', { preHandler: [app.authenticate] }, async (request) => {
     const user = request.user as { id: number; role: string };
-    const { status, page } = request.query as { status?: string; page?: string };
+    const { status, page, userId } = request.query as { status?: string; page?: string; userId?: string };
     const pageNum = parsePage(page);
     const take = 20;
     const skip = (pageNum - 1) * take;
 
     const where: Record<string, unknown> = {};
-    if (user.role !== 'admin') where.userId = user.id;
+    if (user.role !== 'admin') {
+      where.userId = user.id;
+    } else if (userId) {
+      const uid = parseId(userId);
+      if (uid) where.userId = uid;
+    }
     if (status && VALID_STATUSES.includes(status)) where.status = status;
 
     const [requests, total] = await Promise.all([

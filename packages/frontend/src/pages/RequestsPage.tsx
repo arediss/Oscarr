@@ -32,26 +32,49 @@ export default function RequestsPage() {
   const { isAdmin } = useAuth();
   const [requests, setRequests] = useState<MediaRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<string>('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
-  const fetchRequests = useCallback(async () => {
-    setLoading(true);
+  const fetchRequests = useCallback(async (reset = true) => {
+    if (reset) setLoading(true);
     try {
       const params = new URLSearchParams();
       if (filter) params.set('status', filter);
+      params.set('page', reset ? '1' : String(page));
       const { data } = await api.get(`/requests?${params}`);
-      setRequests(data.results);
+      if (reset) {
+        setRequests(data.results);
+        setPage(1);
+      } else {
+        setRequests((prev) => [...prev, ...data.results]);
+      }
+      setTotalPages(data.totalPages);
+      setTotal(data.total);
     } catch (err) {
       console.error('Failed to fetch requests:', err);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [filter]);
+  }, [filter, page]);
 
   useEffect(() => {
-    fetchRequests();
-  }, [fetchRequests]);
+    fetchRequests(true);
+  }, [filter]);
+
+  const loadMore = () => {
+    if (loadingMore || page >= totalPages) return;
+    setLoadingMore(true);
+    setPage((p) => p + 1);
+  };
+
+  useEffect(() => {
+    if (page > 1) fetchRequests(false);
+  }, [page]);
 
   const handleAction = async (id: number, action: 'approve' | 'decline') => {
     setActionLoading(id);
@@ -80,7 +103,12 @@ export default function RequestsPage() {
   return (
     <div className="max-w-[1800px] mx-auto px-4 sm:px-8 py-8">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-ndp-text">Demandes</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-ndp-text">Demandes</h1>
+          {!loading && total > 0 && (
+            <span className="text-sm text-ndp-text-dim bg-white/5 px-2.5 py-0.5 rounded-full">{total}</span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-ndp-text-dim" />
           <select
@@ -122,6 +150,19 @@ export default function RequestsPage() {
             />
           ))}
         </div>
+
+        {page < totalPages && (
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="btn-secondary flex items-center gap-2"
+            >
+              {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
+              Charger plus ({requests.length}/{total})
+            </button>
+          </div>
+        )}
       )}
     </div>
   );
