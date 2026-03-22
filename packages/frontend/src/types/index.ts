@@ -16,15 +16,6 @@ export interface AdminUser extends User {
   requestCount?: number;
 }
 
-export interface AppSettings {
-  id: number;
-  defaultQualityProfile: number | null;
-  defaultRootFolder: string | null;
-  subscriptionPrice: number;
-  subscriptionDuration: number;
-  plexMachineId: string | null;
-}
-
 export interface RootFolder {
   id: number;
   path: string;
@@ -145,16 +136,6 @@ export interface MediaRequest {
   media?: Media;
   user?: Pick<User, 'id' | 'plexUsername' | 'avatar'>;
   approvedBy?: Pick<User, 'id' | 'plexUsername'>;
-}
-
-export interface Message {
-  id: number;
-  userId: number;
-  content: string;
-  type: 'general' | 'announcement' | 'system';
-  createdAt: string;
-  updatedAt: string;
-  user: Pick<User, 'id' | 'plexUsername' | 'avatar'> & { role: string };
 }
 
 export interface QueueItem {

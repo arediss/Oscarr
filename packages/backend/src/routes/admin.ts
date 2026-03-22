@@ -119,7 +119,7 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   });
 
-  // === CHAT / BANNER ===
+  // === BANNER ===
 
   app.put('/banner', async (request, reply) => {
     await requireAdmin(request, reply);
@@ -130,36 +130,6 @@ export async function adminRoutes(app: FastifyInstance) {
       create: { id: 1, incidentBanner: banner || null, updatedAt: new Date() },
     });
     return { ok: true };
-  });
-
-  app.put('/chat-toggle', async (request, reply) => {
-    await requireAdmin(request, reply);
-    const { enabled } = request.body as { enabled: boolean };
-    await prisma.appSettings.upsert({
-      where: { id: 1 },
-      update: { chatEnabled: enabled },
-      create: { id: 1, chatEnabled: enabled, updatedAt: new Date() },
-    });
-    return { ok: true, chatEnabled: enabled };
-  });
-
-  app.post('/channels', async (request, reply) => {
-    await requireAdmin(request, reply);
-    const { name, type } = request.body as { name: string; type?: string };
-    if (!name) return reply.status(400).send({ error: 'Nom requis' });
-    const channel = await prisma.chatChannel.create({
-      data: { name, type: type || 'general', isPrivate: false },
-    });
-    return reply.status(201).send(channel);
-  });
-
-  app.delete('/channels/:id', async (request, reply) => {
-    await requireAdmin(request, reply);
-    const { id } = request.params as { id: string };
-    const channelId = parseId(id);
-    if (!channelId) return reply.status(400).send({ error: 'ID invalide' });
-    await prisma.chatChannel.delete({ where: { id: channelId } });
-    return reply.send({ ok: true });
   });
 
   // === FOLDER RULES ===

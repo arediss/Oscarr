@@ -46,12 +46,12 @@ export default function NoAccessPage() {
         </div>
 
         <p className="text-ndp-text-muted text-sm mb-6">
-          Vous pouvez accéder aux messages pour contacter le support.
+          Vous pouvez contacter le support pour obtenir de l'aide.
         </p>
 
-        <Link to="/messages" className="btn-primary inline-flex items-center gap-2">
+        <Link to="/support" className="btn-primary inline-flex items-center gap-2">
           <MessageSquare className="w-4 h-4" />
-          Accéder aux messages
+          Contacter le support
         </Link>
       </div>
     </div>

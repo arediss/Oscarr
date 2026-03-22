@@ -20,7 +20,7 @@ import { clsx } from 'clsx';
 const NAV_LEFT = [
   { path: '/', label: 'Accueil', icon: Home },
   { path: '/calendar', label: 'Calendrier', icon: Calendar },
-  { path: '/messages', label: 'Messages', icon: MessageSquare },
+  { path: '/support', label: 'Support', icon: MessageSquare },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -37,7 +37,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // Fetch incident banner
   useEffect(() => {
-    api.get('/chat/banner').then(({ data }) => setBanner(data.banner)).catch(() => {});
+    api.get('/support/banner').then(({ data }) => setBanner(data.banner)).catch(() => {});
   }, []);
 
   // Sync search input with URL query param when on /search

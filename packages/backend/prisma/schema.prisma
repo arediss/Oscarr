@@ -24,9 +24,8 @@ model User {
 
   requests              MediaRequest[]
   approvedRequests      MediaRequest[] @relation("ApprovedBy")
-  chatMessages          ChatMessage[]
-  chatChannels          ChatChannel[]  @relation("ChannelCreator")
-  chatMemberships       ChatChannelMember[]
+  supportTickets        SupportTicket[]
+  ticketMessages        TicketMessage[]
 }
 
 model Media {
@@ -82,39 +81,27 @@ model MediaRequest {
   approvedBy    User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
 }
 
-model ChatChannel {
+model SupportTicket {
   id            Int       @id @default(autoincrement())
-  name          String    // Display name
-  type          String    // "general" | "announcements" | "support"
-  createdById   Int?
-  isPrivate     Boolean   @default(false) // Support tickets are private
-  createdAt     DateTime  @default(now())
-
-  createdBy     User?     @relation("ChannelCreator", fields: [createdById], references: [id])
-  messages      ChatMessage[]
-  members       ChatChannelMember[]
-}
-
-model ChatChannelMember {
-  id            Int       @id @default(autoincrement())
-  channelId     Int
   userId        Int
+  subject       String
+  status        String    @default("open") // "open" | "closed"
+  createdAt     DateTime  @default(now())
+  closedAt      DateTime?
 
-  channel       ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([channelId, userId])
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      TicketMessage[]
 }
 
-model ChatMessage {
+model TicketMessage {
   id            Int       @id @default(autoincrement())
-  channelId     Int
+  ticketId      Int
   userId        Int
   content       String
   createdAt     DateTime  @default(now())
 
-  channel       ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model AppSettings {
@@ -129,7 +116,6 @@ model AppSettings {
   lastRadarrSync        DateTime? // Last Radarr sync timestamp
   lastSonarrSync        DateTime? // Last Sonarr sync timestamp
   syncIntervalHours     Int       @default(6) // Auto-sync interval in hours
-  chatEnabled           Boolean   @default(true)
   discordWebhookUrl     String?   // Discord webhook URL for notifications
   incidentBanner        String?   // Global incident banner text (null = no banner)
   updatedAt             DateTime  @updatedAt

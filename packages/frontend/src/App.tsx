@@ -60,8 +60,8 @@ export default function App() {
                 <Route path="/category/:slug" element={<RequireAccess><CategoryPage /></RequireAccess>} />
                 <Route path="/calendar" element={<RequireAccess><CalendarPage /></RequireAccess>} />
 
-                {/* Messages accessible even without full access (support) */}
-                <Route path="/messages" element={<MessagesPage />} />
+                {/* Support accessible even without full access */}
+                <Route path="/support" element={<MessagesPage />} />
 
                 {/* Admin only */}
                 <Route path="/admin" element={<AdminPage />} />

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Info, Star } from 'lucide-react';
 import api from '@/lib/api';
@@ -17,6 +17,20 @@ export default function HomePage() {
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroVisible, setHeroVisible] = useState(true);
   const prevHeroRef = useRef(0);
+  const [scrollOpacity, setScrollOpacity] = useState(0);
+
+  const handleScroll = useCallback(() => {
+    const scrollY = window.scrollY;
+    const fadeStart = 100;
+    const fadeEnd = 500;
+    const opacity = Math.min(1, Math.max(0, (scrollY - fadeStart) / (fadeEnd - fadeStart)));
+    setScrollOpacity(opacity);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
 
   useEffect(() => {
     async function fetchData() {
@@ -87,25 +101,11 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
-      {/* Hero skeleton */}
-      {loading && (
-        <div className="relative h-[70vh] min-h-[500px] bg-ndp-surface">
-          <div className="absolute inset-0 bg-gradient-to-r from-ndp-bg via-ndp-bg/80 to-transparent" />
-          <div className="relative h-full flex flex-col justify-end pb-12 px-4 sm:px-8 max-w-3xl">
-            <div className="skeleton w-20 h-4 mb-3 rounded" />
-            <div className="skeleton w-96 h-10 mb-3 rounded" />
-            <div className="skeleton w-32 h-4 mb-4 rounded" />
-            <div className="skeleton w-full max-w-lg h-12 mb-6 rounded" />
-            <div className="skeleton w-32 h-10 rounded-xl" />
-          </div>
-        </div>
-      )}
-
-      {/* Hero section */}
-      {!loading && hero && (
-        <div className="relative h-[70vh] min-h-[500px] overflow-hidden">
-          {/* Background image with crossfade */}
-          <div className="absolute inset-0">
+      {/* Fixed hero backdrop */}
+      <div className="fixed inset-0 h-screen z-0">
+        {loading && <div className="w-full h-full bg-ndp-surface" />}
+        {!loading && hero && (
+          <>
             <div
               className="absolute inset-0 transition-opacity duration-700 ease-in-out"
               style={{ opacity: heroVisible ? 1 : 0 }}
@@ -113,82 +113,104 @@ export default function HomePage() {
               <img
                 src={backdropUrl(hero.backdrop_path)}
                 alt={heroTitle}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover object-top"
               />
             </div>
+            {/* Base gradients */}
             <div className="absolute inset-0 bg-gradient-to-r from-ndp-bg via-ndp-bg/80 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-t from-ndp-bg via-transparent to-ndp-bg/30" />
-          </div>
+          </>
+        )}
+        {/* Scroll-driven fade to bg color */}
+        <div
+          className="absolute inset-0 bg-ndp-bg transition-none"
+          style={{ opacity: scrollOpacity }}
+        />
+      </div>
 
-          {/* Hero content */}
-          <div className="relative h-full flex flex-col justify-end pb-12 px-4 sm:px-8 max-w-3xl">
-            <div
-              className="transition-all duration-500 ease-out"
-              style={{
-                opacity: heroVisible ? 1 : 0,
-                transform: heroVisible ? 'translateY(0)' : 'translateY(16px)',
-              }}
-            >
-              <span className="text-ndp-accent text-xs font-semibold uppercase tracking-widest mb-2 block">
-                {heroType === 'movie' ? 'Film' : 'Série'} tendance
-              </span>
-              <h1 className="text-4xl sm:text-5xl font-extrabold text-white mb-3 leading-tight">
-                {heroTitle}
-              </h1>
-              <div className="flex items-center gap-3 mb-4">
-                {hero.vote_average > 0 && (
-                  <span className="flex items-center gap-1 text-ndp-gold">
-                    <Star className="w-4 h-4 fill-ndp-gold" />
-                    <span className="font-semibold">{hero.vote_average.toFixed(1)}</span>
-                  </span>
-                )}
-                <span className="text-ndp-text-muted text-sm">
-                  {(hero.release_date || hero.first_air_date || '').slice(0, 4)}
+      {/* Scrollable content */}
+      <div className="relative z-10">
+        {/* Hero content area */}
+        <div className="h-[70vh] min-h-[500px] flex flex-col justify-end pb-12 px-4 sm:px-8">
+          {loading && (
+            <div className="max-w-3xl">
+              <div className="skeleton w-20 h-4 mb-3 rounded" />
+              <div className="skeleton w-96 h-10 mb-3 rounded" />
+              <div className="skeleton w-32 h-4 mb-4 rounded" />
+              <div className="skeleton w-full max-w-lg h-12 mb-6 rounded" />
+              <div className="skeleton w-32 h-10 rounded-xl" />
+            </div>
+          )}
+          {!loading && hero && (
+            <div className="max-w-3xl">
+              <div
+                className="transition-all duration-500 ease-out"
+                style={{
+                  opacity: heroVisible ? 1 : 0,
+                  transform: heroVisible ? 'translateY(0)' : 'translateY(16px)',
+                }}
+              >
+                <span className="text-ndp-accent text-xs font-semibold uppercase tracking-widest mb-2 block">
+                  {heroType === 'movie' ? 'Film' : 'Série'} tendance
                 </span>
+                <h1 className="text-4xl sm:text-5xl font-extrabold text-white mb-3 leading-tight">
+                  {heroTitle}
+                </h1>
+                <div className="flex items-center gap-3 mb-4">
+                  {hero.vote_average > 0 && (
+                    <span className="flex items-center gap-1 text-ndp-gold">
+                      <Star className="w-4 h-4 fill-ndp-gold" />
+                      <span className="font-semibold">{hero.vote_average.toFixed(1)}</span>
+                    </span>
+                  )}
+                  <span className="text-ndp-text-muted text-sm">
+                    {(hero.release_date || hero.first_air_date || '').slice(0, 4)}
+                  </span>
+                </div>
+                <p className="text-ndp-text-muted text-sm leading-relaxed line-clamp-3 max-w-lg mb-6">
+                  {hero.overview}
+                </p>
+                <div className="flex gap-3">
+                  <Link
+                    to={`/${heroType}/${hero.id}`}
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    <Info className="w-4 h-4" />
+                    Plus d'infos
+                  </Link>
+                </div>
               </div>
-              <p className="text-ndp-text-muted text-sm leading-relaxed line-clamp-3 max-w-lg mb-6">
-                {hero.overview}
-              </p>
-              <div className="flex gap-3">
-                <Link
-                  to={`/${heroType}/${hero.id}`}
-                  className="btn-primary flex items-center gap-2"
-                >
-                  <Info className="w-4 h-4" />
-                  Plus d'infos
-                </Link>
-              </div>
-            </div>
 
-            {/* Hero dots */}
-            <div className="flex gap-2 mt-6">
-              {trending.slice(0, 5).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => changeHero(i)}
-                  className={`h-2 rounded-full transition-all duration-500 ${
-                    i === heroIndex ? 'bg-ndp-accent w-6' : 'bg-white/30 hover:bg-white/50 w-2'
-                  }`}
-                />
-              ))}
+              {/* Hero dots */}
+              <div className="flex gap-2 mt-6">
+                {trending.slice(0, 5).map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => changeHero(i)}
+                    className={`h-2 rounded-full transition-all duration-500 ${
+                      i === heroIndex ? 'bg-ndp-accent w-6' : 'bg-white/30 hover:bg-white/50 w-2'
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
-      )}
 
-      {/* Content rows */}
-      <div className="space-y-10 pb-16 -mt-8 relative z-10">
-        {loading && (
-          <MediaRow title="Récemment ajoutés" media={[]} loading={true} />
-        )}
-        {!loading && recentlyAdded.length > 0 && (
-          <MediaRow title="Récemment ajoutés" media={recentlyAdded} />
-        )}
-        <MediaRow title="Tendances de la semaine" media={trending} loading={loading} href="/category/trending" />
-        <MediaRow title="Films populaires" media={popularMovies.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-popular" />
-        <MediaRow title="Séries populaires" media={popularTv.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/tv-popular" />
-        <GenreRow />
-        <MediaRow title="Prochainement au cinéma" media={upcoming.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-upcoming" />
+        {/* Content rows - passes over the hero */}
+        <div className="relative space-y-10 pb-16 pt-8">
+          {loading && (
+            <MediaRow title="Récemment ajoutés" media={[]} loading={true} />
+          )}
+          {!loading && recentlyAdded.length > 0 && (
+            <MediaRow title="Récemment ajoutés" media={recentlyAdded} />
+          )}
+          <MediaRow title="Tendances de la semaine" media={trending} loading={loading} href="/category/trending" />
+          <MediaRow title="Films populaires" media={popularMovies.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-popular" />
+          <MediaRow title="Séries populaires" media={popularTv.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/tv-popular" />
+          <GenreRow />
+          <MediaRow title="Prochainement au cinéma" media={upcoming.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-upcoming" />
+        </div>
       </div>
     </div>
   );
