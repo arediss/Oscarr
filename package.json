@@ -6,12 +6,15 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=packages/backend & npm run dev --workspace=packages/frontend",
+    "dev": "concurrently \"npm:dev:backend\" \"npm:dev:frontend\"",
     "dev:backend": "npm run dev --workspace=packages/backend",
     "dev:frontend": "npm run dev --workspace=packages/frontend",
     "build": "npm run build --workspace=packages/backend && npm run build --workspace=packages/frontend",
     "db:push": "npm run db:push --workspace=packages/backend",
     "db:generate": "npm run db:generate --workspace=packages/backend",
     "db:studio": "npm run db:studio --workspace=packages/backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

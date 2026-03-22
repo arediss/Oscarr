@@ -1,6 +1,6 @@
 import { prisma } from '../utils/prisma.js';
-import { radarr, type RadarrMovie } from './radarr.js';
-import { sonarr, type SonarrSeries } from './sonarr.js';
+import { getRadarr, type RadarrMovie } from './radarr.js';
+import { getSonarr, type SonarrSeries } from './sonarr.js';
 
 export interface SyncResult {
   added: number;
@@ -16,7 +16,7 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
   let errors = 0;
 
   try {
-    const movies = await radarr.getMovies();
+    const movies = await getRadarr().getMovies();
 
     // Filter by "added" date if incremental
     const filtered = since
@@ -91,7 +91,7 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
   let errors = 0;
 
   try {
-    const series = await sonarr.getSeries();
+    const series = await getSonarr().getSeries();
 
     // Sonarr doesn't have an "added" field in the same way, but we can use it
     const filtered = since
@@ -137,29 +137,32 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
             },
           });
 
-          // Sync seasons
-          for (const season of show.seasons) {
-            if (season.seasonNumber === 0) continue;
-            const seasonStatus = getSeasonStatus(season);
-            await prisma.season.upsert({
-              where: {
-                mediaId_seasonNumber: {
-                  mediaId: existing.id,
-                  seasonNumber: season.seasonNumber,
-                },
-              },
-              update: {
-                episodeCount: season.statistics?.totalEpisodeCount ?? 0,
-                status: seasonStatus,
-              },
-              create: {
-                mediaId: existing.id,
-                seasonNumber: season.seasonNumber,
-                episodeCount: season.statistics?.totalEpisodeCount ?? 0,
-                status: seasonStatus,
-              },
-            });
-          }
+          // Sync seasons in a single transaction
+          await prisma.$transaction(
+            show.seasons
+              .filter((s) => s.seasonNumber !== 0)
+              .map((season) => {
+                const seasonStatus = getSeasonStatus(season);
+                return prisma.season.upsert({
+                  where: {
+                    mediaId_seasonNumber: {
+                      mediaId: existing.id,
+                      seasonNumber: season.seasonNumber,
+                    },
+                  },
+                  update: {
+                    episodeCount: season.statistics?.totalEpisodeCount ?? 0,
+                    status: seasonStatus,
+                  },
+                  create: {
+                    mediaId: existing.id,
+                    seasonNumber: season.seasonNumber,
+                    episodeCount: season.statistics?.totalEpisodeCount ?? 0,
+                    status: seasonStatus,
+                  },
+                });
+              })
+          );
           updated++;
         } else {
           // Use negative tvdbId as tmdbId placeholder to avoid unique constraint conflicts
@@ -179,18 +182,21 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
             },
           });
 
-          // Create seasons
-          for (const season of show.seasons) {
-            if (season.seasonNumber === 0) continue;
-            await prisma.season.create({
-              data: {
-                mediaId: media.id,
-                seasonNumber: season.seasonNumber,
-                episodeCount: season.statistics?.totalEpisodeCount ?? 0,
-                status: getSeasonStatus(season),
-              },
-            });
-          }
+          // Create seasons in a single transaction
+          await prisma.$transaction(
+            show.seasons
+              .filter((s) => s.seasonNumber !== 0)
+              .map((season) =>
+                prisma.season.create({
+                  data: {
+                    mediaId: media.id,
+                    seasonNumber: season.seasonNumber,
+                    episodeCount: season.statistics?.totalEpisodeCount ?? 0,
+                    status: getSeasonStatus(season),
+                  },
+                })
+              )
+          );
           added++;
         }
       } catch (err) {
@@ -214,10 +220,9 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
 
 export async function runFullSync(): Promise<{ radarr: SyncResult; sonarr: SyncResult }> {
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-  const [radarrResult, sonarrResult] = await Promise.all([
-    syncRadarr(settings?.lastRadarrSync),
-    syncSonarr(settings?.lastSonarrSync),
-  ]);
+  // Sequential to avoid SQLite write lock contention
+  const radarrResult = await syncRadarr(settings?.lastRadarrSync);
+  const sonarrResult = await syncSonarr(settings?.lastSonarrSync);
   return { radarr: radarrResult, sonarr: sonarrResult };
 }
 

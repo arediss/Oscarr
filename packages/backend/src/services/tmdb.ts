@@ -4,15 +4,22 @@ import { getCached, setCache } from '../utils/cache.js';
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
-const tmdbApi = axios.create({
-  baseURL: TMDB_BASE,
-  headers: {
-    Authorization: `Bearer ${process.env.TMDB_ACCESS_TOKEN}`,
-  },
-  params: {
-    language: 'fr-FR',
-  },
-});
+let _tmdbApi: ReturnType<typeof axios.create> | null = null;
+
+function getTmdbApi() {
+  if (!_tmdbApi) {
+    _tmdbApi = axios.create({
+      baseURL: TMDB_BASE,
+      headers: {
+        Authorization: `Bearer ${process.env.TMDB_ACCESS_TOKEN}`,
+      },
+      params: {
+        language: 'fr-FR',
+      },
+    });
+  }
+  return _tmdbApi;
+}
 
 export interface TmdbCollection {
   id: number;
@@ -133,42 +140,42 @@ async function cachedRequest<T>(cacheKey: string, fetcher: () => Promise<T>, ttl
 
 export async function getTrending(page = 1): Promise<{ results: TmdbMediaResult[]; total_pages: number; total_results: number }> {
   return cachedRequest(`trending:all:week:${page}`, async () => {
-    const { data } = await tmdbApi.get('/trending/all/week', { params: { page } });
+    const { data } = await getTmdbApi().get('/trending/all/week', { params: { page } });
     return data;
   }, 6);
 }
 
 export async function getPopularMovies(page = 1) {
   return cachedRequest(`popular:movies:${page}`, async () => {
-    const { data } = await tmdbApi.get('/movie/popular', { params: { page } });
+    const { data } = await getTmdbApi().get('/movie/popular', { params: { page } });
     return data;
   }, 6);
 }
 
 export async function getPopularTv(page = 1) {
   return cachedRequest(`popular:tv:${page}`, async () => {
-    const { data } = await tmdbApi.get('/tv/popular', { params: { page } });
+    const { data } = await getTmdbApi().get('/tv/popular', { params: { page } });
     return data;
   }, 6);
 }
 
 export async function getUpcomingMovies(page = 1) {
   return cachedRequest(`upcoming:movies:${page}`, async () => {
-    const { data } = await tmdbApi.get('/movie/upcoming', { params: { page } });
+    const { data } = await getTmdbApi().get('/movie/upcoming', { params: { page } });
     return data;
   }, 6);
 }
 
 export async function searchMulti(query: string, page = 1) {
   return cachedRequest(`search:${query}:${page}`, async () => {
-    const { data } = await tmdbApi.get('/search/multi', { params: { query, page } });
+    const { data } = await getTmdbApi().get('/search/multi', { params: { query, page } });
     return data;
   }, 1);
 }
 
 export async function getMovieDetails(movieId: number): Promise<TmdbMovie> {
   return cachedRequest(`movie:${movieId}`, async () => {
-    const { data } = await tmdbApi.get(`/movie/${movieId}`, {
+    const { data } = await getTmdbApi().get(`/movie/${movieId}`, {
       params: { append_to_response: 'credits,external_ids,videos' },
     });
     return data;
@@ -177,7 +184,7 @@ export async function getMovieDetails(movieId: number): Promise<TmdbMovie> {
 
 export async function getTvDetails(tvId: number): Promise<TmdbTv> {
   return cachedRequest(`tv:${tvId}`, async () => {
-    const { data } = await tmdbApi.get(`/tv/${tvId}`, {
+    const { data } = await getTmdbApi().get(`/tv/${tvId}`, {
       params: { append_to_response: 'credits,external_ids,videos' },
     });
     return data;
@@ -186,28 +193,28 @@ export async function getTvDetails(tvId: number): Promise<TmdbTv> {
 
 export async function getMovieRecommendations(movieId: number) {
   return cachedRequest(`movie:${movieId}:reco`, async () => {
-    const { data } = await tmdbApi.get(`/movie/${movieId}/recommendations`);
+    const { data } = await getTmdbApi().get(`/movie/${movieId}/recommendations`);
     return data;
   }, 24);
 }
 
 export async function getTvRecommendations(tvId: number) {
   return cachedRequest(`tv:${tvId}:reco`, async () => {
-    const { data } = await tmdbApi.get(`/tv/${tvId}/recommendations`);
+    const { data } = await getTmdbApi().get(`/tv/${tvId}/recommendations`);
     return data;
   }, 24);
 }
 
 export async function getCollection(collectionId: number): Promise<TmdbCollection> {
   return cachedRequest(`collection:${collectionId}`, async () => {
-    const { data } = await tmdbApi.get(`/collection/${collectionId}`);
+    const { data } = await getTmdbApi().get(`/collection/${collectionId}`);
     return data;
   }, 48);
 }
 
 export async function discoverByGenre(mediaType: 'movie' | 'tv', genreId: number, page = 1) {
   return cachedRequest(`discover:${mediaType}:genre:${genreId}:${page}`, async () => {
-    const { data } = await tmdbApi.get(`/discover/${mediaType}`, {
+    const { data } = await getTmdbApi().get(`/discover/${mediaType}`, {
       params: {
         with_genres: genreId,
         sort_by: 'popularity.desc',

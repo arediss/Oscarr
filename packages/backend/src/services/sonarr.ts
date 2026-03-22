@@ -163,4 +163,8 @@ class SonarrService {
   }
 }
 
-export const sonarr = new SonarrService();
+let _sonarr: SonarrService | null = null;
+export function getSonarr() {
+  if (!_sonarr) _sonarr = new SonarrService();
+  return _sonarr;
+}

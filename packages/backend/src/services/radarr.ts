@@ -128,4 +128,8 @@ class RadarrService {
   }
 }
 
-export const radarr = new RadarrService();
+let _radarr: RadarrService | null = null;
+export function getRadarr() {
+  if (!_radarr) _radarr = new RadarrService();
+  return _radarr;
+}

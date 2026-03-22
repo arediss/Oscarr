@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { radarr } from '../services/radarr.js';
-import { sonarr } from '../services/sonarr.js';
+import { getRadarr } from '../services/radarr.js';
+import { getSonarr } from '../services/sonarr.js';
 import { getMovieDetails, getTvDetails, getCollection } from '../services/tmdb.js';
 import { matchFolderRule } from '../services/folderRules.js';
 import { sendNotification, logEvent } from '../services/notifications.js';
@@ -368,12 +368,12 @@ async function sendToService(
     const defaultFolder = mediaType === 'movie' ? settings?.defaultMovieFolder : settings?.defaultTvFolder;
 
     if (mediaType === 'movie') {
-      const folderPath = ruleMatch?.folderPath || defaultFolder || (await radarr.getRootFolders())[0]?.path || '/movies';
-      const tagId = await radarr.getOrCreateTag(username);
-      const existing = await radarr.getMovieByTmdbId(media.tmdbId);
+      const folderPath = ruleMatch?.folderPath || defaultFolder || (await getRadarr().getRootFolders())[0]?.path || '/movies';
+      const tagId = await getRadarr().getOrCreateTag(username);
+      const existing = await getRadarr().getMovieByTmdbId(media.tmdbId);
       if (!existing) {
-        const profiles = await radarr.getQualityProfiles();
-        await radarr.addMovie({
+        const profiles = await getRadarr().getQualityProfiles();
+        await getRadarr().addMovie({
           title: media.title,
           tmdbId: media.tmdbId,
           qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,
@@ -384,14 +384,14 @@ async function sendToService(
       }
     } else if (mediaType === 'tv' && media.tvdbId) {
       const animeFolder = settings?.defaultAnimeFolder;
-      const folderPath = ruleMatch?.folderPath || defaultFolder || (await sonarr.getRootFolders())[0]?.path || '/tv';
+      const folderPath = ruleMatch?.folderPath || defaultFolder || (await getSonarr().getRootFolders())[0]?.path || '/tv';
       const seriesType = (ruleMatch?.seriesType as 'anime' | 'standard' | 'daily') || 'standard';
 
-      const tagId = await sonarr.getOrCreateTag(username);
-      const existing = await sonarr.getSeriesByTvdbId(media.tvdbId);
+      const tagId = await getSonarr().getOrCreateTag(username);
+      const existing = await getSonarr().getSeriesByTvdbId(media.tvdbId);
       if (!existing) {
-        const profiles = await sonarr.getQualityProfiles();
-        await sonarr.addSeries({
+        const profiles = await getSonarr().getQualityProfiles();
+        await getSonarr().addSeries({
           title: media.title,
           tvdbId: media.tvdbId,
           qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { radarr } from '../services/radarr.js';
-import { sonarr } from '../services/sonarr.js';
+import { getRadarr } from '../services/radarr.js';
+import { getSonarr } from '../services/sonarr.js';
 import { syncRadarr, syncSonarr, runFullSync } from '../services/sync.js';
 import { getPlexFriends } from '../services/plex.js';
 import { syncRequestsFromTags } from '../services/requestSync.js';
@@ -82,7 +82,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/radarr/profiles', async (request, reply) => {
     await requireAdmin(request, reply);
     try {
-      const profiles = await radarr.getQualityProfiles();
+      const profiles = await getRadarr().getQualityProfiles();
       return profiles;
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Radarr' });
@@ -92,7 +92,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/radarr/rootfolders', async (request, reply) => {
     await requireAdmin(request, reply);
     try {
-      const folders = await radarr.getRootFolders();
+      const folders = await getRadarr().getRootFolders();
       return folders;
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Radarr' });
@@ -102,7 +102,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/sonarr/profiles', async (request, reply) => {
     await requireAdmin(request, reply);
     try {
-      const profiles = await sonarr.getQualityProfiles();
+      const profiles = await getSonarr().getQualityProfiles();
       return profiles;
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
@@ -112,7 +112,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/sonarr/rootfolders', async (request, reply) => {
     await requireAdmin(request, reply);
     try {
-      const folders = await sonarr.getRootFolders();
+      const folders = await getSonarr().getRootFolders();
       return folders;
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
