@@ -11,13 +11,15 @@ import {
   XCircle,
   Calendar,
   RefreshCw,
+  Play,
+  Clock,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import type { AdminUser, AppSettings, QualityProfile, RootFolder } from '@/types';
 
-type Tab = 'settings' | 'users';
+type Tab = 'users' | 'jobs' | 'settings';
 
 export default function AdminPage() {
   const { isAdmin } = useAuth();
@@ -49,6 +51,16 @@ export default function AdminPage() {
           Utilisateurs
         </button>
         <button
+          onClick={() => setActiveTab('jobs')}
+          className={clsx(
+            'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all',
+            activeTab === 'jobs' ? 'bg-ndp-accent text-white' : 'bg-ndp-surface text-ndp-text-muted hover:bg-ndp-surface-light'
+          )}
+        >
+          <RefreshCw className="w-4 h-4" />
+          Jobs & Sync
+        </button>
+        <button
           onClick={() => setActiveTab('settings')}
           className={clsx(
             'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all',
@@ -61,6 +73,7 @@ export default function AdminPage() {
       </div>
 
       {activeTab === 'users' && <UsersTab />}
+      {activeTab === 'jobs' && <JobsTab />}
       {activeTab === 'settings' && <SettingsTab />}
     </div>
   );
@@ -413,7 +426,7 @@ function SettingsTab() {
               className="input w-full"
             />
             <p className="text-xs text-ndp-text-dim mt-1">
-              Trouvable dans Plex Settings → General → Machine Identifier. Si vide, la vérification d'accès serveur est désactivée.
+              Accédez à <code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">http://IP_PLEX:32400/identity</code> et copiez le champ <code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">machineIdentifier</code>. Si vide, la vérification d'accès serveur est désactivée.
             </p>
           </div>
         </div>
@@ -438,6 +451,159 @@ function SettingsTab() {
           )}
           {saved ? 'Sauvegardé !' : 'Sauvegarder'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function JobsTab() {
+  const [syncStatus, setSyncStatus] = useState<{
+    lastRadarrSync: string | null;
+    lastSonarrSync: string | null;
+    syncIntervalHours: number;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<{ radarr?: { added: number; updated: number; duration: number }; sonarr?: { added: number; updated: number; duration: number } } | null>(null);
+  const [intervalHours, setIntervalHours] = useState('6');
+
+  useEffect(() => {
+    api.get('/admin/sync/status').then(({ data }) => {
+      setSyncStatus(data);
+      setIntervalHours(data.syncIntervalHours?.toString() || '6');
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const runSync = async (type: 'full' | 'radarr' | 'sonarr') => {
+    setRunning(type);
+    setLastResult(null);
+    try {
+      const endpoint = type === 'full' ? '/admin/sync/run' : `/admin/sync/${type}`;
+      const { data } = await api.post(endpoint);
+      if (type === 'full') {
+        setLastResult(data);
+      } else {
+        setLastResult({ [type]: data });
+      }
+      // Refresh status
+      const { data: status } = await api.get('/admin/sync/status');
+      setSyncStatus(status);
+    } catch (err) {
+      console.error('Sync failed:', err);
+    } finally {
+      setRunning(null);
+    }
+  };
+
+  const saveInterval = async () => {
+    try {
+      await api.put('/admin/sync/interval', { hours: parseInt(intervalHours) || 6 });
+    } catch (err) {
+      console.error('Failed to save interval:', err);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 text-ndp-accent animate-spin" /></div>;
+  }
+
+  const formatDate = (d: string | null) => d ? new Date(d).toLocaleString('fr-FR') : 'Jamais';
+
+  return (
+    <div className="max-w-3xl space-y-6">
+      {/* Sync status */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Synchronisation des médias</h3>
+        <p className="text-xs text-ndp-text-dim mb-6">
+          Importe les films et séries depuis Radarr/Sonarr. Le premier scan récupère tout, les suivants ne récupèrent que les nouveaux ajouts.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="bg-white/5 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-ndp-text">Radarr Sync</span>
+              <Clock className="w-4 h-4 text-ndp-text-dim" />
+            </div>
+            <p className="text-xs text-ndp-text-dim">Dernier scan : {formatDate(syncStatus?.lastRadarrSync ?? null)}</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-ndp-text">Sonarr Sync</span>
+              <Clock className="w-4 h-4 text-ndp-text-dim" />
+            </div>
+            <p className="text-xs text-ndp-text-dim">Dernier scan : {formatDate(syncStatus?.lastSonarrSync ?? null)}</p>
+          </div>
+        </div>
+
+        {/* Sync buttons */}
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => runSync('full')}
+            disabled={running !== null}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            {running === 'full' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            Sync complet
+          </button>
+          <button
+            onClick={() => runSync('radarr')}
+            disabled={running !== null}
+            className="btn-secondary flex items-center gap-2 text-sm"
+          >
+            {running === 'radarr' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sync Radarr
+          </button>
+          <button
+            onClick={() => runSync('sonarr')}
+            disabled={running !== null}
+            className="btn-secondary flex items-center gap-2 text-sm"
+          >
+            {running === 'sonarr' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sync Sonarr
+          </button>
+        </div>
+
+        {/* Last result */}
+        {lastResult && (
+          <div className="mt-4 p-4 bg-ndp-success/5 border border-ndp-success/20 rounded-xl animate-fade-in">
+            <p className="text-sm font-semibold text-ndp-success mb-2">Sync terminé</p>
+            {lastResult.radarr && (
+              <p className="text-xs text-ndp-text-muted">
+                Radarr : +{lastResult.radarr.added} ajoutés, ~{lastResult.radarr.updated} mis à jour ({lastResult.radarr.duration}ms)
+              </p>
+            )}
+            {lastResult.sonarr && (
+              <p className="text-xs text-ndp-text-muted">
+                Sonarr : +{lastResult.sonarr.added} ajoutés, ~{lastResult.sonarr.updated} mis à jour ({lastResult.sonarr.duration}ms)
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Sync interval */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Planification</h3>
+        <div className="flex items-end gap-3">
+          <div>
+            <label className="text-sm text-ndp-text mb-1 block">Intervalle de sync auto (heures)</label>
+            <input
+              type="number"
+              value={intervalHours}
+              onChange={(e) => setIntervalHours(e.target.value)}
+              min="1"
+              max="168"
+              className="input text-sm w-24"
+            />
+          </div>
+          <button onClick={saveInterval} className="btn-primary text-sm py-2.5 flex items-center gap-2">
+            <Save className="w-4 h-4" />
+            Sauver
+          </button>
+        </div>
+        <p className="text-xs text-ndp-text-dim mt-2">
+          Le sync automatique tourne en arrière-plan. Un sync initial est lancé 10 secondes après le démarrage du serveur.
+        </p>
       </div>
     </div>
   );

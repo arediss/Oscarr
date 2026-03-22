@@ -11,6 +11,8 @@ import { messageRoutes } from './routes/messages.js';
 import { radarrSonarrRoutes } from './routes/radarr-sonarr.js';
 import { adminRoutes } from './routes/admin.js';
 import { authenticate } from './middleware/auth.js';
+import { startSyncScheduler } from './services/sync.js';
+import { prisma } from './utils/prisma.js';
 
 const app = Fastify({ logger: true });
 
@@ -48,6 +50,10 @@ async function start() {
   }
   await app.listen({ port, host: '0.0.0.0' });
   console.log(`Netflix du Pauvre API running on port ${port}`);
+
+  // Start media sync scheduler
+  const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+  startSyncScheduler(settings?.syncIntervalHours ?? 6);
 }
 
 start().catch((err) => {

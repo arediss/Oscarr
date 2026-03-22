@@ -98,6 +98,9 @@ model AppSettings {
   subscriptionPrice     Float     @default(0)
   subscriptionDuration  Int       @default(30) // Days
   plexMachineId         String?   // Plex server machine identifier for access verification
+  lastRadarrSync        DateTime? // Last Radarr sync timestamp
+  lastSonarrSync        DateTime? // Last Sonarr sync timestamp
+  syncIntervalHours     Int       @default(6) // Auto-sync interval in hours
   updatedAt             DateTime  @updatedAt
 }
 

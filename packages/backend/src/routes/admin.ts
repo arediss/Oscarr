@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { radarr } from '../services/radarr.js';
 import { sonarr } from '../services/sonarr.js';
+import { syncRadarr, syncSonarr, runFullSync } from '../services/sync.js';
 
 function parseId(value: string): number | null {
   const id = parseInt(value, 10);
@@ -214,5 +215,56 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     return user;
+  });
+
+  // === SYNC JOBS ===
+
+  // Get sync status
+  app.get('/sync/status', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    return {
+      lastRadarrSync: settings?.lastRadarrSync,
+      lastSonarrSync: settings?.lastSonarrSync,
+      syncIntervalHours: settings?.syncIntervalHours ?? 6,
+    };
+  });
+
+  // Trigger full sync (both Radarr + Sonarr)
+  app.post('/sync/run', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const result = await runFullSync();
+    return result;
+  });
+
+  // Trigger Radarr sync only
+  app.post('/sync/radarr', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    const result = await syncRadarr(settings?.lastRadarrSync);
+    return result;
+  });
+
+  // Trigger Sonarr sync only
+  app.post('/sync/sonarr', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    const result = await syncSonarr(settings?.lastSonarrSync);
+    return result;
+  });
+
+  // Update sync interval
+  app.put('/sync/interval', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { hours } = request.body as { hours: number };
+    if (typeof hours !== 'number' || hours < 1 || hours > 168) {
+      return reply.status(400).send({ error: 'Intervalle entre 1 et 168 heures' });
+    }
+    await prisma.appSettings.upsert({
+      where: { id: 1 },
+      update: { syncIntervalHours: hours },
+      create: { id: 1, syncIntervalHours: hours, updatedAt: new Date() },
+    });
+    return { ok: true, syncIntervalHours: hours };
   });
 }
