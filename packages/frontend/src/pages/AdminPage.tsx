@@ -28,10 +28,11 @@ import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import type { AdminUser, AppSettings, QualityProfile, RootFolder } from '@/types';
 
-type Tab = 'users' | 'paths' | 'jobs' | 'general';
+type Tab = 'users' | 'messages' | 'paths' | 'jobs' | 'general';
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'users', label: 'Utilisateurs', icon: Users },
+  { id: 'messages', label: 'Messages', icon: MessageSquare },
   { id: 'paths', label: 'Chemins & Règles', icon: FolderTree },
   { id: 'jobs', label: 'Jobs & Sync', icon: RefreshCw },
   { id: 'general', label: 'Général', icon: Settings },
@@ -68,6 +69,7 @@ export default function AdminPage() {
       </div>
 
       {activeTab === 'users' && <UsersTab />}
+      {activeTab === 'messages' && <MessagesAdminTab />}
       {activeTab === 'paths' && <PathsTab />}
       {activeTab === 'jobs' && <JobsTab />}
       {activeTab === 'general' && <GeneralTab />}
@@ -185,6 +187,146 @@ function UsersTab() {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ============ MESSAGES ADMIN TAB ============
+function MessagesAdminTab() {
+  const [bannerText, setBannerText] = useState('');
+  const [chatEnabled, setChatEnabled] = useState(true);
+  const [channels, setChannels] = useState<{ id: number; name: string; type: string; messageCount: number }[]>([]);
+  const [newChannelName, setNewChannelName] = useState('');
+  const [newChannelType, setNewChannelType] = useState('general');
+  const [loading, setLoading] = useState(true);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [bannerRes, settingsRes, channelsRes] = await Promise.all([
+          api.get('/chat/banner'),
+          api.get('/admin/settings'),
+          api.get('/chat/channels'),
+        ]);
+        setBannerText(bannerRes.data.banner || '');
+        setChatEnabled(settingsRes.data.chatEnabled ?? true);
+        setChannels(channelsRes.data);
+      } catch (err) { console.error(err); }
+      finally { setLoading(false); }
+    }
+    load();
+  }, []);
+
+  const saveBanner = async () => {
+    try {
+      await api.put('/admin/banner', { banner: bannerText.trim() || null });
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } catch (err) { console.error(err); }
+  };
+
+  const toggleChat = async () => {
+    const next = !chatEnabled;
+    try {
+      await api.put('/admin/chat-toggle', { enabled: next });
+      setChatEnabled(next);
+    } catch (err) { console.error(err); }
+  };
+
+  const createChannel = async () => {
+    if (!newChannelName.trim()) return;
+    try {
+      const { data } = await api.post('/admin/channels', { name: newChannelName.trim(), type: newChannelType });
+      setChannels(prev => [...prev, { ...data, messageCount: 0 }]);
+      setNewChannelName('');
+    } catch (err) { console.error(err); }
+  };
+
+  const deleteChannel = async (id: number) => {
+    try {
+      await api.delete(`/admin/channels/${id}`);
+      setChannels(prev => prev.filter(c => c.id !== id));
+    } catch (err) { console.error(err); }
+  };
+
+  if (loading) return <Spinner />;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Incident banner */}
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Bandeau d'incident</h3>
+          <p className="text-xs text-ndp-text-dim mb-3">Affiché en haut de toutes les pages. Laissez vide pour masquer.</p>
+          <input
+            value={bannerText}
+            onChange={(e) => setBannerText(e.target.value)}
+            placeholder="Ex: Maintenance prévue ce soir à 22h"
+            className="input w-full text-sm mb-3"
+          />
+          <button onClick={saveBanner} className={clsx('text-sm font-medium px-4 py-2 rounded-xl transition-all flex items-center gap-2', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
+            {saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            {saved ? 'Sauvegardé' : 'Mettre à jour'}
+          </button>
+        </div>
+
+        {/* Chat toggle */}
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Module Chat</h3>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-ndp-text">Chat en temps réel</p>
+              <p className="text-xs text-ndp-text-dim">Active/désactive le module de messagerie</p>
+            </div>
+            <button onClick={toggleChat} className={clsx('w-12 h-7 rounded-full transition-colors relative', chatEnabled ? 'bg-ndp-success' : 'bg-ndp-surface-hover')}>
+              <div className={clsx('w-5 h-5 rounded-full bg-white absolute top-1 transition-all', chatEnabled ? 'left-6' : 'left-1')} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Channels */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Canaux de discussion</h3>
+
+        {channels.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {channels.map((ch) => (
+              <div key={ch.id} className="flex items-center gap-3 bg-white/5 rounded-lg px-4 py-3">
+                <span className={clsx('text-xs px-2 py-0.5 rounded font-semibold',
+                  ch.type === 'support' ? 'bg-ndp-warning/10 text-ndp-warning' :
+                  ch.type === 'announcements' ? 'bg-ndp-accent/10 text-ndp-accent' :
+                  'bg-white/10 text-ndp-text-muted'
+                )}>{ch.type}</span>
+                <span className="text-sm text-ndp-text font-medium flex-1">{ch.name}</span>
+                <span className="text-xs text-ndp-text-dim">{ch.messageCount} msg</span>
+                {ch.type !== 'support' && (
+                  <button onClick={() => deleteChannel(ch.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
+                    <XCircle className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <label className="text-xs text-ndp-text-dim block mb-1">Nom du canal</label>
+            <input value={newChannelName} onChange={(e) => setNewChannelName(e.target.value)} placeholder="Ex: Général, Annonces..." className="input text-sm w-full" />
+          </div>
+          <div>
+            <label className="text-xs text-ndp-text-dim block mb-1">Type</label>
+            <select value={newChannelType} onChange={(e) => setNewChannelType(e.target.value)} className="input text-sm">
+              <option value="general">Général</option>
+              <option value="announcements">Annonces</option>
+            </select>
+          </div>
+          <button onClick={createChannel} disabled={!newChannelName.trim()} className="btn-primary text-sm py-2.5">
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

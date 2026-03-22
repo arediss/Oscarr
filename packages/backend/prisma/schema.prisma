@@ -24,7 +24,9 @@ model User {
 
   requests              MediaRequest[]
   approvedRequests      MediaRequest[] @relation("ApprovedBy")
-  messages              Message[]
+  chatMessages          ChatMessage[]
+  chatChannels          ChatChannel[]  @relation("ChannelCreator")
+  chatMemberships       ChatChannelMember[]
 }
 
 model Media {
@@ -80,15 +82,39 @@ model MediaRequest {
   approvedBy    User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
 }
 
-model Message {
+model ChatChannel {
   id            Int       @id @default(autoincrement())
+  name          String    // Display name
+  type          String    // "general" | "announcements" | "support"
+  createdById   Int?
+  isPrivate     Boolean   @default(false) // Support tickets are private
+  createdAt     DateTime  @default(now())
+
+  createdBy     User?     @relation("ChannelCreator", fields: [createdById], references: [id])
+  messages      ChatMessage[]
+  members       ChatChannelMember[]
+}
+
+model ChatChannelMember {
+  id            Int       @id @default(autoincrement())
+  channelId     Int
+  userId        Int
+
+  channel       ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+}
+
+model ChatMessage {
+  id            Int       @id @default(autoincrement())
+  channelId     Int
   userId        Int
   content       String
-  type          String    @default("general") // "general" | "announcement" | "system"
   createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
 
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel       ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model AppSettings {
@@ -103,6 +129,8 @@ model AppSettings {
   lastRadarrSync        DateTime? // Last Radarr sync timestamp
   lastSonarrSync        DateTime? // Last Sonarr sync timestamp
   syncIntervalHours     Int       @default(6) // Auto-sync interval in hours
+  chatEnabled           Boolean   @default(true)
+  incidentBanner        String?   // Global incident banner text (null = no banner)
   updatedAt             DateTime  @updatedAt
 }
 

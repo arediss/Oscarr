@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
+import { AlertTriangle, X as XIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
   Home,
@@ -28,7 +29,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
+  const [banner, setBanner] = useState<string | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const avatarMenuRef = useRef<HTMLDivElement>(null);
+
+  // Fetch incident banner
+  useEffect(() => {
+    api.get('/chat/banner').then(({ data }) => setBanner(data.banner)).catch(() => {});
+  }, []);
 
   // Sync search input with URL query param when on /search
   useEffect(() => {
@@ -70,9 +78,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
+  const hasBanner = banner && !bannerDismissed;
+
   return (
     <div className="min-h-screen bg-ndp-bg">
-      <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/5">
+      {/* Incident banner */}
+      {hasBanner && (
+        <div className="fixed top-0 left-0 right-0 z-[60] bg-ndp-warning/90 backdrop-blur-sm text-black px-4 py-2 flex items-center justify-center gap-3">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <p className="text-sm font-medium text-center">{banner}</p>
+          <button onClick={() => setBannerDismissed(true)} className="p-0.5 hover:bg-black/10 rounded flex-shrink-0">
+            <XIcon className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      <nav className={clsx('fixed left-0 right-0 z-50 glass border-b border-white/5', hasBanner ? 'top-10' : 'top-0')}>
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6">
           <div className="relative flex items-center justify-between h-16">
 
@@ -247,7 +268,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         )}
       </nav>
 
-      <main className="pt-16 min-h-screen">
+      <main className={clsx('min-h-screen', hasBanner ? 'pt-[104px]' : 'pt-16')}>
         {children}
       </main>
     </div>

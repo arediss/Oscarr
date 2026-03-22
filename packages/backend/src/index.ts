@@ -10,7 +10,9 @@ import { mediaRoutes } from './routes/media.js';
 import { messageRoutes } from './routes/messages.js';
 import { radarrSonarrRoutes } from './routes/radarr-sonarr.js';
 import { adminRoutes } from './routes/admin.js';
+import { chatRoutes } from './routes/chat.js';
 import { authenticate } from './middleware/auth.js';
+import websocket from '@fastify/websocket';
 import { startSyncScheduler } from './services/sync.js';
 import { prisma } from './utils/prisma.js';
 
@@ -33,6 +35,7 @@ async function start() {
   });
 
   await app.register(cookie);
+  await app.register(websocket);
 
   app.decorate('authenticate', authenticate);
 
@@ -43,6 +46,7 @@ async function start() {
   await app.register(messageRoutes, { prefix: '/api/messages' });
   await app.register(radarrSonarrRoutes, { prefix: '/api/services' });
   await app.register(adminRoutes, { prefix: '/api/admin' });
+  await app.register(chatRoutes, { prefix: '/api/chat' });
 
   const port = parseInt(process.env.PORT || '3001', 10);
   if (Number.isNaN(port)) {
