@@ -4,6 +4,7 @@ import { radarr } from '../services/radarr.js';
 import { sonarr } from '../services/sonarr.js';
 import { getMovieDetails, getTvDetails, getCollection } from '../services/tmdb.js';
 import { matchFolderRule } from '../services/folderRules.js';
+import { sendNotification, logEvent } from '../services/notifications.js';
 
 const VALID_STATUSES = ['pending', 'approved', 'declined', 'processing', 'available', 'failed'];
 const VALID_MEDIA_TYPES = ['movie', 'tv'];
@@ -174,6 +175,11 @@ export async function requestRoutes(app: FastifyInstance) {
       await sendToService(media, validMediaType, tagName, validSeasons);
     }
 
+    // Notify
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { plexUsername: true } });
+    sendNotification('request_new', { title, mediaType: validMediaType, username: dbUser?.plexUsername || 'Utilisateur', posterPath: tmdbData.poster_path, tmdbId: tmdbData.id });
+    logEvent('info', 'Request', `${dbUser?.plexUsername} a demandé "${title}"`);
+
     return reply.status(201).send(mediaRequest);
   });
 
@@ -210,6 +216,9 @@ export async function requestRoutes(app: FastifyInstance) {
       },
     });
 
+    sendNotification('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.plexUsername || 'Utilisateur', posterPath: updated.media.posterPath });
+    logEvent('info', 'Request', `Demande "${updated.media.title}" approuvée`);
+
     return reply.send(updated);
   });
 
@@ -231,6 +240,9 @@ export async function requestRoutes(app: FastifyInstance) {
         user: { select: { id: true, plexUsername: true, avatar: true } },
       },
     });
+
+    sendNotification('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.plexUsername || 'Utilisateur', posterPath: updated.media.posterPath });
+    logEvent('info', 'Request', `Demande "${updated.media.title}" refusée`);
 
     return reply.send(updated);
   });

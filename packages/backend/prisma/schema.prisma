@@ -130,6 +130,7 @@ model AppSettings {
   lastSonarrSync        DateTime? // Last Sonarr sync timestamp
   syncIntervalHours     Int       @default(6) // Auto-sync interval in hours
   chatEnabled           Boolean   @default(true)
+  discordWebhookUrl     String?   // Discord webhook URL for notifications
   incidentBanner        String?   // Global incident banner text (null = no banner)
   updatedAt             DateTime  @updatedAt
 }
@@ -142,6 +143,14 @@ model FolderRule {
   conditions    String    // JSON array: [{ field, operator, value }]
   folderPath    String    // Target root folder path
   seriesType    String?   // Sonarr series type override: "anime" | "standard" | "daily"
+  createdAt     DateTime  @default(now())
+}
+
+model AppLog {
+  id            Int       @id @default(autoincrement())
+  level         String    // "info" | "warn" | "error"
+  label         String    // Category (e.g. "Sync", "Request", "Auth")
+  message       String
   createdAt     DateTime  @default(now())
 }
 

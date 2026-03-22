@@ -28,13 +28,14 @@ import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import type { AdminUser, AppSettings, QualityProfile, RootFolder } from '@/types';
 
-type Tab = 'users' | 'messages' | 'paths' | 'jobs' | 'general';
+type Tab = 'users' | 'messages' | 'paths' | 'jobs' | 'logs' | 'general';
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'users', label: 'Utilisateurs', icon: Users },
   { id: 'messages', label: 'Messages', icon: MessageSquare },
   { id: 'paths', label: 'Chemins & Règles', icon: FolderTree },
   { id: 'jobs', label: 'Jobs & Sync', icon: RefreshCw },
+  { id: 'logs', label: 'Logs', icon: ScrollText },
   { id: 'general', label: 'Général', icon: Settings },
 ];
 
@@ -72,6 +73,7 @@ export default function AdminPage() {
       {activeTab === 'messages' && <MessagesAdminTab />}
       {activeTab === 'paths' && <PathsTab />}
       {activeTab === 'jobs' && <JobsTab />}
+      {activeTab === 'logs' && <LogsTab />}
       {activeTab === 'general' && <GeneralTab />}
     </div>
   );
@@ -672,6 +674,99 @@ function JobsTab() {
   );
 }
 
+// ============ LOGS TAB ============
+interface LogEntry { id: number; level: string; label: string; message: string; createdAt: string; }
+
+function LogsTab() {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [levelFilter, setLevelFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('page', String(page));
+      if (levelFilter) params.set('level', levelFilter);
+      const { data } = await api.get(`/admin/logs?${params}`);
+      setLogs(data.results);
+      setTotalPages(data.totalPages);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  }, [page, levelFilter]);
+
+  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+
+  const clearLogs = async () => {
+    try { await api.delete('/admin/logs'); setLogs([]); }
+    catch (err) { console.error(err); }
+  };
+
+  const levelColors: Record<string, string> = {
+    info: 'bg-ndp-accent/10 text-ndp-accent',
+    warn: 'bg-ndp-warning/10 text-ndp-warning',
+    error: 'bg-ndp-danger/10 text-ndp-danger',
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {['', 'info', 'warn', 'error'].map((lvl) => (
+            <button key={lvl} onClick={() => { setLevelFilter(lvl); setPage(1); }}
+              className={clsx('px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                levelFilter === lvl ? 'bg-ndp-accent text-white' : 'bg-ndp-surface text-ndp-text-muted hover:bg-ndp-surface-light'
+              )}>
+              {lvl || 'Tous'}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={fetchLogs} className="btn-secondary text-xs flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5" /> Rafraîchir</button>
+          <button onClick={clearLogs} className="btn-danger text-xs flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Vider</button>
+        </div>
+      </div>
+
+      {loading ? <Spinner /> : logs.length === 0 ? (
+        <div className="text-center py-16"><ScrollText className="w-10 h-10 text-ndp-text-dim mx-auto mb-2" /><p className="text-sm text-ndp-text-dim">Aucun log</p></div>
+      ) : (
+        <div className="card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/5 text-ndp-text-dim text-xs">
+                <th className="text-left px-4 py-3">Date</th>
+                <th className="text-left px-4 py-3">Niveau</th>
+                <th className="text-left px-4 py-3">Label</th>
+                <th className="text-left px-4 py-3">Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log) => (
+                <tr key={log.id} className="border-b border-white/5 hover:bg-white/5">
+                  <td className="px-4 py-2.5 text-xs text-ndp-text-dim whitespace-nowrap">{new Date(log.createdAt).toLocaleString('fr-FR')}</td>
+                  <td className="px-4 py-2.5"><span className={clsx('text-[10px] px-2 py-0.5 rounded font-semibold', levelColors[log.level] || '')}>{log.level}</span></td>
+                  <td className="px-4 py-2.5 text-xs text-ndp-text-muted">{log.label}</td>
+                  <td className="px-4 py-2.5 text-xs text-ndp-text">{log.message}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-2">
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="btn-secondary text-xs">← Précédent</button>
+          <span className="text-xs text-ndp-text-dim self-center">{page}/{totalPages}</span>
+          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="btn-secondary text-xs">Suivant →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============ GENERAL TAB ============
 function GeneralTab() {
   const [saving, setSaving] = useState(false);
@@ -679,6 +774,7 @@ function GeneralTab() {
   const [subPrice, setSubPrice] = useState('');
   const [subDuration, setSubDuration] = useState('');
   const [plexMachineId, setPlexMachineId] = useState('');
+  const [discordWebhook, setDiscordWebhook] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -686,13 +782,14 @@ function GeneralTab() {
       setSubPrice(data.subscriptionPrice?.toString() || '0');
       setSubDuration(data.subscriptionDuration?.toString() || '30');
       setPlexMachineId(data.plexMachineId || '');
+      setDiscordWebhook(data.discordWebhookUrl || '');
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const handleSave = async () => {
     setSaving(true); setSaved(false);
     try {
-      await api.put('/admin/settings', { subscriptionPrice: parseFloat(subPrice) || 0, subscriptionDuration: parseInt(subDuration) || 30, plexMachineId: plexMachineId || null });
+      await api.put('/admin/settings', { subscriptionPrice: parseFloat(subPrice) || 0, subscriptionDuration: parseInt(subDuration) || 30, plexMachineId: plexMachineId || null, discordWebhookUrl: discordWebhook || null });
       setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch (err) { console.error(err); } finally { setSaving(false); }
   };
@@ -701,7 +798,7 @@ function GeneralTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="card p-6">
           <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Abonnement</h3>
           <div className="grid grid-cols-2 gap-4">
@@ -714,6 +811,12 @@ function GeneralTab() {
           <label className="text-sm text-ndp-text mb-1 block">Machine ID du serveur</label>
           <input type="text" value={plexMachineId} onChange={(e) => setPlexMachineId(e.target.value)} placeholder="Laissez vide pour désactiver" className="input w-full" />
           <p className="text-xs text-ndp-text-dim mt-1"><code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">http://IP:32400/identity</code> → machineIdentifier</p>
+        </div>
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Notifications Discord</h3>
+          <label className="text-sm text-ndp-text mb-1 block">Webhook URL</label>
+          <input type="text" value={discordWebhook} onChange={(e) => setDiscordWebhook(e.target.value)} placeholder="https://discord.com/api/webhooks/..." className="input w-full" />
+          <p className="text-xs text-ndp-text-dim mt-1">Notifie les nouvelles demandes, approbations et refus</p>
         </div>
       </div>
       <button onClick={handleSave} disabled={saving} className={clsx('flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-xl transition-all', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
