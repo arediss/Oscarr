@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.db
+*.db-journal
+.idea/
+.DS_Store
+overrserr/
+api

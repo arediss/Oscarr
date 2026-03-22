@@ -1,0 +1,112 @@
+import type { FastifyInstance } from 'fastify';
+import { prisma } from '../utils/prisma.js';
+import { getPlexUser, createPlexPin, checkPlexPin } from '../services/plex.js';
+
+const PLEX_CLIENT_ID = 'netflix-du-pauvre-client';
+
+export async function authRoutes(app: FastifyInstance) {
+  // Create a Plex PIN for OAuth flow
+  app.post('/plex/pin', async (_request, reply) => {
+    const pin = await createPlexPin(PLEX_CLIENT_ID);
+    const authUrl = `https://app.plex.tv/auth#?clientID=${PLEX_CLIENT_ID}&code=${pin.code}&context%5Bdevice%5D%5Bproduct%5D=Netflix%20du%20Pauvre`;
+    return reply.send({ pin, authUrl });
+  });
+
+  // Check if PIN has been authenticated, then login/create user
+  app.post('/plex/callback', async (request, reply) => {
+    const { pinId } = request.body as { pinId: unknown };
+
+    if (typeof pinId !== 'number' || !Number.isFinite(pinId) || pinId < 1) {
+      return reply.status(400).send({ error: 'pinId invalide' });
+    }
+
+    const authToken = await checkPlexPin(pinId, PLEX_CLIENT_ID);
+    if (!authToken) {
+      return reply.status(400).send({ error: 'PIN non validé. Réessayez.' });
+    }
+
+    const plexAccount = await getPlexUser(authToken);
+
+    // Find or create user
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { plexId: plexAccount.id },
+          { email: plexAccount.email.toLowerCase() },
+        ],
+      },
+    });
+
+    const userCount = await prisma.user.count();
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: plexAccount.email.toLowerCase(),
+          plexId: plexAccount.id,
+          plexToken: authToken,
+          plexUsername: plexAccount.username,
+          avatar: plexAccount.thumb,
+          role: userCount === 0 ? 'admin' : 'user',
+        },
+      });
+    } else {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          plexToken: authToken,
+          plexId: plexAccount.id,
+          plexUsername: plexAccount.username,
+          avatar: plexAccount.thumb,
+        },
+      });
+    }
+
+    const token = app.jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      { expiresIn: '30d' }
+    );
+
+    reply
+      .setCookie('token', token, {
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60,
+      })
+      .send({
+        user: {
+          id: user.id,
+          email: user.email,
+          plexUsername: user.plexUsername,
+          avatar: user.avatar,
+          role: user.role,
+        },
+        token,
+      });
+  });
+
+  // Get current user
+  app.get('/me', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { id } = request.user as { id: number };
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        plexUsername: true,
+        avatar: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+    if (!user) return reply.status(404).send({ error: 'Utilisateur introuvable' });
+    return reply.send(user);
+  });
+
+  // Logout
+  app.post('/logout', async (_request, reply) => {
+    reply.clearCookie('token', { path: '/' }).send({ ok: true });
+  });
+}

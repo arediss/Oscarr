@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  plexId        Int?      @unique
+  plexToken     String?
+  plexUsername   String?
+  avatar        String?
+  role          String    @default("user") // "admin" | "user"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  requests      MediaRequest[]
+  approvedRequests MediaRequest[] @relation("ApprovedBy")
+  messages      Message[]
+}
+
+model Media {
+  id                  Int       @id @default(autoincrement())
+  tmdbId              Int
+  tvdbId              Int?
+  mediaType           String    // "movie" | "tv"
+  title               String
+  overview            String?
+  posterPath          String?
+  backdropPath        String?
+  releaseDate         String?
+  voteAverage         Float?
+  genres              String?   // JSON string array
+  status              String    @default("unknown") // "unknown" | "pending" | "processing" | "available" | "deleted"
+  radarrId            Int?
+  sonarrId            Int?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  requests            MediaRequest[]
+  seasons             Season[]
+
+  @@unique([tmdbId, mediaType])
+}
+
+model Season {
+  id            Int       @id @default(autoincrement())
+  mediaId       Int
+  seasonNumber  Int
+  episodeCount  Int       @default(0)
+  status        String    @default("unknown") // "unknown" | "pending" | "available"
+
+  media         Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([mediaId, seasonNumber])
+}
+
+model MediaRequest {
+  id            Int       @id @default(autoincrement())
+  mediaId       Int
+  userId        Int
+  status        String    @default("pending") // "pending" | "approved" | "declined" | "processing" | "available" | "failed"
+  mediaType     String    // "movie" | "tv"
+  seasons       String?   // JSON array of season numbers for TV requests
+  approvedById  Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  media         Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy    User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
+}
+
+model Message {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  content       String
+  type          String    @default("general") // "general" | "announcement" | "system"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TmdbCache {
+  id            Int       @id @default(autoincrement())
+  cacheKey      String    @unique
+  data          String    // JSON stringified
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+}

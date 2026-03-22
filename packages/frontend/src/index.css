@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #374151 transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #374151;
+    border-radius: 3px;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-ndp-surface/80 backdrop-blur-xl border border-white/5;
+  }
+
+  .glass-hover {
+    @apply hover:bg-ndp-surface-hover/80 transition-colors duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-ndp-accent hover:bg-ndp-accent-hover text-white font-medium px-6 py-2.5 rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-ndp-accent/25;
+  }
+
+  .btn-secondary {
+    @apply bg-ndp-surface-light hover:bg-ndp-surface-hover text-ndp-text font-medium px-6 py-2.5 rounded-xl transition-all duration-200 border border-white/5;
+  }
+
+  .btn-danger {
+    @apply bg-ndp-danger/10 hover:bg-ndp-danger/20 text-ndp-danger font-medium px-6 py-2.5 rounded-xl transition-all duration-200;
+  }
+
+  .btn-success {
+    @apply bg-ndp-success/10 hover:bg-ndp-success/20 text-ndp-success font-medium px-6 py-2.5 rounded-xl transition-all duration-200;
+  }
+
+  .card {
+    @apply bg-ndp-surface rounded-2xl border border-white/5 overflow-hidden;
+  }
+
+  .input {
+    @apply bg-ndp-surface-light border border-white/10 rounded-xl px-4 py-3 text-ndp-text placeholder-ndp-text-dim focus:outline-none focus:ring-2 focus:ring-ndp-accent/50 focus:border-ndp-accent transition-all duration-200;
+  }
+
+  .skeleton {
+    @apply bg-gradient-to-r from-ndp-surface-light via-ndp-surface-hover to-ndp-surface-light bg-[length:400%_100%] animate-shimmer rounded-lg;
+  }
+}
