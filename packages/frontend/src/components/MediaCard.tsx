@@ -10,13 +10,17 @@ interface MediaCardProps {
   availability?: { status: string; requestStatus?: string } | null;
 }
 
+function getMediaType(media: TmdbMedia): string {
+  return media.media_type || (media.title ? 'movie' : 'tv');
+}
+
 export default function MediaCard({ media, className, availability }: MediaCardProps) {
   const title = media.title || media.name || 'Sans titre';
   const year = (media.release_date || media.first_air_date || '').slice(0, 4);
   const type = media.media_type || (media.title ? 'movie' : 'tv');
   const link = `/${type}/${media.id}`;
 
-  const statusBadge = getAvailabilityBadge(availability);
+  const statusBadge = getAvailabilityBadge(availability, type);
 
   return (
     <Link
@@ -90,7 +94,7 @@ export default function MediaCard({ media, className, availability }: MediaCardP
   );
 }
 
-function getAvailabilityBadge(availability?: { status: string; requestStatus?: string } | null) {
+function getAvailabilityBadge(availability?: { status: string; requestStatus?: string } | null, mediaType?: string) {
   if (!availability || availability.status === 'unknown') return null;
 
   if (availability.status === 'available') {
@@ -101,7 +105,8 @@ function getAvailabilityBadge(availability?: { status: string; requestStatus?: s
     };
   }
 
-  if (availability.status === 'processing') {
+  // Only TV shows can be "partially available"
+  if (availability.status === 'processing' && mediaType === 'tv') {
     return {
       label: 'Partiel',
       icon: Clock,

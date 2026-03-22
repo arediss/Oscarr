@@ -110,7 +110,7 @@ export default function MediaDetailPage({ type }: Props) {
   };
 
   const isAvailable = dbMedia?.status === 'available';
-  const isPartiallyAvailable = dbMedia?.status === 'processing';
+  const isPartiallyAvailable = dbMedia?.status === 'processing' && type === 'tv';
   const userHasRequest = dbMedia?.requests?.some(
     (r) => r.user?.id === user?.id && ['pending', 'approved', 'processing'].includes(r.status)
   );
