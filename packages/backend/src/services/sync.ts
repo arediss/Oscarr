@@ -257,7 +257,7 @@ export function startSyncScheduler(intervalHours = 6) {
 
 function getMovieStatus(movie: RadarrMovie): string {
   if (movie.hasFile) return 'available';
-  if (movie.monitored) return 'processing';
+  if (movie.monitored) return 'pending';
   return 'unknown';
 }
 
