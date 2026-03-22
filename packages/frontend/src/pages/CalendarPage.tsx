@@ -145,21 +145,22 @@ function CalendarCard({ item }: { item: CalendarItem }) {
 
       {/* Episode badge */}
       {isEpisode && (
-        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded-md">
-          <span className="text-[10px] font-medium text-white">S{String(item.season).padStart(2, '0')}E{String(item.episode).padStart(2, '0')}</span>
+        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-1.5 h-5 flex items-center rounded-md">
+          <span className="text-[11px] font-semibold text-white leading-none not-italic">S{String(item.season).padStart(2, '0')}E{String(item.episode).padStart(2, '0')}</span>
         </div>
       )}
 
       {/* Available badge */}
       {item.hasFile && (
-        <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-ndp-success/80 px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-white backdrop-blur-sm">
-          <CheckCircle className="w-3 h-3" /> Dispo
+        <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-ndp-success/80 px-1.5 h-5 rounded-md backdrop-blur-sm">
+          <CheckCircle className="w-3 h-3 text-white" />
+          <span className="text-[11px] font-semibold text-white leading-none">Dispo</span>
         </div>
       )}
 
       {/* Time */}
-      <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded-md">
-        <span className="text-[10px] text-white/80">
+      <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm px-1.5 h-5 flex items-center rounded-md">
+        <span className="text-[11px] font-medium text-white leading-none not-italic">
           {new Date(item.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>
