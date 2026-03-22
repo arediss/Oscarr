@@ -8,6 +8,7 @@ import {
   Search,
   Film,
   MessageSquare,
+  Calendar,
   LogOut,
   Menu,
   X,
@@ -19,6 +20,7 @@ import { clsx } from 'clsx';
 const NAV_ITEMS = [
   { path: '/', label: 'Accueil', icon: Home },
   { path: '/requests', label: 'Demandes', icon: Film },
+  { path: '/calendar', label: 'Calendrier', icon: Calendar },
   { path: '/messages', label: 'Messages', icon: MessageSquare },
 ];
 

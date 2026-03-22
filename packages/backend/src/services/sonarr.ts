@@ -116,6 +116,11 @@ class SonarrService {
     return data[0] ?? null;
   }
 
+  async getCalendar(start: string, end: string): Promise<{ seriesId: number; seasonNumber: number; episodeNumber: number; title: string; airDateUtc: string; series: { title: string; tvdbId: number; images: { coverType: string; remoteUrl: string }[] } }[]> {
+    const { data } = await this.api.get('/calendar', { params: { start, end, includeSeries: true } });
+    return data;
+  }
+
   async getQueue(): Promise<{ records: SonarrQueueItem[] }> {
     const { data } = await this.api.get('/queue', {
       params: { pageSize: 50, includeSeries: true, includeEpisode: true },

@@ -81,4 +81,44 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
       return { error: 'Impossible de récupérer les statistiques' };
     }
   });
+
+  // Calendar: upcoming releases
+  app.get('/calendar', { preHandler: [app.authenticate] }, async (request) => {
+    const { days } = request.query as { days?: string };
+    const numDays = Math.min(parseInt(days || '30', 10) || 30, 90);
+    const start = new Date().toISOString().slice(0, 10);
+    const end = new Date(Date.now() + numDays * 86400000).toISOString().slice(0, 10);
+
+    try {
+      const [movies, episodes] = await Promise.all([
+        radarr.getCalendar(start, end),
+        sonarr.getCalendar(start, end),
+      ]);
+
+      const items = [
+        ...movies.map((m) => ({
+          type: 'movie' as const,
+          title: m.title,
+          date: m.digitalRelease || m.physicalRelease || m.inCinemas || m.releaseDate || '',
+          tmdbId: m.tmdbId,
+          poster: m.images?.find((i) => i.coverType === 'poster')?.remoteUrl || null,
+          hasFile: m.hasFile,
+        })),
+        ...episodes.map((e) => ({
+          type: 'episode' as const,
+          title: e.series?.title || 'Série inconnue',
+          episodeTitle: e.title,
+          season: e.seasonNumber,
+          episode: e.episodeNumber,
+          date: e.airDateUtc,
+          tvdbId: e.series?.tvdbId,
+          poster: e.series?.images?.find((i: { coverType: string }) => i.coverType === 'poster')?.remoteUrl || null,
+        })),
+      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      return items;
+    } catch (err) {
+      return [];
+    }
+  });
 }

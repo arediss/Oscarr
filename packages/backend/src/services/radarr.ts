@@ -100,6 +100,11 @@ class RadarrService {
     return created.id;
   }
 
+  async getCalendar(start: string, end: string): Promise<RadarrMovie[]> {
+    const { data } = await this.api.get('/calendar', { params: { start, end } });
+    return data;
+  }
+
   async getQueue(): Promise<{ records: RadarrQueueItem[] }> {
     const { data } = await this.api.get('/queue', {
       params: { pageSize: 50, includeMovie: true },

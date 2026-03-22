@@ -12,6 +12,7 @@ import AdminPage from '@/pages/AdminPage';
 import NoAccessPage from '@/pages/NoAccessPage';
 import DiscoverGenrePage from '@/pages/DiscoverGenrePage';
 import CategoryPage from '@/pages/CategoryPage';
+import CalendarPage from '@/pages/CalendarPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -57,6 +58,7 @@ export default function App() {
 
                 <Route path="/discover/:mediaType/genre/:genreId" element={<RequireAccess><DiscoverGenrePage /></RequireAccess>} />
                 <Route path="/category/:slug" element={<RequireAccess><CategoryPage /></RequireAccess>} />
+                <Route path="/calendar" element={<RequireAccess><CalendarPage /></RequireAccess>} />
 
                 {/* Messages accessible even without full access (support) */}
                 <Route path="/messages" element={<MessagesPage />} />
