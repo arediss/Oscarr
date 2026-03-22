@@ -17,9 +17,8 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
-const NAV_ITEMS = [
+const NAV_LEFT = [
   { path: '/', label: 'Accueil', icon: Home },
-  { path: '/requests', label: 'Demandes', icon: Film },
   { path: '/calendar', label: 'Calendrier', icon: Calendar },
   { path: '/messages', label: 'Messages', icon: MessageSquare },
 ];
@@ -100,31 +99,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6">
           <div className="relative flex items-center justify-between h-16">
 
-            {/* Left: Logo + Nav */}
-            <div className="flex items-center gap-1 relative z-10">
-              <Link to="/" className="flex items-center group mr-1 sm:mr-3">
-                <div className="w-9 h-9 bg-gradient-to-br from-ndp-accent to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-ndp-accent/20 group-hover:shadow-ndp-accent/40 transition-shadow">
-                  <Film className="w-5 h-5 text-white" />
-                </div>
-              </Link>
-
-              <div className="hidden md:flex items-center gap-0.5">
-                {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
-                  <Link
-                    key={path}
-                    to={path}
-                    className={clsx(
-                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200',
-                      location.pathname === path
-                        ? 'bg-ndp-accent/10 text-ndp-accent'
-                        : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
-                    )}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="hidden lg:inline">{label}</span>
-                  </Link>
-                ))}
-              </div>
+            {/* Left: Nav */}
+            <div className="hidden md:flex items-center gap-0.5 relative z-10">
+              {NAV_LEFT.map(({ path, label, icon: Icon }) => (
+                <Link
+                  key={path}
+                  to={path}
+                  className={clsx(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200',
+                    location.pathname === path
+                      ? 'bg-ndp-accent/10 text-ndp-accent'
+                      : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
+                  )}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="hidden lg:inline">{label}</span>
+                </Link>
+              ))}
             </div>
 
             {/* Center: Search bar - absolutely centered on the page */}
@@ -152,6 +143,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               >
                 <Search className="w-5 h-5" />
               </button>
+
+              {/* Demandes link */}
+              <Link
+                to="/requests"
+                className={clsx(
+                  'hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200',
+                  location.pathname === '/requests'
+                    ? 'bg-ndp-accent/10 text-ndp-accent'
+                    : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
+                )}
+              >
+                <Film className="w-4 h-4" />
+                <span className="hidden lg:inline">Demandes</span>
+              </Link>
 
               {/* Avatar with dropdown */}
               <div className="relative" ref={avatarMenuRef}>
@@ -235,7 +240,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </form>
             </div>
             <div className="px-4 py-3 space-y-1">
-              {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
+              {[...NAV_LEFT, { path: '/requests', label: 'Demandes', icon: Film }].map(({ path, label, icon: Icon }) => (
                 <Link
                   key={path}
                   to={path}
