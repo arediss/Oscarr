@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -26,8 +26,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const avatarMenuRef = useRef<HTMLDivElement>(null);
+
+  // Sync search input with URL query param when on /search
+  useEffect(() => {
+    if (location.pathname === '/search') {
+      const q = searchParams.get('q') || '';
+      setSearchQuery(q);
+    } else {
+      setSearchQuery('');
+    }
+  }, [location.pathname, searchParams]);
 
   const handleLogout = async () => {
     setAvatarMenuOpen(false);
@@ -39,7 +50,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-      setSearchQuery('');
     }
   };
 
