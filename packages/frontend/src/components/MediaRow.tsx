@@ -63,7 +63,7 @@ export default function MediaRow({ title, media, loading, href }: MediaRowProps)
             ? Array.from({ length: 8 }).map((_, i) => (
                 <MediaCardSkeleton key={i} />
               ))
-            : media.map((item) => {
+            : media.map((item, i) => {
                 const type = item.media_type || (item.title ? 'movie' : 'tv');
                 return (
                   <MediaCard
@@ -71,6 +71,7 @@ export default function MediaRow({ title, media, loading, href }: MediaRowProps)
                     media={item}
                     className="w-[140px] sm:w-[160px] lg:w-[180px]"
                     availability={getStatusForMedia(statuses, item.id, type)}
+                    index={i}
                   />
                 );
               })}

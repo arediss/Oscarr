@@ -9,14 +9,16 @@ interface MediaCardProps {
   media: TmdbMedia;
   className?: string;
   availability?: { status: string; requestStatus?: string } | null;
+  index?: number;
 }
 
 function getMediaType(media: TmdbMedia): string {
   return media.media_type || (media.title ? 'movie' : 'tv');
 }
 
-export default function MediaCard({ media, className, availability }: MediaCardProps) {
+export default function MediaCard({ media, className, availability, index = 0 }: MediaCardProps) {
   const [loaded, setLoaded] = useState(false);
+  const delay = Math.min(index * 50, 400); // 50ms stagger, max 400ms
   const title = media.title || media.name || 'Sans titre';
   const year = (media.release_date || media.first_air_date || '').slice(0, 4);
   const type = media.media_type || (media.title ? 'movie' : 'tv');
@@ -38,7 +40,8 @@ export default function MediaCard({ media, className, availability }: MediaCardP
           <img
             src={posterUrl(media.poster_path, 'w342')}
             alt={title}
-            className={clsx('w-full h-full object-cover transition-opacity duration-500', loaded ? 'opacity-100' : 'opacity-0')}
+            className={clsx('w-full h-full object-cover transition-opacity duration-500 ease-out', loaded ? 'opacity-100' : 'opacity-0')}
+            style={{ transitionDelay: loaded ? '0ms' : `${delay}ms` }}
             loading="lazy"
             onLoad={() => setLoaded(true)}
           />
