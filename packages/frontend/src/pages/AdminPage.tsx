@@ -83,6 +83,8 @@ function UsersTab() {
   const [paymentDate, setPaymentDate] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; total: number } | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try { const { data } = await api.get('/admin/users'); setUsers(data); }
@@ -107,14 +109,39 @@ function UsersTab() {
     catch (err) { console.error(err); } finally { setSaving(false); }
   };
 
+  const handleImportPlex = async () => {
+    setImporting(true); setImportResult(null);
+    try {
+      const { data } = await api.post('/admin/users/import-plex');
+      setImportResult(data);
+      fetchUsers();
+    } catch (err) { console.error('Import failed:', err); }
+    finally { setImporting(false); }
+  };
+
   if (loading) return <Spinner />;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-ndp-text">{users.length} utilisateur{users.length > 1 ? 's' : ''}</h2>
-        <button onClick={fetchUsers} className="btn-secondary flex items-center gap-2 text-sm"><RefreshCw className="w-4 h-4" /> Rafraîchir</button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleImportPlex} disabled={importing} className="btn-primary flex items-center gap-2 text-sm">
+            {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+            Importer depuis Plex
+          </button>
+          <button onClick={fetchUsers} className="btn-secondary flex items-center gap-2 text-sm"><RefreshCw className="w-4 h-4" /> Rafraîchir</button>
+        </div>
       </div>
+
+      {importResult && (
+        <div className="p-3 bg-ndp-success/5 border border-ndp-success/20 rounded-xl mb-4 animate-fade-in flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-ndp-success flex-shrink-0" />
+          <p className="text-sm text-ndp-text-muted">
+            {importResult.total} utilisateurs Plex trouvés : <strong className="text-ndp-success">{importResult.imported} importés</strong>, {importResult.skipped} déjà existants
+          </p>
+        </div>
+      )}
       <div className="space-y-3">
         {users.map((u) => {
           const isActive = u.subscriptionActive;

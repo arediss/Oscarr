@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { radarr } from '../services/radarr.js';
 import { sonarr } from '../services/sonarr.js';
 import { syncRadarr, syncSonarr, runFullSync } from '../services/sync.js';
+import { getPlexFriends } from '../services/plex.js';
 import { syncRequestsFromTags } from '../services/requestSync.js';
 
 function parseId(value: string): number | null {
@@ -175,6 +176,62 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // === USER MANAGEMENT ===
+
+  // Import Plex friends as users
+  app.post('/users/import-plex', async (request, reply) => {
+    await requireAdmin(request, reply);
+
+    // Get admin's Plex token
+    const adminUser = request.user as { id: number };
+    const admin = await prisma.user.findUnique({
+      where: { id: adminUser.id },
+      select: { plexToken: true },
+    });
+
+    if (!admin?.plexToken) {
+      return reply.status(400).send({ error: 'Token Plex admin introuvable. Reconnectez-vous.' });
+    }
+
+    try {
+      const friends = await getPlexFriends(admin.plexToken);
+      let imported = 0;
+      let skipped = 0;
+
+      for (const friend of friends) {
+        // Check if user already exists
+        const existing = await prisma.user.findFirst({
+          where: {
+            OR: [
+              ...(friend.id ? [{ plexId: friend.id }] : []),
+              ...(friend.email ? [{ email: friend.email.toLowerCase() }] : []),
+            ],
+          },
+        });
+
+        if (existing) {
+          skipped++;
+          continue;
+        }
+
+        await prisma.user.create({
+          data: {
+            email: (friend.email || `${friend.username}@plex.local`).toLowerCase(),
+            plexId: friend.id,
+            plexUsername: friend.username || friend.title,
+            avatar: friend.thumb,
+            role: 'user',
+            hasPlexServerAccess: true,
+          },
+        });
+        imported++;
+      }
+
+      return { imported, skipped, total: friends.length };
+    } catch (err) {
+      console.error('Failed to import Plex users:', err);
+      return reply.status(502).send({ error: 'Impossible de récupérer les utilisateurs Plex' });
+    }
+  });
 
   app.get('/users', async (request, reply) => {
     await requireAdmin(request, reply);

@@ -73,9 +73,40 @@ export async function checkPlexPin(pinId: number, clientId: string): Promise<str
   return data.authToken || null;
 }
 
+export interface PlexFriend {
+  id: number;
+  uuid: string;
+  title: string;
+  username: string;
+  email: string;
+  thumb: string;
+  status: string;
+}
+
 /**
- * Check if a user has access to a specific Plex server by checking
- * the server's friend list (shared users).
+ * Get all friends/shared users from Plex using the admin token.
+ */
+export async function getPlexFriends(adminToken: string): Promise<PlexFriend[]> {
+  const { data } = await axios.get('https://plex.tv/api/v2/friends', {
+    headers: {
+      Accept: 'application/json',
+      'X-Plex-Token': adminToken,
+      'X-Plex-Client-Identifier': 'netflix-du-pauvre-client',
+    },
+  });
+  return data.map((f: PlexFriend) => ({
+    id: f.id,
+    uuid: f.uuid,
+    title: f.title,
+    username: f.username || f.title,
+    email: f.email,
+    thumb: f.thumb,
+    status: f.status,
+  }));
+}
+
+/**
+ * Check if a user has access to a specific Plex server.
  */
 export async function checkPlexServerAccess(
   userPlexToken: string,
