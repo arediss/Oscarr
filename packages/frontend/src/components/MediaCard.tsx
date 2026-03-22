@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useState } from 'react';
 import { Star, CheckCircle, Clock, Film, Tv, Search, CalendarClock } from 'lucide-react';
 import { posterUrl } from '@/lib/api';
 import type { TmdbMedia } from '@/types';
@@ -15,6 +16,7 @@ function getMediaType(media: TmdbMedia): string {
 }
 
 export default function MediaCard({ media, className, availability }: MediaCardProps) {
+  const [loaded, setLoaded] = useState(false);
   const title = media.title || media.name || 'Sans titre';
   const year = (media.release_date || media.first_air_date || '').slice(0, 4);
   const type = media.media_type || (media.title ? 'movie' : 'tv');
@@ -36,8 +38,9 @@ export default function MediaCard({ media, className, availability }: MediaCardP
           <img
             src={posterUrl(media.poster_path, 'w342')}
             alt={title}
-            className="w-full h-full object-cover"
+            className={clsx('w-full h-full object-cover transition-opacity duration-500', loaded ? 'opacity-100' : 'opacity-0')}
             loading="lazy"
+            onLoad={() => setLoaded(true)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-ndp-text-dim">
