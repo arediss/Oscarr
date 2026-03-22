@@ -170,9 +170,12 @@ function RequestCard({
         {/* Left: info */}
         <div className="flex-1 flex flex-col justify-between min-w-0 pr-4">
           <div>
-            {year && (
-              <span className="text-xs text-white/60 font-medium">{year}</span>
-            )}
+            <div className="flex items-center gap-2">
+              {year && <span className="text-xs text-white/60 font-medium">{year}</span>}
+              <span className="text-xs text-white/40">
+                {new Date(req.createdAt).toLocaleDateString('fr-FR')}
+              </span>
+            </div>
             <h3 className="text-lg font-bold text-white leading-tight line-clamp-2 mt-0.5">
               {req.media?.title || 'Média inconnu'}
             </h3>
