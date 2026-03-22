@@ -36,6 +36,13 @@ export interface QualityProfile {
   name: string;
 }
 
+export interface TmdbCollectionRef {
+  id: number;
+  name: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+}
+
 export interface TmdbMedia {
   id: number;
   title?: string;
@@ -57,6 +64,7 @@ export interface TmdbMedia {
   number_of_episodes?: number;
   status?: string;
   tagline?: string;
+  belongs_to_collection?: TmdbCollectionRef | null;
   seasons?: TmdbSeason[];
   credits?: { cast: TmdbCast[]; crew: TmdbCrew[] };
   external_ids?: { imdb_id: string; tvdb_id: number };

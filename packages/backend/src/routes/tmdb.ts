@@ -10,6 +10,7 @@ import {
   getMovieRecommendations,
   getTvRecommendations,
   discoverByGenre,
+  getCollection,
 } from '../services/tmdb.js';
 
 function parsePage(value?: string): number {
@@ -77,6 +78,14 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const tvId = parseId(id);
     if (!tvId) return reply.status(400).send({ error: 'ID invalide' });
     return getTvRecommendations(tvId);
+  });
+
+  // Collection
+  app.get('/collection/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const collectionId = parseId(id);
+    if (!collectionId) return reply.status(400).send({ error: 'ID invalide' });
+    return getCollection(collectionId);
   });
 
   // Discover by genre

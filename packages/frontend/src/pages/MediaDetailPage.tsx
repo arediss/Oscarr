@@ -362,6 +362,11 @@ export default function MediaDetailPage({ type }: Props) {
           </div>
         </div>
 
+        {/* Collection */}
+        {type === 'movie' && media.belongs_to_collection && (
+          <CollectionSection collection={media.belongs_to_collection} />
+        )}
+
         {/* Cast */}
         {cast.length > 0 && (
           <div className="mt-12">
@@ -399,6 +404,57 @@ export default function MediaDetailPage({ type }: Props) {
         )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function CollectionSection({ collection }: { collection: { id: number; name: string; poster_path: string | null } }) {
+  const [parts, setParts] = useState<TmdbMedia[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [requesting, setRequesting] = useState(false);
+  const [result, setResult] = useState<{ requested: number; skipped: number; total: number } | null>(null);
+
+  useEffect(() => {
+    api.get(`/tmdb/collection/${collection.id}`)
+      .then(({ data }) => setParts(data.parts?.map((p: TmdbMedia) => ({ ...p, media_type: 'movie' })) || []))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [collection.id]);
+
+  const requestAll = async () => {
+    setRequesting(true);
+    try {
+      const { data } = await api.post('/requests/collection', { collectionId: collection.id });
+      setResult(data);
+    } catch (err) { console.error(err); }
+    finally { setRequesting(false); }
+  };
+
+  return (
+    <div className="mt-12">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold text-ndp-text">{collection.name}</h3>
+        <button onClick={requestAll} disabled={requesting || !!result} className={clsx('text-sm flex items-center gap-2', result ? 'btn-success cursor-default' : 'btn-primary')}>
+          {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : result ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          {result ? `${result.requested} demandés, ${result.skipped} ignorés` : 'Demander toute la collection'}
+        </button>
+      </div>
+      {!loading && parts.length > 0 && (
+        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
+          {parts.map((movie) => (
+            <Link key={movie.id} to={`/movie/${movie.id}`} className="flex-shrink-0 w-[120px] group">
+              <div className="aspect-[2/3] rounded-xl overflow-hidden bg-ndp-surface-light mb-1.5">
+                {movie.poster_path ? (
+                  <img src={posterUrl(movie.poster_path, 'w185')} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center"><Film className="w-6 h-6 text-ndp-text-dim" /></div>
+                )}
+              </div>
+              <p className="text-xs text-ndp-text-muted truncate">{movie.title}</p>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

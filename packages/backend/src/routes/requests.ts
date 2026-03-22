@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { radarr } from '../services/radarr.js';
 import { sonarr } from '../services/sonarr.js';
-import { getMovieDetails, getTvDetails } from '../services/tmdb.js';
+import { getMovieDetails, getTvDetails, getCollection } from '../services/tmdb.js';
 import { matchFolderRule } from '../services/folderRules.js';
 
 const VALID_STATUSES = ['pending', 'approved', 'declined', 'processing', 'available', 'failed'];
@@ -250,6 +250,89 @@ export async function requestRoutes(app: FastifyInstance) {
 
     await prisma.mediaRequest.delete({ where: { id: requestId } });
     return reply.send({ ok: true });
+  });
+
+  // Request an entire collection
+  app.post('/collection', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { id: number; role: string };
+    const { collectionId } = request.body as { collectionId: unknown };
+
+    if (typeof collectionId !== 'number' || !Number.isFinite(collectionId) || collectionId < 1) {
+      return reply.status(400).send({ error: 'collectionId invalide' });
+    }
+
+    const collection = await getCollection(collectionId);
+    if (!collection?.parts?.length) {
+      return reply.status(404).send({ error: 'Collection introuvable' });
+    }
+
+    let requested = 0;
+    let skipped = 0;
+
+    for (const movie of collection.parts) {
+      // Check if already requested or available
+      const existing = await prisma.mediaRequest.findFirst({
+        where: {
+          media: { tmdbId: movie.id, mediaType: 'movie' },
+          status: { in: ['pending', 'approved', 'processing', 'available'] },
+        },
+      });
+      if (existing) { skipped++; continue; }
+
+      // Check if already available in Radarr
+      const dbMedia = await prisma.media.findUnique({
+        where: { tmdbId_mediaType: { tmdbId: movie.id, mediaType: 'movie' } },
+      });
+      if (dbMedia?.status === 'available') { skipped++; continue; }
+
+      // Fetch full details
+      const details = await getMovieDetails(movie.id);
+
+      // Create or find media
+      let media = dbMedia;
+      if (!media) {
+        media = await prisma.media.create({
+          data: {
+            tmdbId: movie.id,
+            mediaType: 'movie',
+            title: details.title,
+            overview: details.overview || null,
+            posterPath: details.poster_path,
+            backdropPath: details.backdrop_path,
+            releaseDate: details.release_date || null,
+            voteAverage: details.vote_average,
+            genres: details.genres ? JSON.stringify(details.genres.map((g) => g.name)) : null,
+          },
+        });
+      }
+
+      // Create request
+      await prisma.mediaRequest.create({
+        data: {
+          mediaId: media.id,
+          userId: user.id,
+          mediaType: 'movie',
+          status: user.role === 'admin' ? 'approved' : 'pending',
+          approvedById: user.role === 'admin' ? user.id : null,
+        },
+      });
+
+      // Auto-send if admin
+      if (user.role === 'admin') {
+        const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { plexUsername: true, email: true } });
+        const tagName = dbUser?.plexUsername || dbUser?.email || `user-${user.id}`;
+        await sendToService(media, 'movie', tagName);
+      }
+
+      requested++;
+    }
+
+    return reply.status(201).send({
+      collection: collection.name,
+      total: collection.parts.length,
+      requested,
+      skipped,
+    });
   });
 }
 

@@ -14,6 +14,15 @@ const tmdbApi = axios.create({
   },
 });
 
+export interface TmdbCollection {
+  id: number;
+  name: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  parts: TmdbMovie[];
+}
+
 export interface TmdbMovie {
   id: number;
   title: string;
@@ -30,6 +39,7 @@ export interface TmdbMovie {
   runtime?: number;
   status?: string;
   tagline?: string;
+  belongs_to_collection?: { id: number; name: string; poster_path: string | null; backdrop_path: string | null } | null;
   credits?: { cast: TmdbCast[]; crew: TmdbCrew[] };
   external_ids?: { imdb_id: string; tvdb_id: number };
   videos?: { results: TmdbVideo[] };
@@ -186,6 +196,13 @@ export async function getTvRecommendations(tvId: number) {
     const { data } = await tmdbApi.get(`/tv/${tvId}/recommendations`);
     return data;
   }, 24);
+}
+
+export async function getCollection(collectionId: number): Promise<TmdbCollection> {
+  return cachedRequest(`collection:${collectionId}`, async () => {
+    const { data } = await tmdbApi.get(`/collection/${collectionId}`);
+    return data;
+  }, 48);
 }
 
 export async function discoverByGenre(mediaType: 'movie' | 'tv', genreId: number, page = 1) {
