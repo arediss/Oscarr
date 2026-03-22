@@ -310,38 +310,49 @@ function PathsTab() {
           Les règles sont évaluées par priorité. La première qui match détermine le dossier. Si aucune ne match, le dossier par défaut est utilisé.
         </p>
 
-        {/* Existing rules */}
-        {rules.length > 0 && (
-          <div className="space-y-3 mb-5">
-            {rules.map((rule) => {
-              const conds: RuleCondition[] = JSON.parse(rule.conditions);
-              return (
-                <div key={rule.id} className="bg-white/5 rounded-xl p-4 flex items-start gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="text-sm font-semibold text-ndp-text">{rule.name}</span>
-                      <span className="text-[10px] bg-ndp-accent/10 text-ndp-accent px-2 py-0.5 rounded">{rule.mediaType === 'movie' ? 'Film' : rule.mediaType === 'tv' ? 'Série' : 'Tous'}</span>
-                      {rule.seriesType && <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">{rule.seriesType}</span>}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 mb-1.5">
-                      {conds.map((c, i) => (
-                        <span key={i} className="text-xs bg-white/5 text-ndp-text-muted px-2 py-0.5 rounded">
-                          {c.field} {c.operator} <strong>{c.value}</strong>
-                        </span>
-                      ))}
-                    </div>
-                    <p className="text-xs text-ndp-text-dim">→ {rule.folderPath}</p>
-                  </div>
-                  <button onClick={() => deleteRule(rule.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors p-1"><Trash2 className="w-4 h-4" /></button>
-                </div>
-              );
-            })}
+        {/* System rule: anime detection (non-deletable) */}
+        <div className="space-y-3 mb-5">
+          <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 flex items-start gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-sm font-semibold text-ndp-text">Animes</span>
+                <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">Série</span>
+                <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">anime</span>
+                <span className="text-[10px] bg-white/5 text-ndp-text-dim px-2 py-0.5 rounded">système</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                <span className="text-xs bg-white/5 text-ndp-text-muted px-2 py-0.5 rounded">genre contient <strong>Animation</strong></span>
+                <span className="text-xs bg-white/5 text-ndp-text-muted px-2 py-0.5 rounded">pays dans <strong>JP, KR, CN, TW</strong></span>
+              </div>
+              <p className="text-xs text-ndp-text-dim">→ {animeFolder || <span className="italic">Configurer le dossier Animes ci-dessus</span>}</p>
+            </div>
           </div>
-        )}
 
-        {rules.length === 0 && !showNewRule && (
-          <p className="text-sm text-ndp-text-dim text-center py-6">Aucune règle. Les dossiers par défaut seront utilisés.</p>
-        )}
+        {/* Custom rules */}
+        {rules.map((rule) => {
+          const conds: RuleCondition[] = JSON.parse(rule.conditions);
+          return (
+            <div key={rule.id} className="bg-white/5 rounded-xl p-4 flex items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-sm font-semibold text-ndp-text">{rule.name}</span>
+                  <span className="text-[10px] bg-ndp-accent/10 text-ndp-accent px-2 py-0.5 rounded">{rule.mediaType === 'movie' ? 'Film' : rule.mediaType === 'tv' ? 'Série' : 'Tous'}</span>
+                  {rule.seriesType && <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">{rule.seriesType}</span>}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {conds.map((c, i) => (
+                    <span key={i} className="text-xs bg-white/5 text-ndp-text-muted px-2 py-0.5 rounded">
+                      {c.field} {c.operator} <strong>{c.value}</strong>
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-ndp-text-dim">→ {rule.folderPath}</p>
+              </div>
+              <button onClick={() => deleteRule(rule.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors p-1"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          );
+        })}
+        </div>
 
         {/* New rule form */}
         {showNewRule && (
