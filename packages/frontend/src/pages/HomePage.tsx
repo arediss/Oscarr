@@ -1,21 +1,21 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Search, Info, Star } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { Info, Star } from 'lucide-react';
 import api from '@/lib/api';
-import { backdropUrl, posterUrl } from '@/lib/api';
+import { backdropUrl } from '@/lib/api';
 import MediaRow from '@/components/MediaRow';
 import GenreRow, { MOVIE_GENRES, TV_GENRES } from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
 
 export default function HomePage() {
-  const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
   const [trending, setTrending] = useState<TmdbMedia[]>([]);
   const [popularMovies, setPopularMovies] = useState<TmdbMedia[]>([]);
   const [popularTv, setPopularTv] = useState<TmdbMedia[]>([]);
   const [upcoming, setUpcoming] = useState<TmdbMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [heroIndex, setHeroIndex] = useState(0);
+  const [heroVisible, setHeroVisible] = useState(true);
+  const prevHeroRef = useRef(0);
 
   useEffect(() => {
     async function fetchData() {
@@ -39,20 +39,30 @@ export default function HomePage() {
     fetchData();
   }, []);
 
-  // Auto-rotate hero
+  // Auto-rotate hero with crossfade
   useEffect(() => {
     if (trending.length === 0) return;
     const interval = setInterval(() => {
-      setHeroIndex((prev) => (prev + 1) % Math.min(trending.length, 5));
+      setHeroVisible(false);
+      setTimeout(() => {
+        setHeroIndex((prev) => {
+          prevHeroRef.current = prev;
+          return (prev + 1) % Math.min(trending.length, 5);
+        });
+        setHeroVisible(true);
+      }, 500);
     }, 8000);
     return () => clearInterval(interval);
   }, [trending]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-    }
+  const changeHero = (i: number) => {
+    if (i === heroIndex) return;
+    setHeroVisible(false);
+    setTimeout(() => {
+      prevHeroRef.current = heroIndex;
+      setHeroIndex(i);
+      setHeroVisible(true);
+    }, 400);
   };
 
   const hero = trending[heroIndex];
@@ -63,35 +73,32 @@ export default function HomePage() {
     <div className="min-h-screen">
       {/* Hero section */}
       {hero && (
-        <div className="relative h-[70vh] min-h-[500px] overflow-hidden">
-          {/* Background image */}
+        <div className="relative h-[60vh] min-h-[420px] overflow-hidden">
+          {/* Background image with crossfade */}
           <div className="absolute inset-0">
-            <img
-              src={backdropUrl(hero.backdrop_path)}
-              alt={heroTitle}
-              className="w-full h-full object-cover"
-            />
+            <div
+              className="absolute inset-0 transition-opacity duration-700 ease-in-out"
+              style={{ opacity: heroVisible ? 1 : 0 }}
+            >
+              <img
+                src={backdropUrl(hero.backdrop_path)}
+                alt={heroTitle}
+                className="w-full h-full object-cover"
+              />
+            </div>
             <div className="absolute inset-0 bg-gradient-to-r from-ndp-bg via-ndp-bg/80 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-t from-ndp-bg via-transparent to-ndp-bg/30" />
           </div>
 
           {/* Hero content */}
-          <div className="relative h-full flex flex-col justify-end pb-16 px-4 sm:px-8 max-w-3xl">
-            {/* Search bar */}
-            <form onSubmit={handleSearch} className="mb-8 max-w-xl">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ndp-text-dim" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Rechercher un film, une série..."
-                  className="w-full pl-12 pr-4 py-3.5 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-white placeholder-ndp-text-dim focus:outline-none focus:ring-2 focus:ring-ndp-accent/50 focus:border-ndp-accent transition-all text-sm"
-                />
-              </div>
-            </form>
-
-            <div className="animate-fade-in">
+          <div className="relative h-full flex flex-col justify-end pb-12 px-4 sm:px-8 max-w-3xl">
+            <div
+              className="transition-all duration-500 ease-out"
+              style={{
+                opacity: heroVisible ? 1 : 0,
+                transform: heroVisible ? 'translateY(0)' : 'translateY(16px)',
+              }}
+            >
               <span className="text-ndp-accent text-xs font-semibold uppercase tracking-widest mb-2 block">
                 {heroType === 'movie' ? 'Film' : 'Série'} tendance
               </span>
@@ -128,9 +135,9 @@ export default function HomePage() {
               {trending.slice(0, 5).map((_, i) => (
                 <button
                   key={i}
-                  onClick={() => setHeroIndex(i)}
-                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                    i === heroIndex ? 'bg-ndp-accent w-6' : 'bg-white/30 hover:bg-white/50'
+                  onClick={() => changeHero(i)}
+                  className={`h-2 rounded-full transition-all duration-500 ${
+                    i === heroIndex ? 'bg-ndp-accent w-6' : 'bg-white/30 hover:bg-white/50 w-2'
                   }`}
                 />
               ))}
