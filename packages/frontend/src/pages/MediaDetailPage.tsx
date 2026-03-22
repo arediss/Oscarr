@@ -410,13 +410,26 @@ export default function MediaDetailPage({ type }: Props) {
 
 function CollectionSection({ collection }: { collection: { id: number; name: string; poster_path: string | null } }) {
   const [parts, setParts] = useState<TmdbMedia[]>([]);
+  const [statuses, setStatuses] = useState<Record<string, { status: string; requestStatus?: string }>>({});
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
   const [result, setResult] = useState<{ requested: number; skipped: number; total: number } | null>(null);
 
   useEffect(() => {
     api.get(`/tmdb/collection/${collection.id}`)
-      .then(({ data }) => setParts(data.parts?.map((p: TmdbMedia) => ({ ...p, media_type: 'movie' })) || []))
+      .then(async ({ data }) => {
+        const movies = data.parts?.map((p: TmdbMedia) => ({ ...p, media_type: 'movie' })) || [];
+        setParts(movies);
+        // Batch check availability
+        if (movies.length > 0) {
+          try {
+            const { data: statusData } = await api.post('/media/batch-status', {
+              ids: movies.map((m: TmdbMedia) => ({ tmdbId: m.id, mediaType: 'movie' })),
+            });
+            setStatuses(statusData);
+          } catch { /* ignore */ }
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [collection.id]);
@@ -430,29 +443,72 @@ function CollectionSection({ collection }: { collection: { id: number; name: str
     finally { setRequesting(false); }
   };
 
+  const availableCount = parts.filter((p) => statuses[`movie:${p.id}`]?.status === 'available').length;
+  const totalCount = parts.length;
+  const allAvailable = totalCount > 0 && availableCount === totalCount;
+  const someAvailable = availableCount > 0 && availableCount < totalCount;
+  const noneAvailable = availableCount === 0;
+
+  const buttonLabel = result
+    ? `${result.requested} demandés, ${result.skipped} ignorés`
+    : allAvailable
+    ? 'Collection complète'
+    : someAvailable
+    ? `Compléter la collection (${totalCount - availableCount} manquants)`
+    : 'Demander toute la collection';
+
   return (
     <div className="mt-12">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-ndp-text">{collection.name}</h3>
-        <button onClick={requestAll} disabled={requesting || !!result} className={clsx('text-sm flex items-center gap-2', result ? 'btn-success cursor-default' : 'btn-primary')}>
-          {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : result ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {result ? `${result.requested} demandés, ${result.skipped} ignorés` : 'Demander toute la collection'}
-        </button>
+      <div className="flex items-center justify-between mb-4 gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <h3 className="text-lg font-bold text-ndp-text truncate">{collection.name}</h3>
+          {!loading && (
+            <span className="text-xs text-ndp-text-dim flex-shrink-0">{availableCount}/{totalCount}</span>
+          )}
+        </div>
+        {!allAvailable && (
+          <button onClick={requestAll} disabled={requesting || !!result || allAvailable}
+            className={clsx('text-sm flex items-center gap-2 flex-shrink-0',
+              result ? 'btn-success cursor-default' : someAvailable ? 'btn-secondary' : 'btn-primary'
+            )}>
+            {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : result ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {buttonLabel}
+          </button>
+        )}
+        {allAvailable && (
+          <span className="btn-success cursor-default text-sm flex items-center gap-2 flex-shrink-0">
+            <Check className="w-4 h-4" /> Collection complète
+          </span>
+        )}
       </div>
       {!loading && parts.length > 0 && (
         <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
-          {parts.map((movie) => (
-            <Link key={movie.id} to={`/movie/${movie.id}`} className="flex-shrink-0 w-[120px] group">
-              <div className="aspect-[2/3] rounded-xl overflow-hidden bg-ndp-surface-light mb-1.5">
-                {movie.poster_path ? (
-                  <img src={posterUrl(movie.poster_path, 'w185')} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center"><Film className="w-6 h-6 text-ndp-text-dim" /></div>
-                )}
-              </div>
-              <p className="text-xs text-ndp-text-muted truncate">{movie.title}</p>
-            </Link>
-          ))}
+          {parts.map((movie) => {
+            const status = statuses[`movie:${movie.id}`];
+            const isAvail = status?.status === 'available';
+            return (
+              <Link key={movie.id} to={`/movie/${movie.id}`} className="flex-shrink-0 w-[120px] group">
+                <div className="aspect-[2/3] rounded-xl overflow-hidden bg-ndp-surface-light mb-1.5 relative">
+                  {movie.poster_path ? (
+                    <img src={posterUrl(movie.poster_path, 'w185')} alt="" className={clsx('w-full h-full object-cover group-hover:scale-105 transition-transform', !isAvail && status && 'opacity-50')} />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center"><Film className="w-6 h-6 text-ndp-text-dim" /></div>
+                  )}
+                  {isAvail && (
+                    <div className="absolute top-1.5 right-1.5 bg-ndp-success/80 rounded-full p-0.5">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                  {status && !isAvail && status.status !== 'unknown' && (
+                    <div className="absolute top-1.5 right-1.5 bg-ndp-warning/80 rounded-full p-0.5">
+                      <Plus className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-ndp-text-muted truncate">{movie.title}</p>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>
