@@ -305,6 +305,10 @@
 
   "admin.logs.no_logs": "Aucun log",
   "admin.logs.clear": "Vider",
+  "admin.logs.just_now": "À l'instant",
+  "admin.logs.minutes_ago": "Il y a {{count}} min",
+  "admin.logs.hours_ago": "Il y a {{count}}h",
+  "admin.logs.days_ago": "Il y a {{count}}j",
 
   "admin.general.oscarr": "Oscarr",
   "admin.general.site_name": "Nom du site",

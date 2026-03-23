@@ -1,7 +1,7 @@
 import { prisma } from '../utils/prisma.js';
 import { getRadarrAsync, type RadarrMovie } from './radarr.js';
 import { getSonarrAsync, type SonarrSeries } from './sonarr.js';
-import { sendNotification } from './notifications.js';
+import { sendNotification, logEvent } from './notifications.js';
 
 export interface SyncResult {
   added: number;
@@ -90,10 +90,15 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
     });
   } catch (err) {
     console.error('[Sync] Radarr sync failed:', err);
+    logEvent('error', 'Sync', `Radarr sync échoué : ${err}`);
     errors++;
   }
 
-  return { added, updated, errors, duration: Date.now() - start };
+  const duration = Date.now() - start;
+  if (added > 0 || updated > 0) {
+    logEvent('info', 'Sync', `Radarr : +${added} ajoutés, ~${updated} mis à jour (${duration}ms)`);
+  }
+  return { added, updated, errors, duration };
 }
 
 export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
@@ -239,10 +244,15 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
     });
   } catch (err) {
     console.error('[Sync] Sonarr sync failed:', err);
+    logEvent('error', 'Sync', `Sonarr sync échoué : ${err}`);
     errors++;
   }
 
-  return { added, updated, errors, duration: Date.now() - start };
+  const duration = Date.now() - start;
+  if (added > 0 || updated > 0) {
+    logEvent('info', 'Sync', `Sonarr : +${added} ajoutés, ~${updated} mis à jour (${duration}ms)`);
+  }
+  return { added, updated, errors, duration };
 }
 
 export async function runNewMediaSync(): Promise<{ radarr: SyncResult; sonarr: SyncResult }> {

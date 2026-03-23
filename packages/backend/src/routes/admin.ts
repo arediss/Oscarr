@@ -6,7 +6,7 @@ import { getServiceById } from '../utils/services.js';
 import { syncRadarr, syncSonarr, runFullSync, syncAvailabilityDates } from '../services/sync.js';
 import { getSharedServerUsers } from '../services/plex.js';
 import { syncRequestsFromTags } from '../services/requestSync.js';
-import { testDiscord, testTelegram, testEmail, sendNotification } from '../services/notifications.js';
+import { testDiscord, testTelegram, testEmail, sendNotification, logEvent } from '../services/notifications.js';
 import { triggerJob, updateJobSchedule } from '../services/scheduler.js';
 import nodeSchedule from 'node-cron';
 
@@ -100,6 +100,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     });
 
+    logEvent('info', 'Settings', 'Paramètres mis à jour');
     return settings;
   });
 
@@ -126,6 +127,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const service = await prisma.service.create({
       data: { name, type, config: JSON.stringify(config), isDefault: isDefault ?? false },
     });
+    logEvent('info', 'Service', `Service "${name}" (${type}) ajouté`);
     return reply.status(201).send({ ...service, config: JSON.parse(service.config) });
   });
 
@@ -161,7 +163,8 @@ export async function adminRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
     if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
-    await prisma.service.delete({ where: { id: serviceId } });
+    const deleted = await prisma.service.delete({ where: { id: serviceId } });
+    logEvent('info', 'Service', `Service "${deleted.name}" supprimé`);
     return { ok: true };
   });
 
@@ -411,9 +414,11 @@ export async function adminRoutes(app: FastifyInstance) {
         imported++;
       }
 
+      logEvent('info', 'User', `Import Plex : ${imported} importés, ${skipped} existants`);
       return { imported, skipped, total: sharedUsers.length };
     } catch (err) {
       console.error('Failed to import Plex users:', err);
+      logEvent('error', 'User', `Import Plex échoué : ${err}`);
       return reply.status(502).send({ error: 'Impossible de récupérer les utilisateurs Plex' });
     }
   });
@@ -458,6 +463,7 @@ export async function adminRoutes(app: FastifyInstance) {
       select: { id: true, plexUsername: true, role: true },
     });
 
+    logEvent('info', 'User', `Rôle de ${user.plexUsername} changé en ${role}`);
     return user;
   });
 
@@ -465,12 +471,13 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get('/logs', async (request, reply) => {
     await requireAdmin(request, reply);
-    const { page, level } = request.query as { page?: string; level?: string };
+    const { page, level, label } = request.query as { page?: string; level?: string; label?: string };
     const pageNum = parseInt(page || '1', 10) || 1;
     const take = 50;
     const skip = (pageNum - 1) * take;
     const where: Record<string, unknown> = {};
     if (level && ['info', 'warn', 'error'].includes(level)) where.level = level;
+    if (label) where.label = label;
 
     const [logs, total] = await Promise.all([
       prisma.appLog.findMany({ where, orderBy: { createdAt: 'desc' }, take, skip }),

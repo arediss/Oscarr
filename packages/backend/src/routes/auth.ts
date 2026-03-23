@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { getPlexUser, createPlexPin, checkPlexPin, checkPlexServerAccess } from '../services/plex.js';
 import { getServiceConfig } from '../utils/services.js';
+import { logEvent } from '../services/notifications.js';
 
 const PLEX_CLIENT_ID = 'oscarr-client';
 
@@ -21,6 +22,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const authToken = await checkPlexPin(pinId, PLEX_CLIENT_ID);
     if (!authToken) {
+      logEvent('warn', 'Auth', `Échec de validation PIN (pinId: ${pinId})`);
       return reply.status(400).send({ error: 'PIN non validé. Réessayez.' });
     }
 
@@ -56,6 +58,7 @@ export async function authRoutes(app: FastifyInstance) {
           hasPlexServerAccess: isFirstUser || hasServerAccess,
         },
       });
+      logEvent('info', 'Auth', `Nouveau compte créé : ${plexAccount.username} (${isFirstUser ? 'admin' : 'user'})`);
     } else {
       user = await prisma.user.update({
         where: { id: user.id },
@@ -68,6 +71,8 @@ export async function authRoutes(app: FastifyInstance) {
         },
       });
     }
+
+    logEvent('info', 'Auth', `${user.plexUsername} s'est connecté`);
 
     const token = app.jwt.sign(
       { id: user.id, email: user.email, role: user.role },

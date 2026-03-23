@@ -305,6 +305,10 @@
 
   "admin.logs.no_logs": "No logs",
   "admin.logs.clear": "Clear",
+  "admin.logs.just_now": "Just now",
+  "admin.logs.minutes_ago": "{{count}}m ago",
+  "admin.logs.hours_ago": "{{count}}h ago",
+  "admin.logs.days_ago": "{{count}}d ago",
 
   "admin.general.oscarr": "Oscarr",
   "admin.general.site_name": "Site name",

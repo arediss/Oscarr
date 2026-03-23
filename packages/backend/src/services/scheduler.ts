@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { runFullSync, runNewMediaSync } from './sync.js';
 import { syncRequestsFromTags } from './requestSync.js';
 import type { PluginEngine } from '../plugins/engine.js';
+import { logEvent } from './notifications.js';
 
 // Map of job keys to their handler functions
 const JOB_HANDLERS: Record<string, () => Promise<unknown>> = {
@@ -48,6 +49,7 @@ async function runJob(key: string) {
       },
     });
     console.log(`[Scheduler] Job "${key}" completed in ${duration}ms`);
+    logEvent('info', 'Job', `Job "${key}" terminé en ${duration}ms`);
     return result;
   } catch (err) {
     const duration = Date.now() - start;
@@ -61,6 +63,7 @@ async function runJob(key: string) {
       },
     });
     console.error(`[Scheduler] Job "${key}" failed:`, err);
+    logEvent('error', 'Job', `Job "${key}" échoué : ${err}`);
     throw err;
   }
 }

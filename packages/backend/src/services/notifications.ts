@@ -105,21 +105,30 @@ export async function sendNotification(type: NotificationType, data: Notificatio
     const promises: Promise<void>[] = [];
 
     if (channels.discord && settings.discordWebhookUrl) {
-      promises.push(sendDiscord(settings.discordWebhookUrl, type, data).catch(err =>
-        console.error('[Notification] Discord failed:', err.message)
-      ));
+      promises.push(sendDiscord(settings.discordWebhookUrl, type, data).then(() =>
+        logEvent('info', 'Notification', `Discord : ${LABELS[type]}`)
+      ).catch(err => {
+        console.error('[Notification] Discord failed:', err.message);
+        logEvent('error', 'Notification', `Discord échoué : ${err.message}`);
+      }));
     }
 
     if (channels.telegram && settings.telegramBotToken && settings.telegramChatId) {
-      promises.push(sendTelegram(settings.telegramBotToken, settings.telegramChatId, type, data).catch(err =>
-        console.error('[Notification] Telegram failed:', err.message)
-      ));
+      promises.push(sendTelegram(settings.telegramBotToken, settings.telegramChatId, type, data).then(() =>
+        logEvent('info', 'Notification', `Telegram : ${LABELS[type]}`)
+      ).catch(err => {
+        console.error('[Notification] Telegram failed:', err.message);
+        logEvent('error', 'Notification', `Telegram échoué : ${err.message}`);
+      }));
     }
 
     if (channels.email && settings.resendApiKey && settings.resendFromEmail && settings.resendToEmail) {
-      promises.push(sendEmail(settings.resendApiKey, settings.resendFromEmail, settings.resendToEmail, type, data).catch(err =>
-        console.error('[Notification] Email failed:', err.message)
-      ));
+      promises.push(sendEmail(settings.resendApiKey, settings.resendFromEmail, settings.resendToEmail, type, data).then(() =>
+        logEvent('info', 'Notification', `Email : ${LABELS[type]}`)
+      ).catch(err => {
+        console.error('[Notification] Email failed:', err.message);
+        logEvent('error', 'Notification', `Email échoué : ${err.message}`);
+      }));
     }
 
     await Promise.allSettled(promises);

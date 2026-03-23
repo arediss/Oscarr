@@ -4,6 +4,7 @@ import { resolve } from 'path';
 import axios from 'axios';
 import { prisma } from '../utils/prisma.js';
 import { pluginEngine } from '../plugins/engine.js';
+import { logEvent } from '../services/notifications.js';
 
 const APP_VERSION = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../../../../package.json'), 'utf-8')
@@ -167,6 +168,7 @@ export async function supportRoutes(app: FastifyInstance) {
       },
     });
 
+    logEvent('info', 'Support', `Ticket créé par ${ticket.user.plexUsername} : "${subject.trim()}"`);
     return reply.status(201).send(ticket);
   });
 
@@ -241,6 +243,7 @@ export async function supportRoutes(app: FastifyInstance) {
       },
     });
 
+    logEvent('info', 'Support', `Ticket #${ticketId} ${status === 'closed' ? 'fermé' : 'réouvert'}`);
     return ticket;
   });
 }
