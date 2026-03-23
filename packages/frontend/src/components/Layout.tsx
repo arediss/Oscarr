@@ -19,6 +19,7 @@ import { clsx } from 'clsx';
 
 const NAV_LEFT = [
   { path: '/', label: 'Accueil', icon: Home },
+  { path: '/requests', label: 'Demandes', icon: Film },
   { path: '/calendar', label: 'Calendrier', icon: Calendar },
   { path: '/support', label: 'Support', icon: MessageSquare },
 ];
@@ -157,20 +158,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <Search className="w-5 h-5" />
               </button>
 
-              {/* Demandes link */}
-              <Link
-                to="/requests"
-                className={clsx(
-                  'hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200',
-                  location.pathname === '/requests'
-                    ? 'bg-ndp-accent/10 text-ndp-accent'
-                    : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
-                )}
-              >
-                <Film className="w-4 h-4" />
-                <span className="hidden lg:inline">Demandes</span>
-              </Link>
-
               {/* Avatar with dropdown */}
               <div className="relative" ref={avatarMenuRef}>
                 <button
@@ -253,7 +240,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </form>
             </div>
             <div className="px-4 py-3 space-y-1">
-              {[...NAV_LEFT, { path: '/requests', label: 'Demandes', icon: Film }].map(({ path, label, icon: Icon }) => (
+              {NAV_LEFT.map(({ path, label, icon: Icon }) => (
                 <Link
                   key={path}
                   to={path}
