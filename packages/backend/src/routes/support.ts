@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
+import { pluginEngine } from '../plugins/engine.js';
 
 export async function supportRoutes(app: FastifyInstance) {
   // Check if app is installed (has at least one Plex service)
@@ -75,10 +76,12 @@ export async function supportRoutes(app: FastifyInstance) {
   // Get feature flags (no auth — needed by Layout before auth check)
   app.get('/features', async () => {
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    const pluginFeatures = pluginEngine.getAllFeatureFlags();
     return {
       requestsEnabled: settings?.requestsEnabled ?? true,
       supportEnabled: settings?.supportEnabled ?? true,
       calendarEnabled: settings?.calendarEnabled ?? true,
+      ...pluginFeatures,
     };
   });
 

@@ -16,6 +16,8 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { PluginSlot } from '@/plugins/PluginSlot';
+import { DynamicIcon } from '@/plugins/DynamicIcon';
 
 interface Features {
   requestsEnabled: boolean;
@@ -141,6 +143,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <span className="hidden lg:inline">{label}</span>
                 </Link>
               ))}
+              <PluginSlot
+                hookPoint="nav"
+                renderItem={(c) => (
+                  <Link
+                    key={c.pluginId}
+                    to={c.props.path as string}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200',
+                      location.pathname.startsWith(c.props.path as string)
+                        ? 'bg-ndp-accent/10 text-ndp-accent'
+                        : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
+                    )}
+                  >
+                    <DynamicIcon name={c.props.icon as string} className="w-4 h-4" />
+                    <span className="hidden lg:inline">{c.props.label as string}</span>
+                  </Link>
+                )}
+              />
             </div>
 
             {/* Center: Search bar - absolutely centered on the page */}
@@ -267,6 +287,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {label}
                 </Link>
               ))}
+              <PluginSlot
+                hookPoint="nav"
+                renderItem={(c) => (
+                  <Link
+                    key={c.pluginId}
+                    to={c.props.path as string}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={clsx(
+                      'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
+                      location.pathname.startsWith(c.props.path as string)
+                        ? 'bg-ndp-accent/10 text-ndp-accent'
+                        : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
+                    )}
+                  >
+                    <DynamicIcon name={c.props.icon as string} className="w-5 h-5" />
+                    {c.props.label as string}
+                  </Link>
+                )}
+              />
               {isAdmin && (
                 <Link
                   to="/admin"

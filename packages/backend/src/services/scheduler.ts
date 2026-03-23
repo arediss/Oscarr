@@ -2,6 +2,7 @@ import cron, { type ScheduledTask } from 'node-cron';
 import { prisma } from '../utils/prisma.js';
 import { runFullSync } from './sync.js';
 import { syncRequestsFromTags } from './requestSync.js';
+import type { PluginEngine } from '../plugins/engine.js';
 
 // Map of job keys to their handler functions
 const JOB_HANDLERS: Record<string, () => Promise<unknown>> = {
@@ -82,7 +83,22 @@ function scheduleJob(key: string, cronExpression: string) {
   console.log(`[Scheduler] Job "${key}" scheduled: ${cronExpression}`);
 }
 
-export async function initScheduler() {
+export async function initScheduler(pluginEngine?: PluginEngine) {
+  // Register plugin job handlers and seed their definitions
+  if (pluginEngine) {
+    const pluginHandlers = pluginEngine.getJobHandlers();
+    Object.assign(JOB_HANDLERS, pluginHandlers);
+
+    const pluginJobDefs = pluginEngine.getJobDefs();
+    for (const job of pluginJobDefs) {
+      await prisma.cronJob.upsert({
+        where: { key: job.key },
+        update: {},
+        create: { key: job.key, label: job.label, cronExpression: job.cron, enabled: true },
+      });
+    }
+  }
+
   await seedJobs();
   const jobs = await prisma.cronJob.findMany();
 

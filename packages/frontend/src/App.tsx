@@ -15,6 +15,7 @@ import NoAccessPage from '@/pages/NoAccessPage';
 import DiscoverGenrePage from '@/pages/DiscoverGenrePage';
 import CategoryPage from '@/pages/CategoryPage';
 import CalendarPage from '@/pages/CalendarPage';
+import { PluginPage } from '@/plugins/PluginPage';
 import api from '@/lib/api';
 
 function InstallGuard({ children }: { children: React.ReactNode }) {
@@ -97,6 +98,9 @@ export default function App() {
 
                   {/* Support accessible even without full access */}
                   <Route path="/support" element={<MessagesPage />} />
+
+                  {/* Plugin pages */}
+                  <Route path="/p/:pluginId/*" element={<PluginPage />} />
 
                   {/* Admin only */}
                   <Route path="/admin" element={<AdminPage />} />

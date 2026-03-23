@@ -30,9 +30,12 @@ import {
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { usePluginUI } from '@/plugins/usePlugins';
+import { DynamicIcon } from '@/plugins/DynamicIcon';
+import { PluginAdminTab } from '@/plugins/PluginAdminTab';
 import type { AdminUser, QualityProfile, RootFolder } from '@/types';
 
-type Tab = 'users' | 'services' | 'quality' | 'support' | 'notifications' | 'paths' | 'jobs' | 'logs' | 'general';
+type Tab = 'users' | 'services' | 'quality' | 'support' | 'notifications' | 'paths' | 'jobs' | 'logs' | 'general' | (string & {});
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'general', label: 'Général', icon: Settings },
@@ -44,18 +47,30 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'paths', label: 'Chemins & Règles', icon: FolderTree },
   { id: 'jobs', label: 'Jobs & Sync', icon: RefreshCw },
   { id: 'logs', label: 'Logs', icon: ScrollText },
+  { id: 'plugins', label: 'Plugins', icon: Plug },
 ];
 
 export default function AdminPage() {
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabFromUrl = searchParams.get('tab') as Tab | null;
-  const activeTab = tabFromUrl && TABS.some(t => t.id === tabFromUrl) ? tabFromUrl : 'general';
+  const { contributions: pluginTabs } = usePluginUI('admin.tabs');
 
-  const setActiveTab = (tab: Tab) => setSearchParams({ tab }, { replace: true });
+  const pluginTabItems = pluginTabs.map((c) => ({
+    id: `plugin:${c.props.id}` as string,
+    label: c.props.label as string,
+    pluginIcon: c.props.icon as string,
+  }));
+
+  const tabFromUrl = searchParams.get('tab') as string | null;
+  const allTabIds = [...TABS.map(t => t.id), ...pluginTabItems.map(t => t.id)];
+  const activeTab = tabFromUrl && allTabIds.includes(tabFromUrl) ? tabFromUrl : 'general';
+
+  const setActiveTab = (tab: string) => setSearchParams({ tab }, { replace: true });
 
   if (!isAdmin) { navigate('/'); return null; }
+
+  const activePluginTab = activeTab.startsWith('plugin:') ? activeTab.replace('plugin:', '') : null;
 
   return (
     <div className="max-w-[1800px] mx-auto px-4 sm:px-8 py-8">
@@ -78,6 +93,19 @@ export default function AdminPage() {
             {label}
           </button>
         ))}
+        {pluginTabItems.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={clsx(
+              'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap',
+              activeTab === tab.id ? 'bg-ndp-accent text-white' : 'bg-ndp-surface text-ndp-text-muted hover:bg-ndp-surface-light'
+            )}
+          >
+            <DynamicIcon name={tab.pluginIcon} className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {activeTab === 'users' && <UsersTab />}
@@ -89,6 +117,8 @@ export default function AdminPage() {
       {activeTab === 'jobs' && <JobsTab />}
       {activeTab === 'logs' && <LogsTab />}
       {activeTab === 'general' && <GeneralTab />}
+      {activeTab === 'plugins' && <PluginsTab />}
+      {activePluginTab && <PluginAdminTab pluginId={activePluginTab} />}
     </div>
   );
 }
@@ -1612,6 +1642,82 @@ function GeneralTab() {
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
         {saved ? 'Sauvegardé' : 'Sauvegarder'}
       </button>
+    </div>
+  );
+}
+
+// ============ PLUGINS TAB ============
+function PluginsTab() {
+  const [plugins, setPlugins] = useState<{ id: string; name: string; version: string; description?: string; author?: string; enabled: boolean; hasSettings: boolean; hasFrontend: boolean; error?: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  const fetchPlugins = useCallback(() => {
+    api.get('/plugins').then(({ data }) => setPlugins(data)).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { fetchPlugins(); }, [fetchPlugins]);
+
+  const handleToggle = async (id: string, enabled: boolean) => {
+    setToggling(id);
+    try {
+      await api.put(`/plugins/${id}/toggle`, { enabled });
+      setPlugins(prev => prev.map(p => p.id === id ? { ...p, enabled } : p));
+    } catch { /* ignore */ }
+    setToggling(null);
+  };
+
+  if (loading) return <Spinner />;
+
+  if (plugins.length === 0) {
+    return (
+      <div className="card p-8 text-center">
+        <Plug className="w-10 h-10 text-ndp-text-dim mx-auto mb-3" />
+        <p className="text-ndp-text-muted">Aucun plugin installé</p>
+        <p className="text-sm text-ndp-text-dim mt-1">
+          Ajoutez des plugins dans <code className="text-ndp-accent">packages/plugins/</code>
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {plugins.map((plugin) => (
+        <div key={plugin.id} className="card p-5 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-ndp-text">{plugin.name}</h3>
+              <span className="text-xs text-ndp-text-dim">v{plugin.version}</span>
+              {plugin.error && (
+                <span className="text-xs bg-ndp-danger/10 text-ndp-danger px-2 py-0.5 rounded-full">Erreur</span>
+              )}
+            </div>
+            {plugin.description && (
+              <p className="text-sm text-ndp-text-muted mt-0.5">{plugin.description}</p>
+            )}
+            {plugin.author && (
+              <p className="text-xs text-ndp-text-dim mt-0.5">par {plugin.author}</p>
+            )}
+            {plugin.error && (
+              <p className="text-xs text-ndp-danger mt-1">{plugin.error}</p>
+            )}
+          </div>
+          <button
+            onClick={() => handleToggle(plugin.id, !plugin.enabled)}
+            disabled={toggling === plugin.id}
+            className={clsx(
+              'relative w-12 h-6 rounded-full transition-colors flex-shrink-0',
+              plugin.enabled ? 'bg-ndp-accent' : 'bg-white/10'
+            )}
+          >
+            <span className={clsx(
+              'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform',
+              plugin.enabled && 'translate-x-6'
+            )} />
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

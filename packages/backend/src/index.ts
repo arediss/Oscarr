@@ -12,6 +12,8 @@ import { adminRoutes } from './routes/admin.js';
 import { supportRoutes } from './routes/support.js';
 import { authenticate } from './middleware/auth.js';
 import { initScheduler } from './services/scheduler.js';
+import { pluginEngine } from './plugins/engine.js';
+import { pluginRoutes } from './plugins/routes.js';
 
 const app = Fastify({ logger: true });
 
@@ -43,6 +45,11 @@ async function start() {
   await app.register(adminRoutes, { prefix: '/api/admin' });
   await app.register(supportRoutes, { prefix: '/api/support' });
 
+  // Load plugins and register their routes
+  await pluginEngine.loadAll();
+  await pluginEngine.registerWithFastify(app);
+  await app.register(pluginRoutes, { prefix: '/api/plugins' });
+
   const port = parseInt(process.env.PORT || '3001', 10);
   if (Number.isNaN(port)) {
     throw new Error('PORT environment variable must be a valid number');
@@ -50,8 +57,8 @@ async function start() {
   await app.listen({ port, host: '0.0.0.0' });
   console.log(`Netflix du Pauvre API running on port ${port}`);
 
-  // Start CRON scheduler
-  await initScheduler();
+  // Start CRON scheduler (with plugin jobs)
+  await initScheduler(pluginEngine);
 }
 
 start().catch((err) => {

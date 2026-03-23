@@ -209,3 +209,12 @@ model TmdbCache {
   expiresAt     DateTime
   createdAt     DateTime  @default(now())
 }
+
+model PluginState {
+  id            Int       @id @default(autoincrement())
+  pluginId      String    @unique
+  enabled       Boolean   @default(true)
+  settings      String    @default("{}") // JSON blob for plugin-specific settings
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
