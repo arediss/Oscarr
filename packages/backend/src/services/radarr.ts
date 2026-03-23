@@ -184,22 +184,13 @@ let _radarrConfigKey: string | null = null;
 
 export async function getRadarrAsync(): Promise<RadarrService> {
   const config = await getServiceConfig('radarr');
-  const url = config?.url || process.env.RADARR_URL || '';
-  const apiKey = config?.apiKey || process.env.RADARR_API_KEY || '';
-  const configKey = `${url}|${apiKey}`;
-  if (!_radarr || _radarrConfigKey !== configKey) {
-    _radarr = new RadarrService(url, apiKey);
-    _radarrConfigKey = configKey;
+  if (!config?.url || !config?.apiKey) {
+    throw new Error('No Radarr service configured');
   }
-  return _radarr;
-}
-
-export function getRadarr(): RadarrService {
-  if (!_radarr) {
-    _radarr = new RadarrService(
-      process.env.RADARR_URL || '',
-      process.env.RADARR_API_KEY || '',
-    );
+  const configKey = `${config.url}|${config.apiKey}`;
+  if (!_radarr || _radarrConfigKey !== configKey) {
+    _radarr = new RadarrService(config.url, config.apiKey);
+    _radarrConfigKey = configKey;
   }
   return _radarr;
 }

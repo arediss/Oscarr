@@ -35,6 +35,8 @@ async function runJob(key: string) {
   const handler = JOB_HANDLERS[key];
   if (!handler) return;
 
+  const wasFirstSync = !(await hasCompletedFirstSync());
+
   const start = Date.now();
   try {
     const result = await handler();
@@ -50,6 +52,13 @@ async function runJob(key: string) {
     });
     console.log(`[Scheduler] Job "${key}" completed in ${duration}ms`);
     logEvent('info', 'Job', `Job "${key}" terminé en ${duration}ms`);
+
+    // After the first successful full sync, start all cron schedules
+    if (wasFirstSync && key === 'full_sync' && activeTasks.size === 0) {
+      console.log('[Scheduler] First full sync done — starting cron schedules');
+      await startAllJobs();
+    }
+
     return result;
   } catch (err) {
     const duration = Date.now() - start;
@@ -88,6 +97,23 @@ function scheduleJob(key: string, cronExpression: string) {
   console.log(`[Scheduler] Job "${key}" scheduled: ${cronExpression}`);
 }
 
+/** Check if a first full sync has been completed */
+async function hasCompletedFirstSync(): Promise<boolean> {
+  const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+  return !!(settings?.lastRadarrSync || settings?.lastSonarrSync);
+}
+
+/** Start all enabled cron schedules */
+async function startAllJobs() {
+  const jobs = await prisma.cronJob.findMany();
+  for (const job of jobs) {
+    if (job.enabled) {
+      scheduleJob(job.key, job.cronExpression);
+    }
+  }
+  console.log(`[Scheduler] ${jobs.filter((j) => j.enabled).length}/${jobs.length} jobs active`);
+}
+
 export async function initScheduler(pluginEngine?: PluginEngine) {
   // Register plugin job handlers and seed their definitions
   if (pluginEngine) {
@@ -105,15 +131,13 @@ export async function initScheduler(pluginEngine?: PluginEngine) {
   }
 
   await seedJobs();
-  const jobs = await prisma.cronJob.findMany();
 
-  for (const job of jobs) {
-    if (job.enabled) {
-      scheduleJob(job.key, job.cronExpression);
-    }
+  // Only start cron schedules if a first full sync has been done
+  if (await hasCompletedFirstSync()) {
+    await startAllJobs();
+  } else {
+    console.log('[Scheduler] Jobs seeded but not started — waiting for first full sync');
   }
-
-  console.log(`[Scheduler] ${jobs.filter((j) => j.enabled).length}/${jobs.length} jobs active`);
 }
 
 export async function updateJobSchedule(key: string, cronExpression: string, enabled: boolean) {

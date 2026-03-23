@@ -27,6 +27,39 @@ export async function adminRoutes(app: FastifyInstance) {
   // All admin routes require auth + admin role
   app.addHook('preHandler', app.authenticate);
 
+  // === SETUP STATUS (checklist) ===
+
+  app.get('/setup-status', async (request, reply) => {
+    await requireAdmin(request, reply);
+
+    const [radarr, sonarr, plex, settings, qualityMappings, folderRules, userCount, requestSyncJob] = await Promise.all([
+      prisma.service.findFirst({ where: { type: 'radarr', enabled: true } }),
+      prisma.service.findFirst({ where: { type: 'sonarr', enabled: true } }),
+      prisma.service.findFirst({ where: { type: 'plex', enabled: true } }),
+      prisma.appSettings.findUnique({ where: { id: 1 } }),
+      prisma.qualityMapping.count(),
+      prisma.folderRule.count(),
+      prisma.user.count(),
+      prisma.cronJob.findUnique({ where: { key: 'request_sync' } }),
+    ]);
+
+    const hasDefaultMovieFolder = !!settings?.defaultMovieFolder;
+    const hasDefaultTvFolder = !!settings?.defaultTvFolder;
+    const hasSynced = !!(settings?.lastRadarrSync || settings?.lastSonarrSync);
+
+    return {
+      plex: !!plex,
+      radarr: !!radarr,
+      sonarr: !!sonarr,
+      usersImported: userCount > 1, // more than just the admin
+      synced: hasSynced,
+      requestsSynced: !!(requestSyncJob?.lastRunAt && requestSyncJob.lastStatus === 'success'),
+      qualityMappings: qualityMappings > 0,
+      defaultFolders: hasDefaultMovieFolder && hasDefaultTvFolder,
+      folderRules: folderRules > 0,
+    };
+  });
+
   // === SETTINGS ===
 
   app.get('/settings', async (request, reply) => {
