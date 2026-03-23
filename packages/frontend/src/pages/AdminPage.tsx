@@ -603,11 +603,11 @@ function JobsTab() {
       {/* Quick actions */}
       <div className="flex flex-wrap gap-3">
         <button
-          onClick={() => runJob('full_sync')}
+          onClick={() => runJob('new_media_sync')}
           disabled={running !== null || forceRunning}
           className="flex items-center gap-2 px-5 py-2.5 btn-primary text-sm font-medium rounded-xl"
         >
-          {running === 'full_sync' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          {running === 'new_media_sync' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           {t('admin.jobs.sync_new')}
         </button>
         <button

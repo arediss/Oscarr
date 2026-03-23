@@ -40,6 +40,7 @@ model Media {
   status              String    @default("unknown") // "unknown" | "pending" | "processing" | "available" | "deleted"
   radarrId            Int?
   sonarrId            Int?
+  availableAt         DateTime? // Set when status transitions to "available"
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

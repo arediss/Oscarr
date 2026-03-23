@@ -3,7 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { getRadarr, createRadarrFromConfig } from '../services/radarr.js';
 import { getSonarr, createSonarrFromConfig } from '../services/sonarr.js';
 import { getServiceById } from '../utils/services.js';
-import { syncRadarr, syncSonarr, runFullSync } from '../services/sync.js';
+import { syncRadarr, syncSonarr, runFullSync, syncAvailabilityDates } from '../services/sync.js';
 import { getPlexFriends } from '../services/plex.js';
 import { syncRequestsFromTags } from '../services/requestSync.js';
 import { testDiscord, testTelegram, testEmail, sendNotification } from '../services/notifications.js';
@@ -537,7 +537,9 @@ export async function adminRoutes(app: FastifyInstance) {
       update: { lastRadarrSync: null, lastSonarrSync: null },
       create: { id: 1, lastRadarrSync: null, lastSonarrSync: null, updatedAt: new Date() },
     });
-    const [radarrResult, sonarrResult] = await Promise.all([syncRadarr(null), syncSonarr(null)]);
+    const radarrResult = await syncRadarr(null);
+    const sonarrResult = await syncSonarr(null);
+    await syncAvailabilityDates(null);
     return { radarr: radarrResult, sonarr: sonarrResult };
   });
 

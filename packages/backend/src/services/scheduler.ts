@@ -1,19 +1,21 @@
 import cron, { type ScheduledTask } from 'node-cron';
 import { prisma } from '../utils/prisma.js';
-import { runFullSync } from './sync.js';
+import { runFullSync, runNewMediaSync } from './sync.js';
 import { syncRequestsFromTags } from './requestSync.js';
 import type { PluginEngine } from '../plugins/engine.js';
 
 // Map of job keys to their handler functions
 const JOB_HANDLERS: Record<string, () => Promise<unknown>> = {
+  new_media_sync: async () => runNewMediaSync(),
   full_sync: async () => runFullSync(),
   request_sync: async () => syncRequestsFromTags(),
 };
 
 // Default job definitions (seeded on first boot)
 const DEFAULT_JOBS = [
-  { key: 'full_sync', label: 'Sync complet (Radarr + Sonarr)', cronExpression: '0 6 * * *', enabled: true },
-  { key: 'request_sync', label: 'Sync des demandes', cronExpression: '*/5 * * * *', enabled: true },
+  { key: 'new_media_sync', label: 'Sync new media', cronExpression: '*/15 * * * *', enabled: true },
+  { key: 'full_sync', label: 'Full sync (Radarr + Sonarr)', cronExpression: '0 6 * * *', enabled: true },
+  { key: 'request_sync', label: 'Sync requests', cronExpression: '*/5 * * * *', enabled: true },
 ];
 
 const activeTasks = new Map<string, ScheduledTask>();

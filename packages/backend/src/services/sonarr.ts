@@ -163,6 +163,38 @@ class SonarrService {
     const created = await this.createTag(label);
     return created.id;
   }
+
+  async getHistory(since?: Date | null): Promise<SonarrHistoryRecord[]> {
+    if (since) {
+      const { data } = await this.api.get('/history/since', { params: { date: since.toISOString() } });
+      return (Array.isArray(data) ? data : data.records ?? [])
+        .filter((r: SonarrHistoryRecord) => r.eventType === 'downloadFolderImported');
+    }
+    const all: SonarrHistoryRecord[] = [];
+    let page = 1;
+    while (true) {
+      try {
+        const { data } = await this.api.get('/history', {
+          params: { pageSize: 500, page, sortKey: 'date', sortDirection: 'descending' },
+        });
+        const records: SonarrHistoryRecord[] = data.records ?? data;
+        all.push(...records.filter(r => r.eventType === 'downloadFolderImported'));
+        if (records.length < 500) break;
+        page++;
+      } catch {
+        // Sonarr can crash on corrupted history entries — stop pagination gracefully
+        console.warn(`[Sonarr] History pagination failed at page ${page}, using ${all.length} records collected so far`);
+        break;
+      }
+    }
+    return all;
+  }
+}
+
+export interface SonarrHistoryRecord {
+  seriesId: number;
+  date: string;
+  eventType: string;
 }
 
 const _serviceCache = new Map<number, { instance: SonarrService; configKey: string }>();

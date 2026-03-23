@@ -21,6 +21,7 @@ export interface RadarrMovie {
   physicalRelease?: string;
   inCinemas?: string;
   releaseDate?: string;
+  movieFile?: { dateAdded: string };
 }
 
 export interface RadarrQueueItem {
@@ -123,10 +124,42 @@ class RadarrService {
     return data;
   }
 
+  async getHistory(since?: Date | null): Promise<RadarrHistoryRecord[]> {
+    if (since) {
+      const { data } = await this.api.get('/history/since', { params: { date: since.toISOString() } });
+      return (Array.isArray(data) ? data : data.records ?? [])
+        .filter((r: RadarrHistoryRecord) => r.eventType === 'downloadFolderImported');
+    }
+    // Paginated fetch — get enough records to cover the library
+    const all: RadarrHistoryRecord[] = [];
+    let page = 1;
+    while (true) {
+      try {
+        const { data } = await this.api.get('/history', {
+          params: { pageSize: 1000, page, sortKey: 'date', sortDirection: 'descending' },
+        });
+        const records: RadarrHistoryRecord[] = data.records ?? data;
+        all.push(...records.filter(r => r.eventType === 'downloadFolderImported'));
+        if (records.length < 1000) break;
+        page++;
+      } catch {
+        console.warn(`[Radarr] History pagination failed at page ${page}, using ${all.length} records collected so far`);
+        break;
+      }
+    }
+    return all;
+  }
+
   async getSystemStatus(): Promise<{ version: string }> {
     const { data } = await this.api.get('/system/status');
     return data;
   }
+}
+
+export interface RadarrHistoryRecord {
+  movieId: number;
+  date: string;
+  eventType: string;
 }
 
 const _serviceCache = new Map<number, { instance: RadarrService; configKey: string }>();

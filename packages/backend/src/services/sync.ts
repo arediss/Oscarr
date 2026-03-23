@@ -41,7 +41,8 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
         const backdropPath = fanart ? extractTmdbPath(fanart) : null;
 
         if (existing) {
-          if (status === 'available' && existing.status !== 'available') {
+          const becameAvailable = status === 'available' && existing.status !== 'available';
+          if (becameAvailable) {
             sendNotification('media_available', {
               title: existing.title || movie.title,
               mediaType: 'movie',
@@ -240,13 +241,108 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
   return { added, updated, errors, duration: Date.now() - start };
 }
 
-export async function runFullSync(forceAll = false): Promise<{ radarr: SyncResult; sonarr: SyncResult }> {
+export async function runNewMediaSync(): Promise<{ radarr: SyncResult; sonarr: SyncResult }> {
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-  const since = forceAll ? null : settings;
   // Sequential to avoid SQLite write lock contention
-  const radarrResult = await syncRadarr(since?.lastRadarrSync);
-  const sonarrResult = await syncSonarr(since?.lastSonarrSync);
+  const radarrResult = await syncRadarr(settings?.lastRadarrSync);
+  const sonarrResult = await syncSonarr(settings?.lastSonarrSync);
+  // Sync availability dates from history since last sync
+  const earliestSync = [settings?.lastRadarrSync, settings?.lastSonarrSync]
+    .filter(Boolean)
+    .sort((a, b) => a!.getTime() - b!.getTime())[0] || null;
+  await syncAvailabilityDates(earliestSync);
   return { radarr: radarrResult, sonarr: sonarrResult };
+}
+
+export async function runFullSync(): Promise<{ radarr: SyncResult; sonarr: SyncResult }> {
+  // Sequential to avoid SQLite write lock contention
+  const radarrResult = await syncRadarr(null);
+  const sonarrResult = await syncSonarr(null);
+  // After full sync, also sync availability dates from history
+  await syncAvailabilityDates(null);
+  return { radarr: radarrResult, sonarr: sonarrResult };
+}
+
+/**
+ * Sync availableAt dates from Radarr/Sonarr history.
+ * Queries the history API for "imported" events and updates our DB.
+ * Only 2 API calls total (1 Radarr + 1 Sonarr), regardless of library size.
+ */
+export async function syncAvailabilityDates(since?: Date | null): Promise<{ updated: number }> {
+  let updated = 0;
+
+  try {
+    // Radarr: get imported events from history
+    const radarr = await getRadarrAsync();
+    const radarrHistory = await radarr.getHistory(since);
+
+    // Build a map of radarrId → most recent import date
+    const radarrDates = new Map<number, Date>();
+    for (const record of radarrHistory) {
+      const date = new Date(record.date);
+      const existing = radarrDates.get(record.movieId);
+      if (!existing || date > existing) {
+        radarrDates.set(record.movieId, date);
+      }
+    }
+
+    // Update media records that have a radarrId match and no availableAt yet (or a newer date)
+    for (const [radarrId, date] of radarrDates) {
+      const result = await prisma.media.updateMany({
+        where: {
+          radarrId,
+          OR: [
+            { availableAt: null },
+            { availableAt: { lt: date } },
+          ],
+        },
+        data: { availableAt: date },
+      });
+      updated += result.count;
+    }
+
+    console.log(`[Sync] Radarr availability: ${radarrDates.size} history events → ${updated} media updated`);
+  } catch (err) {
+    console.error('[Sync] Radarr availability sync failed:', err);
+  }
+
+  const radarrUpdated = updated;
+
+  try {
+    // Sonarr: get imported events from history
+    const sonarr = await getSonarrAsync();
+    const sonarrHistory = await sonarr.getHistory(since);
+
+    // Build a map of sonarrId → most recent import date
+    const sonarrDates = new Map<number, Date>();
+    for (const record of sonarrHistory) {
+      const date = new Date(record.date);
+      const existing = sonarrDates.get(record.seriesId);
+      if (!existing || date > existing) {
+        sonarrDates.set(record.seriesId, date);
+      }
+    }
+
+    for (const [sonarrId, date] of sonarrDates) {
+      const result = await prisma.media.updateMany({
+        where: {
+          sonarrId,
+          OR: [
+            { availableAt: null },
+            { availableAt: { lt: date } },
+          ],
+        },
+        data: { availableAt: date },
+      });
+      updated += result.count;
+    }
+
+    console.log(`[Sync] Sonarr availability: ${sonarrDates.size} history events → ${updated - radarrUpdated} media updated`);
+  } catch (err) {
+    console.error('[Sync] Sonarr availability sync failed:', err);
+  }
+
+  return { updated };
 }
 
 // Auto-sync scheduler
