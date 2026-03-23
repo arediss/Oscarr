@@ -2,6 +2,7 @@ import { prisma } from '../utils/prisma.js';
 import { getRadarrAsync, type RadarrMovie } from './radarr.js';
 import { getSonarrAsync, type SonarrSeries } from './sonarr.js';
 import { sendNotification, logEvent } from './notifications.js';
+import { getServiceConfig } from '../utils/services.js';
 
 export interface SyncResult {
   added: number;
@@ -15,6 +16,13 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
   let added = 0;
   let updated = 0;
   let errors = 0;
+
+  // Guard: skip if no Radarr service configured
+  const radarrConfig = await getServiceConfig('radarr');
+  if (!radarrConfig) {
+    console.log('[Sync] Radarr: no service configured, skipping');
+    return { added: 0, updated: 0, errors: 0, duration: 0 };
+  }
 
   try {
     const radarr = await getRadarrAsync();
@@ -107,6 +115,13 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
   let updated = 0;
   let errors = 0;
 
+  // Guard: skip if no Sonarr service configured
+  const sonarrConfig = await getServiceConfig('sonarr');
+  if (!sonarrConfig) {
+    console.log('[Sync] Sonarr: no service configured, skipping');
+    return { added: 0, updated: 0, errors: 0, duration: 0 };
+  }
+
   try {
     const sonarr = await getSonarrAsync();
     const series = await sonarr.getSeries();
@@ -127,6 +142,13 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
         // Sonarr gives us tmdbId directly — no need for external API calls
         const tmdbId = show.tmdbId || null;
 
+        // Skip series with neither tmdbId nor tvdbId — can't identify them
+        if (!tmdbId && !show.tvdbId) {
+          console.warn(`[Sync] Skipping series "${show.title}" — no tmdbId or tvdbId`);
+          errors++;
+          continue;
+        }
+
         const status = getSeriesStatus(show);
         const poster = show.images?.find((i) => i.coverType === 'poster')?.remoteUrl;
         const fanart = show.images?.find((i) => i.coverType === 'fanart')?.remoteUrl;
@@ -134,14 +156,17 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
         const backdropPath = fanart ? extractImagePath(fanart) : null;
 
         // Try to find existing entry: by tmdbId (preferred), tvdbId, or negative placeholder
+        const orClauses: Record<string, number>[] = [];
+        if (tmdbId) orClauses.push({ tmdbId });
+        if (show.tvdbId) {
+          orClauses.push({ tvdbId: show.tvdbId });
+          orClauses.push({ tmdbId: -(show.tvdbId) }); // old negative placeholder
+        }
+
         const existing = await prisma.media.findFirst({
           where: {
             mediaType: 'tv',
-            OR: [
-              ...(tmdbId ? [{ tmdbId }] : []),
-              { tvdbId: show.tvdbId },
-              { tmdbId: -(show.tvdbId) }, // old negative placeholder
-            ],
+            OR: orClauses,
           },
           include: { seasons: true },
         });
@@ -197,8 +222,8 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
           );
           updated++;
         } else {
-          // New series — use tmdbId from Sonarr, fallback to negative placeholder
-          const finalTmdbId = tmdbId || -(show.tvdbId);
+          // New series — use tmdbId from Sonarr, fallback to negative tvdbId placeholder
+          const finalTmdbId = tmdbId || (show.tvdbId ? -(show.tvdbId) : 0);
 
           const media = await prisma.media.create({
             data: {
@@ -286,7 +311,9 @@ export async function syncAvailabilityDates(since?: Date | null): Promise<{ upda
   let updated = 0;
 
   try {
-    // Radarr: get imported events from history
+    // Guard: skip if no Radarr service configured
+    const radarrCfg = await getServiceConfig('radarr');
+    if (!radarrCfg) throw new Error('No Radarr service');
     const radarr = await getRadarrAsync();
     const radarrHistory = await radarr.getHistory(since);
 
@@ -323,7 +350,9 @@ export async function syncAvailabilityDates(since?: Date | null): Promise<{ upda
   const radarrUpdated = updated;
 
   try {
-    // Sonarr: get imported events from history
+    // Guard: skip if no Sonarr service configured
+    const sonarrCfg = await getServiceConfig('sonarr');
+    if (!sonarrCfg) throw new Error('No Sonarr service');
     const sonarr = await getSonarrAsync();
     const sonarrHistory = await sonarr.getHistory(since);
 
@@ -357,40 +386,6 @@ export async function syncAvailabilityDates(since?: Date | null): Promise<{ upda
   }
 
   return { updated };
-}
-
-// Auto-sync scheduler
-let syncInterval: ReturnType<typeof setInterval> | null = null;
-
-export function startSyncScheduler(intervalHours = 6) {
-  if (syncInterval) clearInterval(syncInterval);
-  const ms = intervalHours * 60 * 60 * 1000;
-
-  console.log(`[Sync] Scheduler started: syncing every ${intervalHours}h`);
-
-  // Run initial sync after 10 seconds
-  setTimeout(() => {
-    console.log('[Sync] Running initial sync...');
-    runFullSync().then((result) => {
-      console.log(`[Sync] Initial sync complete:`, {
-        radarr: `+${result.radarr.added} ~${result.radarr.updated} (${result.radarr.duration}ms)`,
-        sonarr: `+${result.sonarr.added} ~${result.sonarr.updated} (${result.sonarr.duration}ms)`,
-      });
-    }).catch((err) => console.error('[Sync] Initial sync failed:', err));
-  }, 10_000);
-
-  syncInterval = setInterval(async () => {
-    console.log('[Sync] Running scheduled sync...');
-    try {
-      const result = await runFullSync();
-      console.log(`[Sync] Scheduled sync complete:`, {
-        radarr: `+${result.radarr.added} ~${result.radarr.updated}`,
-        sonarr: `+${result.sonarr.added} ~${result.sonarr.updated}`,
-      });
-    } catch (err) {
-      console.error('[Sync] Scheduled sync failed:', err);
-    }
-  }, ms);
 }
 
 // Helpers

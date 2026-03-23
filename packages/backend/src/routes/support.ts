@@ -5,6 +5,8 @@ import axios from 'axios';
 import { prisma } from '../utils/prisma.js';
 import { pluginEngine } from '../plugins/engine.js';
 import { logEvent } from '../services/notifications.js';
+import { runFullSync } from '../services/sync.js';
+import { initScheduler } from '../services/scheduler.js';
 
 const APP_VERSION = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../../../../package.json'), 'utf-8')
@@ -83,6 +85,80 @@ export async function supportRoutes(app: FastifyInstance) {
     }
 
     return reply.status(201).send({ ok: true, service: { ...service, config: JSON.parse(service.config) } });
+  });
+
+  // Test a Radarr/Sonarr connection during install
+  app.post('/setup/test-arr', async (request, reply) => {
+    const { url, apiKey } = request.body as { url: string; apiKey: string };
+    if (!url || !apiKey) return reply.status(400).send({ error: 'URL et API key requis' });
+    try {
+      const { data } = await axios.get(`${url.replace(/\/+$/, '')}/api/v3/system/status`, {
+        params: { apikey: apiKey },
+        timeout: 5000,
+      });
+      return { ok: true, version: data.version };
+    } catch {
+      return reply.status(502).send({ error: 'Impossible de contacter le service' });
+    }
+  });
+
+  // Add a Radarr/Sonarr service during install (locked once first sync is done)
+  app.post('/setup/service', async (request, reply) => {
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    if (settings?.lastRadarrSync || settings?.lastSonarrSync) {
+      return reply.status(403).send({ error: 'Installation déjà effectuée' });
+    }
+
+    const { name, type, url, apiKey } = request.body as {
+      name: string; type: 'radarr' | 'sonarr'; url: string; apiKey: string;
+    };
+    if (!name || !type || !url || !apiKey) {
+      return reply.status(400).send({ error: 'Tous les champs sont requis' });
+    }
+    if (!['radarr', 'sonarr'].includes(type)) {
+      return reply.status(400).send({ error: 'Type invalide' });
+    }
+
+    const service = await prisma.service.create({
+      data: {
+        name,
+        type,
+        config: JSON.stringify({ url: url.replace(/\/+$/, ''), apiKey }),
+        isDefault: true,
+        enabled: true,
+      },
+    });
+
+    logEvent('info', 'Setup', `Service "${name}" (${type}) ajouté via l'installation`);
+    return reply.status(201).send({ ok: true, service: { ...service, config: JSON.parse(service.config) } });
+  });
+
+  // Run first full sync during install
+  app.post('/setup/sync', async (_request, reply) => {
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    if (settings?.lastRadarrSync || settings?.lastSonarrSync) {
+      return reply.status(403).send({ error: 'Sync déjà effectuée' });
+    }
+
+    // Check at least one arr service exists
+    const arrService = await prisma.service.findFirst({
+      where: { type: { in: ['radarr', 'sonarr'] }, enabled: true },
+    });
+    if (!arrService) {
+      return reply.status(400).send({ error: 'Configurez au moins un service Radarr ou Sonarr' });
+    }
+
+    try {
+      const result = await runFullSync();
+
+      // Start cron schedules now that first sync is done
+      await initScheduler();
+
+      logEvent('info', 'Setup', 'Première synchronisation complète effectuée');
+      return { ok: true, result };
+    } catch (err) {
+      return reply.status(500).send({ error: 'Sync échouée', details: String(err) });
+    }
   });
 
   // Get app version + check for updates

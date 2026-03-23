@@ -219,22 +219,13 @@ let _sonarrConfigKey: string | null = null;
 
 export async function getSonarrAsync(): Promise<SonarrService> {
   const config = await getServiceConfig('sonarr');
-  const url = config?.url || process.env.SONARR_URL || '';
-  const apiKey = config?.apiKey || process.env.SONARR_API_KEY || '';
-  const configKey = `${url}|${apiKey}`;
-  if (!_sonarr || _sonarrConfigKey !== configKey) {
-    _sonarr = new SonarrService(url, apiKey);
-    _sonarrConfigKey = configKey;
+  if (!config?.url || !config?.apiKey) {
+    throw new Error('No Sonarr service configured');
   }
-  return _sonarr;
-}
-
-export function getSonarr(): SonarrService {
-  if (!_sonarr) {
-    _sonarr = new SonarrService(
-      process.env.SONARR_URL || '',
-      process.env.SONARR_API_KEY || '',
-    );
+  const configKey = `${config.url}|${config.apiKey}`;
+  if (!_sonarr || _sonarrConfigKey !== configKey) {
+    _sonarr = new SonarrService(config.url, config.apiKey);
+    _sonarrConfigKey = configKey;
   }
   return _sonarr;
 }

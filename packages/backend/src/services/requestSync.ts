@@ -1,6 +1,7 @@
 import { prisma } from '../utils/prisma.js';
 import { getRadarrAsync } from './radarr.js';
 import { getSonarrAsync } from './sonarr.js';
+import { getServiceConfig } from '../utils/services.js';
 
 interface SyncResult {
   imported: number;
@@ -36,6 +37,13 @@ async function syncRadarrRequests(usernameMap: Map<string, number>): Promise<Syn
   let imported = 0;
   let skipped = 0;
   let errors = 0;
+
+  // Guard: skip if no Radarr service configured
+  const radarrConfig = await getServiceConfig('radarr');
+  if (!radarrConfig) {
+    console.log('[RequestSync] Radarr: no service configured, skipping');
+    return { imported: 0, skipped: 0, errors: 0 };
+  }
 
   try {
     const radarr = await getRadarrAsync();
@@ -110,6 +118,13 @@ async function syncSonarrRequests(usernameMap: Map<string, number>): Promise<Syn
   let imported = 0;
   let skipped = 0;
   let errors = 0;
+
+  // Guard: skip if no Sonarr service configured
+  const sonarrConfig = await getServiceConfig('sonarr');
+  if (!sonarrConfig) {
+    console.log('[RequestSync] Sonarr: no service configured, skipping');
+    return { imported: 0, skipped: 0, errors: 0 };
+  }
 
   try {
     const sonarr = await getSonarrAsync();

@@ -62,6 +62,20 @@ export default function AdminPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { contributions: pluginTabs } = usePluginUI('admin.tabs');
+  const [warnings, setWarnings] = useState<Record<string, boolean>>({});
+
+  const refreshWarnings = useCallback(() => {
+    api.get('/admin/setup-status').then(({ data }) => {
+      const w: Record<string, boolean> = {};
+      if (!data.radarr && !data.sonarr) w.services = true;
+      if (!data.qualityMappings) w.quality = true;
+      if (!data.defaultFolders) w.paths = true;
+      setWarnings(w);
+    }).catch(() => {});
+  }, []);
+
+  const currentTab = searchParams.get('tab');
+  useEffect(() => { refreshWarnings(); }, [currentTab, refreshWarnings]);
 
   const pluginTabItems = pluginTabs.map((c) => ({
     id: `plugin:${c.props.id}` as string,
@@ -86,18 +100,22 @@ export default function AdminPage() {
         <h1 className="text-2xl font-bold text-ndp-text">{t('admin.title')}</h1>
       </div>
 
-      <div className="flex gap-2 mb-8 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+      <div className="flex gap-3 mb-8 overflow-x-auto pb-2 pt-1" style={{ scrollbarWidth: 'none' }}>
         {TABS.map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
             className={clsx(
-              'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap',
-              activeTab === id ? 'bg-ndp-accent text-white' : 'bg-ndp-surface text-ndp-text-muted hover:bg-ndp-surface-light'
+              'relative flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap',
+              activeTab === id ? 'bg-ndp-accent text-white' : 'bg-ndp-surface text-ndp-text-muted hover:bg-ndp-surface-light',
+              warnings[id] && activeTab !== id && 'ring-1 ring-ndp-danger/50'
             )}
           >
             <Icon className="w-4 h-4" />
             {t(labelKey)}
+            {warnings[id] && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-ndp-danger rounded-full flex items-center justify-center text-[10px] font-bold text-white">!</span>
+            )}
           </button>
         ))}
         {pluginTabItems.map((tab) => (
