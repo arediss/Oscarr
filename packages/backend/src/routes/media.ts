@@ -165,9 +165,27 @@ export async function mediaRoutes(app: FastifyInstance) {
       );
     }
 
+    // Resolve which quality options are covered by the service this media is in
+    const availableQualityOptionIds: number[] = [];
+    if (media.status === 'available' || liveAvailable) {
+      const serviceId = media.radarrId
+        ? (await prisma.service.findFirst({ where: { type: 'radarr', enabled: true } }))?.id
+        : media.sonarrId
+          ? (await prisma.service.findFirst({ where: { type: 'sonarr', enabled: true } }))?.id
+          : null;
+      if (serviceId) {
+        const mappings = await prisma.qualityMapping.findMany({
+          where: { serviceId },
+          select: { qualityOptionId: true },
+        });
+        availableQualityOptionIds.push(...mappings.map(m => m.qualityOptionId));
+      }
+    }
+
     const result: Record<string, unknown> = { ...media };
     if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
     if (liveAvailable) result.inLibrary = true;
+    if (availableQualityOptionIds.length > 0) result.availableQualityOptionIds = availableQualityOptionIds;
     return result;
   });
 

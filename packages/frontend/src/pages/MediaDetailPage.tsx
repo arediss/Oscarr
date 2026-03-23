@@ -41,6 +41,7 @@ export default function MediaDetailPage({ type }: Props) {
   const [scrollOpacity, setScrollOpacity] = useState(0);
   const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string; position: number }[]>([]);
   const [selectedQuality, setSelectedQuality] = useState<number | null>(null);
+  const [activeQualityOptionId, setActiveQualityOptionId] = useState<number | null>(null);
 
   const handleScroll = useCallback(() => {
     const scrollY = window.scrollY;
@@ -60,6 +61,7 @@ export default function MediaDetailPage({ type }: Props) {
     if (data.sonarrSeasons) setSonarrSeasons(data.sonarrSeasons as typeof sonarrSeasons);
     if (data.inLibrary) setInLibrary(true);
     if (data.status === 'available' && !data.id) setInLibrary(true);
+    if (data.activeQualityOptionId) setActiveQualityOptionId(data.activeQualityOptionId as number);
   }, []);
 
   useEffect(() => {
@@ -74,6 +76,7 @@ export default function MediaDetailPage({ type }: Props) {
     setInLibrary(false);
     setSelectedSeasons([]);
     setSelectedQuality(null);
+    setActiveQualityOptionId(null);
 
     async function fetchData() {
       try {
@@ -137,9 +140,15 @@ export default function MediaDetailPage({ type }: Props) {
   const isUpcoming = dbMedia?.status === 'upcoming';
   const isSearching = dbMedia?.status === 'searching';
   const isDownloading = !!download;
-  const userHasRequest = dbMedia?.requests?.some(
-    (r) => r.user?.id === user?.id && ['pending', 'approved', 'processing'].includes(r.status)
-  );
+  const activeRequests = dbMedia?.requests?.filter(
+    (r) => ['pending', 'approved', 'processing', 'available'].includes(r.status)
+  ) || [];
+  const takenQualityIds = new Set<number>([
+    ...activeRequests.map(r => r.qualityOptionId).filter(Boolean) as number[],
+    ...(activeQualityOptionId ? [activeQualityOptionId] : []),
+  ]);
+  const userHasRequest = activeRequests.some(r => r.user?.id === user?.id);
+  const canRequestNewQuality = selectedQuality != null && !takenQualityIds.has(selectedQuality);
 
   const formatTimeLeft = (tl: string) => {
     if (!tl) return '';
@@ -288,10 +297,19 @@ export default function MediaDetailPage({ type }: Props) {
                 </a>
               )}
 
-              {isAvailable ? (
+              {isAvailable && !canRequestNewQuality ? (
                 <button disabled className="btn-success flex items-center gap-2 cursor-default">
                   <Check className="w-4 h-4" />
                   {t('status.available')}
+                </button>
+              ) : isAvailable && canRequestNewQuality ? (
+                <button
+                  onClick={handleRequest}
+                  disabled={requesting}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  {t('media.request')}
                 </button>
               ) : isDownloading ? (
                 <div className="flex items-center gap-3">
@@ -315,7 +333,20 @@ export default function MediaDetailPage({ type }: Props) {
                   <Loader2 className="w-4 h-4 animate-spin" />
                   {t('status.searching_long')}
                 </button>
-              ) : userHasRequest ? (
+              ) : canRequestNewQuality ? (
+                <button
+                  onClick={handleRequest}
+                  disabled={requesting}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  {requesting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  {t('media.request')}
+                </button>
+              ) : userHasRequest && !canRequestNewQuality ? (
                 <button disabled className="btn-success flex items-center gap-2 cursor-default">
                   <Check className="w-4 h-4" />
                   {t('status.already_requested')}
@@ -337,24 +368,31 @@ export default function MediaDetailPage({ type }: Props) {
             </div>
 
             {/* Quality selection */}
-            {qualityOptions.length > 0 && !isAvailable && !userHasRequest && (
+            {qualityOptions.length > 0 && (
               <div className="mt-6">
                 <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('media.quality')}</h3>
                 <div className="flex flex-wrap gap-2">
-                  {qualityOptions.map((q) => (
-                    <button
-                      key={q.id}
-                      onClick={() => setSelectedQuality(prev => prev === q.id ? null : q.id)}
-                      className={clsx(
-                        'px-4 py-2 rounded-xl text-sm font-medium transition-all',
-                        selectedQuality === q.id
-                          ? 'bg-ndp-accent text-white'
-                          : 'bg-white/5 text-ndp-text-muted hover:bg-white/10'
-                      )}
-                    >
-                      {q.label}
-                    </button>
-                  ))}
+                  {qualityOptions.map((q) => {
+                    const isRequested = takenQualityIds.has(q.id);
+                    const isSelected = selectedQuality === q.id;
+                    return (
+                      <button
+                        key={q.id}
+                        onClick={() => !isRequested && setSelectedQuality(prev => prev === q.id ? null : q.id)}
+                        className={clsx(
+                          'px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5',
+                          isRequested
+                            ? 'bg-ndp-success/10 text-ndp-success border border-ndp-success/20 cursor-default'
+                            : isSelected
+                              ? 'bg-ndp-accent text-white'
+                              : 'bg-white/5 text-ndp-text-muted hover:bg-white/10'
+                        )}
+                      >
+                        {isRequested && <Check className="w-3.5 h-3.5" />}
+                        {q.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}

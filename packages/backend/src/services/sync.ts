@@ -54,6 +54,7 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
             data: {
               radarrId: movie.id,
               status,
+              qualityProfileId: movie.qualityProfileId,
               title: existing.title || movie.title,
               ...(posterPath && !existing.posterPath ? { posterPath } : {}),
               ...(backdropPath && !existing.backdropPath ? { backdropPath } : {}),
@@ -70,6 +71,7 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
               backdropPath,
               status,
               radarrId: movie.id,
+              qualityProfileId: movie.qualityProfileId,
             },
           });
           added++;
@@ -152,6 +154,7 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
             data: {
               sonarrId: show.id,
               tvdbId: show.tvdbId,
+              qualityProfileId: show.qualityProfileId,
               // Fix negative placeholder tmdbId with real one from Sonarr
               ...(tmdbId && existing.tmdbId < 0 ? { tmdbId } : {}),
               status,
@@ -202,6 +205,7 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
               backdropPath,
               status,
               sonarrId: show.id,
+              qualityProfileId: show.qualityProfileId,
             },
           });
 

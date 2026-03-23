@@ -95,9 +95,12 @@ export async function supportRoutes(app: FastifyInstance) {
     return { banner: settings?.incidentBanner || null };
   });
 
-  // Quality options available for requests (auth required)
+  // Quality options available for requests (only those with at least one mapping)
   app.get('/quality-options', { preHandler: [app.authenticate] }, async () => {
-    return prisma.qualityOption.findMany({ orderBy: { position: 'asc' } });
+    return prisma.qualityOption.findMany({
+      where: { mappings: { some: {} } },
+      orderBy: { position: 'asc' },
+    });
   });
 
   // Get feature flags (no auth — needed by Layout before auth check)

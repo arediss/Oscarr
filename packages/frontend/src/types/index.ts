@@ -126,6 +126,7 @@ export interface MediaRequest {
   mediaType: 'movie' | 'tv';
   seasons: string | null;
   rootFolder: string | null;
+  qualityOptionId: number | null;
   approvedById: number | null;
   createdAt: string;
   updatedAt: string;
