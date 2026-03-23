@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { useFeatures } from '@/context/FeaturesContext';
 import Layout from '@/components/Layout';
 import HomePage from '@/pages/HomePage';
 import LoginPage from '@/pages/LoginPage';
@@ -50,6 +51,13 @@ function RequireAccess({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RequireFeature({ feature, children }: { feature: string; children: React.ReactNode }) {
+  const { features, loading } = useFeatures();
+  if (loading) return null;
+  if (!features[feature]) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 function LoadingScreen() {
   const { t } = useTranslation();
   return (
@@ -92,14 +100,14 @@ export default function App() {
                   <Route path="/search" element={<RequireAccess><SearchPage /></RequireAccess>} />
                   <Route path="/movie/:id" element={<RequireAccess><MediaDetailPage type="movie" /></RequireAccess>} />
                   <Route path="/tv/:id" element={<RequireAccess><MediaDetailPage type="tv" /></RequireAccess>} />
-                  <Route path="/requests" element={<RequireAccess><RequestsPage /></RequireAccess>} />
+                  <Route path="/requests" element={<RequireFeature feature="requestsEnabled"><RequireAccess><RequestsPage /></RequireAccess></RequireFeature>} />
 
                   <Route path="/discover/:mediaType/genre/:genreId" element={<RequireAccess><DiscoverGenrePage /></RequireAccess>} />
                   <Route path="/category/:slug" element={<RequireAccess><CategoryPage /></RequireAccess>} />
-                  <Route path="/calendar" element={<RequireAccess><CalendarPage /></RequireAccess>} />
+                  <Route path="/calendar" element={<RequireFeature feature="calendarEnabled"><RequireAccess><CalendarPage /></RequireAccess></RequireFeature>} />
 
                   {/* Support accessible even without full access */}
-                  <Route path="/support" element={<MessagesPage />} />
+                  <Route path="/support" element={<RequireFeature feature="supportEnabled"><MessagesPage /></RequireFeature>} />
 
                   {/* Plugin pages */}
                   <Route path="/p/:pluginId/*" element={<PluginPage />} />

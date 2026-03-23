@@ -36,6 +36,7 @@ import {
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useFeatures } from '@/context/FeaturesContext';
 import { usePluginUI } from '@/plugins/usePlugins';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
 import { PluginAdminTab } from '@/plugins/PluginAdminTab';
@@ -1655,6 +1656,7 @@ function QualityTab() {
 // ============ GENERAL TAB ============
 function GeneralTab() {
   const { t } = useTranslation();
+  const { refreshFeatures } = useFeatures();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [autoApproveRequests, setAutoApproveRequests] = useState(false);
@@ -1688,6 +1690,7 @@ function GeneralTab() {
         supportEnabled,
         calendarEnabled,
       });
+      await refreshFeatures();
       setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch (err) { console.error(err); } finally { setSaving(false); }
   };

@@ -21,12 +21,7 @@ import {
 import { clsx } from 'clsx';
 import { PluginSlot } from '@/plugins/PluginSlot';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
-
-interface Features {
-  requestsEnabled: boolean;
-  supportEnabled: boolean;
-  calendarEnabled: boolean;
-}
+import { useFeatures } from '@/context/FeaturesContext';
 
 const ALL_NAV = [
   { path: '/', labelKey: 'nav.home', icon: Home, feature: null },
@@ -46,17 +41,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [banner, setBanner] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [features, setFeatures] = useState<Features>({ requestsEnabled: true, supportEnabled: true, calendarEnabled: true });
+  const { features } = useFeatures();
   const avatarMenuRef = useRef<HTMLDivElement>(null);
 
-  // Fetch incident banner + feature flags
+  // Fetch incident banner
   useEffect(() => {
     api.get('/support/banner').then(({ data }) => setBanner(data.banner)).catch(() => {});
-    api.get('/support/features').then(({ data }) => setFeatures(data)).catch(() => {});
   }, []);
 
   // Filter nav items based on feature flags (admins see everything)
-  const navItems = ALL_NAV.filter(({ feature }) => !feature || isAdmin || features[feature]);
+  const navItems = ALL_NAV.filter(({ feature }) => !feature || features[feature]);
 
   // Sync search input with URL query param when on /search
   useEffect(() => {

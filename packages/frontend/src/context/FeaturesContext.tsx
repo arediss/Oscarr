@@ -1,0 +1,55 @@
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import api from '@/lib/api';
+
+interface Features {
+  requestsEnabled: boolean;
+  supportEnabled: boolean;
+  calendarEnabled: boolean;
+  [key: string]: boolean;
+}
+
+interface FeaturesContextType {
+  features: Features;
+  loading: boolean;
+  refreshFeatures: () => Promise<void>;
+}
+
+const defaultFeatures: Features = {
+  requestsEnabled: true,
+  supportEnabled: true,
+  calendarEnabled: true,
+};
+
+const FeaturesContext = createContext<FeaturesContextType | null>(null);
+
+export function FeaturesProvider({ children }: { children: ReactNode }) {
+  const [features, setFeatures] = useState<Features>(defaultFeatures);
+  const [loading, setLoading] = useState(true);
+
+  const refreshFeatures = useCallback(async () => {
+    try {
+      const { data } = await api.get('/support/features');
+      setFeatures(data);
+    } catch {
+      // Keep current state on error
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshFeatures();
+  }, [refreshFeatures]);
+
+  return (
+    <FeaturesContext.Provider value={{ features, loading, refreshFeatures }}>
+      {children}
+    </FeaturesContext.Provider>
+  );
+}
+
+export function useFeatures() {
+  const ctx = useContext(FeaturesContext);
+  if (!ctx) throw new Error('useFeatures must be used within FeaturesProvider');
+  return ctx;
+}
