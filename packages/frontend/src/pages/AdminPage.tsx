@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Settings,
   Users,
@@ -33,23 +34,28 @@ import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import type { AdminUser, QualityProfile, RootFolder } from '@/types';
 
-type Tab = 'users' | 'services' | 'support' | 'notifications' | 'paths' | 'jobs' | 'logs' | 'general';
+type Tab = 'users' | 'services' | 'quality' | 'support' | 'notifications' | 'paths' | 'jobs' | 'logs' | 'general';
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: 'general', label: 'Général', icon: Settings },
   { id: 'users', label: 'Utilisateurs', icon: Users },
   { id: 'services', label: 'Services', icon: Server },
+  { id: 'quality', label: 'Qualité', icon: Star },
   { id: 'support', label: 'Support', icon: MessageSquare },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'paths', label: 'Chemins & Règles', icon: FolderTree },
   { id: 'jobs', label: 'Jobs & Sync', icon: RefreshCw },
   { id: 'logs', label: 'Logs', icon: ScrollText },
-  { id: 'general', label: 'Général', icon: Settings },
 ];
 
 export default function AdminPage() {
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>('users');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab') as Tab | null;
+  const activeTab = tabFromUrl && TABS.some(t => t.id === tabFromUrl) ? tabFromUrl : 'general';
+
+  const setActiveTab = (tab: Tab) => setSearchParams({ tab }, { replace: true });
 
   if (!isAdmin) { navigate('/'); return null; }
 
@@ -78,6 +84,7 @@ export default function AdminPage() {
 
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'services' && <ServicesTab />}
+      {activeTab === 'quality' && <QualityTab />}
       {activeTab === 'support' && <SupportAdminTab />}
       {activeTab === 'notifications' && <NotificationsTab />}
       {activeTab === 'paths' && <PathsTab />}
@@ -271,7 +278,7 @@ function SupportAdminTab() {
 // ============ PATHS & RULES TAB ============
 interface FolderRule {
   id: number; name: string; priority: number; mediaType: string;
-  conditions: string; folderPath: string; seriesType: string | null;
+  conditions: string; folderPath: string; seriesType: string | null; serviceId: number | null;
 }
 interface RuleCondition { field: string; operator: string; value: string; }
 
@@ -1010,7 +1017,7 @@ interface ServiceSchema {
 const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
   radarr: {
     label: 'Radarr',
-    icon: '🎬',
+    icon: '/radarr.png',
     fields: [
       { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:7878' },
       { key: 'apiKey', label: 'Clé API', type: 'password' },
@@ -1018,7 +1025,7 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
   },
   sonarr: {
     label: 'Sonarr',
-    icon: '📺',
+    icon: '/sonarr.png',
     fields: [
       { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:8989' },
       { key: 'apiKey', label: 'Clé API', type: 'password' },
@@ -1026,7 +1033,7 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
   },
   plex: {
     label: 'Plex',
-    icon: '🟧',
+    icon: '/plex.png',
     fields: [
       { key: 'url', label: 'URL du serveur', type: 'text', placeholder: 'http://192.168.1.50:32400' },
       { key: 'token', label: 'Token', type: 'password' },
@@ -1035,7 +1042,7 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
   },
   qbittorrent: {
     label: 'qBittorrent',
-    icon: '⬇️',
+    icon: '/qbittorrent.svg',
     fields: [
       { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.64:8080' },
       { key: 'username', label: 'Utilisateur', type: 'text' },
@@ -1044,7 +1051,7 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
   },
   tautulli: {
     label: 'Tautulli',
-    icon: '📊',
+    icon: '/tautulli.svg',
     fields: [
       { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:8181' },
       { key: 'apiKey', label: 'Clé API', type: 'password' },
@@ -1052,7 +1059,7 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
   },
   trackarr: {
     label: 'Trackarr',
-    icon: '📡',
+    icon: '/trackarr.svg',
     fields: [
       { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:7333' },
       { key: 'apiKey', label: 'Clé API', type: 'password' },
@@ -1139,7 +1146,7 @@ function ServicesTab() {
               <div key={service.id} className={clsx('card p-5 border transition-all', service.enabled ? 'border-white/10' : 'border-white/5 opacity-60')}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">{schema?.icon || '🔌'}</span>
+                    <img src={schema?.icon || '/favicon.svg'} alt={schema?.label || service.type} className="w-8 h-8 rounded-lg object-contain" />
                     <div>
                       <h3 className="text-sm font-semibold text-ndp-text">{service.name}</h3>
                       <p className="text-xs text-ndp-text-dim">{schema?.label || service.type}</p>
@@ -1216,11 +1223,38 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
   const [isDefault, setIsDefault] = useState(service?.isDefault || false);
   const [saving, setSaving] = useState(false);
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
+  const [fetchingPlexToken, setFetchingPlexToken] = useState(false);
+  const [detectingMachineId, setDetectingMachineId] = useState(false);
 
   const schema = SERVICE_SCHEMAS[type];
 
   const handleConfigChange = (key: string, value: string) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const fetchPlexToken = async () => {
+    setFetchingPlexToken(true);
+    try {
+      const { data } = await api.get('/admin/plex-token');
+      if (data.token) handleConfigChange('token', data.token);
+    } catch { /* empty */ }
+    finally { setFetchingPlexToken(false); }
+  };
+
+  const detectMachineId = async () => {
+    const url = config.url;
+    const token = config.token;
+    if (!url || !token) return;
+    setDetectingMachineId(true);
+    try {
+      const res = await fetch(`${url}/identity`, {
+        headers: { 'X-Plex-Token': token, Accept: 'application/json' },
+      });
+      const json = await res.json();
+      const machineId = json.MediaContainer?.machineIdentifier;
+      if (machineId) handleConfigChange('machineId', machineId);
+    } catch { /* empty */ }
+    finally { setDetectingMachineId(false); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1236,9 +1270,9 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
     } catch { /* empty */ } finally { setSaving(false); }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onClick={(e) => e.stopPropagation()}>
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onMouseDown={onClose}>
+      <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-ndp-text mb-5">{isEdit ? 'Modifier le service' : 'Ajouter un service'}</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isEdit && (
@@ -1246,7 +1280,7 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
               <label className="text-sm text-ndp-text mb-1.5 block">Type de service</label>
               <select value={type} onChange={(e) => { setType(e.target.value); setConfig({}); }} className="input w-full">
                 {Object.entries(SERVICE_SCHEMAS).map(([key, s]) => (
-                  <option key={key} value={key}>{s.icon} {s.label}</option>
+                  <option key={key} value={key}>{s.label}</option>
                 ))}
               </select>
             </div>
@@ -1278,6 +1312,29 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
                   </button>
                 )}
               </div>
+              {/* Plex helpers */}
+              {type === 'plex' && field.key === 'token' && (
+                <button
+                  type="button"
+                  onClick={fetchPlexToken}
+                  disabled={fetchingPlexToken}
+                  className="mt-1.5 text-xs text-ndp-accent hover:text-ndp-accent-hover flex items-center gap-1 transition-colors"
+                >
+                  {fetchingPlexToken ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plug className="w-3 h-3" />}
+                  Utiliser mon token Plex
+                </button>
+              )}
+              {type === 'plex' && field.key === 'machineId' && (
+                <button
+                  type="button"
+                  onClick={detectMachineId}
+                  disabled={detectingMachineId || !config.url || !config.token}
+                  className="mt-1.5 text-xs text-ndp-accent hover:text-ndp-accent-hover flex items-center gap-1 transition-colors disabled:opacity-40"
+                >
+                  {detectingMachineId ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  Détecter automatiquement
+                </button>
+              )}
             </div>
           ))}
 
@@ -1297,6 +1354,243 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
           </div>
         </form>
       </div>
+    </div>,
+    document.body
+  );
+}
+
+// ============ QUALITY TAB ============
+interface QualityOptionType {
+  id: number;
+  label: string;
+  position: number;
+  mappings: { id: number; qualityProfileId: number; qualityProfileName: string; service: { id: number; name: string; type: string } }[];
+}
+
+interface ServiceType {
+  id: number;
+  name: string;
+  type: string;
+  enabled: boolean;
+}
+
+function QualityTab() {
+  const [options, setOptions] = useState<QualityOptionType[]>([]);
+  const [services, setServices] = useState<ServiceType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newLabel, setNewLabel] = useState('');
+  const [editingMapping, setEditingMapping] = useState<{ qualityOptionId: number; serviceId: number } | null>(null);
+  const [profiles, setProfiles] = useState<{ id: number; name: string }[]>([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [optRes, svcRes] = await Promise.all([
+        api.get('/admin/quality-options'),
+        api.get('/admin/services'),
+      ]);
+      setOptions(optRes.data);
+      setServices(svcRes.data.filter((s: ServiceType) => ['radarr', 'sonarr'].includes(s.type) && s.enabled));
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const seedDefaults = async () => {
+    await api.post('/admin/quality-options/seed');
+    load();
+  };
+
+  const addOption = async () => {
+    if (!newLabel.trim()) return;
+    await api.post('/admin/quality-options', { label: newLabel.trim() });
+    setNewLabel('');
+    load();
+  };
+
+  const deleteOption = async (id: number) => {
+    await api.delete(`/admin/quality-options/${id}`);
+    load();
+  };
+
+  const openMapping = async (qualityOptionId: number, serviceId: number) => {
+    setEditingMapping({ qualityOptionId, serviceId });
+    setProfiles([]);
+    setSelectedProfile(null);
+    setLoadingProfiles(true);
+    try {
+      const { data } = await api.get(`/admin/services/${serviceId}/profiles`);
+      setProfiles(data);
+      // Pre-select existing mapping
+      const opt = options.find(o => o.id === qualityOptionId);
+      const existing = opt?.mappings.find(m => m.service.id === serviceId);
+      if (existing) setSelectedProfile(existing.qualityProfileId);
+    } catch { /* service unreachable */ }
+    finally { setLoadingProfiles(false); }
+  };
+
+  const saveMapping = async () => {
+    if (!editingMapping || !selectedProfile) return;
+    const profile = profiles.find(p => p.id === selectedProfile);
+    await api.post('/admin/quality-mappings', {
+      qualityOptionId: editingMapping.qualityOptionId,
+      serviceId: editingMapping.serviceId,
+      qualityProfileId: selectedProfile,
+      qualityProfileName: profile?.name || `Profile ${selectedProfile}`,
+    });
+    setEditingMapping(null);
+    load();
+  };
+
+  const deleteMapping = async (mappingId: number) => {
+    await api.delete(`/admin/quality-mappings/${mappingId}`);
+    load();
+  };
+
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-ndp-accent" /></div>;
+
+  return (
+    <div className="space-y-8">
+      {/* Quality Options */}
+      <div className="card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-ndp-text">Options de qualité</h2>
+          {options.length === 0 && (
+            <button onClick={seedDefaults} className="btn-secondary text-sm">
+              Ajouter par défaut (SD, HD, 4K, 4K HDR)
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-3 mb-4">
+          {options.map((opt) => (
+            <div key={opt.id} className="flex items-center gap-2 bg-ndp-surface-light px-4 py-2 rounded-xl">
+              <span className="text-sm font-medium text-ndp-text">{opt.label}</span>
+              <button onClick={() => deleteOption(opt.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addOption()}
+            placeholder="Nouvelle qualité..."
+            className="input flex-1 text-sm"
+          />
+          <button onClick={addOption} disabled={!newLabel.trim()} className="btn-primary text-sm">
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Quality Mappings */}
+      {options.length > 0 && services.length > 0 && (
+        <div className="card p-6">
+          <h2 className="text-lg font-bold text-ndp-text mb-4">Mappings qualité → service</h2>
+          <p className="text-sm text-ndp-text-muted mb-6">
+            Associez chaque qualité du site à un profil qualité d'un service Radarr/Sonarr. Cliquez sur une cellule pour configurer.
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/5">
+                  <th className="text-left py-3 px-3 text-ndp-text-muted font-medium">Qualité</th>
+                  {services.map((svc) => (
+                    <th key={svc.id} className="text-left py-3 px-3 text-ndp-text-muted font-medium">
+                      {svc.name}
+                      <span className="ml-1 text-xs opacity-50">({svc.type})</span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {options.map((opt) => (
+                  <tr key={opt.id} className="border-b border-white/5">
+                    <td className="py-3 px-3 font-semibold text-ndp-text">{opt.label}</td>
+                    {services.map((svc) => {
+                      const mapping = opt.mappings.find(m => m.service.id === svc.id);
+                      return (
+                        <td key={svc.id} className="py-3 px-3">
+                          {mapping ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-ndp-success text-xs font-medium bg-ndp-success/10 px-2 py-1 rounded-lg">
+                                {mapping.qualityProfileName}
+                              </span>
+                              <button onClick={() => openMapping(opt.id, svc.id)} className="text-ndp-text-dim hover:text-ndp-accent transition-colors">
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button onClick={() => deleteMapping(mapping.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => openMapping(opt.id, svc.id)}
+                              className="text-ndp-text-dim hover:text-ndp-accent transition-colors text-xs flex items-center gap-1"
+                            >
+                              <Plus className="w-3 h-3" />
+                              Configurer
+                            </button>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Profile selection modal */}
+      {editingMapping && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onMouseDown={() => setEditingMapping(null)}>
+          <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-ndp-text mb-4">Sélectionner un profil qualité</h3>
+            {loadingProfiles ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-ndp-accent" /></div>
+            ) : profiles.length === 0 ? (
+              <p className="text-ndp-text-muted text-sm">Impossible de charger les profils. Vérifiez la connexion au service.</p>
+            ) : (
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {profiles.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedProfile(p.id)}
+                    className={clsx(
+                      'w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all',
+                      selectedProfile === p.id
+                        ? 'bg-ndp-accent text-white'
+                        : 'bg-ndp-surface-light text-ndp-text hover:bg-white/10'
+                    )}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setEditingMapping(null)} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={saveMapping} disabled={!selectedProfile} className="btn-primary text-sm">Enregistrer</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {services.length === 0 && options.length > 0 && (
+        <div className="card p-6 text-center text-ndp-text-muted">
+          <p>Aucun service Radarr/Sonarr activé. Ajoutez des services dans l'onglet "Services" pour configurer les mappings.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1307,7 +1601,6 @@ function GeneralTab() {
   const [saved, setSaved] = useState(false);
   const [subPrice, setSubPrice] = useState('');
   const [subDuration, setSubDuration] = useState('');
-  const [plexMachineId, setPlexMachineId] = useState('');
   const [autoApproveRequests, setAutoApproveRequests] = useState(false);
   const [requestsEnabled, setRequestsEnabled] = useState(true);
   const [supportEnabled, setSupportEnabled] = useState(true);
@@ -1319,7 +1612,6 @@ function GeneralTab() {
     api.get('/admin/settings').then(({ data }) => {
       setSubPrice(data.subscriptionPrice?.toString() || '0');
       setSubDuration(data.subscriptionDuration?.toString() || '30');
-      setPlexMachineId(data.plexMachineId || '');
       setAutoApproveRequests(data.autoApproveRequests ?? false);
       setRequestsEnabled(data.requestsEnabled ?? true);
       setSupportEnabled(data.supportEnabled ?? true);
@@ -1334,7 +1626,6 @@ function GeneralTab() {
       await api.put('/admin/settings', {
         subscriptionPrice: parseFloat(subPrice) || 0,
         subscriptionDuration: parseInt(subDuration) || 30,
-        plexMachineId: plexMachineId || null,
         autoApproveRequests,
         requestsEnabled,
         supportEnabled,
@@ -1364,12 +1655,6 @@ function GeneralTab() {
             <div><label className="text-sm text-ndp-text mb-1 block">Prix (€)</label><input type="number" value={subPrice} onChange={(e) => setSubPrice(e.target.value)} className="input w-full" min="0" step="0.01" /></div>
             <div><label className="text-sm text-ndp-text mb-1 block">Durée (jours)</label><input type="number" value={subDuration} onChange={(e) => setSubDuration(e.target.value)} className="input w-full" min="1" /></div>
           </div>
-        </div>
-        <div className="card p-6">
-          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Plex</h3>
-          <label className="text-sm text-ndp-text mb-1 block">Machine ID du serveur (legacy)</label>
-          <input type="text" value={plexMachineId} onChange={(e) => setPlexMachineId(e.target.value)} placeholder="Laissez vide pour désactiver" className="input w-full" />
-          <p className="text-xs text-ndp-text-dim mt-1">Préférez configurer Plex dans l'onglet <strong className="text-ndp-accent">Services</strong>. Ce champ est utilisé en fallback.</p>
         </div>
       </div>
 
