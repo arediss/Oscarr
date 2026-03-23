@@ -124,6 +124,7 @@ model AppSettings {
   resendToEmail         String?
   notificationMatrix    String?
   incidentBanner        String?   // Global incident banner text (null = no banner)
+  autoApproveRequests   Boolean   @default(false)
   requestsEnabled       Boolean   @default(true)
   supportEnabled        Boolean   @default(true)
   calendarEnabled       Boolean   @default(true)

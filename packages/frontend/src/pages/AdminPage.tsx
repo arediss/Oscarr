@@ -1255,6 +1255,7 @@ function GeneralTab() {
   const [subPrice, setSubPrice] = useState('');
   const [subDuration, setSubDuration] = useState('');
   const [plexMachineId, setPlexMachineId] = useState('');
+  const [autoApproveRequests, setAutoApproveRequests] = useState(false);
   const [requestsEnabled, setRequestsEnabled] = useState(true);
   const [supportEnabled, setSupportEnabled] = useState(true);
   const [calendarEnabled, setCalendarEnabled] = useState(true);
@@ -1265,6 +1266,7 @@ function GeneralTab() {
       setSubPrice(data.subscriptionPrice?.toString() || '0');
       setSubDuration(data.subscriptionDuration?.toString() || '30');
       setPlexMachineId(data.plexMachineId || '');
+      setAutoApproveRequests(data.autoApproveRequests ?? false);
       setRequestsEnabled(data.requestsEnabled ?? true);
       setSupportEnabled(data.supportEnabled ?? true);
       setCalendarEnabled(data.calendarEnabled ?? true);
@@ -1278,6 +1280,7 @@ function GeneralTab() {
         subscriptionPrice: parseFloat(subPrice) || 0,
         subscriptionDuration: parseInt(subDuration) || 30,
         plexMachineId: plexMachineId || null,
+        autoApproveRequests,
         requestsEnabled,
         supportEnabled,
         calendarEnabled,
@@ -1290,6 +1293,7 @@ function GeneralTab() {
 
   const features = [
     { label: 'Demandes', desc: 'Permet aux utilisateurs de demander des médias', value: requestsEnabled, set: setRequestsEnabled },
+    { label: 'Auto-acceptation', desc: 'Les demandes sont automatiquement approuvées sans validation admin', value: autoApproveRequests, set: setAutoApproveRequests },
     { label: 'Support', desc: 'Système de tickets de support', value: supportEnabled, set: setSupportEnabled },
     { label: 'Calendrier', desc: 'Calendrier des sorties à venir', value: calendarEnabled, set: setCalendarEnabled },
   ];

@@ -162,6 +162,10 @@ export async function requestRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: 'Vous avez déjà une demande en cours pour ce média' });
     }
 
+    // Check if auto-approve is enabled
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    const shouldAutoApprove = user.role === 'admin' || (settings?.autoApproveRequests ?? false);
+
     const mediaRequest = await prisma.mediaRequest.create({
       data: {
         mediaId: media.id,
@@ -169,8 +173,8 @@ export async function requestRoutes(app: FastifyInstance) {
         mediaType: validMediaType,
         seasons: validSeasons ? JSON.stringify(validSeasons) : null,
         rootFolder: typeof rootFolder === 'string' ? rootFolder : null,
-        status: user.role === 'admin' ? 'approved' : 'pending',
-        approvedById: user.role === 'admin' ? user.id : null,
+        status: shouldAutoApprove ? 'approved' : 'pending',
+        approvedById: shouldAutoApprove ? user.id : null,
       },
       include: {
         media: true,
@@ -178,7 +182,7 @@ export async function requestRoutes(app: FastifyInstance) {
       },
     });
 
-    if (user.role === 'admin') {
+    if (shouldAutoApprove) {
       const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { plexUsername: true, email: true } });
       const tagName = dbUser?.plexUsername || dbUser?.email || `user-${user.id}`;
       await sendToService(media, validMediaType, tagName, validSeasons);

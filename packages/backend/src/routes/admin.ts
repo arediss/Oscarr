@@ -55,6 +55,7 @@ export async function adminRoutes(app: FastifyInstance) {
       resendFromEmail?: string;
       resendToEmail?: string;
       notificationMatrix?: string;
+      autoApproveRequests?: boolean;
       requestsEnabled?: boolean;
       supportEnabled?: boolean;
       calendarEnabled?: boolean;
@@ -77,6 +78,7 @@ export async function adminRoutes(app: FastifyInstance) {
         resendFromEmail: body.resendFromEmail ?? undefined,
         resendToEmail: body.resendToEmail ?? undefined,
         notificationMatrix: body.notificationMatrix ?? undefined,
+        autoApproveRequests: body.autoApproveRequests ?? undefined,
         requestsEnabled: body.requestsEnabled ?? undefined,
         supportEnabled: body.supportEnabled ?? undefined,
         calendarEnabled: body.calendarEnabled ?? undefined,
