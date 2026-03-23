@@ -38,6 +38,21 @@ export async function supportRoutes(app: FastifyInstance) {
     return reply.send({ token: authToken });
   });
 
+  // Test a Plex URL from the backend (avoids browser CORS issues)
+  app.post('/setup/test-url', async (request, reply) => {
+    const { url } = request.body as { url: string };
+    if (!url) return reply.status(400).send({ error: 'URL requis' });
+    try {
+      const { data } = await axios.get(`${url.replace(/\/+$/, '')}/identity`, {
+        headers: { Accept: 'application/json' },
+        timeout: 5000,
+      });
+      return { ok: true, machineIdentifier: data?.MediaContainer?.machineIdentifier };
+    } catch {
+      return reply.status(502).send({ error: 'Impossible de joindre le serveur' });
+    }
+  });
+
   // Initial setup — create first Plex service (locked once a Plex service exists)
   app.post('/setup', async (request, reply) => {
     const existing = await prisma.service.findFirst({ where: { type: 'plex' } });

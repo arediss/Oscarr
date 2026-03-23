@@ -40,8 +40,9 @@ export default function InstallPage() {
     setTesting(true);
     setTestOk(null);
     try {
-      const res = await fetch(`${url}/identity`, { headers: { Accept: 'application/json' } });
-      setTestOk(res.ok);
+      const { data } = await api.post('/support/setup/test-url', { url });
+      setTestOk(true);
+      if (data.machineIdentifier && !machineId) setMachineId(data.machineIdentifier);
     } catch { setTestOk(false); }
     finally { setTesting(false); }
   };
