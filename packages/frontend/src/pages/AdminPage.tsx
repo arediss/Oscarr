@@ -1367,9 +1367,9 @@ function GeneralTab() {
         </div>
         <div className="card p-6">
           <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Plex</h3>
-          <label className="text-sm text-ndp-text mb-1 block">Machine ID du serveur</label>
+          <label className="text-sm text-ndp-text mb-1 block">Machine ID du serveur (legacy)</label>
           <input type="text" value={plexMachineId} onChange={(e) => setPlexMachineId(e.target.value)} placeholder="Laissez vide pour désactiver" className="input w-full" />
-          <p className="text-xs text-ndp-text-dim mt-1"><code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">http://IP:32400/identity</code> → machineIdentifier</p>
+          <p className="text-xs text-ndp-text-dim mt-1">Préférez configurer Plex dans l'onglet <strong className="text-ndp-accent">Services</strong>. Ce champ est utilisé en fallback.</p>
         </div>
       </div>
 

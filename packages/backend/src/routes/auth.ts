@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { getPlexUser, createPlexPin, checkPlexPin, checkPlexServerAccess } from '../services/plex.js';
+import { getServiceConfig } from '../utils/services.js';
 
 const PLEX_CLIENT_ID = 'netflix-du-pauvre-client';
 
@@ -25,9 +26,11 @@ export async function authRoutes(app: FastifyInstance) {
 
     const plexAccount = await getPlexUser(authToken);
 
-    // Check Plex server access
+    // Check Plex server access — read machineId from Service registry, fallback to AppSettings
+    const plexConfig = await getServiceConfig('plex');
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-    const hasServerAccess = await checkPlexServerAccess(authToken, settings?.plexMachineId);
+    const machineId = plexConfig?.machineId || settings?.plexMachineId || null;
+    const hasServerAccess = await checkPlexServerAccess(authToken, machineId);
 
     let user = await prisma.user.findFirst({
       where: {
