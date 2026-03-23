@@ -73,36 +73,60 @@ export async function checkPlexPin(pinId: number, clientId: string): Promise<str
   return data.authToken || null;
 }
 
-export interface PlexFriend {
+export interface PlexSharedUser {
   id: number;
   uuid: string;
   title: string;
   username: string;
   email: string;
   thumb: string;
-  status: string;
 }
 
 /**
- * Get all friends/shared users from Plex using the admin token.
+ * Get users who have access to a specific Plex server (shared with them).
+ * Uses the admin token to query shared_servers for the given machineId.
  */
-export async function getPlexFriends(adminToken: string): Promise<PlexFriend[]> {
-  const { data } = await axios.get('https://plex.tv/api/v2/friends', {
+export async function getSharedServerUsers(adminToken: string, machineId: string): Promise<PlexSharedUser[]> {
+  // Use legacy XML endpoint — more reliable than v2 for shared_servers
+  const { data } = await axios.get(`https://plex.tv/api/servers/${encodeURIComponent(machineId)}/shared_servers`, {
     headers: {
-      Accept: 'application/json',
       'X-Plex-Token': adminToken,
       'X-Plex-Client-Identifier': 'oscarr-client',
+      'X-Plex-Product': 'Oscarr',
+      'X-Plex-Version': '1.0.0',
+      Accept: 'application/xml',
     },
   });
-  return data.map((f: PlexFriend) => ({
-    id: f.id,
-    uuid: f.uuid,
-    title: f.title,
-    username: f.username || f.title,
-    email: f.email,
-    thumb: f.thumb,
-    status: f.status,
-  }));
+
+  // Parse XML response: extract <SharedServer> elements
+  const xml = typeof data === 'string' ? data : String(data);
+  const users: PlexSharedUser[] = [];
+  const seen = new Set<number>();
+  const regex = /<SharedServer\s[^>]*?>/g;
+  let match;
+
+  while ((match = regex.exec(xml)) !== null) {
+    const tag = match[0];
+    const attr = (name: string) => {
+      const m = tag.match(new RegExp(`${name}="([^"]*)"`));
+      return m ? m[1] : '';
+    };
+
+    const userId = parseInt(attr('userID'), 10);
+    if (!userId || seen.has(userId)) continue;
+    seen.add(userId);
+
+    users.push({
+      id: userId,
+      uuid: '',
+      title: attr('username'),
+      username: attr('username'),
+      email: attr('email'),
+      thumb: '',
+    });
+  }
+
+  return users;
 }
 
 /**

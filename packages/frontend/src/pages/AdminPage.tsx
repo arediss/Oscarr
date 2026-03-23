@@ -209,13 +209,11 @@ function UsersTab() {
                     <span className="text-sm font-semibold text-ndp-text">{u.plexUsername || u.email}</span>
                     {u.role === 'admin' && <span className="text-[10px] bg-ndp-accent/10 text-ndp-accent px-2 py-0.5 rounded-full font-semibold">Admin</span>}
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5 text-xs text-ndp-text-dim">
-                    <span>{u.email}</span><span>{u.requestCount} {t('requests.title').toLowerCase()}</span>
-                  </div>
+                  <span className="text-xs text-ndp-text-dim mt-0.5 block">{u.email}</span>
                 </div>
-                <div className="flex items-center gap-1.5" title={u.hasPlexServerAccess ? t('admin.users.plex_access') : t('admin.users.no_plex_access')}>
-                  {u.hasPlexServerAccess ? <CheckCircle className="w-4 h-4 text-ndp-success" /> : <XCircle className="w-4 h-4 text-ndp-danger" />}
-                  <span className="text-xs text-ndp-text-dim hidden sm:inline">Plex</span>
+                <div className="flex items-center gap-4 flex-shrink-0">
+                  <span className="text-xs text-ndp-text-dim tabular-nums">{u.requestCount} {t('requests.title').toLowerCase()}</span>
+                  <span className="text-[10px] bg-white/5 text-ndp-text-dim px-2 py-0.5 rounded-full font-medium">Plex</span>
                 </div>
               </div>
             </div>

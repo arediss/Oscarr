@@ -4,7 +4,7 @@ import { getRadarrAsync, createRadarrFromConfig } from '../services/radarr.js';
 import { getSonarrAsync, createSonarrFromConfig } from '../services/sonarr.js';
 import { getServiceById } from '../utils/services.js';
 import { syncRadarr, syncSonarr, runFullSync, syncAvailabilityDates } from '../services/sync.js';
-import { getPlexFriends } from '../services/plex.js';
+import { getSharedServerUsers } from '../services/plex.js';
 import { syncRequestsFromTags } from '../services/requestSync.js';
 import { testDiscord, testTelegram, testEmail, sendNotification } from '../services/notifications.js';
 import { triggerJob, updateJobSchedule } from '../services/scheduler.js';
@@ -371,18 +371,24 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'Token Plex admin introuvable. Reconnectez-vous.' });
     }
 
+    // Get server machine ID to query shared users
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    if (!settings?.plexMachineId) {
+      return reply.status(400).send({ error: 'Aucun serveur Plex configuré. Configurez le Machine ID dans les paramètres.' });
+    }
+
     try {
-      const friends = await getPlexFriends(admin.plexToken);
+      const sharedUsers = await getSharedServerUsers(admin.plexToken, settings.plexMachineId);
       let imported = 0;
       let skipped = 0;
 
-      for (const friend of friends) {
+      for (const user of sharedUsers) {
         // Check if user already exists
         const existing = await prisma.user.findFirst({
           where: {
             OR: [
-              ...(friend.id ? [{ plexId: friend.id }] : []),
-              ...(friend.email ? [{ email: friend.email.toLowerCase() }] : []),
+              ...(user.id ? [{ plexId: user.id }] : []),
+              ...(user.email ? [{ email: user.email.toLowerCase() }] : []),
             ],
           },
         });
@@ -394,10 +400,10 @@ export async function adminRoutes(app: FastifyInstance) {
 
         await prisma.user.create({
           data: {
-            email: (friend.email || `${friend.username}@plex.local`).toLowerCase(),
-            plexId: friend.id,
-            plexUsername: friend.username || friend.title,
-            avatar: friend.thumb,
+            email: (user.email || `${user.username}@plex.local`).toLowerCase(),
+            plexId: user.id,
+            plexUsername: user.username || user.title,
+            avatar: user.thumb,
             role: 'user',
             hasPlexServerAccess: true,
           },
@@ -405,7 +411,7 @@ export async function adminRoutes(app: FastifyInstance) {
         imported++;
       }
 
-      return { imported, skipped, total: friends.length };
+      return { imported, skipped, total: sharedUsers.length };
     } catch (err) {
       console.error('Failed to import Plex users:', err);
       return reply.status(502).send({ error: 'Impossible de récupérer les utilisateurs Plex' });
