@@ -1665,7 +1665,6 @@ function GeneralTab() {
   const [calendarEnabled, setCalendarEnabled] = useState(true);
   const [siteName, setSiteName] = useState('Oscarr');
   const [bannerText, setBannerText] = useState('');
-  const [bannerSaved, setBannerSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [versionInfo, setVersionInfo] = useState<{ current: string; latest?: string; updateAvailable?: boolean; releaseUrl?: string } | null>(null);
 
@@ -1686,23 +1685,19 @@ function GeneralTab() {
   const handleSave = async () => {
     setSaving(true); setSaved(false);
     try {
-      await api.put('/admin/settings', {
-        autoApproveRequests,
-        requestsEnabled,
-        supportEnabled,
-        calendarEnabled,
-        siteName: siteName.trim() || 'Oscarr',
-      });
+      await Promise.all([
+        api.put('/admin/settings', {
+          autoApproveRequests,
+          requestsEnabled,
+          supportEnabled,
+          calendarEnabled,
+          siteName: siteName.trim() || 'Oscarr',
+        }),
+        api.put('/admin/banner', { banner: bannerText.trim() || null }),
+      ]);
       await refreshFeatures();
       setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch (err) { console.error(err); } finally { setSaving(false); }
-  };
-
-  const saveBanner = async () => {
-    try {
-      await api.put('/admin/banner', { banner: bannerText.trim() || null });
-      setBannerSaved(true); setTimeout(() => setBannerSaved(false), 2000);
-    } catch (err) { console.error(err); }
   };
 
   if (loading) return <Spinner />;
@@ -1717,63 +1712,31 @@ function GeneralTab() {
   return (
     <div className="space-y-6">
       {/* Version & Update Check */}
-      {versionInfo && (
-        <div className="card p-6">
-          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.general.oscarr')}</h3>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-ndp-text">{t('admin.general.current_version')} <span className="font-mono font-semibold text-ndp-accent">{versionInfo.current}</span></span>
-            {versionInfo.updateAvailable && versionInfo.latest && (
-              <a
-                href={versionInfo.releaseUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-1.5 bg-ndp-accent/10 text-ndp-accent rounded-lg text-sm font-medium hover:bg-ndp-accent/20 transition-colors"
-              >
-                <ArrowUpCircle className="w-4 h-4" />
-                {t('admin.general.update_available', { version: versionInfo.latest })}
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            )}
-            {versionInfo.latest && !versionInfo.updateAvailable && (
-              <span className="flex items-center gap-1.5 text-sm text-ndp-success">
-                <CheckCircle className="w-4 h-4" />
-                {t('admin.general.up_to_date')}
-              </span>
-            )}
-            {!versionInfo.latest && (
-              <span className="text-sm text-ndp-text-dim">{t('admin.general.update_check_failed')}</span>
-            )}
+      {/* Site Name + Maintenance Banner */}
+      <div className="card p-6">
+        <div className="flex flex-col md:flex-row md:gap-0">
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.general.site_name')}</h3>
+            <p className="text-xs text-ndp-text-dim mb-3">{t('admin.general.site_name_desc')}</p>
+            <input
+              value={siteName}
+              onChange={(e) => setSiteName(e.target.value)}
+              placeholder="Oscarr"
+              className="input w-full text-sm"
+            />
           </div>
-        </div>
-      )}
-
-      {/* Site Name */}
-      <div className="card p-6">
-        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.general.site_name')}</h3>
-        <p className="text-xs text-ndp-text-dim mb-3">{t('admin.general.site_name_desc')}</p>
-        <input
-          value={siteName}
-          onChange={(e) => setSiteName(e.target.value)}
-          placeholder="Oscarr"
-          className="input w-full max-w-sm text-sm"
-        />
-      </div>
-
-      {/* Maintenance Banner */}
-      <div className="card p-6">
-        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.general.maintenance_banner')}</h3>
-        <p className="text-xs text-ndp-text-dim mb-3">{t('admin.general.maintenance_desc')}</p>
-        <div className="flex gap-3">
-          <input
-            value={bannerText}
-            onChange={(e) => setBannerText(e.target.value)}
-            placeholder={t('admin.general.maintenance_placeholder')}
-            className="input flex-1 text-sm"
-          />
-          <button onClick={saveBanner} className={clsx('text-sm font-medium px-4 py-2 rounded-xl transition-all flex items-center gap-2 flex-shrink-0', bannerSaved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
-            {bannerSaved ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-            {bannerSaved ? t('common.saved') : t('admin.general.publish')}
-          </button>
+          <div className="hidden md:block w-px bg-white/5 mx-6" />
+          <hr className="md:hidden border-white/5 my-5" />
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.general.maintenance_banner')}</h3>
+            <p className="text-xs text-ndp-text-dim mb-3">{t('admin.general.maintenance_desc')}</p>
+            <input
+              value={bannerText}
+              onChange={(e) => setBannerText(e.target.value)}
+              placeholder={t('admin.general.maintenance_placeholder')}
+              className="input w-full text-sm"
+            />
+          </div>
         </div>
       </div>
 
@@ -1800,10 +1763,36 @@ function GeneralTab() {
         </div>
       </div>
 
-      <button onClick={handleSave} disabled={saving} className={clsx('flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-xl transition-all', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
-        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-        {saved ? t('common.saved') : t('common.save')}
-      </button>
+      {/* Save + Version */}
+      <div className="flex items-center justify-between">
+        <button onClick={handleSave} disabled={saving} className={clsx('flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-xl transition-all', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+          {saved ? t('common.saved') : t('common.save')}
+        </button>
+        {versionInfo && (
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-ndp-text-dim">{t('admin.general.current_version')} <span className="font-mono font-semibold text-ndp-accent">{versionInfo.current}</span></span>
+            {versionInfo.updateAvailable && versionInfo.latest && (
+              <a
+                href={versionInfo.releaseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-ndp-accent/10 text-ndp-accent rounded-lg text-xs font-medium hover:bg-ndp-accent/20 transition-colors"
+              >
+                <ArrowUpCircle className="w-3.5 h-3.5" />
+                v{versionInfo.latest}
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+            {versionInfo.latest && !versionInfo.updateAvailable && (
+              <span className="flex items-center gap-1 text-xs text-ndp-success">
+                <CheckCircle className="w-3.5 h-3.5" />
+                {t('admin.general.up_to_date')}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
