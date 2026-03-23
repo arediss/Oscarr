@@ -3,6 +3,7 @@ import { getCached, setCache } from '../utils/cache.js';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
+const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
 let _tmdbApi: ReturnType<typeof axios.create> | null = null;
 
@@ -10,10 +11,8 @@ function getTmdbApi() {
   if (!_tmdbApi) {
     _tmdbApi = axios.create({
       baseURL: TMDB_BASE,
-      headers: {
-        Authorization: `Bearer ${process.env.TMDB_ACCESS_TOKEN}`,
-      },
       params: {
+        api_key: TMDB_API_KEY,
         language: 'fr-FR',
       },
     });
