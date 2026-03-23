@@ -55,6 +55,9 @@ export async function adminRoutes(app: FastifyInstance) {
       resendFromEmail?: string;
       resendToEmail?: string;
       notificationMatrix?: string;
+      requestsEnabled?: boolean;
+      supportEnabled?: boolean;
+      calendarEnabled?: boolean;
     };
 
     const settings = await prisma.appSettings.upsert({
@@ -74,6 +77,9 @@ export async function adminRoutes(app: FastifyInstance) {
         resendFromEmail: body.resendFromEmail ?? undefined,
         resendToEmail: body.resendToEmail ?? undefined,
         notificationMatrix: body.notificationMatrix ?? undefined,
+        requestsEnabled: body.requestsEnabled ?? undefined,
+        supportEnabled: body.supportEnabled ?? undefined,
+        calendarEnabled: body.calendarEnabled ?? undefined,
       },
       create: {
         id: 1,

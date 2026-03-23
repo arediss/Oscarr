@@ -8,6 +8,16 @@ export async function supportRoutes(app: FastifyInstance) {
     return { banner: settings?.incidentBanner || null };
   });
 
+  // Get feature flags (no auth — needed by Layout before auth check)
+  app.get('/features', async () => {
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    return {
+      requestsEnabled: settings?.requestsEnabled ?? true,
+      supportEnabled: settings?.supportEnabled ?? true,
+      calendarEnabled: settings?.calendarEnabled ?? true,
+    };
+  });
+
   // List tickets (user sees own, admin sees all)
   app.get('/tickets', { preHandler: [app.authenticate] }, async (request) => {
     const user = request.user as { id: number; role: string };

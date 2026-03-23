@@ -1255,6 +1255,9 @@ function GeneralTab() {
   const [subPrice, setSubPrice] = useState('');
   const [subDuration, setSubDuration] = useState('');
   const [plexMachineId, setPlexMachineId] = useState('');
+  const [requestsEnabled, setRequestsEnabled] = useState(true);
+  const [supportEnabled, setSupportEnabled] = useState(true);
+  const [calendarEnabled, setCalendarEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1262,18 +1265,34 @@ function GeneralTab() {
       setSubPrice(data.subscriptionPrice?.toString() || '0');
       setSubDuration(data.subscriptionDuration?.toString() || '30');
       setPlexMachineId(data.plexMachineId || '');
+      setRequestsEnabled(data.requestsEnabled ?? true);
+      setSupportEnabled(data.supportEnabled ?? true);
+      setCalendarEnabled(data.calendarEnabled ?? true);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const handleSave = async () => {
     setSaving(true); setSaved(false);
     try {
-      await api.put('/admin/settings', { subscriptionPrice: parseFloat(subPrice) || 0, subscriptionDuration: parseInt(subDuration) || 30, plexMachineId: plexMachineId || null });
+      await api.put('/admin/settings', {
+        subscriptionPrice: parseFloat(subPrice) || 0,
+        subscriptionDuration: parseInt(subDuration) || 30,
+        plexMachineId: plexMachineId || null,
+        requestsEnabled,
+        supportEnabled,
+        calendarEnabled,
+      });
       setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch (err) { console.error(err); } finally { setSaving(false); }
   };
 
   if (loading) return <Spinner />;
+
+  const features = [
+    { label: 'Demandes', desc: 'Permet aux utilisateurs de demander des médias', value: requestsEnabled, set: setRequestsEnabled },
+    { label: 'Support', desc: 'Système de tickets de support', value: supportEnabled, set: setSupportEnabled },
+    { label: 'Calendrier', desc: 'Calendrier des sorties à venir', value: calendarEnabled, set: setCalendarEnabled },
+  ];
 
   return (
     <div className="space-y-6">
@@ -1292,6 +1311,29 @@ function GeneralTab() {
           <p className="text-xs text-ndp-text-dim mt-1"><code className="bg-white/5 px-1.5 py-0.5 rounded text-ndp-text-muted">http://IP:32400/identity</code> → machineIdentifier</p>
         </div>
       </div>
+
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Fonctionnalités</h3>
+        <p className="text-xs text-ndp-text-dim mb-4">Activez ou désactivez les sections du site pour les utilisateurs</p>
+        <div className="space-y-3">
+          {features.map(({ label, desc, value, set }) => (
+            <label key={label} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] transition-colors cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-ndp-text">{label}</p>
+                <p className="text-xs text-ndp-text-dim">{desc}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => set(!value)}
+                className={clsx('relative w-11 h-6 rounded-full transition-colors', value ? 'bg-ndp-accent' : 'bg-white/10')}
+              >
+                <span className={clsx('absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm', value && 'translate-x-5')} />
+              </button>
+            </label>
+          ))}
+        </div>
+      </div>
+
       <button onClick={handleSave} disabled={saving} className={clsx('flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-xl transition-all', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
         {saved ? 'Sauvegardé' : 'Sauvegarder'}

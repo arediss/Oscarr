@@ -17,11 +17,17 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
-const NAV_LEFT = [
-  { path: '/', label: 'Accueil', icon: Home },
-  { path: '/requests', label: 'Demandes', icon: Film },
-  { path: '/calendar', label: 'Calendrier', icon: Calendar },
-  { path: '/support', label: 'Support', icon: MessageSquare },
+interface Features {
+  requestsEnabled: boolean;
+  supportEnabled: boolean;
+  calendarEnabled: boolean;
+}
+
+const ALL_NAV = [
+  { path: '/', label: 'Accueil', icon: Home, feature: null },
+  { path: '/requests', label: 'Demandes', icon: Film, feature: 'requestsEnabled' as const },
+  { path: '/calendar', label: 'Calendrier', icon: Calendar, feature: 'calendarEnabled' as const },
+  { path: '/support', label: 'Support', icon: MessageSquare, feature: 'supportEnabled' as const },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -34,12 +40,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [banner, setBanner] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [features, setFeatures] = useState<Features>({ requestsEnabled: true, supportEnabled: true, calendarEnabled: true });
   const avatarMenuRef = useRef<HTMLDivElement>(null);
 
-  // Fetch incident banner
+  // Fetch incident banner + feature flags
   useEffect(() => {
     api.get('/support/banner').then(({ data }) => setBanner(data.banner)).catch(() => {});
+    api.get('/support/features').then(({ data }) => setFeatures(data)).catch(() => {});
   }, []);
+
+  // Filter nav items based on feature flags (admins see everything)
+  const navItems = ALL_NAV.filter(({ feature }) => !feature || isAdmin || features[feature]);
 
   // Sync search input with URL query param when on /search
   useEffect(() => {
@@ -115,7 +126,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Left: Nav */}
             <div className="hidden md:flex items-center gap-0.5 relative z-10">
-              {NAV_LEFT.map(({ path, label, icon: Icon }) => (
+              {navItems.map(({ path, label, icon: Icon }) => (
                 <Link
                   key={path}
                   to={path}
@@ -240,7 +251,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </form>
             </div>
             <div className="px-4 py-3 space-y-1">
-              {NAV_LEFT.map(({ path, label, icon: Icon }) => (
+              {navItems.map(({ path, label, icon: Icon }) => (
                 <Link
                   key={path}
                   to={path}
