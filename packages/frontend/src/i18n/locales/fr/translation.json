@@ -332,6 +332,22 @@
   "admin.general.feature.calendar": "Calendrier",
   "admin.general.feature.calendar_desc": "Calendrier des sorties à venir",
 
+  "admin.danger.title": "Zone dangereuse",
+  "admin.danger.description": "Ces actions sont irréversibles. Utilisez-les avec précaution.",
+  "admin.danger.purge_requests": "Supprimer toutes les demandes",
+  "admin.danger.purge_requests_desc": "Supprime toutes les demandes de tous les utilisateurs. Les médias sont conservés.",
+  "admin.danger.purge_media": "Supprimer tous les médias",
+  "admin.danger.purge_media_desc": "Supprime tous les médias importés ainsi que les demandes associées. Lancez un Full Sync ensuite pour réimporter.",
+  "admin.danger.purge_users": "Supprimer tous les utilisateurs",
+  "admin.danger.purge_users_desc": "Supprime tous les utilisateurs sauf votre compte admin. Réimportez depuis Plex ensuite.",
+  "admin.danger.delete_user": "Supprimer l'utilisateur",
+  "admin.danger.confirm_title": "Confirmer l'action",
+  "admin.danger.confirm_text": "Tapez <strong>{{keyword}}</strong> pour confirmer :",
+  "admin.danger.deleted_requests": "{{count}} demandes supprimées",
+  "admin.danger.deleted_media": "{{media}} médias, {{seasons}} saisons, {{requests}} demandes supprimés",
+  "admin.danger.deleted_users": "{{count}} utilisateurs supprimés",
+  "admin.danger.deleted_user": "Utilisateur supprimé",
+
   "admin.plugins.no_plugins": "Aucun plugin installé",
   "admin.plugins.no_plugins_help": "Ajoutez des plugins dans <code>packages/plugins/</code>",
 

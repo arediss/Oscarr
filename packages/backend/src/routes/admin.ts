@@ -723,6 +723,54 @@ export async function adminRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  // === DANGER ZONE ===
+
+  // Purge all requests
+  app.delete('/danger/requests', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { count } = await prisma.mediaRequest.deleteMany();
+    logEvent('warn', 'Admin', `Purge : ${count} demandes supprimées`);
+    return { ok: true, deleted: count };
+  });
+
+  // Purge all media (to re-import fresh)
+  app.delete('/danger/media', async (request, reply) => {
+    await requireAdmin(request, reply);
+    // Requests reference media, delete them first
+    const { count: reqCount } = await prisma.mediaRequest.deleteMany();
+    const { count: seasonCount } = await prisma.season.deleteMany();
+    const { count: mediaCount } = await prisma.media.deleteMany();
+    logEvent('warn', 'Admin', `Purge : ${mediaCount} médias, ${seasonCount} saisons, ${reqCount} demandes supprimés`);
+    return { ok: true, deleted: { media: mediaCount, seasons: seasonCount, requests: reqCount } };
+  });
+
+  // Delete a specific user (and cascade their requests/tickets)
+  app.delete('/danger/users/:id', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { id } = request.params as { id: string };
+    const userId = parseId(id);
+    if (!userId) return reply.status(400).send({ error: 'ID invalide' });
+
+    const currentUser = request.user as { id: number };
+    if (userId === currentUser.id) return reply.status(400).send({ error: 'Impossible de supprimer votre propre compte' });
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return reply.status(404).send({ error: 'Utilisateur introuvable' });
+
+    await prisma.user.delete({ where: { id: userId } });
+    logEvent('warn', 'Admin', `Utilisateur supprimé : ${user.plexUsername || user.email}`);
+    return { ok: true };
+  });
+
+  // Purge all users except current admin
+  app.delete('/danger/users', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const currentUser = request.user as { id: number };
+    const { count } = await prisma.user.deleteMany({ where: { id: { not: currentUser.id } } });
+    logEvent('warn', 'Admin', `Purge : ${count} utilisateurs supprimés`);
+    return { ok: true, deleted: count };
+  });
+
   // === SERVICE PROFILES (fetch quality profiles from a specific service) ===
 
   app.get('/services/:id/profiles', async (request, reply) => {

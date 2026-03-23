@@ -37,6 +37,11 @@ export async function requestRoutes(app: FastifyInstance) {
     }
     if (status && VALID_STATUSES.includes(status)) where.status = status;
 
+    // Clean up orphaned requests (user or media deleted)
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM MediaRequest WHERE userId NOT IN (SELECT id FROM User) OR mediaId NOT IN (SELECT id FROM Media)`
+    );
+
     // Quick sync: update stale request statuses where media is already available
     await prisma.mediaRequest.updateMany({
       where: {

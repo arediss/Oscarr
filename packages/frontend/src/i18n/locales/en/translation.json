@@ -332,6 +332,22 @@
   "admin.general.feature.calendar": "Calendar",
   "admin.general.feature.calendar_desc": "Upcoming releases calendar",
 
+  "admin.danger.title": "Danger zone",
+  "admin.danger.description": "These actions are irreversible. Use with caution.",
+  "admin.danger.purge_requests": "Delete all requests",
+  "admin.danger.purge_requests_desc": "Deletes all requests from all users. Media is preserved.",
+  "admin.danger.purge_media": "Delete all media",
+  "admin.danger.purge_media_desc": "Deletes all imported media and associated requests. Run a Full Sync afterwards to re-import.",
+  "admin.danger.purge_users": "Delete all users",
+  "admin.danger.purge_users_desc": "Deletes all users except your admin account. Re-import from Plex afterwards.",
+  "admin.danger.delete_user": "Delete user",
+  "admin.danger.confirm_title": "Confirm action",
+  "admin.danger.confirm_text": "Type <strong>{{keyword}}</strong> to confirm:",
+  "admin.danger.deleted_requests": "{{count}} requests deleted",
+  "admin.danger.deleted_media": "{{media}} media, {{seasons}} seasons, {{requests}} requests deleted",
+  "admin.danger.deleted_users": "{{count}} users deleted",
+  "admin.danger.deleted_user": "User deleted",
+
   "admin.plugins.no_plugins": "No plugins installed",
   "admin.plugins.no_plugins_help": "Add plugins in <code>packages/plugins/</code>",
 
