@@ -193,7 +193,7 @@ model QualityMapping {
   qualityOption       QualityOption @relation(fields: [qualityOptionId], references: [id], onDelete: Cascade)
   service             Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
-  @@unique([qualityOptionId, serviceId])
+  @@unique([qualityOptionId, serviceId, qualityProfileId])
 }
 
 model AppLog {

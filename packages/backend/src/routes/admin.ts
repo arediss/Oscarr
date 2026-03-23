@@ -676,10 +676,15 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!qualityOptionId || !serviceId || !qualityProfileId || !qualityProfileName) {
       return reply.status(400).send({ error: 'Tous les champs sont requis' });
     }
-    const mapping = await prisma.qualityMapping.upsert({
-      where: { qualityOptionId_serviceId: { qualityOptionId, serviceId } },
-      update: { qualityProfileId, qualityProfileName },
-      create: { qualityOptionId, serviceId, qualityProfileId, qualityProfileName },
+    // Check for duplicate
+    const existing = await prisma.qualityMapping.findFirst({
+      where: { qualityOptionId, serviceId, qualityProfileId },
+    });
+    if (existing) {
+      return reply.status(409).send({ error: 'Ce mapping existe déjà' });
+    }
+    const mapping = await prisma.qualityMapping.create({
+      data: { qualityOptionId, serviceId, qualityProfileId, qualityProfileName },
       include: {
         qualityOption: true,
         service: { select: { id: true, name: true, type: true } },

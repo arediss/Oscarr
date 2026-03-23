@@ -1413,11 +1413,18 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
 }
 
 // ============ QUALITY TAB ============
+interface QualityMappingType {
+  id: number;
+  qualityProfileId: number;
+  qualityProfileName: string;
+  service: { id: number; name: string; type: string };
+}
+
 interface QualityOptionType {
   id: number;
   label: string;
   position: number;
-  mappings: { id: number; qualityProfileId: number; qualityProfileName: string; service: { id: number; name: string; type: string } }[];
+  mappings: QualityMappingType[];
 }
 
 interface ServiceType {
@@ -1476,11 +1483,12 @@ function QualityTab() {
     setLoadingProfiles(true);
     try {
       const { data } = await api.get(`/admin/services/${serviceId}/profiles`);
-      setProfiles(data);
-      // Pre-select existing mapping
+      // Filter out profiles already mapped to this quality+service
       const opt = options.find(o => o.id === qualityOptionId);
-      const existing = opt?.mappings.find(m => m.service.id === serviceId);
-      if (existing) setSelectedProfile(existing.qualityProfileId);
+      const existingProfileIds = new Set(
+        opt?.mappings.filter(m => m.service.id === serviceId).map(m => m.qualityProfileId) || []
+      );
+      setProfiles(data.filter((p: { id: number }) => !existingProfileIds.has(p.id)));
     } catch { /* service unreachable */ }
     finally { setLoadingProfiles(false); }
   };
@@ -1569,30 +1577,25 @@ function QualityTab() {
                   <tr key={opt.id} className="border-b border-white/5">
                     <td className="py-3 px-3 font-semibold text-ndp-text">{opt.label}</td>
                     {services.map((svc) => {
-                      const mapping = opt.mappings.find(m => m.service.id === svc.id);
+                      const mappings = opt.mappings.filter(m => m.service.id === svc.id);
                       return (
                         <td key={svc.id} className="py-3 px-3">
-                          {mapping ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-ndp-success text-xs font-medium bg-ndp-success/10 px-2 py-1 rounded-lg">
-                                {mapping.qualityProfileName}
-                              </span>
-                              <button onClick={() => openMapping(opt.id, svc.id)} className="text-ndp-text-dim hover:text-ndp-accent transition-colors">
-                                <Pencil className="w-3 h-3" />
-                              </button>
-                              <button onClick={() => deleteMapping(mapping.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ) : (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {mappings.map((mapping) => (
+                              <div key={mapping.id} className="flex items-center gap-1 bg-ndp-success/10 px-2 py-1 rounded-lg">
+                                <span className="text-ndp-success text-xs font-medium">{mapping.qualityProfileName}</span>
+                                <button onClick={() => deleteMapping(mapping.id)} className="text-ndp-success/50 hover:text-ndp-danger transition-colors">
+                                  <XCircle className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
                             <button
                               onClick={() => openMapping(opt.id, svc.id)}
-                              className="text-ndp-text-dim hover:text-ndp-accent transition-colors text-xs flex items-center gap-1"
+                              className="text-ndp-text-dim hover:text-ndp-accent transition-colors text-xs flex items-center gap-0.5 px-1.5 py-1"
                             >
                               <Plus className="w-3 h-3" />
-                              {t('common.edit')}
                             </button>
-                          )}
+                          </div>
                         </td>
                       );
                     })}

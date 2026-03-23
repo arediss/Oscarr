@@ -165,27 +165,20 @@ export async function mediaRoutes(app: FastifyInstance) {
       );
     }
 
-    // Resolve which quality options are covered by the service this media is in
-    const availableQualityOptionIds: number[] = [];
-    if (media.status === 'available' || liveAvailable) {
-      const serviceId = media.radarrId
-        ? (await prisma.service.findFirst({ where: { type: 'radarr', enabled: true } }))?.id
-        : media.sonarrId
-          ? (await prisma.service.findFirst({ where: { type: 'sonarr', enabled: true } }))?.id
-          : null;
-      if (serviceId) {
-        const mappings = await prisma.qualityMapping.findMany({
-          where: { serviceId },
-          select: { qualityOptionId: true },
-        });
-        availableQualityOptionIds.push(...mappings.map(m => m.qualityOptionId));
-      }
+    // Resolve which quality options match the media's quality profile
+    const activeQualityOptionIds: number[] = [];
+    if ((media.status === 'available' || liveAvailable) && media.qualityProfileId) {
+      const mappings = await prisma.qualityMapping.findMany({
+        where: { qualityProfileId: media.qualityProfileId },
+        select: { qualityOptionId: true },
+      });
+      activeQualityOptionIds.push(...[...new Set(mappings.map(m => m.qualityOptionId))]);
     }
 
     const result: Record<string, unknown> = { ...media };
     if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
     if (liveAvailable) result.inLibrary = true;
-    if (availableQualityOptionIds.length > 0) result.availableQualityOptionIds = availableQualityOptionIds;
+    if (activeQualityOptionIds.length > 0) result.activeQualityOptionIds = activeQualityOptionIds;
     return result;
   });
 

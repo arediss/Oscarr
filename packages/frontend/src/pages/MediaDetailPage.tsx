@@ -41,7 +41,7 @@ export default function MediaDetailPage({ type }: Props) {
   const [scrollOpacity, setScrollOpacity] = useState(0);
   const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string; position: number }[]>([]);
   const [selectedQuality, setSelectedQuality] = useState<number | null>(null);
-  const [activeQualityOptionId, setActiveQualityOptionId] = useState<number | null>(null);
+  const [activeQualityOptionIds, setActiveQualityOptionIds] = useState<number[]>([]);
 
   const handleScroll = useCallback(() => {
     const scrollY = window.scrollY;
@@ -61,7 +61,7 @@ export default function MediaDetailPage({ type }: Props) {
     if (data.sonarrSeasons) setSonarrSeasons(data.sonarrSeasons as typeof sonarrSeasons);
     if (data.inLibrary) setInLibrary(true);
     if (data.status === 'available' && !data.id) setInLibrary(true);
-    if (data.activeQualityOptionId) setActiveQualityOptionId(data.activeQualityOptionId as number);
+    if (data.activeQualityOptionIds) setActiveQualityOptionIds(data.activeQualityOptionIds as number[]);
   }, []);
 
   useEffect(() => {
@@ -76,7 +76,7 @@ export default function MediaDetailPage({ type }: Props) {
     setInLibrary(false);
     setSelectedSeasons([]);
     setSelectedQuality(null);
-    setActiveQualityOptionId(null);
+    setActiveQualityOptionIds([]);
 
     async function fetchData() {
       try {
@@ -145,7 +145,7 @@ export default function MediaDetailPage({ type }: Props) {
   ) || [];
   const takenQualityIds = new Set<number>([
     ...activeRequests.map(r => r.qualityOptionId).filter(Boolean) as number[],
-    ...(activeQualityOptionId ? [activeQualityOptionId] : []),
+    ...activeQualityOptionIds,
   ]);
   const userHasRequest = activeRequests.some(r => r.user?.id === user?.id);
   const canRequestNewQuality = selectedQuality != null && !takenQualityIds.has(selectedQuality);
