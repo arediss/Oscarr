@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
@@ -14,6 +14,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [polling, setPolling] = useState(false);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
 
   if (user) {
     navigate('/', { replace: true });
@@ -36,10 +43,12 @@ export default function LoginPage() {
       const maxAttempts = 120; // 2 minutes
       let attempts = 0;
 
-      const pollInterval = setInterval(async () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = setInterval(async () => {
         attempts++;
         if (attempts >= maxAttempts) {
-          clearInterval(pollInterval);
+          clearInterval(pollIntervalRef.current!);
+          pollIntervalRef.current = null;
           setPolling(false);
           setLoading(false);
           setError(t('login.expired'));
@@ -49,7 +58,8 @@ export default function LoginPage() {
         try {
           const { data: callbackData } = await api.post('/auth/plex/callback', { pinId: pin.id });
           if (callbackData.token) {
-            clearInterval(pollInterval);
+            clearInterval(pollIntervalRef.current!);
+            pollIntervalRef.current = null;
             authWindow?.close();
             login(callbackData.token, callbackData.user);
             navigate('/', { replace: true });

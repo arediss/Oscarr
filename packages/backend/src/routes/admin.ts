@@ -18,7 +18,8 @@ function parseId(value: string): number | null {
 async function requireAdmin(request: { user: unknown }, reply: { status: (code: number) => { send: (body: unknown) => void } }) {
   const user = request.user as { id: number; role: string };
   if (user.role !== 'admin') {
-    return reply.status(403).send({ error: 'Admin uniquement' });
+    reply.status(403).send({ error: 'Admin uniquement' });
+    throw new Error('Unauthorized');
   }
 }
 
@@ -96,6 +97,11 @@ export async function adminRoutes(app: FastifyInstance) {
         resendFromEmail: body.resendFromEmail,
         resendToEmail: body.resendToEmail,
         notificationMatrix: body.notificationMatrix,
+        autoApproveRequests: body.autoApproveRequests,
+        requestsEnabled: body.requestsEnabled,
+        supportEnabled: body.supportEnabled,
+        calendarEnabled: body.calendarEnabled,
+        siteName: body.siteName,
         updatedAt: new Date(),
       },
     });

@@ -80,6 +80,9 @@ model MediaRequest {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   approvedBy    User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
   qualityOption QualityOption? @relation(fields: [qualityOptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([mediaId])
 }
 
 model SupportTicket {
@@ -203,6 +206,9 @@ model AppLog {
   label         String    // Category (e.g. "Sync", "Request", "Auth")
   message       String
   createdAt     DateTime  @default(now())
+
+  @@index([label])
+  @@index([createdAt])
 }
 
 model TmdbCache {
