@@ -16,6 +16,10 @@
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs Welcome" />
 </p>
 
+<p align="center">
+  <img src="docs/preview.jpg" alt="Oscarr Preview" width="900" />
+</p>
+
 ---
 
 ## Why Oscarr?
