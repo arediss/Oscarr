@@ -83,7 +83,35 @@ Here's what makes Oscarr different:
 
 ---
 
-## Quick Start
+## Quick Start with Docker
+
+The easiest way to run Oscarr:
+
+```bash
+git clone https://github.com/arediss/Oscarr.git
+cd Oscarr
+```
+
+Create a `.env` file:
+
+```env
+TMDB_API_KEY=your_tmdb_api_key
+JWT_SECRET=your_random_secret_key
+```
+
+Start:
+
+```bash
+docker compose up -d
+```
+
+Open `http://localhost:3456` and follow the setup wizard.
+
+> Data is persisted in a Docker volume. Plugins can be added in `packages/plugins/`.
+
+---
+
+## Manual Setup
 
 ### Prerequisites
 
@@ -131,7 +159,7 @@ This starts both the frontend (`:5173`) and backend (`:3456`) concurrently.
 
 ```bash
 npm run build
-npm run start
+NODE_ENV=production node packages/backend/dist/index.js
 ```
 
 ### First launch

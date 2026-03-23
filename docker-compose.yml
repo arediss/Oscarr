@@ -1,0 +1,20 @@
+services:
+  oscarr:
+    build: .
+    container_name: oscarr
+    restart: unless-stopped
+    ports:
+      - "3456:3456"
+    volumes:
+      - oscarr-data:/data
+      - ./packages/plugins:/app/packages/plugins
+    environment:
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=file:///data/oscarr.db
+      - PORT=3456
+      - NODE_ENV=production
+      - FRONTEND_URL=http://localhost:3456
+
+volumes:
+  oscarr-data:

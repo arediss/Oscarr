@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.db
+*.db-journal
+.env
+.git/
+.gitignore
+.claude/
+__pycache__/
+docs/
+issues/
+.idea/
+.DS_Store

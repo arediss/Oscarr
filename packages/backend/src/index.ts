@@ -1,8 +1,12 @@
 import './env.js';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import cookie from '@fastify/cookie';
+import fastifyStatic from '@fastify/static';
 import { authRoutes } from './routes/auth.js';
 import { tmdbRoutes } from './routes/tmdb.js';
 import { requestRoutes } from './routes/requests.js';
@@ -15,6 +19,7 @@ import { initScheduler } from './services/scheduler.js';
 import { pluginEngine } from './plugins/engine.js';
 import { pluginRoutes } from './plugins/routes.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = Fastify({ logger: true });
 
 async function start() {
@@ -49,6 +54,24 @@ async function start() {
   await pluginEngine.loadAll();
   await pluginEngine.registerWithFastify(app);
   await app.register(pluginRoutes, { prefix: '/api/plugins' });
+
+  // In production, serve the frontend SPA
+  const frontendDir = resolve(__dirname, '../../frontend/dist');
+  if (process.env.NODE_ENV === 'production' && existsSync(frontendDir)) {
+    await app.register(fastifyStatic, {
+      root: frontendDir,
+      prefix: '/',
+      wildcard: false,
+    });
+
+    // SPA fallback: serve index.html for non-API routes
+    app.setNotFoundHandler((request, reply) => {
+      if (request.url.startsWith('/api/')) {
+        return reply.status(404).send({ error: 'Not found' });
+      }
+      return reply.sendFile('index.html');
+    });
+  }
 
   const port = parseInt(process.env.PORT || '3001', 10);
   if (Number.isNaN(port)) {
