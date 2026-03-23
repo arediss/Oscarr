@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import { AlertTriangle, X as XIcon } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -15,6 +16,7 @@ import {
   X,
   Shield,
   ChevronDown,
+  Globe,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { PluginSlot } from '@/plugins/PluginSlot';
@@ -232,6 +234,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         {t('nav.admin')}
                       </Link>
                     )}
+
+                    <div className="px-4 py-2.5 border-t border-white/5">
+                      <div className="flex items-center gap-2.5">
+                        <Globe className="w-4 h-4 text-ndp-text-dim flex-shrink-0" />
+                        <select
+                          value={i18n.language.split('-')[0]}
+                          onChange={(e) => i18n.changeLanguage(e.target.value)}
+                          className="flex-1 bg-white/5 border border-white/10 rounded-lg text-sm text-ndp-text px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-ndp-accent/40 cursor-pointer appearance-none"
+                        >
+                          {Object.keys(i18n.options.resources || {}).map((code) => (
+                            <option key={code} value={code}>
+                              {new Intl.DisplayNames([code], { type: 'language' }).of(code)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
 
                     <button
                       onClick={handleLogout}
