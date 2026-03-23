@@ -6,6 +6,8 @@ import { syncRadarr, syncSonarr, runFullSync } from '../services/sync.js';
 import { getPlexFriends } from '../services/plex.js';
 import { syncRequestsFromTags } from '../services/requestSync.js';
 import { testDiscord, testTelegram, testEmail, sendNotification } from '../services/notifications.js';
+import { triggerJob, updateJobSchedule } from '../services/scheduler.js';
+import nodeSchedule from 'node-cron';
 
 function parseId(value: string): number | null {
   const id = parseInt(value, 10);
@@ -494,9 +496,47 @@ export async function adminRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // === SYNC JOBS ===
+  // === CRON JOBS ===
 
-  // Get sync status
+  app.get('/jobs', async (request, reply) => {
+    await requireAdmin(request, reply);
+    return prisma.cronJob.findMany({ orderBy: { key: 'asc' } });
+  });
+
+  app.put('/jobs/:key', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { key } = request.params as { key: string };
+    const { cronExpression, enabled } = request.body as { cronExpression?: string; enabled?: boolean };
+
+    if (cronExpression && !nodeSchedule.validate(cronExpression)) {
+      return reply.status(400).send({ error: 'Expression CRON invalide' });
+    }
+
+    const job = await prisma.cronJob.update({
+      where: { key },
+      data: {
+        ...(cronExpression !== undefined ? { cronExpression } : {}),
+        ...(enabled !== undefined ? { enabled } : {}),
+      },
+    });
+
+    await updateJobSchedule(key, job.cronExpression, job.enabled);
+    return job;
+  });
+
+  app.post('/jobs/:key/run', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { key } = request.params as { key: string };
+    try {
+      const result = await triggerJob(key);
+      const job = await prisma.cronJob.findUnique({ where: { key } });
+      return { ok: true, result, job };
+    } catch (err) {
+      return reply.status(500).send({ error: 'Le job a échoué', details: String(err) });
+    }
+  });
+
+  // Keep legacy sync endpoints for backwards compat
   app.get('/sync/status', async (request, reply) => {
     await requireAdmin(request, reply);
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
@@ -507,14 +547,11 @@ export async function adminRoutes(app: FastifyInstance) {
     };
   });
 
-  // Trigger incremental sync
   app.post('/sync/run', async (request, reply) => {
     await requireAdmin(request, reply);
-    const result = await runFullSync();
-    return result;
+    return triggerJob('full_sync');
   });
 
-  // Force full sync (reset timestamps, re-import everything)
   app.post('/sync/force', async (request, reply) => {
     await requireAdmin(request, reply);
     await prisma.appSettings.upsert({
@@ -522,49 +559,8 @@ export async function adminRoutes(app: FastifyInstance) {
       update: { lastRadarrSync: null, lastSonarrSync: null },
       create: { id: 1, lastRadarrSync: null, lastSonarrSync: null, updatedAt: new Date() },
     });
-    const [radarrResult, sonarrResult] = await Promise.all([
-      syncRadarr(null),
-      syncSonarr(null),
-    ]);
+    const [radarrResult, sonarrResult] = await Promise.all([syncRadarr(null), syncSonarr(null)]);
     return { radarr: radarrResult, sonarr: sonarrResult };
-  });
-
-  // Trigger Radarr sync only
-  app.post('/sync/radarr', async (request, reply) => {
-    await requireAdmin(request, reply);
-    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-    const result = await syncRadarr(settings?.lastRadarrSync);
-    return result;
-  });
-
-  // Trigger Sonarr sync only
-  app.post('/sync/sonarr', async (request, reply) => {
-    await requireAdmin(request, reply);
-    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-    const result = await syncSonarr(settings?.lastSonarrSync);
-    return result;
-  });
-
-  // Update sync interval
-  app.put('/sync/interval', async (request, reply) => {
-    await requireAdmin(request, reply);
-    const { hours } = request.body as { hours: number };
-    if (typeof hours !== 'number' || hours < 1 || hours > 168) {
-      return reply.status(400).send({ error: 'Intervalle entre 1 et 168 heures' });
-    }
-    await prisma.appSettings.upsert({
-      where: { id: 1 },
-      update: { syncIntervalHours: hours },
-      create: { id: 1, syncIntervalHours: hours, updatedAt: new Date() },
-    });
-    return { ok: true, syncIntervalHours: hours };
-  });
-
-  // Import historical requests from Radarr/Sonarr tags
-  app.post('/sync/requests', async (request, reply) => {
-    await requireAdmin(request, reply);
-    const result = await syncRequestsFromTags();
-    return result;
   });
 
   // === NOTIFICATION TESTS ===

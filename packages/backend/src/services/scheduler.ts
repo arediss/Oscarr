@@ -1,0 +1,125 @@
+import cron, { type ScheduledTask } from 'node-cron';
+import { prisma } from '../utils/prisma.js';
+import { runFullSync } from './sync.js';
+import { syncRequestsFromTags } from './requestSync.js';
+import { checkExpiringSubscriptions } from './subscriptionCheck.js';
+
+// Map of job keys to their handler functions
+const JOB_HANDLERS: Record<string, () => Promise<unknown>> = {
+  full_sync: async () => runFullSync(),
+  request_sync: async () => syncRequestsFromTags(),
+  subscription_check: async () => checkExpiringSubscriptions(),
+};
+
+// Default job definitions (seeded on first boot)
+const DEFAULT_JOBS = [
+  { key: 'full_sync', label: 'Sync complet (Radarr + Sonarr)', cronExpression: '0 6 * * *', enabled: true },
+  { key: 'request_sync', label: 'Sync des demandes', cronExpression: '*/5 * * * *', enabled: true },
+  { key: 'subscription_check', label: 'Vérification abonnements', cronExpression: '0 9 * * *', enabled: true },
+];
+
+const activeTasks = new Map<string, ScheduledTask>();
+
+async function seedJobs() {
+  for (const job of DEFAULT_JOBS) {
+    await prisma.cronJob.upsert({
+      where: { key: job.key },
+      update: {},
+      create: job,
+    });
+  }
+}
+
+async function runJob(key: string) {
+  const handler = JOB_HANDLERS[key];
+  if (!handler) return;
+
+  const start = Date.now();
+  try {
+    const result = await handler();
+    const duration = Date.now() - start;
+    await prisma.cronJob.update({
+      where: { key },
+      data: {
+        lastRunAt: new Date(),
+        lastStatus: 'success',
+        lastDuration: duration,
+        lastResult: JSON.stringify(result ?? null),
+      },
+    });
+    console.log(`[Scheduler] Job "${key}" completed in ${duration}ms`);
+    return result;
+  } catch (err) {
+    const duration = Date.now() - start;
+    await prisma.cronJob.update({
+      where: { key },
+      data: {
+        lastRunAt: new Date(),
+        lastStatus: 'error',
+        lastDuration: duration,
+        lastResult: JSON.stringify({ error: String(err) }),
+      },
+    });
+    console.error(`[Scheduler] Job "${key}" failed:`, err);
+    throw err;
+  }
+}
+
+function scheduleJob(key: string, cronExpression: string) {
+  // Stop existing task if any
+  const existing = activeTasks.get(key);
+  if (existing) {
+    existing.stop();
+    activeTasks.delete(key);
+  }
+
+  if (!cron.validate(cronExpression)) {
+    console.error(`[Scheduler] Invalid cron expression for "${key}": ${cronExpression}`);
+    return;
+  }
+
+  const task = cron.schedule(cronExpression, () => {
+    runJob(key).catch(() => {});
+  });
+  activeTasks.set(key, task);
+  console.log(`[Scheduler] Job "${key}" scheduled: ${cronExpression}`);
+}
+
+export async function initScheduler() {
+  await seedJobs();
+  const jobs = await prisma.cronJob.findMany();
+
+  for (const job of jobs) {
+    if (job.enabled) {
+      scheduleJob(job.key, job.cronExpression);
+    }
+  }
+
+  console.log(`[Scheduler] ${jobs.filter((j) => j.enabled).length}/${jobs.length} jobs active`);
+}
+
+export async function updateJobSchedule(key: string, cronExpression: string, enabled: boolean) {
+  const existing = activeTasks.get(key);
+  if (existing) {
+    existing.stop();
+    activeTasks.delete(key);
+  }
+
+  if (enabled && cron.validate(cronExpression)) {
+    scheduleJob(key, cronExpression);
+  }
+}
+
+export async function triggerJob(key: string) {
+  return runJob(key);
+}
+
+export function getNextRun(cronExpression: string): Date | null {
+  try {
+    // Simple next-run calculation based on cron expression
+    // node-cron doesn't expose this, so we return null and let frontend handle display
+    return null;
+  } catch {
+    return null;
+  }
+}

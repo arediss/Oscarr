@@ -21,12 +21,14 @@
     "dotenv": "^16.4.7",
     "fastify": "^5.3.2",
     "node-cache": "^5.1.2",
+    "node-cron": "^4.2.1",
     "pino": "^9.6.0",
     "resend": "^6.9.4",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "@types/node-cron": "^3.0.11",
     "dotenv-cli": "^11.0.0",
     "prisma": "^6.5.0",
     "tsx": "^4.19.3",
