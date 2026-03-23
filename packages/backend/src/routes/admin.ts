@@ -46,8 +46,6 @@ export async function adminRoutes(app: FastifyInstance) {
       defaultMovieFolder?: string;
       defaultTvFolder?: string;
       defaultAnimeFolder?: string;
-      subscriptionPrice?: number;
-      subscriptionDuration?: number;
       plexMachineId?: string;
       discordWebhookUrl?: string;
       telegramBotToken?: string;
@@ -60,7 +58,6 @@ export async function adminRoutes(app: FastifyInstance) {
       requestsEnabled?: boolean;
       supportEnabled?: boolean;
       calendarEnabled?: boolean;
-      subscriptionEnabled?: boolean;
     };
 
     const settings = await prisma.appSettings.upsert({
@@ -70,8 +67,6 @@ export async function adminRoutes(app: FastifyInstance) {
         defaultMovieFolder: body.defaultMovieFolder ?? undefined,
         defaultTvFolder: body.defaultTvFolder ?? undefined,
         defaultAnimeFolder: body.defaultAnimeFolder ?? undefined,
-        subscriptionPrice: body.subscriptionPrice ?? undefined,
-        subscriptionDuration: body.subscriptionDuration ?? undefined,
         plexMachineId: body.plexMachineId ?? undefined,
         discordWebhookUrl: body.discordWebhookUrl ?? undefined,
         telegramBotToken: body.telegramBotToken ?? undefined,
@@ -84,7 +79,6 @@ export async function adminRoutes(app: FastifyInstance) {
         requestsEnabled: body.requestsEnabled ?? undefined,
         supportEnabled: body.supportEnabled ?? undefined,
         calendarEnabled: body.calendarEnabled ?? undefined,
-        subscriptionEnabled: body.subscriptionEnabled ?? undefined,
       },
       create: {
         id: 1,
@@ -92,8 +86,6 @@ export async function adminRoutes(app: FastifyInstance) {
         defaultMovieFolder: body.defaultMovieFolder,
         defaultTvFolder: body.defaultTvFolder,
         defaultAnimeFolder: body.defaultAnimeFolder,
-        subscriptionPrice: body.subscriptionPrice ?? 0,
-        subscriptionDuration: body.subscriptionDuration ?? 30,
         plexMachineId: body.plexMachineId,
         discordWebhookUrl: body.discordWebhookUrl,
         telegramBotToken: body.telegramBotToken,
@@ -424,9 +416,6 @@ export async function adminRoutes(app: FastifyInstance) {
         avatar: true,
         role: true,
         hasPlexServerAccess: true,
-        subscriptionEndDate: true,
-        lastPaymentDate: true,
-        lastPaymentAmount: true,
         createdAt: true,
         _count: { select: { requests: true } },
       },
@@ -436,68 +425,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return users.map((u) => ({
       ...u,
       requestCount: u._count.requests,
-      subscriptionActive: u.role === 'admin' ||
-        (u.subscriptionEndDate && new Date(u.subscriptionEndDate) > new Date()),
     }));
-  });
-
-  // Update user subscription (admin records a payment)
-  app.put('/users/:id/subscription', async (request, reply) => {
-    await requireAdmin(request, reply);
-    const { id } = request.params as { id: string };
-    const userId = parseId(id);
-    if (!userId) return reply.status(400).send({ error: 'ID invalide' });
-
-    const { paymentDate, amount, durationDays } = request.body as {
-      paymentDate: string;
-      amount?: number;
-      durationDays?: number;
-    };
-
-    if (!paymentDate) {
-      return reply.status(400).send({ error: 'La date de paiement est requise' });
-    }
-
-    // Get default duration from settings
-    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-    const duration = durationDays || settings?.subscriptionDuration || 30;
-
-    const payDate = new Date(paymentDate);
-    const endDate = new Date(payDate.getTime() + duration * 24 * 60 * 60 * 1000);
-
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        lastPaymentDate: payDate,
-        lastPaymentAmount: amount,
-        subscriptionEndDate: endDate,
-      },
-      select: {
-        id: true,
-        plexUsername: true,
-        subscriptionEndDate: true,
-        lastPaymentDate: true,
-        lastPaymentAmount: true,
-      },
-    });
-
-    return user;
-  });
-
-  // Revoke subscription
-  app.delete('/users/:id/subscription', async (request, reply) => {
-    await requireAdmin(request, reply);
-    const { id } = request.params as { id: string };
-    const userId = parseId(id);
-    if (!userId) return reply.status(400).send({ error: 'ID invalide' });
-
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { subscriptionEndDate: null },
-      select: { id: true, plexUsername: true, subscriptionEndDate: true },
-    });
-
-    return user;
   });
 
   // Change user role

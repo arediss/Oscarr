@@ -4,13 +4,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Settings,
   Users,
-  CreditCard,
   Shield,
   Save,
   Loader2,
   CheckCircle,
   XCircle,
-  Calendar,
   RefreshCw,
   Clock,
   FolderTree,
@@ -101,43 +99,19 @@ type UserSort = 'username' | 'date' | 'role';
 function UsersTab() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [sortBy, setSortBy] = useState<UserSort>('username');
-  const [paymentDate, setPaymentDate] = useState('');
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [subEnabled, setSubEnabled] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number; total: number } | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
-      const [{ data: usersData }, { data: settings }] = await Promise.all([
-        api.get('/admin/users'),
-        api.get('/admin/settings'),
-      ]);
+      const { data: usersData } = await api.get('/admin/users');
       setUsers(usersData);
-      setSubEnabled(settings.subscriptionEnabled ?? true);
     } catch (err) { console.error('Failed to fetch users:', err); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
-
-  const handleSubscription = async (userId: number) => {
-    if (!paymentDate) return;
-    setSaving(true);
-    try {
-      await api.put(`/admin/users/${userId}/subscription`, { paymentDate, amount: paymentAmount ? parseFloat(paymentAmount) : undefined });
-      setSelectedUser(null); setPaymentDate(''); setPaymentAmount(''); fetchUsers();
-    } catch (err) { console.error(err); } finally { setSaving(false); }
-  };
-
-  const handleRevokeSubscription = async (userId: number) => {
-    setSaving(true);
-    try { await api.delete(`/admin/users/${userId}/subscription`); fetchUsers(); }
-    catch (err) { console.error(err); } finally { setSaving(false); }
-  };
 
   const handleImportPlex = async () => {
     setImporting(true); setImportResult(null);
@@ -189,10 +163,7 @@ function UsersTab() {
         </div>
       )}
       <div className="space-y-3">
-        {sortedUsers.map((u) => {
-          const isActive = u.subscriptionActive;
-          const isExpanded = selectedUser?.id === u.id;
-          return (
+        {sortedUsers.map((u) => (
             <div key={u.id} className="card">
               <div className="flex items-center gap-4 p-4">
                 {u.avatar ? <img src={u.avatar} alt="" className="w-10 h-10 rounded-full" /> : <div className="w-10 h-10 rounded-full bg-ndp-accent/20 flex items-center justify-center text-ndp-accent font-bold">{(u.plexUsername || u.email)[0].toUpperCase()}</div>}
@@ -209,30 +180,9 @@ function UsersTab() {
                   {u.hasPlexServerAccess ? <CheckCircle className="w-4 h-4 text-ndp-success" /> : <XCircle className="w-4 h-4 text-ndp-danger" />}
                   <span className="text-xs text-ndp-text-dim hidden sm:inline">Plex</span>
                 </div>
-                {subEnabled && (
-                  <div className={clsx('flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold', isActive ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger')}>
-                    <CreditCard className="w-3.5 h-3.5" /><span className="hidden sm:inline">{isActive ? 'Actif' : 'Inactif'}</span>
-                  </div>
-                )}
-                {u.role !== 'admin' && subEnabled && <button onClick={() => setSelectedUser(isExpanded ? null : u)} className="btn-secondary text-xs py-1.5 px-3">{isExpanded ? 'Fermer' : 'Gérer'}</button>}
               </div>
-              {isExpanded && subEnabled && (
-                <div className="px-4 pb-4 pt-2 border-t border-white/5 animate-slide-up">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><p className="text-xs text-ndp-text-dim mb-1">Dernier paiement</p><p className="text-sm text-ndp-text">{u.lastPaymentDate ? `${new Date(u.lastPaymentDate).toLocaleDateString('fr-FR')}${u.lastPaymentAmount ? ` - ${u.lastPaymentAmount}€` : ''}` : 'Aucun'}</p></div>
-                    <div><p className="text-xs text-ndp-text-dim mb-1">Fin d'abonnement</p><p className={clsx('text-sm', isActive ? 'text-ndp-success' : 'text-ndp-danger')}>{u.subscriptionEndDate ? new Date(u.subscriptionEndDate).toLocaleDateString('fr-FR') : 'Non défini'}</p></div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-end gap-3">
-                    <div><label className="text-xs text-ndp-text-muted block mb-1">Date de paiement</label><input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} className="input text-sm py-2" /></div>
-                    <div><label className="text-xs text-ndp-text-muted block mb-1">Montant (€)</label><input type="number" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder="0" className="input text-sm py-2 w-24" /></div>
-                    <button onClick={() => handleSubscription(u.id)} disabled={saving || !paymentDate} className="btn-success flex items-center gap-1.5 text-sm py-2">{saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calendar className="w-3.5 h-3.5" />} Valider paiement</button>
-                    {isActive && <button onClick={() => handleRevokeSubscription(u.id)} disabled={saving} className="btn-danger flex items-center gap-1.5 text-sm py-2"><XCircle className="w-3.5 h-3.5" /> Révoquer</button>}
-                  </div>
-                </div>
-              )}
             </div>
-          );
-        })}
+        ))}
       </div>
     </div>
   );
@@ -789,7 +739,6 @@ const EVENT_TYPES = [
   { key: 'request_approved', label: 'Demande approuvée' },
   { key: 'request_declined', label: 'Demande refusée' },
   { key: 'media_available', label: 'Média disponible' },
-  { key: 'subscription_expiring', label: "Expiration d'abonnement" },
   { key: 'incident_banner', label: "Bandeau d'incident" },
 ] as const;
 
@@ -798,7 +747,6 @@ const DEFAULT_MATRIX: Record<string, { discord: boolean; telegram: boolean; emai
   request_approved: { discord: true, telegram: true, email: false },
   request_declined: { discord: true, telegram: true, email: false },
   media_available: { discord: true, telegram: true, email: false },
-  subscription_expiring: { discord: false, telegram: false, email: true },
   incident_banner: { discord: true, telegram: true, email: false },
 };
 
@@ -1599,24 +1547,18 @@ function QualityTab() {
 function GeneralTab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [subPrice, setSubPrice] = useState('');
-  const [subDuration, setSubDuration] = useState('');
   const [autoApproveRequests, setAutoApproveRequests] = useState(false);
   const [requestsEnabled, setRequestsEnabled] = useState(true);
   const [supportEnabled, setSupportEnabled] = useState(true);
   const [calendarEnabled, setCalendarEnabled] = useState(true);
-  const [subscriptionEnabled, setSubscriptionEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.get('/admin/settings').then(({ data }) => {
-      setSubPrice(data.subscriptionPrice?.toString() || '0');
-      setSubDuration(data.subscriptionDuration?.toString() || '30');
       setAutoApproveRequests(data.autoApproveRequests ?? false);
       setRequestsEnabled(data.requestsEnabled ?? true);
       setSupportEnabled(data.supportEnabled ?? true);
       setCalendarEnabled(data.calendarEnabled ?? true);
-      setSubscriptionEnabled(data.subscriptionEnabled ?? true);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -1624,13 +1566,10 @@ function GeneralTab() {
     setSaving(true); setSaved(false);
     try {
       await api.put('/admin/settings', {
-        subscriptionPrice: parseFloat(subPrice) || 0,
-        subscriptionDuration: parseInt(subDuration) || 30,
         autoApproveRequests,
         requestsEnabled,
         supportEnabled,
         calendarEnabled,
-        subscriptionEnabled,
       });
       setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch (err) { console.error(err); } finally { setSaving(false); }
@@ -1643,21 +1582,10 @@ function GeneralTab() {
     { label: 'Auto-acceptation', desc: 'Les demandes sont automatiquement approuvées sans validation admin', value: autoApproveRequests, set: setAutoApproveRequests },
     { label: 'Support', desc: 'Système de tickets de support', value: supportEnabled, set: setSupportEnabled },
     { label: 'Calendrier', desc: 'Calendrier des sorties à venir', value: calendarEnabled, set: setCalendarEnabled },
-    { label: 'Abonnements', desc: 'Gestion des abonnements et paiements', value: subscriptionEnabled, set: setSubscriptionEnabled },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card p-6">
-          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Abonnement</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-sm text-ndp-text mb-1 block">Prix (€)</label><input type="number" value={subPrice} onChange={(e) => setSubPrice(e.target.value)} className="input w-full" min="0" step="0.01" /></div>
-            <div><label className="text-sm text-ndp-text mb-1 block">Durée (jours)</label><input type="number" value={subDuration} onChange={(e) => setSubDuration(e.target.value)} className="input w-full" min="1" /></div>
-          </div>
-        </div>
-      </div>
-
       <div className="card p-6">
         <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Fonctionnalités</h3>
         <p className="text-xs text-ndp-text-dim mb-4">Activez ou désactivez les sections du site pour les utilisateurs</p>

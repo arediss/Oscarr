@@ -5,14 +5,10 @@ export interface User {
   avatar: string | null;
   role: 'admin' | 'user';
   hasPlexServerAccess?: boolean;
-  subscriptionActive?: boolean;
-  subscriptionEndDate?: string | null;
-  lastPaymentDate?: string | null;
   createdAt?: string;
 }
 
 export interface AdminUser extends User {
-  lastPaymentAmount?: number | null;
   requestCount?: number;
 }
 

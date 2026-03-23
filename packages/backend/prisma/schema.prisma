@@ -16,9 +16,6 @@ model User {
   avatar                String?
   role                  String    @default("user") // "admin" | "user"
   hasPlexServerAccess   Boolean   @default(false)
-  subscriptionEndDate   DateTime?
-  lastPaymentDate       DateTime?
-  lastPaymentAmount     Float?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -112,8 +109,6 @@ model AppSettings {
   defaultMovieFolder    String?   // Default root folder for movies
   defaultTvFolder       String?   // Default root folder for TV series
   defaultAnimeFolder    String?   // Default root folder for anime
-  subscriptionPrice     Float     @default(0)
-  subscriptionDuration  Int       @default(30) // Days
   plexMachineId         String?   // Plex server machine identifier for access verification
   lastRadarrSync        DateTime? // Last Radarr sync timestamp
   lastSonarrSync        DateTime? // Last Sonarr sync timestamp
@@ -130,13 +125,12 @@ model AppSettings {
   requestsEnabled       Boolean   @default(true)
   supportEnabled        Boolean   @default(true)
   calendarEnabled       Boolean   @default(true)
-  subscriptionEnabled   Boolean   @default(true)
   updatedAt             DateTime  @updatedAt
 }
 
 model CronJob {
   id              Int       @id @default(autoincrement())
-  key             String    @unique // "full_sync" | "request_sync" | "subscription_check"
+  key             String    @unique // "full_sync" | "request_sync"
   label           String    // Display name
   cronExpression  String    @default("0 */6 * * *")
   enabled         Boolean   @default(true)

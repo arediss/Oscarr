@@ -1,9 +1,9 @@
 import { useAuth } from '@/context/AuthContext';
 import { Link } from 'react-router-dom';
-import { ShieldX, MessageSquare, CreditCard, Server } from 'lucide-react';
+import { ShieldX, MessageSquare, Server } from 'lucide-react';
 
 export default function NoAccessPage() {
-  const { user, hasPlexServerAccess, isSubscriptionActive } = useAuth();
+  const { user } = useAuth();
 
   return (
     <div className="max-w-xl mx-auto px-4 py-20 text-center">
@@ -15,34 +15,15 @@ export default function NoAccessPage() {
         </p>
 
         <div className="space-y-4 text-left mb-8">
-          {!hasPlexServerAccess && (
-            <div className="flex items-start gap-3 p-4 bg-ndp-danger/5 border border-ndp-danger/20 rounded-xl">
-              <Server className="w-5 h-5 text-ndp-danger flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-ndp-danger">Pas d'accès au serveur Plex</p>
-                <p className="text-xs text-ndp-text-muted mt-1">
-                  Votre compte Plex n'a pas accès au serveur. Contactez l'administrateur pour être ajouté.
-                </p>
-              </div>
+          <div className="flex items-start gap-3 p-4 bg-ndp-danger/5 border border-ndp-danger/20 rounded-xl">
+            <Server className="w-5 h-5 text-ndp-danger flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-ndp-danger">Pas d'accès au serveur Plex</p>
+              <p className="text-xs text-ndp-text-muted mt-1">
+                Votre compte Plex n'a pas accès au serveur. Contactez l'administrateur pour être ajouté.
+              </p>
             </div>
-          )}
-
-          {!isSubscriptionActive && (
-            <div className="flex items-start gap-3 p-4 bg-ndp-warning/5 border border-ndp-warning/20 rounded-xl">
-              <CreditCard className="w-5 h-5 text-ndp-warning flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-ndp-warning">Abonnement inactif</p>
-                <p className="text-xs text-ndp-text-muted mt-1">
-                  Votre abonnement n'est pas actif ou a expiré. Effectuez votre paiement et contactez l'administrateur.
-                </p>
-                {user?.subscriptionEndDate && (
-                  <p className="text-xs text-ndp-text-dim mt-1">
-                    Expiré le {new Date(user.subscriptionEndDate).toLocaleDateString('fr-FR')}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
+          </div>
         </div>
 
         <p className="text-ndp-text-muted text-sm mb-6">

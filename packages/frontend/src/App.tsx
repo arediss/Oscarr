@@ -84,7 +84,7 @@ export default function App() {
             <Layout>
               <PageTransition>
                 <Routes>
-                  {/* These pages require full access (server + subscription) */}
+                  {/* These pages require Plex server access */}
                   <Route path="/" element={<RequireAccess><HomePage /></RequireAccess>} />
                   <Route path="/search" element={<RequireAccess><SearchPage /></RequireAccess>} />
                   <Route path="/movie/:id" element={<RequireAccess><MediaDetailPage type="movie" /></RequireAccess>} />

@@ -54,8 +54,6 @@ export async function authRoutes(app: FastifyInstance) {
           avatar: plexAccount.thumb,
           role: isFirstUser ? 'admin' : 'user',
           hasPlexServerAccess: isFirstUser || hasServerAccess,
-          // First user gets unlimited subscription
-          subscriptionEndDate: isFirstUser ? new Date('2099-12-31') : null,
         },
       });
     } else {
@@ -70,9 +68,6 @@ export async function authRoutes(app: FastifyInstance) {
         },
       });
     }
-
-    const isSubscriptionActive = user.role === 'admin' ||
-      (user.subscriptionEndDate && new Date(user.subscriptionEndDate) > new Date());
 
     const token = app.jwt.sign(
       { id: user.id, email: user.email, role: user.role },
@@ -95,8 +90,6 @@ export async function authRoutes(app: FastifyInstance) {
           avatar: user.avatar,
           role: user.role,
           hasPlexServerAccess: user.hasPlexServerAccess,
-          subscriptionActive: isSubscriptionActive,
-          subscriptionEndDate: user.subscriptionEndDate,
         },
         token,
       });
@@ -113,20 +106,12 @@ export async function authRoutes(app: FastifyInstance) {
         avatar: true,
         role: true,
         hasPlexServerAccess: true,
-        subscriptionEndDate: true,
-        lastPaymentDate: true,
         createdAt: true,
       },
     });
     if (!user) return reply.status(404).send({ error: 'Utilisateur introuvable' });
 
-    const isSubscriptionActive = user.role === 'admin' ||
-      (user.subscriptionEndDate && new Date(user.subscriptionEndDate) > new Date());
-
-    return reply.send({
-      ...user,
-      subscriptionActive: isSubscriptionActive,
-    });
+    return reply.send(user);
   });
 
   app.post('/logout', async (_request, reply) => {

@@ -7,7 +7,6 @@ export type NotificationType =
   | 'request_approved'
   | 'request_declined'
   | 'media_available'
-  | 'subscription_expiring'
   | 'incident_banner';
 
 export interface NotificationData {
@@ -17,7 +16,6 @@ export interface NotificationData {
   posterPath?: string | null;
   tmdbId?: number;
   message?: string;
-  expiresAt?: string;
 }
 
 interface NotificationMatrix {
@@ -29,7 +27,6 @@ const DEFAULT_MATRIX: NotificationMatrix = {
   request_approved: { discord: true, telegram: true, email: false },
   request_declined: { discord: true, telegram: true, email: false },
   media_available: { discord: true, telegram: true, email: false },
-  subscription_expiring: { discord: false, telegram: false, email: true },
   incident_banner: { discord: true, telegram: true, email: false },
 };
 
@@ -38,7 +35,6 @@ const LABELS: Record<NotificationType, string> = {
   request_approved: 'Demande approuvée',
   request_declined: 'Demande refusée',
   media_available: 'Média disponible',
-  subscription_expiring: 'Abonnement bientôt expiré',
   incident_banner: 'Incident',
 };
 
@@ -47,13 +43,11 @@ const COLORS: Record<NotificationType, number> = {
   request_approved: 0x6366f1,
   request_declined: 0xef4444,
   media_available: 0x10b981,
-  subscription_expiring: 0xf97316,
   incident_banner: 0xef4444,
 };
 
 function buildMessage(type: NotificationType, data: NotificationData): string {
   if (type === 'incident_banner') return data.message || 'Incident en cours';
-  if (type === 'subscription_expiring') return `L'abonnement de **${data.username}** expire le ${data.expiresAt}`;
   const mediaLabel = data.mediaType === 'movie' ? 'Film' : 'Série';
   return `**${data.title}** (${mediaLabel})${data.username ? ` — ${data.username}` : ''}`;
 }

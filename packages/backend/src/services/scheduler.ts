@@ -2,20 +2,17 @@ import cron, { type ScheduledTask } from 'node-cron';
 import { prisma } from '../utils/prisma.js';
 import { runFullSync } from './sync.js';
 import { syncRequestsFromTags } from './requestSync.js';
-import { checkExpiringSubscriptions } from './subscriptionCheck.js';
 
 // Map of job keys to their handler functions
 const JOB_HANDLERS: Record<string, () => Promise<unknown>> = {
   full_sync: async () => runFullSync(),
   request_sync: async () => syncRequestsFromTags(),
-  subscription_check: async () => checkExpiringSubscriptions(),
 };
 
 // Default job definitions (seeded on first boot)
 const DEFAULT_JOBS = [
   { key: 'full_sync', label: 'Sync complet (Radarr + Sonarr)', cronExpression: '0 6 * * *', enabled: true },
   { key: 'request_sync', label: 'Sync des demandes', cronExpression: '*/5 * * * *', enabled: true },
-  { key: 'subscription_check', label: 'Vérification abonnements', cronExpression: '0 9 * * *', enabled: true },
 ];
 
 const activeTasks = new Map<string, ScheduledTask>();
