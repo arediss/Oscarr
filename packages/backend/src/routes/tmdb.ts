@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   getTrending,
   getPopularMovies,
@@ -23,25 +23,29 @@ function parseId(value: string): number | null {
   return Number.isNaN(id) || id < 1 ? null : id;
 }
 
+function getLang(request: FastifyRequest): string {
+  return (request.headers['accept-language'] || '').split(',')[0]?.split('-')[0] || 'en';
+}
+
 export async function tmdbRoutes(app: FastifyInstance) {
   app.get('/trending', { preHandler: [app.authenticate] }, async (request) => {
     const { page } = request.query as { page?: string };
-    return getTrending(parsePage(page));
+    return getTrending(parsePage(page), getLang(request));
   });
 
   app.get('/movies/popular', { preHandler: [app.authenticate] }, async (request) => {
     const { page } = request.query as { page?: string };
-    return getPopularMovies(parsePage(page));
+    return getPopularMovies(parsePage(page), getLang(request));
   });
 
   app.get('/tv/popular', { preHandler: [app.authenticate] }, async (request) => {
     const { page } = request.query as { page?: string };
-    return getPopularTv(parsePage(page));
+    return getPopularTv(parsePage(page), getLang(request));
   });
 
   app.get('/movies/upcoming', { preHandler: [app.authenticate] }, async (request) => {
     const { page } = request.query as { page?: string };
-    return getUpcomingMovies(parsePage(page));
+    return getUpcomingMovies(parsePage(page), getLang(request));
   });
 
   app.get('/search', { preHandler: [app.authenticate] }, async (request) => {
@@ -49,54 +53,52 @@ export async function tmdbRoutes(app: FastifyInstance) {
     if (!q || q.trim().length === 0) {
       return { results: [], total_pages: 0, total_results: 0 };
     }
-    return searchMulti(q.trim(), parsePage(page));
+    return searchMulti(q.trim(), parsePage(page), getLang(request));
   });
 
   app.get('/movie/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const movieId = parseId(id);
-    if (!movieId) return reply.status(400).send({ error: 'ID invalide' });
-    return getMovieDetails(movieId);
+    if (!movieId) return reply.status(400).send({ error: 'Invalid ID' });
+    return getMovieDetails(movieId, getLang(request));
   });
 
   app.get('/tv/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const tvId = parseId(id);
-    if (!tvId) return reply.status(400).send({ error: 'ID invalide' });
-    return getTvDetails(tvId);
+    if (!tvId) return reply.status(400).send({ error: 'Invalid ID' });
+    return getTvDetails(tvId, getLang(request));
   });
 
   app.get('/movie/:id/recommendations', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const movieId = parseId(id);
-    if (!movieId) return reply.status(400).send({ error: 'ID invalide' });
-    return getMovieRecommendations(movieId);
+    if (!movieId) return reply.status(400).send({ error: 'Invalid ID' });
+    return getMovieRecommendations(movieId, getLang(request));
   });
 
   app.get('/tv/:id/recommendations', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const tvId = parseId(id);
-    if (!tvId) return reply.status(400).send({ error: 'ID invalide' });
-    return getTvRecommendations(tvId);
+    if (!tvId) return reply.status(400).send({ error: 'Invalid ID' });
+    return getTvRecommendations(tvId, getLang(request));
   });
 
-  // Collection
   app.get('/collection/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const collectionId = parseId(id);
-    if (!collectionId) return reply.status(400).send({ error: 'ID invalide' });
-    return getCollection(collectionId);
+    if (!collectionId) return reply.status(400).send({ error: 'Invalid ID' });
+    return getCollection(collectionId, getLang(request));
   });
 
-  // Discover by genre
   app.get('/discover/:mediaType/genre/:genreId', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { mediaType, genreId } = request.params as { mediaType: string; genreId: string };
     const { page } = request.query as { page?: string };
     if (mediaType !== 'movie' && mediaType !== 'tv') {
-      return reply.status(400).send({ error: 'mediaType invalide' });
+      return reply.status(400).send({ error: 'Invalid mediaType' });
     }
     const gid = parseId(genreId);
-    if (!gid) return reply.status(400).send({ error: 'genreId invalide' });
-    return discoverByGenre(mediaType, gid, parsePage(page));
+    if (!gid) return reply.status(400).send({ error: 'Invalid genreId' });
+    return discoverByGenre(mediaType, gid, parsePage(page), getLang(request));
   });
 }

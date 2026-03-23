@@ -1,16 +1,18 @@
 import axios from 'axios';
+import i18n from '@/i18n';
 
 const api = axios.create({
   baseURL: '/api',
   withCredentials: true,
 });
 
-// Add token from localStorage as fallback
+// Add token + language header
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  config.headers['Accept-Language'] = i18n.language;
   return config;
 });
 
