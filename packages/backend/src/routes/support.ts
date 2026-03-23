@@ -2,10 +2,74 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 
 export async function supportRoutes(app: FastifyInstance) {
+  // Check if app is installed (has at least one Plex service)
+  app.get('/install-status', async () => {
+    const plexService = await prisma.service.findFirst({ where: { type: 'plex' } });
+    return { installed: !!plexService };
+  });
+
+  // Plex OAuth for setup — just get a token without creating a user
+  app.post('/setup/plex-pin', async (_request, reply) => {
+    const existing = await prisma.service.findFirst({ where: { type: 'plex' } });
+    if (existing) return reply.status(403).send({ error: 'Installation déjà effectuée' });
+    const { createPlexPin } = await import('../services/plex.js');
+    const pin = await createPlexPin('netflix-du-pauvre-client');
+    const authUrl = `https://app.plex.tv/auth#?clientID=netflix-du-pauvre-client&code=${pin.code}&context%5Bdevice%5D%5Bproduct%5D=Netflix%20du%20Pauvre`;
+    return reply.send({ pin, authUrl });
+  });
+
+  app.post('/setup/plex-check', async (request, reply) => {
+    const existing = await prisma.service.findFirst({ where: { type: 'plex' } });
+    if (existing) return reply.status(403).send({ error: 'Installation déjà effectuée' });
+    const { pinId } = request.body as { pinId: number };
+    if (!pinId) return reply.status(400).send({ error: 'pinId requis' });
+    const { checkPlexPin } = await import('../services/plex.js');
+    const authToken = await checkPlexPin(pinId, 'netflix-du-pauvre-client');
+    if (!authToken) return reply.status(400).send({ error: 'PIN non validé' });
+    return reply.send({ token: authToken });
+  });
+
+  // Initial setup — create first Plex service (locked once a Plex service exists)
+  app.post('/setup', async (request, reply) => {
+    const existing = await prisma.service.findFirst({ where: { type: 'plex' } });
+    if (existing) return reply.status(403).send({ error: 'Installation déjà effectuée' });
+
+    const { url, token, machineId, name } = request.body as {
+      url: string; token: string; machineId?: string; name?: string;
+    };
+    if (!url || !token) return reply.status(400).send({ error: 'URL et Token requis' });
+
+    const service = await prisma.service.create({
+      data: {
+        name: name || 'Plex',
+        type: 'plex',
+        config: JSON.stringify({ url, token, machineId: machineId || '' }),
+        isDefault: true,
+        enabled: true,
+      },
+    });
+
+    // Also store machineId in AppSettings for auth flow
+    if (machineId) {
+      await prisma.appSettings.upsert({
+        where: { id: 1 },
+        update: { plexMachineId: machineId },
+        create: { id: 1, plexMachineId: machineId, updatedAt: new Date() },
+      });
+    }
+
+    return reply.status(201).send({ ok: true, service: { ...service, config: JSON.parse(service.config) } });
+  });
+
   // Get incident banner (no auth)
   app.get('/banner', async () => {
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
     return { banner: settings?.incidentBanner || null };
+  });
+
+  // Quality options available for requests (auth required)
+  app.get('/quality-options', { preHandler: [app.authenticate] }, async () => {
+    return prisma.qualityOption.findMany({ orderBy: { position: 'asc' } });
   });
 
   // Get feature flags (no auth — needed by Layout before auth check)

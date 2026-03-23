@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Layout from '@/components/Layout';
 import HomePage from '@/pages/HomePage';
 import LoginPage from '@/pages/LoginPage';
+import InstallPage from '@/pages/InstallPage';
 import SearchPage from '@/pages/SearchPage';
 import MediaDetailPage from '@/pages/MediaDetailPage';
 import RequestsPage from '@/pages/RequestsPage';
@@ -14,6 +15,24 @@ import NoAccessPage from '@/pages/NoAccessPage';
 import DiscoverGenrePage from '@/pages/DiscoverGenrePage';
 import CategoryPage from '@/pages/CategoryPage';
 import CalendarPage from '@/pages/CalendarPage';
+import api from '@/lib/api';
+
+function InstallGuard({ children }: { children: React.ReactNode }) {
+  const [status, setStatus] = useState<'checking' | 'installed' | 'not-installed'>('checking');
+  const location = useLocation();
+
+  useEffect(() => {
+    api.get('/support/install-status')
+      .then(({ data }) => setStatus(data.installed ? 'installed' : 'not-installed'))
+      .catch(() => setStatus('installed'));
+  }, [location.pathname]);
+
+  if (status === 'checking') return <LoadingScreen />;
+  if (status === 'not-installed' && location.pathname !== '/install') {
+    return <Navigate to="/install" replace />;
+  }
+  return <>{children}</>;
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -54,7 +73,9 @@ function PageTransition({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <InstallGuard>
     <Routes>
+      <Route path="/install" element={<InstallPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/*"
@@ -86,5 +107,6 @@ export default function App() {
         }
       />
     </Routes>
+    </InstallGuard>
   );
 }
