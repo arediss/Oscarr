@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { getRadarr } from '../services/radarr.js';
-import { getSonarr } from '../services/sonarr.js';
+import { getRadarrAsync } from '../services/radarr.js';
+import { getSonarrAsync } from '../services/sonarr.js';
 
 const VALID_MEDIA_TYPES = ['movie', 'tv'];
 
@@ -109,7 +109,8 @@ export async function mediaRoutes(app: FastifyInstance) {
 
     try {
       if (mediaType === 'movie') {
-        const radarrMovie = await getRadarr().getMovieByTmdbId(tmdbIdNum);
+        const radarr = await getRadarrAsync();
+        const radarrMovie = await radarr.getMovieByTmdbId(tmdbIdNum);
         if (radarrMovie?.hasFile) liveAvailable = true;
       } else if (mediaType === 'tv') {
         // Try to find in Sonarr by tvdbId (from DB) or by looking up tvdbId via TMDB
@@ -120,7 +121,8 @@ export async function mediaRoutes(app: FastifyInstance) {
           tvdbId = tmdbData.external_ids?.tvdb_id ?? null;
         }
         if (tvdbId) {
-          const sonarrSeries = await getSonarr().getSeriesByTvdbId(tvdbId);
+          const sonarr = await getSonarrAsync();
+          const sonarrSeries = await sonarr.getSeriesByTvdbId(tvdbId);
           if (sonarrSeries) {
             const stats = sonarrSeries.statistics;
             if (stats?.percentOfEpisodes >= 100) {

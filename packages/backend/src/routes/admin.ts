@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { getRadarr, createRadarrFromConfig } from '../services/radarr.js';
-import { getSonarr, createSonarrFromConfig } from '../services/sonarr.js';
+import { getRadarrAsync, createRadarrFromConfig } from '../services/radarr.js';
+import { getSonarrAsync, createSonarrFromConfig } from '../services/sonarr.js';
 import { getServiceById } from '../utils/services.js';
 import { syncRadarr, syncSonarr, runFullSync, syncAvailabilityDates } from '../services/sync.js';
 import { getPlexFriends } from '../services/plex.js';
@@ -234,7 +234,8 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/radarr/profiles', async (request, reply) => {
     await requireAdmin(request, reply);
     try {
-      const profiles = await getRadarr().getQualityProfiles();
+      const radarr = await getRadarrAsync();
+      const profiles = await radarr.getQualityProfiles();
       return profiles;
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Radarr' });
@@ -244,7 +245,8 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/radarr/rootfolders', async (request, reply) => {
     await requireAdmin(request, reply);
     try {
-      const folders = await getRadarr().getRootFolders();
+      const radarr = await getRadarrAsync();
+      const folders = await radarr.getRootFolders();
       return folders;
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Radarr' });
@@ -254,7 +256,8 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/sonarr/profiles', async (request, reply) => {
     await requireAdmin(request, reply);
     try {
-      const profiles = await getSonarr().getQualityProfiles();
+      const sonarr = await getSonarrAsync();
+      const profiles = await sonarr.getQualityProfiles();
       return profiles;
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
@@ -264,7 +267,8 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/sonarr/rootfolders', async (request, reply) => {
     await requireAdmin(request, reply);
     try {
-      const folders = await getSonarr().getRootFolders();
+      const sonarr = await getSonarrAsync();
+      const folders = await sonarr.getRootFolders();
       return folders;
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });

@@ -150,42 +150,6 @@ export default function MediaDetailPage({ type }: Props) {
     return `~${parseInt(min)}min`;
   };
 
-  const getStatusBadge = () => {
-    if (isAvailable) {
-      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-success/10 text-ndp-success">{t('status.available')}</span>;
-    }
-    if (isDownloading) {
-      return (
-        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 flex items-center gap-1.5">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          {t('status.downloading', { progress: download.progress })}
-          {download.timeLeft && <span className="opacity-70">· {formatTimeLeft(download.timeLeft)}</span>}
-        </span>
-      );
-    }
-    if (isUpcoming) {
-      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400">{t('status.upcoming')}</span>;
-    }
-    if (isSearching) {
-      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-accent/10 text-ndp-accent">{t('status.searching_long')}</span>;
-    }
-    if (isPartiallyAvailable) {
-      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-accent/10 text-ndp-accent">{t('status.partially_available')}</span>;
-    }
-    if (!dbMedia?.requests?.length) return null;
-    const latestRequest = dbMedia.requests[0];
-    const statusMap: Record<string, { color: string }> = {
-      pending: { color: 'bg-ndp-warning/10 text-ndp-warning' },
-      approved: { color: 'bg-ndp-accent/10 text-ndp-accent' },
-      declined: { color: 'bg-ndp-danger/10 text-ndp-danger' },
-      processing: { color: 'bg-blue-500/10 text-blue-400' },
-      available: { color: 'bg-ndp-success/10 text-ndp-success' },
-      failed: { color: 'bg-ndp-danger/10 text-ndp-danger' },
-    };
-    const s = statusMap[latestRequest.status] || { color: 'bg-white/10 text-white' };
-    return <span className={clsx('px-3 py-1 rounded-full text-xs font-semibold', s.color)}>{t(`status.${latestRequest.status}`)}</span>;
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -250,10 +214,7 @@ export default function MediaDetailPage({ type }: Props) {
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-start gap-3 flex-wrap">
-              <h1 className="text-3xl sm:text-4xl font-extrabold text-white">{title}</h1>
-              {getStatusBadge()}
-            </div>
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-white">{title}</h1>
 
             {media.tagline && (
               <p className="text-ndp-text-muted italic mt-2">{media.tagline}</p>

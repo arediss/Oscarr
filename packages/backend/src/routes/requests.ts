@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { getRadarr, getRadarrForService, createRadarrFromConfig } from '../services/radarr.js';
-import { getSonarr, getSonarrForService, createSonarrFromConfig } from '../services/sonarr.js';
+import { getRadarrAsync, getRadarrForService, createRadarrFromConfig } from '../services/radarr.js';
+import { getSonarrAsync, getSonarrForService, createSonarrFromConfig } from '../services/sonarr.js';
 import { getMovieDetails, getTvDetails, getCollection } from '../services/tmdb.js';
 import { matchFolderRule } from '../services/folderRules.js';
 import { sendNotification, logEvent } from '../services/notifications.js';
@@ -417,7 +417,7 @@ async function sendToService(
     if (mediaType === 'movie') {
       const radarr = targetService
         ? getRadarrForService(targetService.id, targetService.config)
-        : getRadarr();
+        : await getRadarrAsync();
       const folderPath = ruleMatch?.folderPath || defaultFolder || (await radarr.getRootFolders())[0]?.path || '/movies';
       const tagId = await radarr.getOrCreateTag(username);
       const existing = await radarr.getMovieByTmdbId(media.tmdbId);
@@ -435,7 +435,7 @@ async function sendToService(
     } else if (mediaType === 'tv' && media.tvdbId) {
       const sonarr = targetService
         ? getSonarrForService(targetService.id, targetService.config)
-        : getSonarr();
+        : await getSonarrAsync();
       const folderPath = ruleMatch?.folderPath || defaultFolder || (await sonarr.getRootFolders())[0]?.path || '/tv';
       const seriesType = (ruleMatch?.seriesType as 'anime' | 'standard' | 'daily') || 'standard';
       const tagId = await sonarr.getOrCreateTag(username);

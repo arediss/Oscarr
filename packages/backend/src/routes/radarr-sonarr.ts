@@ -1,13 +1,14 @@
 import type { FastifyInstance } from 'fastify';
-import { getRadarr } from '../services/radarr.js';
-import { getSonarr } from '../services/sonarr.js';
+import { getRadarrAsync } from '../services/radarr.js';
+import { getSonarrAsync } from '../services/sonarr.js';
 import { prisma } from '../utils/prisma.js';
 
 export async function radarrSonarrRoutes(app: FastifyInstance) {
   // Radarr status
   app.get('/radarr/status', { preHandler: [app.authenticate] }, async (_request, reply) => {
     try {
-      const status = await getRadarr().getSystemStatus();
+      const radarr = await getRadarrAsync();
+      const status = await radarr.getSystemStatus();
       return { online: true, version: status.version };
     } catch {
       return reply.send({ online: false });
@@ -17,7 +18,8 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
   // Sonarr status
   app.get('/sonarr/status', { preHandler: [app.authenticate] }, async (_request, reply) => {
     try {
-      const status = await getSonarr().getSystemStatus();
+      const sonarr = await getSonarrAsync();
+      const status = await sonarr.getSystemStatus();
       return { online: true, version: status.version };
     } catch {
       return reply.send({ online: false });
@@ -26,7 +28,8 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
 
   // Radarr queue (download status)
   app.get('/radarr/queue', { preHandler: [app.authenticate] }, async () => {
-    const queue = await getRadarr().getQueue();
+    const radarr = await getRadarrAsync();
+    const queue = await radarr.getQueue();
     return queue.records.map(item => ({
       movieId: item.movieId,
       title: item.title,
@@ -41,7 +44,8 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
 
   // Sonarr queue (download status)
   app.get('/sonarr/queue', { preHandler: [app.authenticate] }, async () => {
-    const queue = await getSonarr().getQueue();
+    const sonarr = await getSonarrAsync();
+    const queue = await sonarr.getQueue();
     return queue.records.map(item => ({
       seriesId: item.seriesId,
       title: item.title,
@@ -58,9 +62,13 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
   // Combined download queue mapped to tmdbId
   app.get('/downloads', { preHandler: [app.authenticate] }, async () => {
     try {
+      const [radarr, sonarr] = await Promise.all([
+        getRadarrAsync(),
+        getSonarrAsync(),
+      ]);
       const [radarrQueue, sonarrQueue] = await Promise.all([
-        getRadarr().getQueue().catch(() => ({ records: [] })),
-        getSonarr().getQueue().catch(() => ({ records: [] })),
+        radarr.getQueue().catch(() => ({ records: [] })),
+        sonarr.getQueue().catch(() => ({ records: [] })),
       ]);
 
       const downloads: {
@@ -116,9 +124,13 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
   // Library stats
   app.get('/stats', { preHandler: [app.authenticate] }, async () => {
     try {
+      const [radarr, sonarr] = await Promise.all([
+        getRadarrAsync(),
+        getSonarrAsync(),
+      ]);
       const [movies, series] = await Promise.all([
-        getRadarr().getMovies(),
-        getSonarr().getSeries(),
+        radarr.getMovies(),
+        sonarr.getSeries(),
       ]);
 
       return {
@@ -149,9 +161,13 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
     const end = new Date(Date.now() + numDays * 86400000).toISOString().slice(0, 10);
 
     try {
+      const [radarr, sonarr] = await Promise.all([
+        getRadarrAsync(),
+        getSonarrAsync(),
+      ]);
       const [movies, episodes] = await Promise.all([
-        getRadarr().getCalendar(start, end),
-        getSonarr().getCalendar(start, end),
+        radarr.getCalendar(start, end),
+        sonarr.getCalendar(start, end),
       ]);
 
       // Resolve tvdbId → tmdbId for episodes via DB
