@@ -79,7 +79,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
       }[] = [];
 
       for (const item of radarrQueue.records) {
-        const movie = (item as Record<string, unknown>).movie as { tmdbId?: number } | undefined;
+        const movie = (item as unknown as Record<string, unknown>).movie as { tmdbId?: number } | undefined;
         if (!movie?.tmdbId) continue;
         downloads.push({
           tmdbId: movie.tmdbId,
@@ -95,7 +95,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
       }
 
       for (const item of sonarrQueue.records) {
-        const series = (item as Record<string, unknown>).series as { tvdbId?: number } | undefined;
+        const series = (item as unknown as Record<string, unknown>).series as { tvdbId?: number } | undefined;
         if (!series?.tvdbId) continue;
         // Look up tmdbId from our DB via tvdbId
         const { prisma } = await import('../utils/prisma.js');
