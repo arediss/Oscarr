@@ -1,4 +1,4 @@
 # Contributors
 
-- **Quentin** — Maintainer & Developer
-- **Claude** (Anthropic) — AI Development Assistant
+- **[@Arediss](https://github.com/arediss)** — Maintainer & Developer
+- **[Claude Code](https://github.com/anthropics)** (Anthropic) — AI Development Assistant
