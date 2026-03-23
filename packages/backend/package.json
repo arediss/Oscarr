@@ -20,11 +20,8 @@
     "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "fastify": "^5.3.2",
-    "node-cache": "^5.1.2",
     "node-cron": "^4.2.1",
-    "pino": "^9.6.0",
-    "resend": "^6.9.4",
-    "zod": "^3.24.2"
+    "resend": "^6.9.4"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

@@ -2,7 +2,6 @@ import axios from 'axios';
 import { getCached, setCache } from '../utils/cache.js';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
-const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
 const SUPPORTED_LANGS = ['en', 'fr'];
@@ -28,8 +27,6 @@ function getTmdbApi(lang = DEFAULT_LANG) {
     },
   });
 }
-
-export { normalizeLang };
 
 export interface TmdbCollection {
   id: number;
@@ -135,11 +132,6 @@ export interface TmdbVideo {
 
 export type TmdbMediaResult = (TmdbMovie | TmdbTv) & { media_type: string };
 
-export function getImageUrl(path: string | null, size = 'w500'): string | null {
-  if (!path) return null;
-  return `${TMDB_IMAGE_BASE}/${size}${path}`;
-}
-
 async function cachedRequest<T>(cacheKey: string, fetcher: () => Promise<T>, ttlHours = 24): Promise<T> {
   const cached = await getCached<T>(cacheKey);
   if (cached) return cached;
@@ -230,21 +222,6 @@ export async function getCollection(collectionId: number, lang?: string): Promis
     const { data } = await getTmdbApi(l).get(`/collection/${collectionId}`);
     return data;
   }, 48);
-}
-
-export async function findByTvdbId(tvdbId: number): Promise<{ tmdbId: number; posterPath: string | null; backdropPath: string | null } | null> {
-  return cachedRequest(`find:tvdb:${tvdbId}`, async () => {
-    const { data } = await getTmdbApi().get(`/find/${tvdbId}`, {
-      params: { external_source: 'tvdb_id' },
-    });
-    const result = data.tv_results?.[0];
-    if (!result) return null;
-    return {
-      tmdbId: result.id,
-      posterPath: result.poster_path,
-      backdropPath: result.backdrop_path,
-    };
-  }, 168);
 }
 
 export async function discoverByGenre(mediaType: 'movie' | 'tv', genreId: number, page = 1, lang?: string) {

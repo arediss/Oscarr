@@ -55,7 +55,7 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
               title: existing.title || movie.title,
               mediaType: 'movie',
               posterPath: posterPath || existing.posterPath,
-            });
+            }).catch(err => console.error('[Notification] Failed:', err));
           }
           await prisma.media.update({
             where: { id: existing.id },
@@ -177,7 +177,7 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
               title: existing.title || show.title,
               mediaType: 'tv',
               posterPath: posterPath || existing.posterPath,
-            });
+            }).catch(err => console.error('[Notification] Failed:', err));
           }
           await prisma.media.update({
             where: { id: existing.id },

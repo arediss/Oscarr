@@ -37,11 +37,3 @@ export function usePluginUI(hookPoint: string) {
 
   return { contributions, loading };
 }
-
-export function invalidatePluginCache(hookPoint?: string) {
-  if (hookPoint) {
-    cache.delete(hookPoint);
-  } else {
-    cache.clear();
-  }
-}

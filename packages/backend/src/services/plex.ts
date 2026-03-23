@@ -32,20 +32,6 @@ export async function getPlexUser(authToken: string): Promise<PlexUser> {
   };
 }
 
-export function getPlexOAuthUrl(clientId: string, forwardUrl: string): string {
-  const params = new URLSearchParams({
-    'X-Plex-Product': 'Oscarr',
-    'X-Plex-Client-Identifier': clientId,
-    'X-Plex-Version': '1.0.0',
-    clientID: clientId,
-    forwardUrl,
-    context: 'home',
-    'code': '',
-  });
-
-  return `https://app.plex.tv/auth#?${params.toString()}`;
-}
-
 export async function createPlexPin(clientId: string): Promise<{ id: number; code: string }> {
   const { data } = await axios.post(
     'https://plex.tv/api/v2/pins',

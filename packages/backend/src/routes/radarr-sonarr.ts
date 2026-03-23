@@ -98,7 +98,6 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
         const series = (item as unknown as Record<string, unknown>).series as { tvdbId?: number } | undefined;
         if (!series?.tvdbId) continue;
         // Look up tmdbId from our DB via tvdbId
-        const { prisma } = await import('../utils/prisma.js');
         const media = await prisma.media.findFirst({ where: { tvdbId: series.tvdbId, mediaType: 'tv' }, select: { tmdbId: true } });
         if (!media) continue;
         downloads.push({

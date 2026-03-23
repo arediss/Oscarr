@@ -2,18 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { getRadarrAsync } from '../services/radarr.js';
 import { getSonarrAsync } from '../services/sonarr.js';
-
-const VALID_MEDIA_TYPES = ['movie', 'tv'];
-
-function parseId(value: string): number | null {
-  const id = parseInt(value, 10);
-  return Number.isNaN(id) || id < 1 ? null : id;
-}
-
-function parsePage(value?: string): number {
-  const page = parseInt(value || '1', 10);
-  return Number.isNaN(page) || page < 1 ? 1 : page;
-}
+import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 
 export async function mediaRoutes(app: FastifyInstance) {
   app.get('/', { preHandler: [app.authenticate] }, async (request) => {

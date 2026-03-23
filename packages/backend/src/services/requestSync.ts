@@ -3,6 +3,13 @@ import { getRadarrAsync } from './radarr.js';
 import { getSonarrAsync } from './sonarr.js';
 import { getServiceConfig } from '../utils/services.js';
 
+export async function cleanupOrphanedRequests(): Promise<{ deleted: number }> {
+  const result = await prisma.$executeRawUnsafe(
+    `DELETE FROM MediaRequest WHERE userId NOT IN (SELECT id FROM User) OR mediaId NOT IN (SELECT id FROM Media)`
+  );
+  return { deleted: result };
+}
+
 interface SyncResult {
   imported: number;
   skipped: number;
@@ -176,7 +183,7 @@ async function syncSonarrRequests(usernameMap: Map<string, number>): Promise<Syn
 
           const stats = show.statistics;
           const status = stats && stats.percentOfEpisodes >= 100 ? 'available'
-            : stats && stats.episodeFileCount > 0 ? 'approved'
+            : stats && stats.episodeFileCount > 0 ? 'processing'
             : 'approved';
 
           const addedDate = (show as unknown as { added?: string }).added;

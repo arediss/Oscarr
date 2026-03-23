@@ -12,16 +12,7 @@ import {
   discoverByGenre,
   getCollection,
 } from '../services/tmdb.js';
-
-function parsePage(value?: string): number {
-  const page = parseInt(value || '1', 10);
-  return Number.isNaN(page) || page < 1 ? 1 : page;
-}
-
-function parseId(value: string): number | null {
-  const id = parseInt(value, 10);
-  return Number.isNaN(id) || id < 1 ? null : id;
-}
+import { parseId, parsePage } from '../utils/params.js';
 
 function getLang(request: FastifyRequest): string {
   return (request.headers['accept-language'] || '').split(',')[0]?.split('-')[0] || 'en';
