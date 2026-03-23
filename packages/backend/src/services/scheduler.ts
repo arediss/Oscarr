@@ -1,7 +1,7 @@
 import cron, { type ScheduledTask } from 'node-cron';
 import { prisma } from '../utils/prisma.js';
 import { runFullSync, runNewMediaSync } from './sync.js';
-import { syncRequestsFromTags } from './requestSync.js';
+import { syncRequestsFromTags, cleanupOrphanedRequests } from './requestSync.js';
 import type { PluginEngine } from '../plugins/engine.js';
 import { logEvent } from './notifications.js';
 
@@ -10,6 +10,7 @@ const JOB_HANDLERS: Record<string, () => Promise<unknown>> = {
   new_media_sync: async () => runNewMediaSync(),
   full_sync: async () => runFullSync(),
   request_sync: async () => syncRequestsFromTags(),
+  cleanup_orphans: async () => cleanupOrphanedRequests(),
 };
 
 // Default job definitions (seeded on first boot)
@@ -17,6 +18,7 @@ const DEFAULT_JOBS = [
   { key: 'new_media_sync', label: 'Sync new media', cronExpression: '*/15 * * * *', enabled: true },
   { key: 'full_sync', label: 'Full sync (Radarr + Sonarr)', cronExpression: '0 6 * * *', enabled: true },
   { key: 'request_sync', label: 'Sync requests', cronExpression: '*/5 * * * *', enabled: true },
+  { key: 'cleanup_orphans', label: 'Cleanup orphaned requests', cronExpression: '0 3 * * *', enabled: true },
 ];
 
 const activeTasks = new Map<string, ScheduledTask>();
@@ -156,12 +158,3 @@ export async function triggerJob(key: string) {
   return runJob(key);
 }
 
-export function getNextRun(cronExpression: string): Date | null {
-  try {
-    // Simple next-run calculation based on cron expression
-    // node-cron doesn't expose this, so we return null and let frontend handle display
-    return null;
-  } catch {
-    return null;
-  }
-}

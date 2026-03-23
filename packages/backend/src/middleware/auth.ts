@@ -13,9 +13,12 @@ export async function requireAdmin(request: FastifyRequest, reply: FastifyReply)
     await request.jwtVerify();
     const user = request.user as { id: number; role: string };
     if (user.role !== 'admin') {
-      return reply.status(403).send({ error: 'Accès réservé aux administrateurs' });
+      reply.status(403).send({ error: 'Accès réservé aux administrateurs' });
+      throw new Error('Unauthorized');
     }
   } catch (err) {
-    return reply.status(401).send({ error: 'Non autorisé' });
+    if ((err as Error).message === 'Unauthorized') throw err;
+    reply.status(401).send({ error: 'Non autorisé' });
+    throw new Error('Unauthorized');
   }
 }

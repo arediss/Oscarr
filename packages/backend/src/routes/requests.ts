@@ -6,19 +6,9 @@ import { getMovieDetails, getTvDetails, getCollection } from '../services/tmdb.j
 import { matchFolderRule } from '../services/folderRules.js';
 import { sendNotification, logEvent } from '../services/notifications.js';
 import { getServiceById, getAllServices } from '../utils/services.js';
+import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 
 const VALID_STATUSES = ['pending', 'approved', 'declined', 'processing', 'available', 'failed'];
-const VALID_MEDIA_TYPES = ['movie', 'tv'];
-
-function parseId(value: string): number | null {
-  const id = parseInt(value, 10);
-  return Number.isNaN(id) || id < 1 ? null : id;
-}
-
-function parsePage(value?: string): number {
-  const page = parseInt(value || '1', 10);
-  return Number.isNaN(page) || page < 1 ? 1 : page;
-}
 
 export async function requestRoutes(app: FastifyInstance) {
   app.get('/', { preHandler: [app.authenticate] }, async (request) => {
@@ -36,11 +26,6 @@ export async function requestRoutes(app: FastifyInstance) {
       if (uid) where.userId = uid;
     }
     if (status && VALID_STATUSES.includes(status)) where.status = status;
-
-    // Clean up orphaned requests (user or media deleted)
-    await prisma.$executeRawUnsafe(
-      `DELETE FROM MediaRequest WHERE userId NOT IN (SELECT id FROM User) OR mediaId NOT IN (SELECT id FROM Media)`
-    );
 
     // Quick sync: update stale request statuses where media is already available
     await prisma.mediaRequest.updateMany({
@@ -198,7 +183,7 @@ export async function requestRoutes(app: FastifyInstance) {
 
     // Notify
     const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { plexUsername: true } });
-    sendNotification('request_new', { title, mediaType: validMediaType, username: dbUser?.plexUsername || 'Utilisateur', posterPath: tmdbData.poster_path, tmdbId: tmdbData.id });
+    sendNotification('request_new', { title, mediaType: validMediaType, username: dbUser?.plexUsername || 'Utilisateur', posterPath: tmdbData.poster_path, tmdbId: tmdbData.id }).catch(err => console.error('[Notification] Failed:', err));
     logEvent('info', 'Request', `${dbUser?.plexUsername} a demandé "${title}"`);
 
     return reply.status(201).send(mediaRequest);
@@ -237,7 +222,7 @@ export async function requestRoutes(app: FastifyInstance) {
       },
     });
 
-    sendNotification('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.plexUsername || 'Utilisateur', posterPath: updated.media.posterPath });
+    sendNotification('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.plexUsername || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
     logEvent('info', 'Request', `Demande "${updated.media.title}" approuvée`);
 
     return reply.send(updated);
@@ -262,7 +247,7 @@ export async function requestRoutes(app: FastifyInstance) {
       },
     });
 
-    sendNotification('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.plexUsername || 'Utilisateur', posterPath: updated.media.posterPath });
+    sendNotification('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.plexUsername || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
     logEvent('info', 'Request', `Demande "${updated.media.title}" refusée`);
 
     return reply.send(updated);

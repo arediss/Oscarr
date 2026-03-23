@@ -7,7 +7,6 @@ import {
   XCircle,
   Loader2,
   AlertCircle,
-  Filter,
   Film,
   Search,
   CalendarClock,

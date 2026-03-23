@@ -9,19 +9,8 @@ import { syncRequestsFromTags } from '../services/requestSync.js';
 import { testDiscord, testTelegram, testEmail, sendNotification, logEvent } from '../services/notifications.js';
 import { triggerJob, updateJobSchedule } from '../services/scheduler.js';
 import nodeSchedule from 'node-cron';
-
-function parseId(value: string): number | null {
-  const id = parseInt(value, 10);
-  return Number.isNaN(id) || id < 1 ? null : id;
-}
-
-async function requireAdmin(request: { user: unknown }, reply: { status: (code: number) => { send: (body: unknown) => void } }) {
-  const user = request.user as { id: number; role: string };
-  if (user.role !== 'admin') {
-    reply.status(403).send({ error: 'Admin uniquement' });
-    throw new Error('Unauthorized');
-  }
-}
+import { parseId } from '../utils/params.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   // All admin routes require auth + admin role
@@ -330,7 +319,7 @@ export async function adminRoutes(app: FastifyInstance) {
       create: { id: 1, incidentBanner: banner || null, updatedAt: new Date() },
     });
     if (banner) {
-      sendNotification('incident_banner', { title: 'Incident', message: banner });
+      sendNotification('incident_banner', { title: 'Incident', message: banner }).catch(err => console.error('[Notification] Failed:', err));
     }
     return { ok: true };
   });

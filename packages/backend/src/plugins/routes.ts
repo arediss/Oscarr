@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { pluginEngine } from './engine.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 export async function pluginRoutes(app: FastifyInstance) {
   // List all plugins (admin only)
@@ -63,10 +64,4 @@ export async function pluginRoutes(app: FastifyInstance) {
   app.get('/features', async () => {
     return pluginEngine.getAllFeatureFlags();
   });
-}
-
-async function requireAdmin(request: any, reply: any) {
-  if (request.user?.role !== 'admin') {
-    return reply.status(403).send({ error: 'Admin access required' });
-  }
 }
