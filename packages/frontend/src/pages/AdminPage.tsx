@@ -89,10 +89,13 @@ export default function AdminPage() {
 }
 
 // ============ USERS TAB ============
+type UserSort = 'username' | 'date' | 'role';
+
 function UsersTab() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [sortBy, setSortBy] = useState<UserSort>('username');
   const [paymentDate, setPaymentDate] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [saving, setSaving] = useState(false);
@@ -134,10 +137,26 @@ function UsersTab() {
 
   if (loading) return <Spinner />;
 
+  const sortedUsers = [...users].sort((a, b) => {
+    if (sortBy === 'username') return (a.plexUsername || a.email).localeCompare(b.plexUsername || b.email);
+    if (sortBy === 'role') return a.role === b.role ? 0 : a.role === 'admin' ? -1 : 1;
+    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+  });
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-ndp-text">{users.length} utilisateur{users.length > 1 ? 's' : ''}</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-ndp-text">{users.length} utilisateur{users.length > 1 ? 's' : ''}</h2>
+          <div className="flex items-center gap-1">
+            {([['username', 'Nom'], ['date', 'Date'], ['role', 'Rôle']] as const).map(([key, label]) => (
+              <button key={key} onClick={() => setSortBy(key)}
+                className={clsx('px-2.5 py-1 rounded-lg text-xs font-medium transition-all', sortBy === key ? 'bg-ndp-accent text-white' : 'bg-ndp-surface text-ndp-text-muted hover:bg-ndp-surface-light')}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           <button onClick={handleImportPlex} disabled={importing} className="btn-primary flex items-center gap-2 text-sm">
             {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
@@ -156,7 +175,7 @@ function UsersTab() {
         </div>
       )}
       <div className="space-y-3">
-        {users.map((u) => {
+        {sortedUsers.map((u) => {
           const isActive = u.subscriptionActive;
           const isExpanded = selectedUser?.id === u.id;
           return (
