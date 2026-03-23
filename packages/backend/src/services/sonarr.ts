@@ -165,6 +165,23 @@ class SonarrService {
   }
 }
 
+const _serviceCache = new Map<number, { instance: SonarrService; configKey: string }>();
+
+/** Create a SonarrService from a service config object */
+export function createSonarrFromConfig(config: Record<string, string>): SonarrService {
+  return new SonarrService(config.url || '', config.apiKey || '');
+}
+
+/** Get a cached SonarrService for a specific service ID */
+export function getSonarrForService(serviceId: number, config: Record<string, string>): SonarrService {
+  const configKey = `${config.url}|${config.apiKey}`;
+  const cached = _serviceCache.get(serviceId);
+  if (cached && cached.configKey === configKey) return cached.instance;
+  const instance = createSonarrFromConfig(config);
+  _serviceCache.set(serviceId, { instance, configKey });
+  return instance;
+}
+
 let _sonarr: SonarrService | null = null;
 let _sonarrConfigKey: string | null = null;
 

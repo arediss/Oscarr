@@ -10,6 +10,7 @@ export interface RuleCondition {
 export interface RuleMatch {
   folderPath: string;
   seriesType?: string | null;
+  serviceId?: number | null;
 }
 
 interface MediaContext {
@@ -79,6 +80,7 @@ export async function matchFolderRule(
       return {
         folderPath: rule.folderPath,
         seriesType: rule.seriesType,
+        serviceId: rule.serviceId,
       };
     }
   }

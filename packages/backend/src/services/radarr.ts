@@ -129,6 +129,23 @@ class RadarrService {
   }
 }
 
+const _serviceCache = new Map<number, { instance: RadarrService; configKey: string }>();
+
+/** Create a RadarrService from a service config object */
+export function createRadarrFromConfig(config: Record<string, string>): RadarrService {
+  return new RadarrService(config.url || '', config.apiKey || '');
+}
+
+/** Get a cached RadarrService for a specific service ID */
+export function getRadarrForService(serviceId: number, config: Record<string, string>): RadarrService {
+  const configKey = `${config.url}|${config.apiKey}`;
+  const cached = _serviceCache.get(serviceId);
+  if (cached && cached.configKey === configKey) return cached.instance;
+  const instance = createRadarrFromConfig(config);
+  _serviceCache.set(serviceId, { instance, configKey });
+  return instance;
+}
+
 let _radarr: RadarrService | null = null;
 let _radarrConfigKey: string | null = null;
 

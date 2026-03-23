@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { getRadarr } from '../services/radarr.js';
-import { getSonarr } from '../services/sonarr.js';
+import { getRadarr, getRadarrForService, createRadarrFromConfig } from '../services/radarr.js';
+import { getSonarr, getSonarrForService, createSonarrFromConfig } from '../services/sonarr.js';
 import { getMovieDetails, getTvDetails, getCollection } from '../services/tmdb.js';
 import { matchFolderRule } from '../services/folderRules.js';
 import { sendNotification, logEvent } from '../services/notifications.js';
+import { getServiceById, getAllServices } from '../utils/services.js';
 
 const VALID_STATUSES = ['pending', 'approved', 'declined', 'processing', 'available', 'failed'];
 const VALID_MEDIA_TYPES = ['movie', 'tv'];
@@ -89,11 +90,12 @@ export async function requestRoutes(app: FastifyInstance) {
   // Create a new request
   app.post('/', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
-    const { tmdbId, mediaType, seasons, rootFolder } = request.body as {
+    const { tmdbId, mediaType, seasons, rootFolder, qualityOptionId } = request.body as {
       tmdbId: unknown;
       mediaType: unknown;
       seasons?: unknown;
       rootFolder?: string;
+      qualityOptionId?: number;
     };
 
     if (typeof tmdbId !== 'number' || !Number.isFinite(tmdbId) || tmdbId < 1) {
@@ -173,6 +175,7 @@ export async function requestRoutes(app: FastifyInstance) {
         mediaType: validMediaType,
         seasons: validSeasons ? JSON.stringify(validSeasons) : null,
         rootFolder: typeof rootFolder === 'string' ? rootFolder : null,
+        qualityOptionId: qualityOptionId ?? null,
         status: shouldAutoApprove ? 'approved' : 'pending',
         approvedById: shouldAutoApprove ? user.id : null,
       },
@@ -185,7 +188,7 @@ export async function requestRoutes(app: FastifyInstance) {
     if (shouldAutoApprove) {
       const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { plexUsername: true, email: true } });
       const tagName = dbUser?.plexUsername || dbUser?.email || `user-${user.id}`;
-      await sendToService(media, validMediaType, tagName, validSeasons);
+      await sendToService(media, validMediaType, tagName, validSeasons, qualityOptionId);
     }
 
     // Notify
@@ -218,7 +221,7 @@ export async function requestRoutes(app: FastifyInstance) {
 
     const seasons = mediaRequest.seasons ? JSON.parse(mediaRequest.seasons) : undefined;
     const tagName = mediaRequest.user.plexUsername || mediaRequest.user.email || `user-${mediaRequest.user.id}`;
-    await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, seasons);
+    await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, seasons, mediaRequest.qualityOptionId ?? undefined);
 
     const updated = await prisma.mediaRequest.update({
       where: { id: requestId },
@@ -366,6 +369,7 @@ async function sendToService(
   mediaType: string,
   username: string,
   seasons?: number[],
+  qualityOptionId?: number,
 ) {
   try {
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
@@ -380,34 +384,68 @@ async function sendToService(
     const ruleMatch = await matchFolderRule(mediaType as 'movie' | 'tv', tmdbData);
     const defaultFolder = mediaType === 'movie' ? settings?.defaultMovieFolder : settings?.defaultTvFolder;
 
+    // Resolve service + quality profile via quality mapping
+    let targetServiceId: number | null = ruleMatch?.serviceId ?? null;
+    let targetProfileId: number | null = null;
+
+    if (qualityOptionId) {
+      const serviceType = mediaType === 'movie' ? 'radarr' : 'sonarr';
+      const mapping = await prisma.qualityMapping.findFirst({
+        where: {
+          qualityOptionId,
+          service: { type: serviceType, enabled: true },
+        },
+        include: { service: true },
+      });
+      if (mapping) {
+        targetServiceId = mapping.serviceId;
+        targetProfileId = mapping.qualityProfileId;
+      }
+    }
+
+    // Resolve the actual service instance
+    let targetService: { id: number; config: Record<string, string> } | null = null;
+    if (targetServiceId) {
+      targetService = await getServiceById(targetServiceId) as { id: number; config: Record<string, string> } | null;
+    }
+    if (!targetService) {
+      // Fallback: first enabled service of the right type
+      const services = await getAllServices(mediaType === 'movie' ? 'radarr' : 'sonarr');
+      if (services.length > 0) targetService = services[0];
+    }
+
     if (mediaType === 'movie') {
-      const folderPath = ruleMatch?.folderPath || defaultFolder || (await getRadarr().getRootFolders())[0]?.path || '/movies';
-      const tagId = await getRadarr().getOrCreateTag(username);
-      const existing = await getRadarr().getMovieByTmdbId(media.tmdbId);
+      const radarr = targetService
+        ? getRadarrForService(targetService.id, targetService.config)
+        : getRadarr();
+      const folderPath = ruleMatch?.folderPath || defaultFolder || (await radarr.getRootFolders())[0]?.path || '/movies';
+      const tagId = await radarr.getOrCreateTag(username);
+      const existing = await radarr.getMovieByTmdbId(media.tmdbId);
       if (!existing) {
-        const profiles = await getRadarr().getQualityProfiles();
-        await getRadarr().addMovie({
+        const profileId = targetProfileId ?? defaultProfileId ?? (await radarr.getQualityProfiles())[0]?.id ?? 1;
+        await radarr.addMovie({
           title: media.title,
           tmdbId: media.tmdbId,
-          qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,
+          qualityProfileId: profileId,
           rootFolderPath: folderPath,
           tags: [tagId],
           searchForMovie: true,
         });
       }
     } else if (mediaType === 'tv' && media.tvdbId) {
-      const animeFolder = settings?.defaultAnimeFolder;
-      const folderPath = ruleMatch?.folderPath || defaultFolder || (await getSonarr().getRootFolders())[0]?.path || '/tv';
+      const sonarr = targetService
+        ? getSonarrForService(targetService.id, targetService.config)
+        : getSonarr();
+      const folderPath = ruleMatch?.folderPath || defaultFolder || (await sonarr.getRootFolders())[0]?.path || '/tv';
       const seriesType = (ruleMatch?.seriesType as 'anime' | 'standard' | 'daily') || 'standard';
-
-      const tagId = await getSonarr().getOrCreateTag(username);
-      const existing = await getSonarr().getSeriesByTvdbId(media.tvdbId);
+      const tagId = await sonarr.getOrCreateTag(username);
+      const existing = await sonarr.getSeriesByTvdbId(media.tvdbId);
       if (!existing) {
-        const profiles = await getSonarr().getQualityProfiles();
-        await getSonarr().addSeries({
+        const profileId = targetProfileId ?? defaultProfileId ?? (await sonarr.getQualityProfiles())[0]?.id ?? 1;
+        await sonarr.addSeries({
           title: media.title,
           tvdbId: media.tvdbId,
-          qualityProfileId: defaultProfileId ?? profiles[0]?.id ?? 1,
+          qualityProfileId: profileId,
           rootFolderPath: folderPath,
           seriesType,
           seasons: seasons ?? [],

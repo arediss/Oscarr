@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { getRadarr } from '../services/radarr.js';
-import { getSonarr } from '../services/sonarr.js';
+import { getRadarr, createRadarrFromConfig } from '../services/radarr.js';
+import { getSonarr, createSonarrFromConfig } from '../services/sonarr.js';
+import { getServiceById } from '../utils/services.js';
 import { syncRadarr, syncSonarr, runFullSync } from '../services/sync.js';
 import { getPlexFriends } from '../services/plex.js';
 import { syncRequestsFromTags } from '../services/requestSync.js';
@@ -223,6 +224,19 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   });
 
+  // === PLEX TOKEN HELPER (for service setup) ===
+
+  app.get('/plex-token', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const adminUser = request.user as { id: number };
+    const admin = await prisma.user.findUnique({
+      where: { id: adminUser.id },
+      select: { plexToken: true },
+    });
+    if (!admin?.plexToken) return reply.status(404).send({ error: 'Aucun token Plex trouvé' });
+    return { token: admin.plexToken };
+  });
+
   // === SERVICE CONFIG (Radarr/Sonarr profiles & folders) ===
 
   app.get('/radarr/profiles', async (request, reply) => {
@@ -290,8 +304,8 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.post('/folder-rules', async (request, reply) => {
     await requireAdmin(request, reply);
-    const { name, mediaType, conditions, folderPath, seriesType, priority } = request.body as {
-      name: string; mediaType: string; conditions: unknown[]; folderPath: string; seriesType?: string; priority?: number;
+    const { name, mediaType, conditions, folderPath, seriesType, priority, serviceId } = request.body as {
+      name: string; mediaType: string; conditions: unknown[]; folderPath: string; seriesType?: string; priority?: number; serviceId?: number;
     };
     if (!name || !mediaType || !conditions || !folderPath) {
       return reply.status(400).send({ error: 'Tous les champs sont requis' });
@@ -304,6 +318,7 @@ export async function adminRoutes(app: FastifyInstance) {
         folderPath,
         seriesType: seriesType || null,
         priority: priority ?? 0,
+        serviceId: serviceId ?? null,
       },
     });
     return reply.status(201).send(rule);
@@ -314,8 +329,8 @@ export async function adminRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const ruleId = parseId(id);
     if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
-    const { name, mediaType, conditions, folderPath, seriesType, priority } = request.body as {
-      name?: string; mediaType?: string; conditions?: unknown[]; folderPath?: string; seriesType?: string; priority?: number;
+    const { name, mediaType, conditions, folderPath, seriesType, priority, serviceId } = request.body as {
+      name?: string; mediaType?: string; conditions?: unknown[]; folderPath?: string; seriesType?: string; priority?: number; serviceId?: number | null;
     };
     const rule = await prisma.folderRule.update({
       where: { id: ruleId },
@@ -326,6 +341,7 @@ export async function adminRoutes(app: FastifyInstance) {
         ...(folderPath !== undefined ? { folderPath } : {}),
         ...(seriesType !== undefined ? { seriesType: seriesType || null } : {}),
         ...(priority !== undefined ? { priority } : {}),
+        ...(serviceId !== undefined ? { serviceId } : {}),
       },
     });
     return reply.send(rule);
@@ -632,6 +648,142 @@ export async function adminRoutes(app: FastifyInstance) {
       return { ok: true };
     } catch (err) {
       return reply.status(502).send({ error: 'Échec de l\'envoi email' });
+    }
+  });
+
+  // === QUALITY OPTIONS ===
+
+  app.get('/quality-options', async (request, reply) => {
+    await requireAdmin(request, reply);
+    return prisma.qualityOption.findMany({
+      orderBy: { position: 'asc' },
+      include: {
+        mappings: {
+          include: { service: { select: { id: true, name: true, type: true } } },
+        },
+      },
+    });
+  });
+
+  app.post('/quality-options', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { label, position } = request.body as { label: string; position?: number };
+    if (!label) return reply.status(400).send({ error: 'Label requis' });
+    const maxPos = await prisma.qualityOption.aggregate({ _max: { position: true } });
+    const option = await prisma.qualityOption.create({
+      data: { label, position: position ?? (maxPos._max.position ?? 0) + 1 },
+    });
+    return reply.status(201).send(option);
+  });
+
+  app.put('/quality-options/:id', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { id } = request.params as { id: string };
+    const optionId = parseId(id);
+    if (!optionId) return reply.status(400).send({ error: 'ID invalide' });
+    const { label, position } = request.body as { label?: string; position?: number };
+    const option = await prisma.qualityOption.update({
+      where: { id: optionId },
+      data: {
+        ...(label !== undefined ? { label } : {}),
+        ...(position !== undefined ? { position } : {}),
+      },
+    });
+    return option;
+  });
+
+  app.delete('/quality-options/:id', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { id } = request.params as { id: string };
+    const optionId = parseId(id);
+    if (!optionId) return reply.status(400).send({ error: 'ID invalide' });
+    await prisma.qualityOption.delete({ where: { id: optionId } });
+    return { ok: true };
+  });
+
+  // Seed default quality options
+  app.post('/quality-options/seed', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const defaults = [
+      { label: 'SD', position: 1 },
+      { label: 'HD', position: 2 },
+      { label: '4K', position: 3 },
+      { label: '4K HDR', position: 4 },
+    ];
+    let created = 0;
+    for (const d of defaults) {
+      const exists = await prisma.qualityOption.findUnique({ where: { label: d.label } });
+      if (!exists) {
+        await prisma.qualityOption.create({ data: d });
+        created++;
+      }
+    }
+    return { created };
+  });
+
+  // === QUALITY MAPPINGS ===
+
+  app.get('/quality-mappings', async (request, reply) => {
+    await requireAdmin(request, reply);
+    return prisma.qualityMapping.findMany({
+      include: {
+        qualityOption: true,
+        service: { select: { id: true, name: true, type: true } },
+      },
+      orderBy: { qualityOptionId: 'asc' },
+    });
+  });
+
+  app.post('/quality-mappings', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { qualityOptionId, serviceId, qualityProfileId, qualityProfileName } = request.body as {
+      qualityOptionId: number; serviceId: number; qualityProfileId: number; qualityProfileName: string;
+    };
+    if (!qualityOptionId || !serviceId || !qualityProfileId || !qualityProfileName) {
+      return reply.status(400).send({ error: 'Tous les champs sont requis' });
+    }
+    const mapping = await prisma.qualityMapping.upsert({
+      where: { qualityOptionId_serviceId: { qualityOptionId, serviceId } },
+      update: { qualityProfileId, qualityProfileName },
+      create: { qualityOptionId, serviceId, qualityProfileId, qualityProfileName },
+      include: {
+        qualityOption: true,
+        service: { select: { id: true, name: true, type: true } },
+      },
+    });
+    return reply.status(201).send(mapping);
+  });
+
+  app.delete('/quality-mappings/:id', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { id } = request.params as { id: string };
+    const mappingId = parseId(id);
+    if (!mappingId) return reply.status(400).send({ error: 'ID invalide' });
+    await prisma.qualityMapping.delete({ where: { id: mappingId } });
+    return { ok: true };
+  });
+
+  // === SERVICE PROFILES (fetch quality profiles from a specific service) ===
+
+  app.get('/services/:id/profiles', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { id } = request.params as { id: string };
+    const serviceId = parseId(id);
+    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    const svc = await getServiceById(serviceId);
+    if (!svc) return reply.status(404).send({ error: 'Service introuvable ou désactivé' });
+    try {
+      if (svc.type === 'radarr') {
+        const radarr = createRadarrFromConfig(svc.config);
+        return await radarr.getQualityProfiles();
+      }
+      if (svc.type === 'sonarr') {
+        const sonarr = createSonarrFromConfig(svc.config);
+        return await sonarr.getQualityProfiles();
+      }
+      return reply.status(400).send({ error: 'Ce type de service ne supporte pas les profils qualité' });
+    } catch {
+      return reply.status(502).send({ error: 'Impossible de contacter le service' });
     }
   });
 }

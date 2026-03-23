@@ -72,6 +72,7 @@ model MediaRequest {
   mediaType     String    // "movie" | "tv"
   seasons       String?   // JSON array of season numbers for TV requests, null = all seasons
   rootFolder    String?   // Root folder path override
+  qualityOptionId Int?    // Selected quality option
   approvedById  Int?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -79,6 +80,7 @@ model MediaRequest {
   media         Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   approvedBy    User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
+  qualityOption QualityOption? @relation(fields: [qualityOptionId], references: [id], onDelete: SetNull)
 }
 
 model SupportTicket {
@@ -155,6 +157,9 @@ model Service {
   enabled       Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  qualityMappings QualityMapping[]
+  folderRules     FolderRule[]
 }
 
 model FolderRule {
@@ -165,7 +170,34 @@ model FolderRule {
   conditions    String    // JSON array: [{ field, operator, value }]
   folderPath    String    // Target root folder path
   seriesType    String?   // Sonarr series type override: "anime" | "standard" | "daily"
+  serviceId     Int?      // Target service for this rule
   createdAt     DateTime  @default(now())
+
+  service       Service?  @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+}
+
+model QualityOption {
+  id            Int       @id @default(autoincrement())
+  label         String    @unique // "SD", "HD", "4K", "4K HDR"
+  position      Int       @default(0) // Display order
+  createdAt     DateTime  @default(now())
+
+  mappings      QualityMapping[]
+  requests      MediaRequest[]
+}
+
+model QualityMapping {
+  id                  Int       @id @default(autoincrement())
+  qualityOptionId     Int
+  serviceId           Int
+  qualityProfileId    Int       // Profile ID from Radarr/Sonarr API
+  qualityProfileName  String    // Cached name for display
+  createdAt           DateTime  @default(now())
+
+  qualityOption       QualityOption @relation(fields: [qualityOptionId], references: [id], onDelete: Cascade)
+  service             Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([qualityOptionId, serviceId])
 }
 
 model AppLog {
