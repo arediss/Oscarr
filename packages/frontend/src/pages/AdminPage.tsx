@@ -1024,6 +1024,15 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
       { key: 'apiKey', label: 'Clé API', type: 'password' },
     ],
   },
+  plex: {
+    label: 'Plex',
+    icon: '🟧',
+    fields: [
+      { key: 'url', label: 'URL du serveur', type: 'text', placeholder: 'http://192.168.1.50:32400' },
+      { key: 'token', label: 'Token', type: 'password' },
+      { key: 'machineId', label: 'Machine ID', type: 'text', placeholder: 'Voir /identity sur votre serveur' },
+    ],
+  },
   qbittorrent: {
     label: 'qBittorrent',
     icon: '⬇️',
@@ -1031,6 +1040,22 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
       { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.64:8080' },
       { key: 'username', label: 'Utilisateur', type: 'text' },
       { key: 'password', label: 'Mot de passe', type: 'password' },
+    ],
+  },
+  tautulli: {
+    label: 'Tautulli',
+    icon: '📊',
+    fields: [
+      { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:8181' },
+      { key: 'apiKey', label: 'Clé API', type: 'password' },
+    ],
+  },
+  trackarr: {
+    label: 'Trackarr',
+    icon: '📡',
+    fields: [
+      { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:7333' },
+      { key: 'apiKey', label: 'Clé API', type: 'password' },
     ],
   },
 };

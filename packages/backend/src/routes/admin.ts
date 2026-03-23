@@ -188,9 +188,33 @@ export async function adminRoutes(app: FastifyInstance) {
         });
         return { ok: true, version: data.version };
       }
+      if (service.type === 'plex') {
+        const { default: axios } = await import('axios');
+        const { data } = await axios.get(`${config.url}/identity`, {
+          headers: { 'X-Plex-Token': config.token, Accept: 'application/json' },
+          timeout: 5000,
+        });
+        return { ok: true, version: data.MediaContainer?.version };
+      }
       if (service.type === 'qbittorrent') {
         const { default: axios } = await import('axios');
         await axios.get(`${config.url}/api/v2/app/version`, { timeout: 5000 });
+        return { ok: true };
+      }
+      if (service.type === 'tautulli') {
+        const { default: axios } = await import('axios');
+        const { data } = await axios.get(`${config.url}/api/v2`, {
+          params: { apikey: config.apiKey, cmd: 'arnold' },
+          timeout: 5000,
+        });
+        return { ok: true, version: data?.response?.data?.version };
+      }
+      if (service.type === 'trackarr') {
+        const { default: axios } = await import('axios');
+        await axios.get(`${config.url}/api/health`, {
+          headers: { 'X-Api-Key': config.apiKey },
+          timeout: 5000,
+        });
         return { ok: true };
       }
       return reply.status(400).send({ error: 'Test non supporté pour ce type de service' });
