@@ -1,6 +1,13 @@
 import type { FastifyInstance } from 'fastify';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import axios from 'axios';
 import { prisma } from '../utils/prisma.js';
 import { pluginEngine } from '../plugins/engine.js';
+
+const APP_VERSION = JSON.parse(
+  readFileSync(resolve(import.meta.dirname, '../../../../package.json'), 'utf-8')
+).version as string;
 
 export async function supportRoutes(app: FastifyInstance) {
   // Check if app is installed (has at least one Plex service)
@@ -60,6 +67,26 @@ export async function supportRoutes(app: FastifyInstance) {
     }
 
     return reply.status(201).send({ ok: true, service: { ...service, config: JSON.parse(service.config) } });
+  });
+
+  // Get app version + check for updates
+  app.get('/version', async () => {
+    const result: { current: string; latest?: string; updateAvailable?: boolean; releaseUrl?: string } = {
+      current: APP_VERSION,
+    };
+    try {
+      const { data } = await axios.get('https://api.github.com/repos/arediss/Oscarr/releases/latest', {
+        headers: { Accept: 'application/vnd.github.v3+json' },
+        timeout: 5000,
+      });
+      const latest = (data.tag_name as string).replace(/^v/, '');
+      result.latest = latest;
+      result.updateAvailable = latest !== APP_VERSION;
+      result.releaseUrl = data.html_url;
+    } catch {
+      // GitHub unreachable or no releases yet
+    }
+    return result;
   });
 
   // Get incident banner (no auth)

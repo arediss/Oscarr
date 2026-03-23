@@ -13,7 +13,9 @@ import {
   Clock,
   FolderTree,
   Bell,
-  MessageSquare,
+  AlertTriangle,
+  ArrowUpCircle,
+  ExternalLink,
   ScrollText,
   Plus,
   Trash2,
@@ -42,7 +44,6 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'users', label: 'Utilisateurs', icon: Users },
   { id: 'services', label: 'Services', icon: Server },
   { id: 'quality', label: 'Qualité', icon: Star },
-  { id: 'support', label: 'Support', icon: MessageSquare },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'paths', label: 'Chemins & Règles', icon: FolderTree },
   { id: 'jobs', label: 'Jobs & Sync', icon: RefreshCw },
@@ -111,7 +112,6 @@ export default function AdminPage() {
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'services' && <ServicesTab />}
       {activeTab === 'quality' && <QualityTab />}
-      {activeTab === 'support' && <SupportAdminTab />}
       {activeTab === 'notifications' && <NotificationsTab />}
       {activeTab === 'paths' && <PathsTab />}
       {activeTab === 'jobs' && <JobsTab />}
@@ -219,42 +219,6 @@ function UsersTab() {
 }
 
 // ============ SUPPORT ADMIN TAB ============
-function SupportAdminTab() {
-  const [bannerText, setBannerText] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    api.get('/support/banner').then(({ data }) => setBannerText(data.banner || '')).catch(console.error).finally(() => setLoading(false));
-  }, []);
-
-  const saveBanner = async () => {
-    try {
-      await api.put('/admin/banner', { banner: bannerText.trim() || null });
-      setSaved(true); setTimeout(() => setSaved(false), 2000);
-    } catch (err) { console.error(err); }
-  };
-
-  if (loading) return <Spinner />;
-
-  return (
-    <div className="card p-6 max-w-xl">
-      <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Bandeau d'incident</h3>
-      <p className="text-xs text-ndp-text-dim mb-3">Affiché en haut de toutes les pages. Laissez vide pour masquer.</p>
-      <input
-        value={bannerText}
-        onChange={(e) => setBannerText(e.target.value)}
-        placeholder="Ex: Maintenance prévue ce soir à 22h"
-        className="input w-full text-sm mb-3"
-      />
-      <button onClick={saveBanner} className={clsx('text-sm font-medium px-4 py-2 rounded-xl transition-all flex items-center gap-2', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
-        {saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-        {saved ? 'Sauvegardé' : 'Mettre à jour'}
-      </button>
-    </div>
-  );
-}
-
 // ============ PATHS & RULES TAB ============
 interface FolderRule {
   id: number; name: string; priority: number; mediaType: string;
@@ -1581,15 +1545,22 @@ function GeneralTab() {
   const [requestsEnabled, setRequestsEnabled] = useState(true);
   const [supportEnabled, setSupportEnabled] = useState(true);
   const [calendarEnabled, setCalendarEnabled] = useState(true);
+  const [bannerText, setBannerText] = useState('');
+  const [bannerSaved, setBannerSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [versionInfo, setVersionInfo] = useState<{ current: string; latest?: string; updateAvailable?: boolean; releaseUrl?: string } | null>(null);
 
   useEffect(() => {
-    api.get('/admin/settings').then(({ data }) => {
-      setAutoApproveRequests(data.autoApproveRequests ?? false);
-      setRequestsEnabled(data.requestsEnabled ?? true);
-      setSupportEnabled(data.supportEnabled ?? true);
-      setCalendarEnabled(data.calendarEnabled ?? true);
-    }).catch(() => {}).finally(() => setLoading(false));
+    Promise.all([
+      api.get('/admin/settings').then(({ data }) => {
+        setAutoApproveRequests(data.autoApproveRequests ?? false);
+        setRequestsEnabled(data.requestsEnabled ?? true);
+        setSupportEnabled(data.supportEnabled ?? true);
+        setCalendarEnabled(data.calendarEnabled ?? true);
+      }),
+      api.get('/support/banner').then(({ data }) => setBannerText(data.banner || '')),
+      api.get('/support/version').then(({ data }) => setVersionInfo(data)),
+    ]).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const handleSave = async () => {
@@ -1605,6 +1576,13 @@ function GeneralTab() {
     } catch (err) { console.error(err); } finally { setSaving(false); }
   };
 
+  const saveBanner = async () => {
+    try {
+      await api.put('/admin/banner', { banner: bannerText.trim() || null });
+      setBannerSaved(true); setTimeout(() => setBannerSaved(false), 2000);
+    } catch (err) { console.error(err); }
+  };
+
   if (loading) return <Spinner />;
 
   const features = [
@@ -1616,6 +1594,56 @@ function GeneralTab() {
 
   return (
     <div className="space-y-6">
+      {/* Version & Update Check */}
+      {versionInfo && (
+        <div className="card p-6">
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Oscarr</h3>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-ndp-text">Version actuelle : <span className="font-mono font-semibold text-ndp-accent">{versionInfo.current}</span></span>
+            {versionInfo.updateAvailable && versionInfo.latest && (
+              <a
+                href={versionInfo.releaseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-1.5 bg-ndp-accent/10 text-ndp-accent rounded-lg text-sm font-medium hover:bg-ndp-accent/20 transition-colors"
+              >
+                <ArrowUpCircle className="w-4 h-4" />
+                v{versionInfo.latest} disponible
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+            {versionInfo.latest && !versionInfo.updateAvailable && (
+              <span className="flex items-center gap-1.5 text-sm text-ndp-success">
+                <CheckCircle className="w-4 h-4" />
+                À jour
+              </span>
+            )}
+            {!versionInfo.latest && (
+              <span className="text-sm text-ndp-text-dim">Impossible de vérifier les mises à jour</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Maintenance Banner */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Bandeau de maintenance</h3>
+        <p className="text-xs text-ndp-text-dim mb-3">Affiché en haut de toutes les pages. Laissez vide pour masquer.</p>
+        <div className="flex gap-3">
+          <input
+            value={bannerText}
+            onChange={(e) => setBannerText(e.target.value)}
+            placeholder="Ex: Maintenance prévue ce soir à 22h"
+            className="input flex-1 text-sm"
+          />
+          <button onClick={saveBanner} className={clsx('text-sm font-medium px-4 py-2 rounded-xl transition-all flex items-center gap-2 flex-shrink-0', bannerSaved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
+            {bannerSaved ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+            {bannerSaved ? 'Sauvegardé' : 'Publier'}
+          </button>
+        </div>
+      </div>
+
+      {/* Feature Flags */}
       <div className="card p-6">
         <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Fonctionnalités</h3>
         <p className="text-xs text-ndp-text-dim mb-4">Activez ou désactivez les sections du site pour les utilisateurs</p>
