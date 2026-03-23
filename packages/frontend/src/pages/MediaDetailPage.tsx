@@ -442,8 +442,8 @@ export default function MediaDetailPage({ type }: Props) {
         {/* Cast */}
         {cast.length > 0 && (
           <div className="mt-12">
-            <h3 className="text-lg font-bold text-ndp-text mb-4">Distribution</h3>
-            <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
+            <h3 className="text-lg font-bold text-ndp-text mb-4">Casting</h3>
+            <div className="flex gap-4 overflow-x-auto pb-4">
               {cast.map((person) => (
                 <div key={person.id} className="flex-shrink-0 w-28 text-center">
                   <div className="w-20 h-20 mx-auto rounded-full overflow-hidden bg-ndp-surface-light mb-2">
