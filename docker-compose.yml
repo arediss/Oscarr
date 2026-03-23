@@ -3,8 +3,7 @@ services:
     build: .
     container_name: oscarr
     restart: unless-stopped
-    ports:
-      - "3456:3456"
+    network_mode: host
     volumes:
       - oscarr-data:/data
       - ./packages/plugins:/app/packages/plugins
