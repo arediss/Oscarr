@@ -122,7 +122,12 @@ export async function mediaRoutes(app: FastifyInstance) {
         if (tvdbId) {
           const sonarrSeries = await getSonarr().getSeriesByTvdbId(tvdbId);
           if (sonarrSeries) {
-            if (sonarrSeries.statistics?.episodeFileCount > 0) liveAvailable = true;
+            const stats = sonarrSeries.statistics;
+            if (stats?.percentOfEpisodes >= 100) {
+              liveAvailable = true;
+            } else if (stats?.episodeFileCount && stats.episodeFileCount > 0) {
+              // Partially available — don't set liveAvailable, let DB status stay as 'processing'
+            }
             sonarrSeasonStats = sonarrSeries.seasons
               .filter((s) => s.seasonNumber > 0)
               .map((s) => ({
