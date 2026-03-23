@@ -1,6 +1,6 @@
 import { prisma } from '../utils/prisma.js';
-import { getRadarr, type RadarrMovie } from './radarr.js';
-import { getSonarr, type SonarrSeries } from './sonarr.js';
+import { getRadarrAsync, type RadarrMovie } from './radarr.js';
+import { getSonarrAsync, type SonarrSeries } from './sonarr.js';
 import { sendNotification } from './notifications.js';
 
 export interface SyncResult {
@@ -17,7 +17,8 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
   let errors = 0;
 
   try {
-    const movies = await getRadarr().getMovies();
+    const radarr = await getRadarrAsync();
+    const movies = await radarr.getMovies();
 
     // Filter by "added" date if incremental
     const filtered = since
@@ -99,7 +100,8 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
   let errors = 0;
 
   try {
-    const series = await getSonarr().getSeries();
+    const sonarr = await getSonarrAsync();
+    const series = await sonarr.getSeries();
 
     // Sonarr doesn't have an "added" field in the same way, but we can use it
     const filtered = since
@@ -238,11 +240,12 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
   return { added, updated, errors, duration: Date.now() - start };
 }
 
-export async function runFullSync(): Promise<{ radarr: SyncResult; sonarr: SyncResult }> {
+export async function runFullSync(forceAll = false): Promise<{ radarr: SyncResult; sonarr: SyncResult }> {
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+  const since = forceAll ? null : settings;
   // Sequential to avoid SQLite write lock contention
-  const radarrResult = await syncRadarr(settings?.lastRadarrSync);
-  const sonarrResult = await syncSonarr(settings?.lastSonarrSync);
+  const radarrResult = await syncRadarr(since?.lastRadarrSync);
+  const sonarrResult = await syncSonarr(since?.lastSonarrSync);
   return { radarr: radarrResult, sonarr: sonarrResult };
 }
 

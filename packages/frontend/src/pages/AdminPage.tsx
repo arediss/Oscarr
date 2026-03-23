@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import cronstrue from 'cronstrue/i18n';
 import {
   Settings,
   Users,
@@ -501,11 +502,18 @@ interface CronJobData {
   lastResult: string | null;
 }
 
+interface SyncToast {
+  type: 'success' | 'error';
+  message: string;
+}
+
 function JobsTab() {
   const [jobs, setJobs] = useState<CronJobData[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
+  const [forceRunning, setForceRunning] = useState(false);
   const [editingCron, setEditingCron] = useState<{ key: string; value: string } | null>(null);
+  const [toast, setToast] = useState<SyncToast | null>(null);
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -516,12 +524,36 @@ function JobsTab() {
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
+  const showToast = (t: SyncToast) => { setToast(t); setTimeout(() => setToast(null), 6000); };
+
+  const formatSyncResult = (data: Record<string, any>) => {
+    const parts: string[] = [];
+    if (data.radarr) {
+      const r = data.radarr;
+      if ('added' in r) parts.push(`Radarr : +${r.added} ajoutés, ${r.updated} mis à jour (${(r.duration / 1000).toFixed(1)}s)`);
+      else if ('imported' in r) parts.push(`Radarr : ${r.imported} importées, ${r.skipped} ignorées${r.errors ? `, ${r.errors} erreurs` : ''}`);
+    }
+    if (data.sonarr) {
+      const s = data.sonarr;
+      if ('added' in s) parts.push(`Sonarr : +${s.added} ajoutés, ${s.updated} mis à jour (${(s.duration / 1000).toFixed(1)}s)`);
+      else if ('imported' in s) parts.push(`Sonarr : ${s.imported} importées, ${s.skipped} ignorées${s.errors ? `, ${s.errors} erreurs` : ''}`);
+    }
+    return parts.join(' — ') || JSON.stringify(data);
+  };
+
   const runJob = async (key: string) => {
     setRunning(key);
     try {
-      await api.post(`/admin/jobs/${key}/run`);
+      const { data } = await api.post(`/admin/jobs/${key}/run`);
       await fetchJobs();
-    } catch (err) { console.error(err); } finally { setRunning(null); }
+      if (data?.result && (data.result.radarr || data.result.sonarr)) {
+        showToast({ type: 'success', message: formatSyncResult(data.result) });
+      } else {
+        showToast({ type: 'success', message: `Job "${key}" terminé` });
+      }
+    } catch (err: any) {
+      showToast({ type: 'error', message: err.response?.data?.error || `Job "${key}" échoué` });
+    } finally { setRunning(null); }
   };
 
   const toggleJob = async (job: CronJobData) => {
@@ -536,7 +568,12 @@ function JobsTab() {
   };
 
   if (loading) return <Spinner />;
-  const formatDate = (d: string | null) => d ? new Date(d).toLocaleString('fr-FR') : 'Jamais';
+
+  const formatDate = (d: string | null) => d ? new Date(d).toLocaleString('fr-FR') : '—';
+  const cronToHuman = (expr: string) => {
+    try { return cronstrue.toString(expr, { locale: 'fr', use24HourTimeFormat: true }); }
+    catch { return null; }
+  };
   const formatDuration = (ms: number | null) => {
     if (ms === null) return '—';
     if (ms < 1000) return `${ms}ms`;
@@ -545,75 +582,138 @@ function JobsTab() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-ndp-text-muted">Jobs automatiques planifiés avec des expressions CRON</p>
+      {/* Toast */}
+      {toast && (
+        <div className={clsx(
+          'fixed bottom-6 right-6 z-50 max-w-lg px-5 py-3 rounded-xl shadow-2xl shadow-black/50 animate-fade-in flex items-start gap-3',
+          toast.type === 'success' ? 'bg-ndp-success/10 border border-ndp-success/20 text-ndp-success' : 'bg-ndp-danger/10 border border-ndp-danger/20 text-ndp-danger'
+        )}>
+          {toast.type === 'success' ? <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" /> : <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+          <p className="text-sm">{toast.message}</p>
+        </div>
+      )}
 
-      <div className="space-y-4">
-        {jobs.map((job) => {
-          const isEditing = editingCron?.key === job.key;
-          let parsedResult: Record<string, unknown> | null = null;
-          try { if (job.lastResult) parsedResult = JSON.parse(job.lastResult); } catch { /* empty */ }
-
-          return (
-            <div key={job.key} className={clsx('card p-5 border transition-all', job.enabled ? 'border-white/10' : 'border-white/5 opacity-60')}>
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-ndp-text">{job.label}</h3>
-                    {job.lastStatus && (
-                      <span className={clsx('px-2 py-0.5 text-[10px] font-semibold rounded-full',
-                        job.lastStatus === 'success' ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger'
-                      )}>
-                        {job.lastStatus === 'success' ? 'OK' : 'ERREUR'}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-ndp-text-dim mt-1">
-                    Dernier lancement : {formatDate(job.lastRunAt)} {job.lastDuration !== null && `(${formatDuration(job.lastDuration)})`}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => runJob(job.key)} disabled={running !== null} className="p-2 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors" title="Lancer maintenant">
-                    {running === job.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                  </button>
-                  <button onClick={() => toggleJob(job)} className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors" title={job.enabled ? 'Désactiver' : 'Activer'}>
-                    <Power className={clsx('w-4 h-4', job.enabled && 'text-ndp-success')} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Clock className="w-4 h-4 text-ndp-text-dim flex-shrink-0" />
-                {isEditing ? (
-                  <div className="flex items-center gap-2 flex-1">
-                    <input
-                      type="text"
-                      value={editingCron.value}
-                      onChange={(e) => setEditingCron({ key: job.key, value: e.target.value })}
-                      className="input text-sm flex-1 font-mono"
-                      placeholder="*/5 * * * *"
-                      onKeyDown={(e) => { if (e.key === 'Enter') saveCron(job.key, editingCron.value); if (e.key === 'Escape') setEditingCron(null); }}
-                    />
-                    <button onClick={() => saveCron(job.key, editingCron.value)} className="p-1.5 text-ndp-success hover:bg-ndp-success/10 rounded-lg"><CheckCircle className="w-4 h-4" /></button>
-                    <button onClick={() => setEditingCron(null)} className="p-1.5 text-ndp-text-dim hover:bg-white/5 rounded-lg"><XCircle className="w-4 h-4" /></button>
-                  </div>
-                ) : (
-                  <button onClick={() => setEditingCron({ key: job.key, value: job.cronExpression })} className="flex items-center gap-2 text-sm font-mono text-ndp-text-muted hover:text-ndp-text transition-colors">
-                    <code className="bg-white/5 px-2 py-1 rounded">{job.cronExpression}</code>
-                    <Pencil className="w-3 h-3 opacity-50" />
-                  </button>
-                )}
-              </div>
-
-              {parsedResult && job.lastStatus === 'success' && (
-                <div className="mt-3 p-3 bg-white/[0.02] rounded-lg">
-                  <pre className="text-[11px] text-ndp-text-dim whitespace-pre-wrap">{JSON.stringify(parsedResult, null, 2)}</pre>
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {/* Quick actions */}
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={() => runJob('full_sync')}
+          disabled={running !== null || forceRunning}
+          className="flex items-center gap-2 px-5 py-2.5 btn-primary text-sm font-medium rounded-xl"
+        >
+          {running === 'full_sync' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          Sync (nouveautés)
+        </button>
+        <button
+          onClick={async () => {
+            setForceRunning(true);
+            try {
+              const { data } = await api.post('/admin/sync/force');
+              await fetchJobs();
+              showToast({ type: 'success', message: formatSyncResult(data) });
+            } catch (err: any) {
+              showToast({ type: 'error', message: err.response?.data?.error || 'Sync complète échouée' });
+            }
+            finally { setForceRunning(false); }
+          }}
+          disabled={running !== null || forceRunning}
+          className="flex items-center gap-2 px-5 py-2.5 bg-ndp-warning/10 text-ndp-warning hover:bg-ndp-warning/20 text-sm font-medium rounded-xl transition-colors"
+        >
+          {forceRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          Sync complète (tout récupérer)
+        </button>
+        <button
+          onClick={() => runJob('request_sync')}
+          disabled={running !== null || forceRunning}
+          className="flex items-center gap-2 px-5 py-2.5 bg-ndp-surface hover:bg-ndp-surface-light text-ndp-text text-sm font-medium rounded-xl transition-colors"
+        >
+          {running === 'request_sync' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          Sync des demandes
+        </button>
       </div>
 
+      {/* Jobs table */}
+      <div className="card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-white/5 text-left">
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">Job</th>
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">Planification</th>
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">Dernier lancement</th>
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">Durée</th>
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">Statut</th>
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {jobs.map((job) => {
+              const isEditing = editingCron?.key === job.key;
+              return (
+                <tr key={job.key} className={clsx('transition-colors hover:bg-white/[0.02]', !job.enabled && 'opacity-50')}>
+                  <td className="px-5 py-4">
+                    <span className="font-medium text-ndp-text">{job.label}</span>
+                    <p className="text-xs text-ndp-text-dim font-mono mt-0.5">{job.key}</p>
+                  </td>
+                  <td className="px-5 py-4">
+                    {isEditing ? (
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            value={editingCron.value}
+                            onChange={(e) => setEditingCron({ key: job.key, value: e.target.value })}
+                            className="input text-sm font-mono w-36 py-1 px-2"
+                            onKeyDown={(e) => { if (e.key === 'Enter') saveCron(job.key, editingCron.value); if (e.key === 'Escape') setEditingCron(null); }}
+                            autoFocus
+                          />
+                          {cronToHuman(editingCron.value) && (
+                            <p className="text-[11px] text-ndp-accent mt-1">{cronToHuman(editingCron.value)}</p>
+                          )}
+                        </div>
+                        <button onClick={() => saveCron(job.key, editingCron.value)} className="p-1 text-ndp-success hover:bg-ndp-success/10 rounded"><CheckCircle className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => setEditingCron(null)} className="p-1 text-ndp-text-dim hover:bg-white/5 rounded"><XCircle className="w-3.5 h-3.5" /></button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setEditingCron({ key: job.key, value: job.cronExpression })}
+                        className="text-left hover:bg-white/5 px-2 py-1 rounded transition-colors group"
+                      >
+                        <span className="text-sm text-ndp-text">{cronToHuman(job.cronExpression) || job.cronExpression}</span>
+                        <p className="text-[11px] font-mono text-ndp-text-dim group-hover:text-ndp-accent transition-colors">{job.cronExpression}</p>
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-5 py-4 text-ndp-text-muted text-xs">{formatDate(job.lastRunAt)}</td>
+                  <td className="px-5 py-4 text-ndp-text-muted text-xs font-mono">{formatDuration(job.lastDuration)}</td>
+                  <td className="px-5 py-4">
+                    {job.lastStatus ? (
+                      <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full',
+                        job.lastStatus === 'success' ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger'
+                      )}>
+                        {job.lastStatus === 'success' ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                        {job.lastStatus === 'success' ? 'OK' : 'Erreur'}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-ndp-text-dim">—</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-1 justify-end">
+                      <button onClick={() => runJob(job.key)} disabled={running !== null} className="p-1.5 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors" title="Lancer">
+                        {running === job.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      </button>
+                      <button onClick={() => toggleJob(job)} className="p-1.5 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors" title={job.enabled ? 'Désactiver' : 'Activer'}>
+                        <Power className={clsx('w-4 h-4', job.enabled && 'text-ndp-success')} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* CRON help */}
       <div className="card p-5">
         <h3 className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">Aide CRON</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">

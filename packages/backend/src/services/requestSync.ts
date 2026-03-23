@@ -1,6 +1,6 @@
 import { prisma } from '../utils/prisma.js';
-import { getRadarr } from './radarr.js';
-import { getSonarr } from './sonarr.js';
+import { getRadarrAsync } from './radarr.js';
+import { getSonarrAsync } from './sonarr.js';
 
 interface SyncResult {
   imported: number;
@@ -38,9 +38,10 @@ async function syncRadarrRequests(usernameMap: Map<string, number>): Promise<Syn
   let errors = 0;
 
   try {
+    const radarr = await getRadarrAsync();
     const [tags, movies] = await Promise.all([
-      getRadarr().getTags(),
-      getRadarr().getMovies(),
+      radarr.getTags(),
+      radarr.getMovies(),
     ]);
 
     // Build tag ID -> userId map
@@ -111,9 +112,10 @@ async function syncSonarrRequests(usernameMap: Map<string, number>): Promise<Syn
   let errors = 0;
 
   try {
+    const sonarr = await getSonarrAsync();
     const [tags, series] = await Promise.all([
-      getSonarr().getTags(),
-      getSonarr().getSeries(),
+      sonarr.getTags(),
+      sonarr.getSeries(),
     ]);
 
     const tagToUser = new Map<number, number>();
