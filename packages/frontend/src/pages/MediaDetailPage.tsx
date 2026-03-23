@@ -37,6 +37,8 @@ export default function MediaDetailPage({ type }: Props) {
   const [requesting, setRequesting] = useState(false);
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
   const [scrollOpacity, setScrollOpacity] = useState(0);
+  const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string; position: number }[]>([]);
+  const [selectedQuality, setSelectedQuality] = useState<number | null>(null);
 
   const handleScroll = useCallback(() => {
     const scrollY = window.scrollY;
@@ -59,12 +61,17 @@ export default function MediaDetailPage({ type }: Props) {
   }, []);
 
   useEffect(() => {
+    api.get('/support/quality-options').then(({ data }) => setQualityOptions(data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
     setMedia(null);
     setDbMedia(null);
     setSonarrSeasons([]);
     setInLibrary(false);
     setSelectedSeasons([]);
+    setSelectedQuality(null);
 
     async function fetchData() {
       try {
@@ -96,6 +103,9 @@ export default function MediaDetailPage({ type }: Props) {
       const body: Record<string, unknown> = { tmdbId: media.id, mediaType: type };
       if (type === 'tv' && selectedSeasons.length > 0) {
         body.seasons = selectedSeasons;
+      }
+      if (selectedQuality) {
+        body.qualityOptionId = selectedQuality;
       }
       await api.post('/requests', body);
       // Invalidate badge cache so homepage updates without F5
@@ -362,6 +372,29 @@ export default function MediaDetailPage({ type }: Props) {
                 </button>
               )}
             </div>
+
+            {/* Quality selection */}
+            {qualityOptions.length > 0 && !isAvailable && !userHasRequest && (
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">Qualité</h3>
+                <div className="flex flex-wrap gap-2">
+                  {qualityOptions.map((q) => (
+                    <button
+                      key={q.id}
+                      onClick={() => setSelectedQuality(prev => prev === q.id ? null : q.id)}
+                      className={clsx(
+                        'px-4 py-2 rounded-xl text-sm font-medium transition-all',
+                        selectedQuality === q.id
+                          ? 'bg-ndp-accent text-white'
+                          : 'bg-white/5 text-ndp-text-muted hover:bg-white/10'
+                      )}
+                    >
+                      {q.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Seasons */}
             {type === 'tv' && media.seasons && media.seasons.length > 0 && (

@@ -105,9 +105,6 @@ export default function LoginPage() {
               </>
             ) : (
               <>
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12.0005 0L4 12L12.0005 24L20 12L12.0005 0Z" />
-                </svg>
                 Se connecter avec Plex
               </>
             )}
