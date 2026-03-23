@@ -110,6 +110,10 @@
   "install.machine_id_help": "Utilisé pour vérifier que les utilisateurs ont accès à votre serveur",
   "install.summary": "Récapitulatif",
   "install.install": "Installer",
+  "install.done_title": "Installation terminée !",
+  "install.done_desc": "Votre serveur Plex est configuré. Connectez-vous pour commencer.",
+  "install.redirect": "Redirection dans {{seconds}}s...",
+  "install.go_now": "Continuer maintenant",
 
   "search.searching": "Recherche en cours...",
   "search.result_one": "{{count}} résultat pour \"{{query}}\"",

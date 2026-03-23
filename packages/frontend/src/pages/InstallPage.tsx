@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Film, Loader2, CheckCircle, RefreshCw } from 'lucide-react';
+import { Film, Loader2, CheckCircle, RefreshCw, PartyPopper } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function InstallPage() {
@@ -18,7 +18,8 @@ export default function InstallPage() {
   const [testOk, setTestOk] = useState<boolean | null>(null);
   const [plexPolling, setPlexPolling] = useState(false);
   const [error, setError] = useState('');
-  const [step, setStep] = useState(0); // 0=url, 1=plex auth, 2=confirm
+  const [step, setStep] = useState(0); // 0=url, 1=plex auth, 2=confirm, 3=done
+  const [countdown, setCountdown] = useState(5);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -110,12 +111,20 @@ export default function InstallPage() {
     setError('');
     try {
       await api.post('/support/setup', { url, token, machineId, name });
-      navigate('/login', { replace: true });
+      setStep(3);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('common.error');
       setError(msg);
     } finally { setSaving(false); }
   };
+
+  // Countdown redirect after install
+  useEffect(() => {
+    if (step !== 3) return;
+    if (countdown <= 0) { navigate('/login', { replace: true }); return; }
+    const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [step, countdown, navigate]);
 
   if (checking) {
     return (
@@ -147,11 +156,11 @@ export default function InstallPage() {
 
           {/* Progress dots */}
           <div className="flex items-center justify-center gap-2 mb-8">
-            {[0, 1, 2].map((s) => (
+            {[0, 1, 2, 3].map((s) => (
               <div
                 key={s}
                 className={`h-1.5 rounded-full transition-all ${
-                  s <= step ? 'bg-ndp-accent w-8' : 'bg-white/10 w-4'
+                  s <= step ? (step === 3 ? 'bg-ndp-success w-8' : 'bg-ndp-accent w-8') : 'bg-white/10 w-4'
                 }`}
               />
             ))}
@@ -311,6 +320,36 @@ export default function InstallPage() {
                   {t('install.install')}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Step 3: Done */}
+          {step === 3 && (
+            <div className="space-y-6 animate-fade-in text-center">
+              <div className="flex justify-center">
+                <div className="w-16 h-16 bg-ndp-success/10 rounded-full flex items-center justify-center">
+                  <PartyPopper className="w-8 h-8 text-ndp-success" />
+                </div>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-ndp-text">{t('install.done_title')}</h2>
+                <p className="text-sm text-ndp-text-muted mt-2">{t('install.done_desc')}</p>
+              </div>
+              <p className="text-sm text-ndp-text-dim">
+                {t('install.redirect', { seconds: countdown })}
+              </p>
+              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="h-full bg-ndp-success rounded-full transition-all duration-1000 ease-linear"
+                  style={{ width: `${((5 - countdown) / 5) * 100}%` }}
+                />
+              </div>
+              <button
+                onClick={() => navigate('/login', { replace: true })}
+                className="btn-primary text-sm"
+              >
+                {t('install.go_now')}
+              </button>
             </div>
           )}
         </div>
