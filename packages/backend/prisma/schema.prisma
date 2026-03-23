@@ -127,6 +127,17 @@ model AppSettings {
   updatedAt             DateTime  @updatedAt
 }
 
+model Service {
+  id            Int       @id @default(autoincrement())
+  name          String    // Display name (e.g. "Radarr Principal", "Sonarr 4K")
+  type          String    // "radarr" | "sonarr" | "qbittorrent" | etc.
+  config        String    // JSON object with service-specific config
+  isDefault     Boolean   @default(false)
+  enabled       Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
 model FolderRule {
   id            Int       @id @default(autoincrement())
   name          String    // Display name (e.g. "Animes", "Documentaires Film")

@@ -1,4 +1,5 @@
 import axios, { type AxiosInstance } from 'axios';
+import { getServiceConfig } from '../utils/services.js';
 
 export interface SonarrSeries {
   id: number;
@@ -56,10 +57,10 @@ export interface SonarrQueueItem {
 class SonarrService {
   private api: AxiosInstance;
 
-  constructor() {
+  constructor(url: string, apiKey: string) {
     this.api = axios.create({
-      baseURL: `${process.env.SONARR_URL}/api/v3`,
-      params: { apikey: process.env.SONARR_API_KEY },
+      baseURL: `${url}/api/v3`,
+      params: { apikey: apiKey },
     });
   }
 
@@ -165,7 +166,26 @@ class SonarrService {
 }
 
 let _sonarr: SonarrService | null = null;
-export function getSonarr() {
-  if (!_sonarr) _sonarr = new SonarrService();
+let _sonarrConfigKey: string | null = null;
+
+export async function getSonarrAsync(): Promise<SonarrService> {
+  const config = await getServiceConfig('sonarr');
+  const url = config?.url || process.env.SONARR_URL || '';
+  const apiKey = config?.apiKey || process.env.SONARR_API_KEY || '';
+  const configKey = `${url}|${apiKey}`;
+  if (!_sonarr || _sonarrConfigKey !== configKey) {
+    _sonarr = new SonarrService(url, apiKey);
+    _sonarrConfigKey = configKey;
+  }
+  return _sonarr;
+}
+
+export function getSonarr(): SonarrService {
+  if (!_sonarr) {
+    _sonarr = new SonarrService(
+      process.env.SONARR_URL || '',
+      process.env.SONARR_API_KEY || '',
+    );
+  }
   return _sonarr;
 }

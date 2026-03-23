@@ -19,6 +19,13 @@ import {
   Plus,
   Trash2,
   Send,
+  Server,
+  Pencil,
+  Power,
+  Star,
+  Plug,
+  Eye,
+  EyeOff,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -26,10 +33,11 @@ import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import type { AdminUser, QualityProfile, RootFolder } from '@/types';
 
-type Tab = 'users' | 'support' | 'notifications' | 'paths' | 'jobs' | 'logs' | 'general';
+type Tab = 'users' | 'services' | 'support' | 'notifications' | 'paths' | 'jobs' | 'logs' | 'general';
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'users', label: 'Utilisateurs', icon: Users },
+  { id: 'services', label: 'Services', icon: Server },
   { id: 'support', label: 'Support', icon: MessageSquare },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'paths', label: 'Chemins & Règles', icon: FolderTree },
@@ -69,6 +77,7 @@ export default function AdminPage() {
       </div>
 
       {activeTab === 'users' && <UsersTab />}
+      {activeTab === 'services' && <ServicesTab />}
       {activeTab === 'support' && <SupportAdminTab />}
       {activeTab === 'notifications' && <NotificationsTab />}
       {activeTab === 'paths' && <PathsTab />}
@@ -876,6 +885,290 @@ function NotificationsTab() {
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
         {saved ? 'Sauvegardé' : 'Sauvegarder'}
       </button>
+    </div>
+  );
+}
+
+// ============ SERVICES TAB ============
+
+interface ServiceField {
+  key: string;
+  label: string;
+  type: 'text' | 'password';
+  placeholder?: string;
+}
+
+interface ServiceSchema {
+  label: string;
+  icon: string;
+  fields: ServiceField[];
+}
+
+const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
+  radarr: {
+    label: 'Radarr',
+    icon: '🎬',
+    fields: [
+      { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:7878' },
+      { key: 'apiKey', label: 'Clé API', type: 'password' },
+    ],
+  },
+  sonarr: {
+    label: 'Sonarr',
+    icon: '📺',
+    fields: [
+      { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:8989' },
+      { key: 'apiKey', label: 'Clé API', type: 'password' },
+    ],
+  },
+  qbittorrent: {
+    label: 'qBittorrent',
+    icon: '⬇️',
+    fields: [
+      { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.64:8080' },
+      { key: 'username', label: 'Utilisateur', type: 'text' },
+      { key: 'password', label: 'Mot de passe', type: 'password' },
+    ],
+  },
+};
+
+interface ServiceData {
+  id: number;
+  name: string;
+  type: string;
+  config: Record<string, string>;
+  isDefault: boolean;
+  enabled: boolean;
+}
+
+function ServicesTab() {
+  const [services, setServices] = useState<ServiceData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingService, setEditingService] = useState<ServiceData | null>(null);
+  const [testing, setTesting] = useState<number | null>(null);
+  const [testResult, setTestResult] = useState<{ id: number; ok: boolean; version?: string } | null>(null);
+
+  const fetchServices = useCallback(async () => {
+    try {
+      const { data } = await api.get('/admin/services');
+      setServices(data);
+    } catch { /* empty */ } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchServices(); }, [fetchServices]);
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Supprimer ce service ?')) return;
+    await api.delete(`/admin/services/${id}`);
+    fetchServices();
+  };
+
+  const handleToggle = async (service: ServiceData) => {
+    await api.put(`/admin/services/${service.id}`, { enabled: !service.enabled });
+    fetchServices();
+  };
+
+  const handleSetDefault = async (service: ServiceData) => {
+    await api.put(`/admin/services/${service.id}`, { isDefault: true });
+    fetchServices();
+  };
+
+  const handleTest = async (service: ServiceData) => {
+    setTesting(service.id);
+    setTestResult(null);
+    try {
+      const { data } = await api.post(`/admin/services/${service.id}/test`);
+      setTestResult({ id: service.id, ok: true, version: data.version });
+    } catch {
+      setTestResult({ id: service.id, ok: false });
+    } finally { setTesting(null); }
+  };
+
+  if (loading) return <Spinner />;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-ndp-text-muted">Gérez vos services connectés (Radarr, Sonarr, qBittorrent...)</p>
+        <button onClick={() => { setEditingService(null); setShowModal(true); }} className="btn-primary flex items-center gap-2 text-sm px-4 py-2 rounded-xl">
+          <Plus className="w-4 h-4" /> Ajouter
+        </button>
+      </div>
+
+      {services.length === 0 ? (
+        <div className="card p-12 text-center">
+          <Server className="w-12 h-12 text-ndp-text-dim mx-auto mb-4" />
+          <p className="text-ndp-text-muted">Aucun service configuré</p>
+          <p className="text-sm text-ndp-text-dim mt-1">Ajoutez votre premier service pour commencer</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {services.map((service) => {
+            const schema = SERVICE_SCHEMAS[service.type];
+            const result = testResult?.id === service.id ? testResult : null;
+            return (
+              <div key={service.id} className={clsx('card p-5 border transition-all', service.enabled ? 'border-white/10' : 'border-white/5 opacity-60')}>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{schema?.icon || '🔌'}</span>
+                    <div>
+                      <h3 className="text-sm font-semibold text-ndp-text">{service.name}</h3>
+                      <p className="text-xs text-ndp-text-dim">{schema?.label || service.type}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {service.isDefault && (
+                      <span className="px-2 py-0.5 bg-ndp-accent/10 text-ndp-accent text-[10px] font-semibold rounded-full">PAR DÉFAUT</span>
+                    )}
+                    {service.enabled ? (
+                      <span className="w-2 h-2 bg-ndp-success rounded-full" />
+                    ) : (
+                      <span className="w-2 h-2 bg-ndp-text-dim rounded-full" />
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1 mb-4">
+                  {schema?.fields.filter(f => f.type !== 'password').map((field) => (
+                    <p key={field.key} className="text-xs text-ndp-text-dim">
+                      <span className="text-ndp-text-muted">{field.label}:</span> {service.config[field.key] || '—'}
+                    </p>
+                  ))}
+                </div>
+
+                {result && (
+                  <div className={clsx('text-xs px-3 py-2 rounded-lg mb-3', result.ok ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger')}>
+                    {result.ok ? `Connecté${result.version ? ` (v${result.version})` : ''}` : 'Connexion échouée'}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1 pt-3 border-t border-white/5">
+                  <button onClick={() => handleTest(service)} disabled={testing === service.id} className="p-2 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors" title="Tester">
+                    {testing === service.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plug className="w-4 h-4" />}
+                  </button>
+                  <button onClick={() => { setEditingService(service); setShowModal(true); }} className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors" title="Modifier">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => handleToggle(service)} className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors" title={service.enabled ? 'Désactiver' : 'Activer'}>
+                    <Power className={clsx('w-4 h-4', service.enabled && 'text-ndp-success')} />
+                  </button>
+                  {!service.isDefault && (
+                    <button onClick={() => handleSetDefault(service)} className="p-2 text-ndp-text-dim hover:text-ndp-warning hover:bg-white/5 rounded-lg transition-colors" title="Définir par défaut">
+                      <Star className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div className="flex-1" />
+                  <button onClick={() => handleDelete(service.id)} className="p-2 text-ndp-text-dim hover:text-ndp-danger hover:bg-white/5 rounded-lg transition-colors" title="Supprimer">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showModal && (
+        <ServiceModal
+          service={editingService}
+          onClose={() => { setShowModal(false); setEditingService(null); }}
+          onSaved={() => { setShowModal(false); setEditingService(null); fetchServices(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | null; onClose: () => void; onSaved: () => void }) {
+  const isEdit = !!service;
+  const [type, setType] = useState(service?.type || 'radarr');
+  const [name, setName] = useState(service?.name || '');
+  const [config, setConfig] = useState<Record<string, string>>(service?.config || {});
+  const [isDefault, setIsDefault] = useState(service?.isDefault || false);
+  const [saving, setSaving] = useState(false);
+  const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
+
+  const schema = SERVICE_SCHEMAS[type];
+
+  const handleConfigChange = (key: string, value: string) => {
+    setConfig((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (isEdit) {
+        await api.put(`/admin/services/${service!.id}`, { name, config, isDefault });
+      } else {
+        await api.post('/admin/services', { name, type, config, isDefault });
+      }
+      onSaved();
+    } catch { /* empty */ } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold text-ndp-text mb-5">{isEdit ? 'Modifier le service' : 'Ajouter un service'}</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {!isEdit && (
+            <div>
+              <label className="text-sm text-ndp-text mb-1.5 block">Type de service</label>
+              <select value={type} onChange={(e) => { setType(e.target.value); setConfig({}); }} className="input w-full">
+                {Object.entries(SERVICE_SCHEMAS).map(([key, s]) => (
+                  <option key={key} value={key}>{s.icon} {s.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="text-sm text-ndp-text mb-1.5 block">Nom</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={`${schema?.label || type} Principal`} className="input w-full" required />
+          </div>
+
+          {schema?.fields.map((field) => (
+            <div key={field.key}>
+              <label className="text-sm text-ndp-text mb-1.5 block">{field.label}</label>
+              <div className="relative">
+                <input
+                  type={field.type === 'password' && !showSecrets[field.key] ? 'password' : 'text'}
+                  value={config[field.key] || ''}
+                  onChange={(e) => handleConfigChange(field.key, e.target.value)}
+                  placeholder={field.placeholder}
+                  className="input w-full pr-10"
+                />
+                {field.type === 'password' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSecrets((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text"
+                  >
+                    {showSecrets[field.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          <label className="flex items-center gap-2 text-sm text-ndp-text-muted cursor-pointer">
+            <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} className="rounded" />
+            Définir comme service par défaut
+          </label>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium bg-ndp-surface text-ndp-text-muted hover:bg-ndp-surface-light transition-colors">
+              Annuler
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 btn-primary flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {isEdit ? 'Sauvegarder' : 'Ajouter'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

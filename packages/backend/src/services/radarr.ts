@@ -1,4 +1,5 @@
 import axios, { type AxiosInstance } from 'axios';
+import { getServiceConfig } from '../utils/services.js';
 
 export interface RadarrMovie {
   id: number;
@@ -36,10 +37,10 @@ export interface RadarrQueueItem {
 class RadarrService {
   private api: AxiosInstance;
 
-  constructor() {
+  constructor(url: string, apiKey: string) {
     this.api = axios.create({
-      baseURL: `${process.env.RADARR_URL}/api/v3`,
-      params: { apikey: process.env.RADARR_API_KEY },
+      baseURL: `${url}/api/v3`,
+      params: { apikey: apiKey },
     });
   }
 
@@ -129,7 +130,26 @@ class RadarrService {
 }
 
 let _radarr: RadarrService | null = null;
-export function getRadarr() {
-  if (!_radarr) _radarr = new RadarrService();
+let _radarrConfigKey: string | null = null;
+
+export async function getRadarrAsync(): Promise<RadarrService> {
+  const config = await getServiceConfig('radarr');
+  const url = config?.url || process.env.RADARR_URL || '';
+  const apiKey = config?.apiKey || process.env.RADARR_API_KEY || '';
+  const configKey = `${url}|${apiKey}`;
+  if (!_radarr || _radarrConfigKey !== configKey) {
+    _radarr = new RadarrService(url, apiKey);
+    _radarrConfigKey = configKey;
+  }
+  return _radarr;
+}
+
+export function getRadarr(): RadarrService {
+  if (!_radarr) {
+    _radarr = new RadarrService(
+      process.env.RADARR_URL || '',
+      process.env.RADARR_API_KEY || '',
+    );
+  }
   return _radarr;
 }

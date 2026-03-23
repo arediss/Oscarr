@@ -96,6 +96,97 @@ export async function adminRoutes(app: FastifyInstance) {
     return settings;
   });
 
+  // === SERVICES REGISTRY ===
+
+  app.get('/services', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const services = await prisma.service.findMany({ orderBy: { createdAt: 'asc' } });
+    return services.map((s) => ({ ...s, config: JSON.parse(s.config) }));
+  });
+
+  app.post('/services', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { name, type, config, isDefault } = request.body as {
+      name: string; type: string; config: Record<string, string>; isDefault?: boolean;
+    };
+    if (!name || !type || !config) {
+      return reply.status(400).send({ error: 'Nom, type et configuration requis' });
+    }
+    // If this is set as default, unset other defaults of the same type
+    if (isDefault) {
+      await prisma.service.updateMany({ where: { type, isDefault: true }, data: { isDefault: false } });
+    }
+    const service = await prisma.service.create({
+      data: { name, type, config: JSON.stringify(config), isDefault: isDefault ?? false },
+    });
+    return reply.status(201).send({ ...service, config: JSON.parse(service.config) });
+  });
+
+  app.put('/services/:id', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { id } = request.params as { id: string };
+    const serviceId = parseId(id);
+    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    const { name, config, isDefault, enabled } = request.body as {
+      name?: string; config?: Record<string, string>; isDefault?: boolean; enabled?: boolean;
+    };
+    // If setting as default, unset others of the same type
+    if (isDefault) {
+      const existing = await prisma.service.findUnique({ where: { id: serviceId } });
+      if (existing) {
+        await prisma.service.updateMany({ where: { type: existing.type, isDefault: true, NOT: { id: serviceId } }, data: { isDefault: false } });
+      }
+    }
+    const service = await prisma.service.update({
+      where: { id: serviceId },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(config !== undefined ? { config: JSON.stringify(config) } : {}),
+        ...(isDefault !== undefined ? { isDefault } : {}),
+        ...(enabled !== undefined ? { enabled } : {}),
+      },
+    });
+    return { ...service, config: JSON.parse(service.config) };
+  });
+
+  app.delete('/services/:id', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { id } = request.params as { id: string };
+    const serviceId = parseId(id);
+    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    await prisma.service.delete({ where: { id: serviceId } });
+    return { ok: true };
+  });
+
+  app.post('/services/:id/test', async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { id } = request.params as { id: string };
+    const serviceId = parseId(id);
+    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!service) return reply.status(404).send({ error: 'Service introuvable' });
+    const config = JSON.parse(service.config) as Record<string, string>;
+
+    try {
+      if (service.type === 'radarr' || service.type === 'sonarr') {
+        const { default: axios } = await import('axios');
+        const { data } = await axios.get(`${config.url}/api/v3/system/status`, {
+          params: { apikey: config.apiKey },
+          timeout: 5000,
+        });
+        return { ok: true, version: data.version };
+      }
+      if (service.type === 'qbittorrent') {
+        const { default: axios } = await import('axios');
+        await axios.get(`${config.url}/api/v2/app/version`, { timeout: 5000 });
+        return { ok: true };
+      }
+      return reply.status(400).send({ error: 'Test non supporté pour ce type de service' });
+    } catch {
+      return reply.status(502).send({ error: 'Impossible de contacter le service' });
+    }
+  });
+
   // === SERVICE CONFIG (Radarr/Sonarr profiles & folders) ===
 
   app.get('/radarr/profiles', async (request, reply) => {
