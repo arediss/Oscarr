@@ -128,6 +128,7 @@ model AppSettings {
   requestsEnabled       Boolean   @default(true)
   supportEnabled        Boolean   @default(true)
   calendarEnabled       Boolean   @default(true)
+  subscriptionEnabled   Boolean   @default(true)
   updatedAt             DateTime  @updatedAt
 }
 

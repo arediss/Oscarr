@@ -99,12 +99,19 @@ function UsersTab() {
   const [paymentDate, setPaymentDate] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [saving, setSaving] = useState(false);
+  const [subEnabled, setSubEnabled] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number; total: number } | null>(null);
 
   const fetchUsers = useCallback(async () => {
-    try { const { data } = await api.get('/admin/users'); setUsers(data); }
-    catch (err) { console.error('Failed to fetch users:', err); }
+    try {
+      const [{ data: usersData }, { data: settings }] = await Promise.all([
+        api.get('/admin/users'),
+        api.get('/admin/settings'),
+      ]);
+      setUsers(usersData);
+      setSubEnabled(settings.subscriptionEnabled ?? true);
+    } catch (err) { console.error('Failed to fetch users:', err); }
     finally { setLoading(false); }
   }, []);
 
@@ -195,12 +202,14 @@ function UsersTab() {
                   {u.hasPlexServerAccess ? <CheckCircle className="w-4 h-4 text-ndp-success" /> : <XCircle className="w-4 h-4 text-ndp-danger" />}
                   <span className="text-xs text-ndp-text-dim hidden sm:inline">Plex</span>
                 </div>
-                <div className={clsx('flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold', isActive ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger')}>
-                  <CreditCard className="w-3.5 h-3.5" /><span className="hidden sm:inline">{isActive ? 'Actif' : 'Inactif'}</span>
-                </div>
-                {u.role !== 'admin' && <button onClick={() => setSelectedUser(isExpanded ? null : u)} className="btn-secondary text-xs py-1.5 px-3">{isExpanded ? 'Fermer' : 'Gérer'}</button>}
+                {subEnabled && (
+                  <div className={clsx('flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold', isActive ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger')}>
+                    <CreditCard className="w-3.5 h-3.5" /><span className="hidden sm:inline">{isActive ? 'Actif' : 'Inactif'}</span>
+                  </div>
+                )}
+                {u.role !== 'admin' && subEnabled && <button onClick={() => setSelectedUser(isExpanded ? null : u)} className="btn-secondary text-xs py-1.5 px-3">{isExpanded ? 'Fermer' : 'Gérer'}</button>}
               </div>
-              {isExpanded && (
+              {isExpanded && subEnabled && (
                 <div className="px-4 pb-4 pt-2 border-t border-white/5 animate-slide-up">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><p className="text-xs text-ndp-text-dim mb-1">Dernier paiement</p><p className="text-sm text-ndp-text">{u.lastPaymentDate ? `${new Date(u.lastPaymentDate).toLocaleDateString('fr-FR')}${u.lastPaymentAmount ? ` - ${u.lastPaymentAmount}€` : ''}` : 'Aucun'}</p></div>
@@ -1278,6 +1287,7 @@ function GeneralTab() {
   const [requestsEnabled, setRequestsEnabled] = useState(true);
   const [supportEnabled, setSupportEnabled] = useState(true);
   const [calendarEnabled, setCalendarEnabled] = useState(true);
+  const [subscriptionEnabled, setSubscriptionEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1289,6 +1299,7 @@ function GeneralTab() {
       setRequestsEnabled(data.requestsEnabled ?? true);
       setSupportEnabled(data.supportEnabled ?? true);
       setCalendarEnabled(data.calendarEnabled ?? true);
+      setSubscriptionEnabled(data.subscriptionEnabled ?? true);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -1303,6 +1314,7 @@ function GeneralTab() {
         requestsEnabled,
         supportEnabled,
         calendarEnabled,
+        subscriptionEnabled,
       });
       setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch (err) { console.error(err); } finally { setSaving(false); }
@@ -1315,6 +1327,7 @@ function GeneralTab() {
     { label: 'Auto-acceptation', desc: 'Les demandes sont automatiquement approuvées sans validation admin', value: autoApproveRequests, set: setAutoApproveRequests },
     { label: 'Support', desc: 'Système de tickets de support', value: supportEnabled, set: setSupportEnabled },
     { label: 'Calendrier', desc: 'Calendrier des sorties à venir', value: calendarEnabled, set: setCalendarEnabled },
+    { label: 'Abonnements', desc: 'Gestion des abonnements et paiements', value: subscriptionEnabled, set: setSubscriptionEnabled },
   ];
 
   return (
