@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
@@ -36,35 +36,46 @@ export default function CategoryPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const seenIds = useRef(new Set<number>());
 
   useEffect(() => {
     if (!category) return;
     setResults([]);
     setPage(1);
     setLoading(true);
+    seenIds.current.clear();
 
     api.get(`${category.endpoint}?page=1`).then(({ data }) => {
-      const items = data.results.map((r: TmdbMedia) => ({
+      const items = dedup(data.results.map((r: TmdbMedia) => ({
         ...r,
         media_type: r.media_type || category.mediaType || (r.title ? 'movie' : 'tv'),
-      }));
+      })));
       setResults(items);
-      setTotalPages(Math.min(data.total_pages, 20)); // TMDB caps at 500 pages but we limit
+      setTotalPages(Math.min(data.total_pages, 20));
     }).catch((err) => {
       console.error('Failed to fetch category:', err);
     }).finally(() => setLoading(false));
   }, [slug]);
 
-  const loadMore = async () => {
+  function dedup(items: TmdbMedia[]): TmdbMedia[] {
+    return items.filter((item) => {
+      if (seenIds.current.has(item.id)) return false;
+      seenIds.current.add(item.id);
+      return true;
+    });
+  }
+
+  const loadMore = useCallback(async () => {
     if (!category || loadingMore || page >= totalPages) return;
     setLoadingMore(true);
     const nextPage = page + 1;
     try {
       const { data } = await api.get(`${category.endpoint}?page=${nextPage}`);
-      const items = data.results.map((r: TmdbMedia) => ({
+      const items = dedup(data.results.map((r: TmdbMedia) => ({
         ...r,
         media_type: r.media_type || category.mediaType || (r.title ? 'movie' : 'tv'),
-      }));
+      })));
       setResults((prev) => [...prev, ...items]);
       setPage(nextPage);
     } catch (err) {
@@ -72,7 +83,24 @@ export default function CategoryPage() {
     } finally {
       setLoadingMore(false);
     }
-  };
+  }, [category, loadingMore, page, totalPages]);
+
+  // Infinite scroll via Intersection Observer
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMore();
+        }
+      },
+      { rootMargin: '400px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore]);
 
   if (!category) {
     return (
@@ -94,16 +122,10 @@ export default function CategoryPage() {
 
       <MediaGrid media={results} loading={loading} skeletonCount={21} />
 
+      {/* Infinite scroll sentinel */}
       {!loading && page < totalPages && (
-        <div className="flex justify-center mt-8">
-          <button
-            onClick={loadMore}
-            disabled={loadingMore}
-            className="btn-secondary flex items-center gap-2"
-          >
-            {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
-            Charger plus
-          </button>
+        <div ref={sentinelRef} className="flex justify-center py-8">
+          {loadingMore && <Loader2 className="w-6 h-6 text-ndp-accent animate-spin" />}
         </div>
       )}
     </div>

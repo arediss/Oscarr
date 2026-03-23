@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
@@ -13,42 +13,65 @@ export default function DiscoverGenrePage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const seenIds = useRef(new Set<number>());
 
   const gid = parseInt(genreId || '0');
   const genre = ALL_GENRES.find((g) => g.id === gid && g.mediaType === mediaType);
   const genreName = genre?.name || 'Genre inconnu';
 
+  function dedup(items: TmdbMedia[]): TmdbMedia[] {
+    return items.filter((item) => {
+      if (seenIds.current.has(item.id)) return false;
+      seenIds.current.add(item.id);
+      return true;
+    });
+  }
+
   useEffect(() => {
     setResults([]);
     setPage(1);
     setLoading(true);
+    seenIds.current.clear();
 
     api.get(`/tmdb/discover/${mediaType}/genre/${genreId}?page=1`).then(({ data }) => {
-      setResults(data.results.map((r: TmdbMedia) => ({ ...r, media_type: mediaType })));
+      setResults(dedup(data.results.map((r: TmdbMedia) => ({ ...r, media_type: mediaType }))));
       setTotalPages(data.total_pages);
     }).catch((err) => {
       console.error('Failed to discover:', err);
     }).finally(() => setLoading(false));
   }, [mediaType, genreId]);
 
-  const loadMore = async () => {
+  const loadMore = useCallback(async () => {
     if (loadingMore || page >= totalPages) return;
     setLoadingMore(true);
     const nextPage = page + 1;
     try {
       const { data } = await api.get(`/tmdb/discover/${mediaType}/genre/${genreId}?page=${nextPage}`);
-      setResults((prev) => [...prev, ...data.results.map((r: TmdbMedia) => ({ ...r, media_type: mediaType }))]);
+      const items = dedup(data.results.map((r: TmdbMedia) => ({ ...r, media_type: mediaType })));
+      setResults((prev) => [...prev, ...items]);
       setPage(nextPage);
     } catch (err) {
       console.error('Failed to load more:', err);
     } finally {
       setLoadingMore(false);
     }
-  };
+  }, [loadingMore, page, totalPages, mediaType, genreId]);
+
+  // Infinite scroll
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMore(); },
+      { rootMargin: '400px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore]);
 
   return (
     <div className="max-w-[1800px] mx-auto px-4 sm:px-8 py-8">
-      {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <Link to="/" className="p-2 glass rounded-xl hover:bg-white/10 transition-colors">
           <ArrowLeft className="w-5 h-5 text-white" />
@@ -61,20 +84,11 @@ export default function DiscoverGenrePage() {
         </div>
       </div>
 
-      {/* Results grid */}
       <MediaGrid media={results} loading={loading} />
 
-      {/* Load more */}
       {!loading && page < totalPages && (
-        <div className="flex justify-center mt-8">
-          <button
-            onClick={loadMore}
-            disabled={loadingMore}
-            className="btn-secondary flex items-center gap-2"
-          >
-            {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Charger plus
-          </button>
+        <div ref={sentinelRef} className="flex justify-center py-8">
+          {loadingMore && <Loader2 className="w-6 h-6 text-ndp-accent animate-spin" />}
         </div>
       )}
 
