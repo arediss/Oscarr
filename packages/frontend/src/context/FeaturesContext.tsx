@@ -5,7 +5,8 @@ interface Features {
   requestsEnabled: boolean;
   supportEnabled: boolean;
   calendarEnabled: boolean;
-  [key: string]: boolean;
+  siteName: string;
+  [key: string]: boolean | string;
 }
 
 interface FeaturesContextType {
@@ -18,6 +19,7 @@ const defaultFeatures: Features = {
   requestsEnabled: true,
   supportEnabled: true,
   calendarEnabled: true,
+  siteName: 'Oscarr',
 };
 
 const FeaturesContext = createContext<FeaturesContextType | null>(null);
@@ -40,6 +42,11 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshFeatures();
   }, [refreshFeatures]);
+
+  // Update page title when siteName changes
+  useEffect(() => {
+    document.title = features.siteName;
+  }, [features.siteName]);
 
   return (
     <FeaturesContext.Provider value={{ features, loading, refreshFeatures }}>

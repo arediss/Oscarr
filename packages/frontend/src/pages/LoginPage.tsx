@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
+import { useFeatures } from '@/context/FeaturesContext';
 import { Film } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function LoginPage() {
   const { t } = useTranslation();
   const { login, user } = useAuth();
+  const { features } = useFeatures();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -78,7 +80,7 @@ export default function LoginPage() {
             <div className="w-16 h-16 bg-gradient-to-br from-ndp-accent to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-ndp-accent/30 mb-4">
               <Film className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-ndp-text">Netflix du Pauvre</h1>
+            <h1 className="text-2xl font-bold text-ndp-text">{features.siteName}</h1>
             <p className="text-ndp-text-muted text-sm mt-1">{t('login.title')}</p>
           </div>
 

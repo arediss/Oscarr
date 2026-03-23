@@ -307,6 +307,8 @@
   "admin.logs.clear": "Vider",
 
   "admin.general.oscarr": "Oscarr",
+  "admin.general.site_name": "Nom du site",
+  "admin.general.site_name_desc": "Affiché dans l'onglet du navigateur et sur la page de connexion",
   "admin.general.current_version": "Version actuelle :",
   "admin.general.update_available": "v{{version}} disponible",
   "admin.general.up_to_date": "À jour",

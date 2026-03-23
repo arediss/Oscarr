@@ -55,7 +55,7 @@ async function start() {
     throw new Error('PORT environment variable must be a valid number');
   }
   await app.listen({ port, host: '0.0.0.0' });
-  console.log(`Netflix du Pauvre API running on port ${port}`);
+  console.log(`Oscarr API running on port ${port}`);
 
   // Start CRON scheduler (with plugin jobs)
   await initScheduler(pluginEngine);

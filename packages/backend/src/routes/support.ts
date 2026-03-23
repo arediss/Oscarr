@@ -21,8 +21,8 @@ export async function supportRoutes(app: FastifyInstance) {
     const existing = await prisma.service.findFirst({ where: { type: 'plex' } });
     if (existing) return reply.status(403).send({ error: 'Installation déjà effectuée' });
     const { createPlexPin } = await import('../services/plex.js');
-    const pin = await createPlexPin('netflix-du-pauvre-client');
-    const authUrl = `https://app.plex.tv/auth#?clientID=netflix-du-pauvre-client&code=${pin.code}&context%5Bdevice%5D%5Bproduct%5D=Netflix%20du%20Pauvre`;
+    const pin = await createPlexPin('oscarr-client');
+    const authUrl = `https://app.plex.tv/auth#?clientID=oscarr-client&code=${pin.code}&context%5Bdevice%5D%5Bproduct%5D=Oscarr`;
     return reply.send({ pin, authUrl });
   });
 
@@ -32,7 +32,7 @@ export async function supportRoutes(app: FastifyInstance) {
     const { pinId } = request.body as { pinId: number };
     if (!pinId) return reply.status(400).send({ error: 'pinId requis' });
     const { checkPlexPin } = await import('../services/plex.js');
-    const authToken = await checkPlexPin(pinId, 'netflix-du-pauvre-client');
+    const authToken = await checkPlexPin(pinId, 'oscarr-client');
     if (!authToken) return reply.status(400).send({ error: 'PIN non validé' });
     return reply.send({ token: authToken });
   });
@@ -111,6 +111,7 @@ export async function supportRoutes(app: FastifyInstance) {
       requestsEnabled: settings?.requestsEnabled ?? true,
       supportEnabled: settings?.supportEnabled ?? true,
       calendarEnabled: settings?.calendarEnabled ?? true,
+      siteName: settings?.siteName ?? 'Oscarr',
       ...pluginFeatures,
     };
   });

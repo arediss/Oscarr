@@ -127,6 +127,7 @@ model AppSettings {
   requestsEnabled       Boolean   @default(true)
   supportEnabled        Boolean   @default(true)
   calendarEnabled       Boolean   @default(true)
+  siteName              String    @default("Oscarr")
   updatedAt             DateTime  @updatedAt
 }
 

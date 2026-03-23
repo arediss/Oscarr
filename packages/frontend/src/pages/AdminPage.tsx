@@ -983,7 +983,7 @@ function NotificationsTab() {
           <label className="text-xs text-ndp-text-dim block mb-1">{t('common.api_key')}</label>
           <input type="password" value={resendApiKey} onChange={(e) => setResendApiKey(e.target.value)} placeholder="re_..." className="input w-full text-sm mb-2" />
           <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.services.sender_email')}</label>
-          <input type="text" value={resendFromEmail} onChange={(e) => setResendFromEmail(e.target.value)} placeholder="Netflix du Pauvre <notifs@domain.com>" className="input w-full text-sm mb-2" />
+          <input type="text" value={resendFromEmail} onChange={(e) => setResendFromEmail(e.target.value)} placeholder="Oscarr <notifs@domain.com>" className="input w-full text-sm mb-2" />
           <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.services.recipient_email')}</label>
           <input type="text" value={resendToEmail} onChange={(e) => setResendToEmail(e.target.value)} placeholder="admin@domain.com" className="input w-full text-sm mb-3" />
           <button onClick={() => testChannel('email')} disabled={!hasEmail || testingEmail} className="btn-secondary text-xs flex items-center gap-1.5">
@@ -1663,6 +1663,7 @@ function GeneralTab() {
   const [requestsEnabled, setRequestsEnabled] = useState(true);
   const [supportEnabled, setSupportEnabled] = useState(true);
   const [calendarEnabled, setCalendarEnabled] = useState(true);
+  const [siteName, setSiteName] = useState('Oscarr');
   const [bannerText, setBannerText] = useState('');
   const [bannerSaved, setBannerSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1675,6 +1676,7 @@ function GeneralTab() {
         setRequestsEnabled(data.requestsEnabled ?? true);
         setSupportEnabled(data.supportEnabled ?? true);
         setCalendarEnabled(data.calendarEnabled ?? true);
+        setSiteName(data.siteName ?? 'Oscarr');
       }),
       api.get('/support/banner').then(({ data }) => setBannerText(data.banner || '')),
       api.get('/support/version').then(({ data }) => setVersionInfo(data)),
@@ -1689,6 +1691,7 @@ function GeneralTab() {
         requestsEnabled,
         supportEnabled,
         calendarEnabled,
+        siteName: siteName.trim() || 'Oscarr',
       });
       await refreshFeatures();
       setSaved(true); setTimeout(() => setSaved(false), 3000);
@@ -1743,6 +1746,18 @@ function GeneralTab() {
           </div>
         </div>
       )}
+
+      {/* Site Name */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.general.site_name')}</h3>
+        <p className="text-xs text-ndp-text-dim mb-3">{t('admin.general.site_name_desc')}</p>
+        <input
+          value={siteName}
+          onChange={(e) => setSiteName(e.target.value)}
+          placeholder="Oscarr"
+          className="input w-full max-w-sm text-sm"
+        />
+      </div>
 
       {/* Maintenance Banner */}
       <div className="card p-6">

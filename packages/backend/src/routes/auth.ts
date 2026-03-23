@@ -3,12 +3,12 @@ import { prisma } from '../utils/prisma.js';
 import { getPlexUser, createPlexPin, checkPlexPin, checkPlexServerAccess } from '../services/plex.js';
 import { getServiceConfig } from '../utils/services.js';
 
-const PLEX_CLIENT_ID = 'netflix-du-pauvre-client';
+const PLEX_CLIENT_ID = 'oscarr-client';
 
 export async function authRoutes(app: FastifyInstance) {
   app.post('/plex/pin', async (_request, reply) => {
     const pin = await createPlexPin(PLEX_CLIENT_ID);
-    const authUrl = `https://app.plex.tv/auth#?clientID=${PLEX_CLIENT_ID}&code=${pin.code}&context%5Bdevice%5D%5Bproduct%5D=Netflix%20du%20Pauvre`;
+    const authUrl = `https://app.plex.tv/auth#?clientID=${PLEX_CLIENT_ID}&code=${pin.code}&context%5Bdevice%5D%5Bproduct%5D=Oscarr`;
     return reply.send({ pin, authUrl });
   });
 

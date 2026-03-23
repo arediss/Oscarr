@@ -61,7 +61,7 @@ async function sendDiscord(webhookUrl: string, type: NotificationType, data: Not
       description: buildMessage(type, data),
       color: COLORS[type],
       thumbnail: posterUrl ? { url: posterUrl } : undefined,
-      footer: { text: 'Netflix du Pauvre' },
+      footer: { text: 'Oscarr' },
       timestamp: new Date().toISOString(),
     }],
   });
@@ -84,7 +84,7 @@ async function sendEmail(apiKey: string, from: string, to: string, type: Notific
   await resend.emails.send({
     from,
     to: [to],
-    subject: `[Netflix du Pauvre] ${LABELS[type]}`,
+    subject: `[Oscarr] ${LABELS[type]}`,
     html: `<h2 style="margin:0 0 12px">${LABELS[type]}</h2><p style="margin:0">${msg}</p>${
       data.posterPath ? `<br/><img src="https://image.tmdb.org/t/p/w185${data.posterPath}" alt="" style="border-radius:8px" />` : ''
     }`,
@@ -131,7 +131,7 @@ export async function sendNotification(type: NotificationType, data: Notificatio
 // === TEST FUNCTIONS ===
 export async function testDiscord(webhookUrl: string) {
   await axios.post(webhookUrl, {
-    embeds: [{ title: 'Test', description: 'Notification Discord OK !', color: 0x10b981, footer: { text: 'Netflix du Pauvre' } }],
+    embeds: [{ title: 'Test', description: 'Notification Discord OK !', color: 0x10b981, footer: { text: 'Oscarr' } }],
   });
 }
 
@@ -143,7 +143,7 @@ export async function testTelegram(botToken: string, chatId: string) {
 
 export async function testEmail(apiKey: string, from: string, to: string) {
   const resend = new Resend(apiKey);
-  await resend.emails.send({ from, to: [to], subject: '[Netflix du Pauvre] Test', html: '<h2>Test</h2><p>Notification Email OK !</p>' });
+  await resend.emails.send({ from, to: [to], subject: '[Oscarr] Test', html: '<h2>Test</h2><p>Notification Email OK !</p>' });
 }
 
 // Log events for the admin logs

@@ -307,6 +307,8 @@
   "admin.logs.clear": "Clear",
 
   "admin.general.oscarr": "Oscarr",
+  "admin.general.site_name": "Site name",
+  "admin.general.site_name_desc": "Displayed in the browser tab and on the login page",
   "admin.general.current_version": "Current version:",
   "admin.general.update_available": "v{{version}} available",
   "admin.general.up_to_date": "Up to date",

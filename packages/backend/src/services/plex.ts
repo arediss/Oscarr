@@ -34,7 +34,7 @@ export async function getPlexUser(authToken: string): Promise<PlexUser> {
 
 export function getPlexOAuthUrl(clientId: string, forwardUrl: string): string {
   const params = new URLSearchParams({
-    'X-Plex-Product': 'Netflix du Pauvre',
+    'X-Plex-Product': 'Oscarr',
     'X-Plex-Client-Identifier': clientId,
     'X-Plex-Version': '1.0.0',
     clientID: clientId,
@@ -54,7 +54,7 @@ export async function createPlexPin(clientId: string): Promise<{ id: number; cod
       params: { strong: true },
       headers: {
         Accept: 'application/json',
-        'X-Plex-Product': 'Netflix du Pauvre',
+        'X-Plex-Product': 'Oscarr',
         'X-Plex-Client-Identifier': clientId,
         'X-Plex-Version': '1.0.0',
       },
@@ -91,7 +91,7 @@ export async function getPlexFriends(adminToken: string): Promise<PlexFriend[]> 
     headers: {
       Accept: 'application/json',
       'X-Plex-Token': adminToken,
-      'X-Plex-Client-Identifier': 'netflix-du-pauvre-client',
+      'X-Plex-Client-Identifier': 'oscarr-client',
     },
   });
   return data.map((f: PlexFriend) => ({
@@ -119,7 +119,7 @@ export async function checkPlexServerAccess(
       headers: {
         Accept: 'application/json',
         'X-Plex-Token': userPlexToken,
-        'X-Plex-Client-Identifier': 'netflix-du-pauvre-client',
+        'X-Plex-Client-Identifier': 'oscarr-client',
       },
       params: { includeHttps: 1, includeRelay: 1 },
     });

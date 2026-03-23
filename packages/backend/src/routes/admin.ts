@@ -58,6 +58,7 @@ export async function adminRoutes(app: FastifyInstance) {
       requestsEnabled?: boolean;
       supportEnabled?: boolean;
       calendarEnabled?: boolean;
+      siteName?: string;
     };
 
     const settings = await prisma.appSettings.upsert({
@@ -79,6 +80,7 @@ export async function adminRoutes(app: FastifyInstance) {
         requestsEnabled: body.requestsEnabled ?? undefined,
         supportEnabled: body.supportEnabled ?? undefined,
         calendarEnabled: body.calendarEnabled ?? undefined,
+        siteName: body.siteName ?? undefined,
       },
       create: {
         id: 1,
