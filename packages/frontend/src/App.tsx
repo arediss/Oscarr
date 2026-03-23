@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Layout from '@/components/Layout';
@@ -50,11 +51,12 @@ function RequireAccess({ children }: { children: React.ReactNode }) {
 }
 
 function LoadingScreen() {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-ndp-bg flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
         <div className="w-12 h-12 border-4 border-ndp-accent/30 border-t-ndp-accent rounded-full animate-spin" />
-        <p className="text-ndp-text-muted text-sm">Chargement...</p>
+        <p className="text-ndp-text-muted text-sm">{t('common.loading')}</p>
       </div>
     </div>
   );

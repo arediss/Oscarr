@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Star, CheckCircle, Clock, Film, Tv, Search, CalendarClock, Plus, Loader2 } from 'lucide-react';
 import { posterUrl } from '@/lib/api';
 import api from '@/lib/api';
@@ -18,6 +19,7 @@ function getMediaType(media: TmdbMedia): string {
 }
 
 export default function MediaCard({ media, className, availability, index = 0 }: MediaCardProps) {
+  const { t } = useTranslation();
   const [loaded, setLoaded] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [requested, setRequested] = useState(false);
@@ -27,7 +29,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
   const type = media.media_type || (media.title ? 'movie' : 'tv');
   const link = `/${type}/${media.id}`;
 
-  const statusBadge = getAvailabilityBadge(availability, type);
+  const statusBadge = getAvailabilityBadge(availability, type, t);
 
   const canRequest = !availability || (availability.status === 'unknown' && !availability.requestStatus);
 
@@ -82,7 +84,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
           )}
         </div>
         <span className="text-[10px] uppercase tracking-wider text-ndp-accent font-semibold mt-1">
-          {type === 'movie' ? 'Film' : 'Série'}
+          {type === 'movie' ? t('common.movie') : t('common.series')}
         </span>
 
         {/* Quick request button */}
@@ -133,12 +135,12 @@ export default function MediaCard({ media, className, availability, index = 0 }:
   );
 }
 
-function getAvailabilityBadge(availability?: { status: string; requestStatus?: string } | null, mediaType?: string) {
+function getAvailabilityBadge(availability?: { status: string; requestStatus?: string } | null, mediaType?: string, t?: (key: string) => string) {
   if (!availability || availability.status === 'unknown') return null;
 
   if (availability.status === 'available') {
     return {
-      label: 'Dispo',
+      label: t?.('status.available') ?? 'Available',
       icon: CheckCircle,
       bgClass: 'bg-ndp-success/80 text-white',
     };
@@ -146,7 +148,7 @@ function getAvailabilityBadge(availability?: { status: string; requestStatus?: s
 
   if (availability.status === 'upcoming') {
     return {
-      label: 'Prochainement',
+      label: t?.('status.upcoming') ?? 'Upcoming',
       icon: CalendarClock,
       bgClass: 'bg-purple-600/80 text-white',
     };
@@ -154,7 +156,7 @@ function getAvailabilityBadge(availability?: { status: string; requestStatus?: s
 
   if (availability.status === 'searching') {
     return {
-      label: 'Recherche',
+      label: t?.('status.searching') ?? 'Searching',
       icon: Search,
       bgClass: 'bg-ndp-accent/80 text-white',
     };
@@ -163,7 +165,7 @@ function getAvailabilityBadge(availability?: { status: string; requestStatus?: s
   // Only TV shows can be "partially available"
   if (availability.status === 'processing' && mediaType === 'tv') {
     return {
-      label: 'Partiel',
+      label: t?.('status.partial') ?? 'Partial',
       icon: Clock,
       bgClass: 'bg-ndp-accent/80 text-white',
     };
@@ -171,7 +173,7 @@ function getAvailabilityBadge(availability?: { status: string; requestStatus?: s
 
   if (availability.requestStatus === 'pending') {
     return {
-      label: 'Demandé',
+      label: t?.('status.requested') ?? 'Requested',
       icon: Clock,
       bgClass: 'bg-ndp-warning/80 text-white',
     };
@@ -179,7 +181,7 @@ function getAvailabilityBadge(availability?: { status: string; requestStatus?: s
 
   if (availability.requestStatus === 'approved') {
     return {
-      label: 'En cours',
+      label: t?.('status.processing') ?? 'Processing',
       icon: Clock,
       bgClass: 'bg-ndp-accent/80 text-white',
     };

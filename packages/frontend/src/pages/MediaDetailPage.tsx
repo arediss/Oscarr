@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Star,
   Calendar,
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export default function MediaDetailPage({ type }: Props) {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [media, setMedia] = useState<TmdbMedia | null>(null);
@@ -114,7 +116,7 @@ export default function MediaDetailPage({ type }: Props) {
       const { data } = await api.get(`/media/tmdb/${id}/${type}`);
       applyDbData(data);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erreur';
+      const message = err instanceof Error ? err.message : t('common.error');
       console.error('Request failed:', message);
     } finally {
       setRequesting(false);
@@ -150,38 +152,38 @@ export default function MediaDetailPage({ type }: Props) {
 
   const getStatusBadge = () => {
     if (isAvailable) {
-      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-success/10 text-ndp-success">Disponible</span>;
+      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-success/10 text-ndp-success">{t('status.available')}</span>;
     }
     if (isDownloading) {
       return (
         <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 flex items-center gap-1.5">
           <Loader2 className="w-3 h-3 animate-spin" />
-          Téléchargement {download.progress}%
+          {t('status.downloading', { progress: download.progress })}
           {download.timeLeft && <span className="opacity-70">· {formatTimeLeft(download.timeLeft)}</span>}
         </span>
       );
     }
     if (isUpcoming) {
-      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400">Prochainement</span>;
+      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400">{t('status.upcoming')}</span>;
     }
     if (isSearching) {
-      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-accent/10 text-ndp-accent">Recherche en cours</span>;
+      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-accent/10 text-ndp-accent">{t('status.searching_long')}</span>;
     }
     if (isPartiallyAvailable) {
-      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-accent/10 text-ndp-accent">Partiellement disponible</span>;
+      return <span className="px-3 py-1 rounded-full text-xs font-semibold bg-ndp-accent/10 text-ndp-accent">{t('status.partially_available')}</span>;
     }
     if (!dbMedia?.requests?.length) return null;
     const latestRequest = dbMedia.requests[0];
-    const statusMap: Record<string, { label: string; color: string }> = {
-      pending: { label: 'En attente', color: 'bg-ndp-warning/10 text-ndp-warning' },
-      approved: { label: 'Approuvé', color: 'bg-ndp-accent/10 text-ndp-accent' },
-      declined: { label: 'Refusé', color: 'bg-ndp-danger/10 text-ndp-danger' },
-      processing: { label: 'En cours', color: 'bg-blue-500/10 text-blue-400' },
-      available: { label: 'Disponible', color: 'bg-ndp-success/10 text-ndp-success' },
-      failed: { label: 'Échec', color: 'bg-ndp-danger/10 text-ndp-danger' },
+    const statusMap: Record<string, { color: string }> = {
+      pending: { color: 'bg-ndp-warning/10 text-ndp-warning' },
+      approved: { color: 'bg-ndp-accent/10 text-ndp-accent' },
+      declined: { color: 'bg-ndp-danger/10 text-ndp-danger' },
+      processing: { color: 'bg-blue-500/10 text-blue-400' },
+      available: { color: 'bg-ndp-success/10 text-ndp-success' },
+      failed: { color: 'bg-ndp-danger/10 text-ndp-danger' },
     };
-    const s = statusMap[latestRequest.status] || { label: latestRequest.status, color: 'bg-white/10 text-white' };
-    return <span className={clsx('px-3 py-1 rounded-full text-xs font-semibold', s.color)}>{s.label}</span>;
+    const s = statusMap[latestRequest.status] || { color: 'bg-white/10 text-white' };
+    return <span className={clsx('px-3 py-1 rounded-full text-xs font-semibold', s.color)}>{t(`status.${latestRequest.status}`)}</span>;
   };
 
   if (loading) {
@@ -195,7 +197,7 @@ export default function MediaDetailPage({ type }: Props) {
   if (!media) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-ndp-text-muted">Média introuvable</p>
+        <p className="text-ndp-text-muted">{t('media.not_found')}</p>
       </div>
     );
   }
@@ -273,18 +275,18 @@ export default function MediaDetailPage({ type }: Props) {
               {media.vote_average > 0 && (
                 <span className="flex items-center gap-1.5 text-ndp-gold">
                   <Star className="w-4 h-4 fill-ndp-gold" />
-                  {media.vote_average.toFixed(1)} ({media.vote_count} votes)
+                  {media.vote_average.toFixed(1)} ({media.vote_count} {t('media.votes')})
                 </span>
               )}
               {type === 'tv' && media.number_of_seasons && (
                 <span className="flex items-center gap-1.5">
                   <Tv className="w-4 h-4" />
-                  {media.number_of_seasons} saison{media.number_of_seasons > 1 ? 's' : ''}
+                  {t('media.season', { count: media.number_of_seasons })}
                 </span>
               )}
               <span className="flex items-center gap-1.5">
                 <Film className="w-4 h-4" />
-                {type === 'movie' ? 'Film' : 'Série'}
+                {type === 'movie' ? t('common.movie') : t('common.series')}
               </span>
             </div>
 
@@ -300,14 +302,14 @@ export default function MediaDetailPage({ type }: Props) {
 
             {/* Synopsis */}
             <div className="mt-6">
-              <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-2">Synopsis</h3>
-              <p className="text-ndp-text leading-relaxed">{media.overview || 'Aucune description disponible.'}</p>
+              <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-2">{t('media.synopsis')}</h3>
+              <p className="text-ndp-text leading-relaxed">{media.overview || t('media.no_description')}</p>
             </div>
 
             {/* Director */}
             {director && (
               <p className="mt-4 text-sm text-ndp-text-muted">
-                Réalisé par <span className="text-ndp-text font-medium">{director.name}</span>
+                {t('media.directed_by', { name: director.name })}
               </p>
             )}
 
@@ -321,20 +323,20 @@ export default function MediaDetailPage({ type }: Props) {
                   className="btn-secondary flex items-center gap-2"
                 >
                   <Play className="w-4 h-4" />
-                  Bande-annonce
+                  {t('media.trailer')}
                 </a>
               )}
 
               {isAvailable ? (
                 <button disabled className="btn-success flex items-center gap-2 cursor-default">
                   <Check className="w-4 h-4" />
-                  Disponible
+                  {t('status.available')}
                 </button>
               ) : isDownloading ? (
                 <div className="flex items-center gap-3">
                   <button disabled className="btn-secondary flex items-center gap-2 cursor-default">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Téléchargement en cours
+                    {t('status.downloading_long')}
                   </button>
                   <div className="flex-1 min-w-[120px] max-w-[200px]">
                     <div className="h-2 bg-white/10 rounded-full overflow-hidden">
@@ -345,17 +347,17 @@ export default function MediaDetailPage({ type }: Props) {
               ) : isUpcoming ? (
                 <button disabled className="btn-secondary flex items-center gap-2 cursor-default opacity-60">
                   <Clock className="w-4 h-4" />
-                  Prochainement
+                  {t('status.upcoming')}
                 </button>
               ) : isSearching ? (
                 <button disabled className="btn-secondary flex items-center gap-2 cursor-default opacity-60">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Recherche en cours
+                  {t('status.searching_long')}
                 </button>
               ) : userHasRequest ? (
                 <button disabled className="btn-success flex items-center gap-2 cursor-default">
                   <Check className="w-4 h-4" />
-                  Déjà demandé
+                  {t('status.already_requested')}
                 </button>
               ) : (
                 <button
@@ -368,7 +370,7 @@ export default function MediaDetailPage({ type }: Props) {
                   ) : (
                     <Plus className="w-4 h-4" />
                   )}
-                  {isPartiallyAvailable ? 'Demander le reste' : 'Demander'}
+                  {isPartiallyAvailable ? t('media.request_rest') : t('media.request')}
                 </button>
               )}
             </div>
@@ -376,7 +378,7 @@ export default function MediaDetailPage({ type }: Props) {
             {/* Quality selection */}
             {qualityOptions.length > 0 && !isAvailable && !userHasRequest && (
               <div className="mt-6">
-                <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">Qualité</h3>
+                <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('media.quality')}</h3>
                 <div className="flex flex-wrap gap-2">
                   {qualityOptions.map((q) => (
                     <button
@@ -400,7 +402,7 @@ export default function MediaDetailPage({ type }: Props) {
             {type === 'tv' && media.seasons && media.seasons.length > 0 && (
               <div className="mt-6">
                 <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">
-                  {sonarrSeasons.length > 0 ? 'Saisons' : 'Saisons à demander'}
+                  {sonarrSeasons.length > 0 ? t('media.seasons') : t('media.seasons_to_request')}
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {/* All seasons button (only if can request) */}
@@ -419,7 +421,7 @@ export default function MediaDetailPage({ type }: Props) {
                           : 'bg-white/5 text-ndp-text-muted hover:bg-white/10 border border-dashed border-white/10'
                       )}
                     >
-                      Toutes les saisons
+                      {t('media.all_seasons')}
                     </button>
                   )}
                   {media.seasons
@@ -455,7 +457,7 @@ export default function MediaDetailPage({ type }: Props) {
                         >
                           S{String(season.season_number).padStart(2, '0')}
                           <span className="text-xs opacity-60">
-                            {hasStats ? `${fileCount}/${totalCount}` : `${season.episode_count} ép.`}
+                            {hasStats ? `${fileCount}/${totalCount}` : `${season.episode_count} ${t('media.episodes_short')}`}
                           </span>
                         </button>
                       );
@@ -475,7 +477,7 @@ export default function MediaDetailPage({ type }: Props) {
         {/* Cast */}
         {cast.length > 0 && (
           <div className="mt-12">
-            <h3 className="text-lg font-bold text-ndp-text mb-4">Casting</h3>
+            <h3 className="text-lg font-bold text-ndp-text mb-4">{t('media.casting')}</h3>
             <div className="flex gap-4 overflow-x-auto pb-4">
               {cast.map((person) => (
                 <div key={person.id} className="flex-shrink-0 w-28 text-center">
@@ -504,7 +506,7 @@ export default function MediaDetailPage({ type }: Props) {
         {/* Recommendations */}
         {recommendations.length > 0 && (
           <div className="mt-12 pb-16">
-            <MediaRow title="Recommandations" media={recommendations} />
+            <MediaRow title={t('media.recommendations')} media={recommendations} />
           </div>
         )}
         </div>
@@ -514,6 +516,7 @@ export default function MediaDetailPage({ type }: Props) {
 }
 
 function CollectionSection({ collection }: { collection: { id: number; name: string; poster_path: string | null } }) {
+  const { t } = useTranslation();
   const [parts, setParts] = useState<TmdbMedia[]>([]);
   const [statuses, setStatuses] = useState<Record<string, { status: string; requestStatus?: string }>>({});
   const [loading, setLoading] = useState(true);
@@ -554,12 +557,12 @@ function CollectionSection({ collection }: { collection: { id: number; name: str
   const someAvailable = availableCount > 0 && availableCount < totalCount;
 
   const buttonLabel = result
-    ? `${result.requested} demandés, ${result.skipped} ignorés`
+    ? t('media.requested_count', { requested: result.requested, skipped: result.skipped })
     : allAvailable
-    ? 'Collection complète'
+    ? t('media.collection_complete')
     : someAvailable
-    ? `Compléter la collection (${totalCount - availableCount} manquants)`
-    : 'Demander toute la collection';
+    ? t('media.complete_collection', { count: totalCount - availableCount })
+    : t('media.request_collection');
 
   return (
     <div className="mt-12">
@@ -581,7 +584,7 @@ function CollectionSection({ collection }: { collection: { id: number; name: str
         )}
         {allAvailable && (
           <span className="btn-success cursor-default text-sm flex items-center gap-2 flex-shrink-0">
-            <Check className="w-4 h-4" /> Collection complète
+            <Check className="w-4 h-4" /> {t('media.collection_complete')}
           </span>
         )}
       </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Info, Star } from 'lucide-react';
 import api from '@/lib/api';
 import { backdropUrl } from '@/lib/api';
@@ -8,6 +9,7 @@ import GenreRow from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
 
 export default function HomePage() {
+  const { t } = useTranslation();
   const [recentlyAdded, setRecentlyAdded] = useState<TmdbMedia[]>([]);
   const [trending, setTrending] = useState<TmdbMedia[]>([]);
   const [popularMovies, setPopularMovies] = useState<TmdbMedia[]>([]);
@@ -151,7 +153,7 @@ export default function HomePage() {
                 }}
               >
                 <span className="text-ndp-accent text-xs font-semibold uppercase tracking-widest mb-2 block">
-                  {heroType === 'movie' ? 'Film' : 'Série'} tendance
+                  {t('home.trending_type', { type: heroType === 'movie' ? t('common.movie') : t('common.series') })}
                 </span>
                 <h1 className="text-4xl sm:text-5xl font-extrabold text-white mb-3 leading-tight">
                   {heroTitle}
@@ -176,7 +178,7 @@ export default function HomePage() {
                     className="btn-primary flex items-center gap-2"
                   >
                     <Info className="w-4 h-4" />
-                    Plus d'infos
+                    {t('home.more_info')}
                   </Link>
                 </div>
               </div>
@@ -200,16 +202,16 @@ export default function HomePage() {
         {/* Content rows - passes over the hero */}
         <div className="relative space-y-10 pb-16 pt-8">
           {loading && (
-            <MediaRow title="Récemment ajoutés" media={[]} loading={true} />
+            <MediaRow title={t('home.recently_added')} media={[]} loading={true} />
           )}
           {!loading && recentlyAdded.length > 0 && (
-            <MediaRow title="Récemment ajoutés" media={recentlyAdded} />
+            <MediaRow title={t('home.recently_added')} media={recentlyAdded} />
           )}
-          <MediaRow title="Tendances de la semaine" media={trending} loading={loading} href="/category/trending" size="large" />
-          <MediaRow title="Films populaires" media={popularMovies.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-popular" />
-          <MediaRow title="Séries populaires" media={popularTv.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/tv-popular" />
+          <MediaRow title={t('home.trending_week')} media={trending} loading={loading} href="/category/trending" size="large" />
+          <MediaRow title={t('home.popular_movies')} media={popularMovies.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-popular" />
+          <MediaRow title={t('home.popular_series')} media={popularTv.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/tv-popular" />
           <GenreRow />
-          <MediaRow title="Prochainement au cinéma" media={upcoming.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-upcoming" />
+          <MediaRow title={t('home.coming_soon')} media={upcoming.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-upcoming" />
         </div>
       </div>
     </div>

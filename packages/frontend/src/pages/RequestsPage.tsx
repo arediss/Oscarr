@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Clock,
   CheckCircle,
@@ -23,17 +24,18 @@ import api from '@/lib/api';
 import { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useDownloadForMedia } from '@/hooks/useDownloads';
+import { localizedDate } from '@/i18n/formatters';
 import type { MediaRequest } from '@/types';
 
-const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: string; bg: string }> = {
-  pending: { label: 'En attente', icon: Clock, color: 'text-ndp-warning', bg: 'bg-ndp-warning' },
-  approved: { label: 'Approuvé', icon: CheckCircle, color: 'text-ndp-accent', bg: 'bg-ndp-accent' },
-  declined: { label: 'Refusé', icon: XCircle, color: 'text-ndp-danger', bg: 'bg-ndp-danger' },
-  processing: { label: 'En cours', icon: Loader2, color: 'text-blue-400', bg: 'bg-blue-500' },
-  available: { label: 'Disponible', icon: CheckCircle, color: 'text-ndp-success', bg: 'bg-ndp-success' },
-  searching: { label: 'Recherche', icon: Search, color: 'text-ndp-accent', bg: 'bg-ndp-accent' },
-  upcoming: { label: 'Prochainement', icon: CalendarClock, color: 'text-purple-400', bg: 'bg-purple-500' },
-  failed: { label: 'Échec', icon: AlertCircle, color: 'text-ndp-danger', bg: 'bg-ndp-danger' },
+const STATUS_CONFIG: Record<string, { labelKey: string; icon: typeof Clock; color: string; bg: string }> = {
+  pending: { labelKey: 'pending', icon: Clock, color: 'text-ndp-warning', bg: 'bg-ndp-warning' },
+  approved: { labelKey: 'approved', icon: CheckCircle, color: 'text-ndp-accent', bg: 'bg-ndp-accent' },
+  declined: { labelKey: 'declined', icon: XCircle, color: 'text-ndp-danger', bg: 'bg-ndp-danger' },
+  processing: { labelKey: 'processing', icon: Loader2, color: 'text-blue-400', bg: 'bg-blue-500' },
+  available: { labelKey: 'available', icon: CheckCircle, color: 'text-ndp-success', bg: 'bg-ndp-success' },
+  searching: { labelKey: 'searching', icon: Search, color: 'text-ndp-accent', bg: 'bg-ndp-accent' },
+  upcoming: { labelKey: 'upcoming', icon: CalendarClock, color: 'text-purple-400', bg: 'bg-purple-500' },
+  failed: { labelKey: 'failed', icon: AlertCircle, color: 'text-ndp-danger', bg: 'bg-ndp-danger' },
 };
 
 interface RequestStats {
@@ -46,6 +48,7 @@ interface RequestStats {
 }
 
 export default function RequestsPage() {
+  const { t } = useTranslation();
   const { isAdmin } = useAuth();
   const [requests, setRequests] = useState<MediaRequest[]>([]);
   const [stats, setStats] = useState<RequestStats | null>(null);
@@ -100,7 +103,7 @@ export default function RequestsPage() {
     setActionLoading(id);
     try {
       await api.post(`/requests/${id}/${action}`);
-      fetchRequests();
+      fetchRequests(1);
     } catch (err) {
       console.error(`Failed to ${action} request:`, err);
     } finally {
@@ -112,7 +115,7 @@ export default function RequestsPage() {
     setActionLoading(id);
     try {
       await api.delete(`/requests/${id}`);
-      fetchRequests();
+      fetchRequests(1);
     } catch (err) {
       console.error('Failed to delete request:', err);
     } finally {
@@ -125,21 +128,21 @@ export default function RequestsPage() {
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-          <StatCard label="Total" value={stats.total} icon={LayoutGrid} color="text-ndp-text" bg="bg-white/5" active={filter === ''} onClick={() => setFilter('')} />
-          <StatCard label="En attente" value={stats.pending} icon={Hourglass} color="text-ndp-warning" bg="bg-ndp-warning/5" active={filter === 'pending'} onClick={() => setFilter(filter === 'pending' ? '' : 'pending')} />
-          <StatCard label="Approuvées" value={stats.approved} icon={ThumbsUp} color="text-ndp-accent" bg="bg-ndp-accent/5" active={filter === 'approved'} onClick={() => setFilter(filter === 'approved' ? '' : 'approved')} />
-          <StatCard label="Disponibles" value={stats.available} icon={CircleCheck} color="text-ndp-success" bg="bg-ndp-success/5" active={filter === 'available'} onClick={() => setFilter(filter === 'available' ? '' : 'available')} />
-          <StatCard label="En cours" value={stats.processing} icon={Cog} color="text-blue-400" bg="bg-blue-500/5" />
-          <StatCard label="Refusées" value={stats.declined} icon={Ban} color="text-ndp-danger" bg="bg-ndp-danger/5" active={filter === 'declined'} onClick={() => setFilter(filter === 'declined' ? '' : 'declined')} />
+          <StatCard label={t('requests.total')} value={stats.total} icon={LayoutGrid} color="text-ndp-text" bg="bg-white/5" active={filter === ''} onClick={() => setFilter('')} />
+          <StatCard label={t('status.pending')} value={stats.pending} icon={Hourglass} color="text-ndp-warning" bg="bg-ndp-warning/5" active={filter === 'pending'} onClick={() => setFilter(filter === 'pending' ? '' : 'pending')} />
+          <StatCard label={t('requests.approved_plural')} value={stats.approved} icon={ThumbsUp} color="text-ndp-accent" bg="bg-ndp-accent/5" active={filter === 'approved'} onClick={() => setFilter(filter === 'approved' ? '' : 'approved')} />
+          <StatCard label={t('requests.available_plural')} value={stats.available} icon={CircleCheck} color="text-ndp-success" bg="bg-ndp-success/5" active={filter === 'available'} onClick={() => setFilter(filter === 'available' ? '' : 'available')} />
+          <StatCard label={t('requests.processing_plural')} value={stats.processing} icon={Cog} color="text-blue-400" bg="bg-blue-500/5" />
+          <StatCard label={t('requests.declined_plural')} value={stats.declined} icon={Ban} color="text-ndp-danger" bg="bg-ndp-danger/5" active={filter === 'declined'} onClick={() => setFilter(filter === 'declined' ? '' : 'declined')} />
         </div>
       )}
 
       <div className="flex items-center gap-3 mb-8">
-        <h1 className="text-2xl font-bold text-ndp-text">Demandes</h1>
+        <h1 className="text-2xl font-bold text-ndp-text">{t('requests.title')}</h1>
         {filter && (
           <button onClick={() => setFilter('')} className="text-xs text-ndp-text-dim hover:text-ndp-text bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-full transition-colors flex items-center gap-1">
             <XCircle className="w-3 h-3" />
-            Effacer le filtre
+            {t('requests.clear_filter')}
           </button>
         )}
       </div>
@@ -151,9 +154,9 @@ export default function RequestsPage() {
       ) : requests.length === 0 ? (
         <div className="text-center py-20">
           <Film className="w-16 h-16 text-ndp-text-dim mx-auto mb-4" />
-          <p className="text-ndp-text-muted text-lg">Aucune demande</p>
+          <p className="text-ndp-text-muted text-lg">{t('requests.no_requests')}</p>
           <Link to="/" className="btn-primary inline-flex items-center gap-2 mt-4">
-            Rechercher un média
+            {t('requests.search_media')}
           </Link>
         </div>
       ) : (
@@ -184,7 +187,7 @@ export default function RequestsPage() {
                 className="btn-secondary flex items-center gap-2"
               >
                 {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
-                Charger plus ({requests.length}/{total})
+                {t('requests.load_more', { current: requests.length, total })}
               </button>
             </div>
           )}
@@ -207,6 +210,7 @@ function RequestCard({
   onAction: (id: number, action: 'approve' | 'decline') => void;
   onDelete: (id: number) => void;
 }) {
+  const { t } = useTranslation();
   const download = useDownloadForMedia(req.media?.tmdbId, req.mediaType);
   const status = STATUS_CONFIG[req.status] || STATUS_CONFIG.pending;
   const mediaLink = `/${req.mediaType}/${req.media?.tmdbId}`;
@@ -241,11 +245,11 @@ function RequestCard({
             <div className="flex items-center gap-2">
               {year && <span className="text-xs text-white/60 font-medium">{year}</span>}
               <span className="text-xs text-white/40">
-                {new Date(req.createdAt).toLocaleDateString('fr-FR')}
+                {localizedDate(req.createdAt)}
               </span>
             </div>
             <h3 className="text-lg font-bold text-white leading-tight line-clamp-2 mt-0.5">
-              {req.media?.title || 'Média inconnu'}
+              {req.media?.title || t('requests.unknown_media')}
             </h3>
             <div className="flex items-center gap-2 mt-2">
               {req.user?.avatar ? (
@@ -260,15 +264,15 @@ function RequestCard({
           </div>
 
           <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs text-white/50">Status</span>
+            <span className="text-xs text-white/50">{t('requests.status')}</span>
             {download ? (
               <span className="px-2 py-0.5 rounded text-[11px] font-semibold text-white bg-blue-500 flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                Téléchargement {download.progress}%
+                {t('status.downloading', { progress: download.progress })}
               </span>
             ) : (
               <span className={clsx('px-2 py-0.5 rounded text-[11px] font-semibold text-white', status.bg)}>
-                {status.label}
+                {t(`status.${status.labelKey}`)}
               </span>
             )}
 
@@ -279,7 +283,7 @@ function RequestCard({
                   onClick={(e) => { e.preventDefault(); onAction(req.id, 'approve'); }}
                   disabled={actionLoading === req.id}
                   className="p-1.5 rounded-lg bg-ndp-success/20 text-ndp-success hover:bg-ndp-success/30 transition-colors"
-                  title="Approuver"
+                  title={t('status.approved')}
                 >
                   {actionLoading === req.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
                 </button>
@@ -287,7 +291,7 @@ function RequestCard({
                   onClick={(e) => { e.preventDefault(); onAction(req.id, 'decline'); }}
                   disabled={actionLoading === req.id}
                   className="p-1.5 rounded-lg bg-ndp-danger/20 text-ndp-danger hover:bg-ndp-danger/30 transition-colors"
-                  title="Refuser"
+                  title={t('status.declined')}
                 >
                   <XCircle className="w-3.5 h-3.5" />
                 </button>
@@ -299,7 +303,7 @@ function RequestCard({
                 onClick={(e) => { e.preventDefault(); onDelete(req.id); }}
                 disabled={actionLoading === req.id}
                 className="p-1.5 rounded-lg text-white/40 hover:text-ndp-danger hover:bg-ndp-danger/20 transition-colors ml-auto"
-                title="Annuler"
+                title={t('common.cancel')}
               >
                 <XCircle className="w-3.5 h-3.5" />
               </button>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Send,
   Plus,
@@ -12,6 +13,7 @@ import {
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { localizedTime, localizedDate } from '@/i18n/formatters';
 
 interface Ticket {
   id: number;
@@ -34,6 +36,7 @@ interface TicketMsg {
 }
 
 export default function MessagesPage() {
+  const { t } = useTranslation();
   const { user, isAdmin } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
@@ -125,10 +128,10 @@ export default function MessagesPage() {
     const date = new Date(d);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
-    if (diff < 60000) return "À l'instant";
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}min`;
-    if (date.toDateString() === now.toDateString()) return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    if (diff < 60000) return t('messages.just_now');
+    if (diff < 3600000) return t('messages.minutes_ago', { count: Math.floor(diff / 60000) });
+    if (date.toDateString() === now.toDateString()) return localizedTime(date, { hour: '2-digit', minute: '2-digit' });
+    return localizedDate(date, { day: '2-digit', month: '2-digit' }) + ' ' + localizedTime(date, { hour: '2-digit', minute: '2-digit' });
   };
 
   if (loading) {
@@ -146,35 +149,35 @@ export default function MessagesPage() {
             </button>
           )}
           <MessageSquare className="w-5 h-5 text-ndp-accent" />
-          <h1 className="text-xl font-bold text-ndp-text">Support</h1>
+          <h1 className="text-xl font-bold text-ndp-text">{t('messages.title')}</h1>
         </div>
         <button onClick={() => setShowNew(!showNew)} className="btn-primary text-sm flex items-center gap-1.5">
           {showNew ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {showNew ? 'Annuler' : 'Nouveau ticket'}
+          {showNew ? t('common.cancel') : t('messages.new_ticket')}
         </button>
       </div>
 
       {/* New ticket form */}
       {showNew && (
         <div className="mb-4 p-4 card border border-ndp-accent/20 animate-slide-up">
-          <p className="text-sm font-semibold text-ndp-text mb-3">Nouveau ticket</p>
+          <p className="text-sm font-semibold text-ndp-text mb-3">{t('messages.new_ticket')}</p>
           <input
             value={newSubject}
             onChange={(e) => setNewSubject(e.target.value)}
-            placeholder="Sujet (ex: Problème de lecture, Demande d'ajout...)"
+            placeholder={t('messages.subject_placeholder')}
             className="input text-sm w-full mb-3"
             autoFocus
           />
           <textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Décrivez votre problème ou demande. Précisez le film/série, saison et épisode si applicable."
+            placeholder={t('messages.description_placeholder')}
             className="input text-sm w-full mb-3 min-h-[100px] resize-none"
             rows={4}
           />
           <button onClick={createTicket} disabled={!newSubject.trim() || !newMessage.trim() || creating} className="btn-primary text-sm flex items-center gap-2">
             {creating && <Loader2 className="w-4 h-4 animate-spin" />}
-            Créer le ticket
+            {t('messages.create_ticket')}
           </button>
         </div>
       )}
@@ -189,8 +192,8 @@ export default function MessagesPage() {
           {tickets.length === 0 ? (
             <div className="text-center py-12">
               <MessageSquare className="w-10 h-10 text-ndp-text-dim mx-auto mb-2" />
-              <p className="text-sm text-ndp-text-dim">Aucun ticket</p>
-              <p className="text-xs text-ndp-text-dim mt-1">Créez un ticket pour contacter le support</p>
+              <p className="text-sm text-ndp-text-dim">{t('messages.no_tickets')}</p>
+              <p className="text-xs text-ndp-text-dim mt-1">{t('messages.no_tickets_help')}</p>
             </div>
           ) : (
             tickets.map((ticket) => (
@@ -241,7 +244,7 @@ export default function MessagesPage() {
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-ndp-text truncate">{activeTicket.subject}</p>
                 <p className="text-[11px] text-ndp-text-dim">
-                  {activeTicket.status === 'open' ? 'Ouvert' : 'Fermé'}
+                  {activeTicket.status === 'open' ? t('messages.open') : t('messages.closed')}
                   {isAdmin && ` · ${activeTicket.user.plexUsername}`}
                 </p>
               </div>
@@ -254,7 +257,7 @@ export default function MessagesPage() {
                       : 'bg-ndp-success/10 text-ndp-success hover:bg-ndp-success/20'
                   )}
                 >
-                  {activeTicket.status === 'open' ? 'Fermer' : 'Rouvrir'}
+                  {activeTicket.status === 'open' ? t('messages.close_ticket') : t('messages.reopen_ticket')}
                 </button>
               )}
             </div>
@@ -311,7 +314,7 @@ export default function MessagesPage() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Votre message..."
+                  placeholder={t('messages.message_placeholder')}
                   className="input flex-1 text-sm rounded-full px-5"
                 />
                 <button onClick={sendMessage} disabled={!input.trim() || sending}
@@ -328,7 +331,7 @@ export default function MessagesPage() {
           <div className="flex-1 hidden sm:flex items-center justify-center card">
             <div className="text-center">
               <MessageSquare className="w-12 h-12 text-ndp-text-dim mx-auto mb-3" />
-              <p className="text-ndp-text-muted">Sélectionnez un ticket</p>
+              <p className="text-ndp-text-muted">{t('messages.select_ticket')}</p>
             </div>
           </div>
         )}

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
 import { Film } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const { login, user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -38,7 +40,7 @@ export default function LoginPage() {
           clearInterval(pollInterval);
           setPolling(false);
           setLoading(false);
-          setError('Connexion expirée. Réessayez.');
+          setError(t('login.expired'));
           return;
         }
 
@@ -55,7 +57,7 @@ export default function LoginPage() {
         }
       }, 1000);
     } catch (err) {
-      setError('Erreur lors de la connexion. Réessayez.');
+      setError(t('login.error'));
       setLoading(false);
       setPolling(false);
     }
@@ -77,7 +79,7 @@ export default function LoginPage() {
               <Film className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-ndp-text">Netflix du Pauvre</h1>
-            <p className="text-ndp-text-muted text-sm mt-1">Connectez-vous avec votre compte Plex</p>
+            <p className="text-ndp-text-muted text-sm mt-1">{t('login.title')}</p>
           </div>
 
           {/* Error */}
@@ -96,22 +98,22 @@ export default function LoginPage() {
             {polling ? (
               <>
                 <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                En attente de Plex...
+                {t('login.waiting')}
               </>
             ) : loading ? (
               <>
                 <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                Connexion...
+                {t('login.connecting')}
               </>
             ) : (
               <>
-                Se connecter avec Plex
+                {t('login.button')}
               </>
             )}
           </button>
 
           <p className="text-ndp-text-dim text-xs text-center mt-6">
-            Vous devez avoir accès au serveur Plex pour utiliser cette application.
+            {t('login.disclaimer')}
           </p>
         </div>
       </div>

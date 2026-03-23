@@ -1,10 +1,11 @@
 import { useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export interface GenreItem {
   id: number;
-  name: string;
+  nameKey: string;
   mediaType: 'movie' | 'tv';
 }
 
@@ -38,27 +39,28 @@ const DEFAULT_GRADIENT = 'from-ndp-accent to-purple-600';
 // Deduplicated genre list - one card per genre name
 // Genres shared by movie & TV use the movie ID (TMDB discover works with both)
 export const ALL_GENRES: GenreItem[] = [
-  { id: 28, name: 'Action', mediaType: 'movie' },
-  { id: 12, name: 'Aventure', mediaType: 'movie' },
-  { id: 16, name: 'Animation', mediaType: 'movie' },
-  { id: 35, name: 'Comédie', mediaType: 'movie' },
-  { id: 80, name: 'Crime', mediaType: 'movie' },
-  { id: 99, name: 'Documentaire', mediaType: 'movie' },
-  { id: 18, name: 'Drame', mediaType: 'movie' },
-  { id: 10751, name: 'Familial', mediaType: 'movie' },
-  { id: 14, name: 'Fantastique', mediaType: 'movie' },
-  { id: 36, name: 'Histoire', mediaType: 'movie' },
-  { id: 27, name: 'Horreur', mediaType: 'movie' },
-  { id: 10402, name: 'Musique', mediaType: 'movie' },
-  { id: 9648, name: 'Mystère', mediaType: 'movie' },
-  { id: 10749, name: 'Romance', mediaType: 'movie' },
-  { id: 878, name: 'Science-Fiction', mediaType: 'movie' },
-  { id: 53, name: 'Thriller', mediaType: 'movie' },
-  { id: 10752, name: 'Guerre', mediaType: 'movie' },
-  { id: 37, name: 'Western', mediaType: 'movie' },
+  { id: 28, nameKey: 'genre.action', mediaType: 'movie' },
+  { id: 12, nameKey: 'genre.adventure', mediaType: 'movie' },
+  { id: 16, nameKey: 'genre.animation', mediaType: 'movie' },
+  { id: 35, nameKey: 'genre.comedy', mediaType: 'movie' },
+  { id: 80, nameKey: 'genre.crime', mediaType: 'movie' },
+  { id: 99, nameKey: 'genre.documentary', mediaType: 'movie' },
+  { id: 18, nameKey: 'genre.drama', mediaType: 'movie' },
+  { id: 10751, nameKey: 'genre.family', mediaType: 'movie' },
+  { id: 14, nameKey: 'genre.fantasy', mediaType: 'movie' },
+  { id: 36, nameKey: 'genre.history', mediaType: 'movie' },
+  { id: 27, nameKey: 'genre.horror', mediaType: 'movie' },
+  { id: 10402, nameKey: 'genre.music', mediaType: 'movie' },
+  { id: 9648, nameKey: 'genre.mystery', mediaType: 'movie' },
+  { id: 10749, nameKey: 'genre.romance', mediaType: 'movie' },
+  { id: 878, nameKey: 'genre.science_fiction', mediaType: 'movie' },
+  { id: 53, nameKey: 'genre.thriller', mediaType: 'movie' },
+  { id: 10752, nameKey: 'genre.war', mediaType: 'movie' },
+  { id: 37, nameKey: 'genre.western', mediaType: 'movie' },
 ];
 
 export default function GenreRow() {
+  const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scroll = (direction: 'left' | 'right') => {
@@ -72,7 +74,7 @@ export default function GenreRow() {
 
   return (
     <section className="relative group/row">
-      <h2 className="text-xl font-bold text-ndp-text mb-4 px-4 sm:px-8">Genres</h2>
+      <h2 className="text-xl font-bold text-ndp-text mb-4 px-4 sm:px-8">{t('genre.title')}</h2>
 
       <div className="relative">
         <button
@@ -108,7 +110,7 @@ export default function GenreRow() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
 
                   <span className="relative text-white font-bold text-base sm:text-lg text-center px-4 drop-shadow-lg">
-                    {genre.name}
+                    {t(genre.nameKey)}
                   </span>
                 </div>
               </Link>

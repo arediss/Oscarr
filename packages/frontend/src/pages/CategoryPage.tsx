@@ -1,34 +1,36 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
 import MediaGrid from '@/components/MediaGrid';
 import type { TmdbMedia } from '@/types';
 
-const CATEGORIES: Record<string, { title: string; endpoint: string; mediaType: string }> = {
+const CATEGORIES: Record<string, { titleKey: string; endpoint: string; mediaType: string }> = {
   trending: {
-    title: 'Tendances de la semaine',
+    titleKey: 'category.trending',
     endpoint: '/tmdb/trending',
     mediaType: '',
   },
   'movies-popular': {
-    title: 'Films populaires',
+    titleKey: 'category.popular_movies',
     endpoint: '/tmdb/movies/popular',
     mediaType: 'movie',
   },
   'tv-popular': {
-    title: 'Séries populaires',
+    titleKey: 'category.popular_series',
     endpoint: '/tmdb/tv/popular',
     mediaType: 'tv',
   },
   'movies-upcoming': {
-    title: 'Prochainement au cinéma',
+    titleKey: 'category.coming_soon',
     endpoint: '/tmdb/movies/upcoming',
     mediaType: 'movie',
   },
 };
 
 export default function CategoryPage() {
+  const { t } = useTranslation();
   const { slug } = useParams<{ slug: string }>();
   const category = CATEGORIES[slug || ''];
   const [results, setResults] = useState<TmdbMedia[]>([]);
@@ -105,8 +107,8 @@ export default function CategoryPage() {
   if (!category) {
     return (
       <div className="max-w-[1800px] mx-auto px-4 sm:px-8 py-20 text-center">
-        <p className="text-ndp-text-muted text-lg">Catégorie introuvable</p>
-        <Link to="/" className="btn-primary inline-block mt-4">Retour à l'accueil</Link>
+        <p className="text-ndp-text-muted text-lg">{t('category.not_found')}</p>
+        <Link to="/" className="btn-primary inline-block mt-4">{t('category.back_home')}</Link>
       </div>
     );
   }
@@ -117,7 +119,7 @@ export default function CategoryPage() {
         <Link to="/" className="p-2 glass rounded-xl hover:bg-white/10 transition-colors">
           <ArrowLeft className="w-5 h-5 text-white" />
         </Link>
-        <h1 className="text-2xl font-bold text-ndp-text">{category.title}</h1>
+        <h1 className="text-2xl font-bold text-ndp-text">{t(category.titleKey)}</h1>
       </div>
 
       <MediaGrid media={results} loading={loading} skeletonCount={21} />

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Save, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
 import type { PluginSettings } from './types';
@@ -8,6 +9,7 @@ interface PluginAdminTabProps {
 }
 
 export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<PluginSettings | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
@@ -20,7 +22,7 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
         setSettings(data);
         setValues(data.values);
       })
-      .catch((err) => setError(err.response?.data?.error || 'Erreur de chargement'));
+      .catch((err) => setError(err.response?.data?.error || t('plugin.load_error')));
   }, [pluginId]);
 
   const handleSave = async () => {
@@ -32,7 +34,7 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Erreur de sauvegarde');
+      setError(err.response?.data?.error || t('plugin.save_error'));
     } finally {
       setSaving(false);
     }
@@ -57,7 +59,7 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
   if (!settings.schema || settings.schema.length === 0) {
     return (
       <div className="card p-6 text-center text-ndp-text-muted">
-        Ce plugin n'a pas de paramètres configurables.
+        {t('plugin.no_settings')}
       </div>
     );
   }
@@ -103,7 +105,7 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
         className="flex items-center gap-2 px-5 py-2.5 bg-ndp-accent text-white rounded-xl text-sm font-medium hover:bg-ndp-accent/90 transition-colors disabled:opacity-50"
       >
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-        {saved ? 'Sauvegardé !' : 'Sauvegarder'}
+        {saved ? t('plugin.saved') : t('common.save')}
       </button>
     </div>
   );

@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, X as XIcon } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -26,13 +27,14 @@ interface Features {
 }
 
 const ALL_NAV = [
-  { path: '/', label: 'Accueil', icon: Home, feature: null },
-  { path: '/requests', label: 'Demandes', icon: Film, feature: 'requestsEnabled' as const },
-  { path: '/calendar', label: 'Calendrier', icon: Calendar, feature: 'calendarEnabled' as const },
-  { path: '/support', label: 'Support', icon: MessageSquare, feature: 'supportEnabled' as const },
+  { path: '/', labelKey: 'nav.home', icon: Home, feature: null },
+  { path: '/requests', labelKey: 'nav.requests', icon: Film, feature: 'requestsEnabled' as const },
+  { path: '/calendar', labelKey: 'nav.calendar', icon: Calendar, feature: 'calendarEnabled' as const },
+  { path: '/support', labelKey: 'nav.support', icon: MessageSquare, feature: 'supportEnabled' as const },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const { user, logout, isAdmin } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -128,7 +130,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Left: Nav */}
             <div className="hidden md:flex items-center gap-0.5 relative z-10">
-              {navItems.map(({ path, label, icon: Icon }) => (
+              {navItems.map(({ path, labelKey, icon: Icon }) => (
                 <Link
                   key={path}
                   to={path}
@@ -140,7 +142,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   )}
                 >
                   <Icon className="w-4 h-4" />
-                  <span className="hidden lg:inline">{label}</span>
+                  <span className="hidden lg:inline">{t(labelKey)}</span>
                 </Link>
               ))}
               <PluginSlot
@@ -172,7 +174,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Rechercher un film, une série..."
+                    placeholder={t('search.placeholder')}
                     className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-ndp-text placeholder-ndp-text-dim focus:outline-none focus:ring-2 focus:ring-ndp-accent/40 focus:border-ndp-accent/40 focus:bg-white/10 transition-all"
                   />
                 </div>
@@ -227,7 +229,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ndp-text-muted hover:text-ndp-accent hover:bg-white/5 transition-colors"
                       >
                         <Shield className="w-4 h-4" />
-                        Administration
+                        {t('nav.admin')}
                       </Link>
                     )}
 
@@ -236,7 +238,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ndp-text-muted hover:text-ndp-danger hover:bg-white/5 transition-colors w-full text-left"
                     >
                       <LogOut className="w-4 h-4" />
-                      Déconnexion
+                      {t('nav.logout')}
                     </button>
                   </div>
                 )}
@@ -264,14 +266,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Rechercher..."
+                    placeholder={t('search.placeholder_short')}
                     className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-ndp-text placeholder-ndp-text-dim focus:outline-none focus:ring-2 focus:ring-ndp-accent/40"
                   />
                 </div>
               </form>
             </div>
             <div className="px-4 py-3 space-y-1">
-              {navItems.map(({ path, label, icon: Icon }) => (
+              {navItems.map(({ path, labelKey, icon: Icon }) => (
                 <Link
                   key={path}
                   to={path}
@@ -284,7 +286,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   )}
                 >
                   <Icon className="w-5 h-5" />
-                  {label}
+                  {t(labelKey)}
                 </Link>
               ))}
               <PluginSlot

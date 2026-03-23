@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
 import MediaGrid from '@/components/MediaGrid';
@@ -7,6 +8,7 @@ import { ALL_GENRES } from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
 
 export default function DiscoverGenrePage() {
+  const { t } = useTranslation();
   const { mediaType, genreId } = useParams<{ mediaType: string; genreId: string }>();
   const [results, setResults] = useState<TmdbMedia[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,7 +20,7 @@ export default function DiscoverGenrePage() {
 
   const gid = parseInt(genreId || '0');
   const genre = ALL_GENRES.find((g) => g.id === gid && g.mediaType === mediaType);
-  const genreName = genre?.name || 'Genre inconnu';
+  const genreName = genre ? t(genre.nameKey) : t('genre.unknown');
 
   function dedup(items: TmdbMedia[]): TmdbMedia[] {
     return items.filter((item) => {
@@ -78,7 +80,7 @@ export default function DiscoverGenrePage() {
         </Link>
         <div>
           <p className="text-xs text-ndp-accent uppercase tracking-wider font-semibold">
-            {mediaType === 'movie' ? 'Films' : 'Séries'}
+            {mediaType === 'movie' ? t('discover.movies') : t('discover.series')}
           </p>
           <h1 className="text-2xl font-bold text-ndp-text">{genreName}</h1>
         </div>
@@ -94,7 +96,7 @@ export default function DiscoverGenrePage() {
 
       {!loading && results.length === 0 && (
         <div className="text-center py-20">
-          <p className="text-ndp-text-muted text-lg">Aucun résultat pour ce genre</p>
+          <p className="text-ndp-text-muted text-lg">{t('discover.no_results')}</p>
         </div>
       )}
     </div>

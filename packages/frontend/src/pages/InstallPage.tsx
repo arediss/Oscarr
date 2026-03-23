@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Film, Loader2, CheckCircle, RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function InstallPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
   const [url, setUrl] = useState('');
@@ -59,7 +61,7 @@ export default function InstallPage() {
         if (attempts >= 120) {
           if (pollRef.current) clearInterval(pollRef.current);
           setPlexPolling(false);
-          setError('Connexion expirée. Réessayez.');
+          setError(t('login.expired'));
           return;
         }
         try {
@@ -83,7 +85,7 @@ export default function InstallPage() {
       }, 1000);
     } catch {
       setPlexPolling(false);
-      setError('Erreur lors de la connexion Plex.');
+      setError(t('login.error'));
     }
   };
 
@@ -109,7 +111,7 @@ export default function InstallPage() {
       await api.post('/support/setup', { url, token, machineId, name });
       navigate('/login', { replace: true });
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Erreur lors de la configuration';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('common.error');
       setError(msg);
     } finally { setSaving(false); }
   };
@@ -136,9 +138,9 @@ export default function InstallPage() {
             <div className="w-16 h-16 bg-gradient-to-br from-ndp-accent to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-ndp-accent/30 mb-4">
               <Film className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-ndp-text">Installation</h1>
+            <h1 className="text-2xl font-bold text-ndp-text">{t('install.title')}</h1>
             <p className="text-ndp-text-muted text-sm mt-1 text-center">
-              Configurez votre serveur Plex pour commencer
+              {t('install.subtitle')}
             </p>
           </div>
 
@@ -164,7 +166,7 @@ export default function InstallPage() {
           {step === 0 && (
             <div className="space-y-4 animate-fade-in">
               <div>
-                <label className="text-sm text-ndp-text mb-1.5 block font-medium">URL du serveur Plex</label>
+                <label className="text-sm text-ndp-text mb-1.5 block font-medium">{t('install.plex_url')}</label>
                 <input
                   type="text"
                   value={url}
@@ -174,13 +176,13 @@ export default function InstallPage() {
                   autoFocus
                 />
                 <p className="text-xs text-ndp-text-dim mt-1.5">
-                  L'adresse de votre serveur Plex avec le port (par défaut 32400)
+                  {t('install.plex_url_help')}
                 </p>
               </div>
 
               {testOk !== null && (
                 <div className={`text-xs px-3 py-2 rounded-lg ${testOk ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger'}`}>
-                  {testOk ? 'Serveur Plex accessible' : 'Impossible de joindre le serveur. Vérifiez l\'URL.'}
+                  {testOk ? t('install.server_ok') : t('install.server_error')}
                 </div>
               )}
 
@@ -191,14 +193,14 @@ export default function InstallPage() {
                   className="btn-secondary flex items-center gap-2 text-sm flex-1"
                 >
                   {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                  Tester
+                  {t('common.test')}
                 </button>
                 <button
                   onClick={() => setStep(1)}
                   disabled={!url}
                   className="btn-primary flex items-center gap-2 text-sm flex-1"
                 >
-                  Suivant
+                  {t('common.next')}
                 </button>
               </div>
             </div>
@@ -208,7 +210,7 @@ export default function InstallPage() {
           {step === 1 && (
             <div className="space-y-4 animate-fade-in">
               <p className="text-sm text-ndp-text-muted text-center">
-                Connectez-vous avec votre compte Plex admin pour autoriser l'application.
+                {t('install.plex_auth')}
               </p>
 
               <button
@@ -219,17 +221,17 @@ export default function InstallPage() {
                 {plexPolling ? (
                   <>
                     <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                    En attente de Plex...
+                    {t('login.waiting')}
                   </>
                 ) : (
                   <>
-                    Se connecter avec Plex
+                    {t('login.button')}
                   </>
                 )}
               </button>
 
               <button onClick={() => setStep(0)} className="btn-secondary text-sm w-full">
-                Retour
+                {t('common.back')}
               </button>
             </div>
           )}
@@ -239,11 +241,11 @@ export default function InstallPage() {
             <div className="space-y-4 animate-fade-in">
               <div className="p-3 bg-ndp-success/10 border border-ndp-success/20 rounded-xl text-ndp-success text-sm text-center flex items-center justify-center gap-2">
                 <CheckCircle className="w-4 h-4" />
-                Connexion Plex réussie
+                {t('install.plex_success')}
               </div>
 
               <div>
-                <label className="text-sm text-ndp-text mb-1.5 block font-medium">Nom du service</label>
+                <label className="text-sm text-ndp-text mb-1.5 block font-medium">{t('install.service_name')}</label>
                 <input
                   type="text"
                   value={name}
@@ -254,13 +256,13 @@ export default function InstallPage() {
               </div>
 
               <div>
-                <label className="text-sm text-ndp-text mb-1.5 block font-medium">Machine ID</label>
+                <label className="text-sm text-ndp-text mb-1.5 block font-medium">{t('install.machine_id')}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={machineId}
                     onChange={(e) => setMachineId(e.target.value)}
-                    placeholder="Détection automatique..."
+                    placeholder={t('admin.services.auto_detect')}
                     className="input flex-1"
                   />
                   <button
@@ -272,24 +274,24 @@ export default function InstallPage() {
                   </button>
                 </div>
                 <p className="text-xs text-ndp-text-dim mt-1.5">
-                  Utilisé pour vérifier que les utilisateurs ont accès à votre serveur
+                  {t('install.machine_id_help')}
                 </p>
               </div>
 
               {/* Recap */}
               <div className="p-4 bg-white/5 rounded-xl space-y-2">
-                <p className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-2">Récapitulatif</p>
+                <p className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-2">{t('install.summary')}</p>
                 <div className="flex justify-between text-sm">
-                  <span className="text-ndp-text-dim">URL</span>
+                  <span className="text-ndp-text-dim">{t('common.url')}</span>
                   <span className="text-ndp-text font-mono text-xs">{url}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-ndp-text-dim">Token</span>
+                  <span className="text-ndp-text-dim">{t('common.token')}</span>
                   <span className="text-ndp-text font-mono text-xs">{token.slice(0, 8)}...</span>
                 </div>
                 {machineId && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-ndp-text-dim">Machine ID</span>
+                    <span className="text-ndp-text-dim">{t('install.machine_id')}</span>
                     <span className="text-ndp-text font-mono text-xs truncate ml-4">{machineId}</span>
                   </div>
                 )}
@@ -297,7 +299,7 @@ export default function InstallPage() {
 
               <div className="flex gap-2">
                 <button onClick={() => { setToken(''); setMachineId(''); setStep(1); }} className="btn-secondary text-sm flex-1">
-                  Retour
+                  {t('common.back')}
                 </button>
                 <button
                   onClick={handleSubmit}
@@ -305,7 +307,7 @@ export default function InstallPage() {
                   className="btn-primary flex items-center justify-center gap-2 text-sm flex-1"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                  Installer
+                  {t('install.install')}
                 </button>
               </div>
             </div>

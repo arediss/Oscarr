@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import cronstrue from 'cronstrue/i18n';
+import i18n from '@/i18n';
+import { localizedDateTime } from '@/i18n/formatters';
 import {
   Settings,
   Users,
@@ -40,19 +43,20 @@ import type { AdminUser, QualityProfile, RootFolder } from '@/types';
 
 type Tab = 'users' | 'services' | 'quality' | 'support' | 'notifications' | 'paths' | 'jobs' | 'logs' | 'general' | (string & {});
 
-const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
-  { id: 'general', label: 'Général', icon: Settings },
-  { id: 'users', label: 'Utilisateurs', icon: Users },
-  { id: 'services', label: 'Services', icon: Server },
-  { id: 'quality', label: 'Qualité', icon: Star },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'paths', label: 'Chemins & Règles', icon: FolderTree },
-  { id: 'jobs', label: 'Jobs & Sync', icon: RefreshCw },
-  { id: 'logs', label: 'Logs', icon: ScrollText },
-  { id: 'plugins', label: 'Plugins', icon: Plug },
+const TABS: { id: Tab; labelKey: string; icon: LucideIcon }[] = [
+  { id: 'general', labelKey: 'admin.tab.general', icon: Settings },
+  { id: 'users', labelKey: 'admin.tab.users', icon: Users },
+  { id: 'services', labelKey: 'admin.tab.services', icon: Server },
+  { id: 'quality', labelKey: 'admin.tab.quality', icon: Star },
+  { id: 'notifications', labelKey: 'admin.tab.notifications', icon: Bell },
+  { id: 'paths', labelKey: 'admin.tab.paths', icon: FolderTree },
+  { id: 'jobs', labelKey: 'admin.tab.jobs', icon: RefreshCw },
+  { id: 'logs', labelKey: 'admin.tab.logs', icon: ScrollText },
+  { id: 'plugins', labelKey: 'admin.tab.plugins', icon: Plug },
 ];
 
 export default function AdminPage() {
+  const { t } = useTranslation();
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -78,11 +82,11 @@ export default function AdminPage() {
     <div className="max-w-[1800px] mx-auto px-4 sm:px-8 py-8">
       <div className="flex items-center gap-3 mb-6">
         <Shield className="w-6 h-6 text-ndp-accent" />
-        <h1 className="text-2xl font-bold text-ndp-text">Administration</h1>
+        <h1 className="text-2xl font-bold text-ndp-text">{t('admin.title')}</h1>
       </div>
 
       <div className="flex gap-2 mb-8 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {TABS.map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
@@ -92,7 +96,7 @@ export default function AdminPage() {
             )}
           >
             <Icon className="w-4 h-4" />
-            {label}
+            {t(labelKey)}
           </button>
         ))}
         {pluginTabItems.map((tab) => (
@@ -128,6 +132,7 @@ export default function AdminPage() {
 type UserSort = 'username' | 'date' | 'role';
 
 function UsersTab() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<UserSort>('username');
@@ -166,9 +171,9 @@ function UsersTab() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-ndp-text">{users.length} utilisateur{users.length > 1 ? 's' : ''}</h2>
+          <h2 className="text-lg font-semibold text-ndp-text">{t('admin.users.count', { count: users.length })}</h2>
           <div className="flex items-center gap-1">
-            {([['username', 'Nom'], ['date', 'Date'], ['role', 'Rôle']] as const).map(([key, label]) => (
+            {([['username', t('admin.users.sort.name')], ['date', t('admin.users.sort.date')], ['role', t('admin.users.sort.role')]] as [UserSort, string][]).map(([key, label]) => (
               <button key={key} onClick={() => setSortBy(key)}
                 className={clsx('px-2.5 py-1 rounded-lg text-xs font-medium transition-all', sortBy === key ? 'bg-ndp-accent text-white' : 'bg-ndp-surface text-ndp-text-muted hover:bg-ndp-surface-light')}>
                 {label}
@@ -179,9 +184,9 @@ function UsersTab() {
         <div className="flex items-center gap-2">
           <button onClick={handleImportPlex} disabled={importing} className="btn-primary flex items-center gap-2 text-sm">
             {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-            Importer depuis Plex
+            {t('admin.users.import_plex')}
           </button>
-          <button onClick={fetchUsers} className="btn-secondary flex items-center gap-2 text-sm"><RefreshCw className="w-4 h-4" /> Rafraîchir</button>
+          <button onClick={fetchUsers} className="btn-secondary flex items-center gap-2 text-sm"><RefreshCw className="w-4 h-4" /> {t('common.refresh')}</button>
         </div>
       </div>
 
@@ -189,7 +194,7 @@ function UsersTab() {
         <div className="p-3 bg-ndp-success/5 border border-ndp-success/20 rounded-xl mb-4 animate-fade-in flex items-center gap-3">
           <CheckCircle className="w-5 h-5 text-ndp-success flex-shrink-0" />
           <p className="text-sm text-ndp-text-muted">
-            {importResult.total} utilisateurs Plex trouvés : <strong className="text-ndp-success">{importResult.imported} importés</strong>, {importResult.skipped} déjà existants
+            {t('admin.users.imported', { imported: importResult.imported, existing: importResult.skipped })}
           </p>
         </div>
       )}
@@ -204,10 +209,10 @@ function UsersTab() {
                     {u.role === 'admin' && <span className="text-[10px] bg-ndp-accent/10 text-ndp-accent px-2 py-0.5 rounded-full font-semibold">Admin</span>}
                   </div>
                   <div className="flex items-center gap-3 mt-0.5 text-xs text-ndp-text-dim">
-                    <span>{u.email}</span><span>{u.requestCount} demande{(u.requestCount ?? 0) > 1 ? 's' : ''}</span>
+                    <span>{u.email}</span><span>{u.requestCount} {t('requests.title').toLowerCase()}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5" title={u.hasPlexServerAccess ? 'Accès serveur Plex' : 'Pas d\'accès serveur'}>
+                <div className="flex items-center gap-1.5" title={u.hasPlexServerAccess ? t('admin.users.plex_access') : t('admin.users.no_plex_access')}>
                   {u.hasPlexServerAccess ? <CheckCircle className="w-4 h-4 text-ndp-success" /> : <XCircle className="w-4 h-4 text-ndp-danger" />}
                   <span className="text-xs text-ndp-text-dim hidden sm:inline">Plex</span>
                 </div>
@@ -227,13 +232,14 @@ interface FolderRule {
 }
 interface RuleCondition { field: string; operator: string; value: string; }
 
-const GENRE_LIST = [
-  'Action','Aventure','Animation','Comédie','Crime','Documentaire','Drame',
-  'Familial','Fantastique','Histoire','Horreur','Musique','Mystère',
-  'Romance','Science-Fiction','Thriller','Guerre','Western',
+const GENRE_KEYS = [
+  'action','adventure','animation','comedy','crime','documentary','drama',
+  'family','fantasy','history','horror','music','mystery',
+  'romance','science_fiction','thriller','war','western',
 ];
 
 function PathsTab() {
+  const { t } = useTranslation();
   const [radarrFolders, setRadarrFolders] = useState<RootFolder[]>([]);
   const [sonarrFolders, setSonarrFolders] = useState<RootFolder[]>([]);
   const [radarrProfiles, setRadarrProfiles] = useState<QualityProfile[]>([]);
@@ -322,28 +328,28 @@ function PathsTab() {
       {/* Default paths */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="card p-5">
-          <h3 className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">Profil qualité</h3>
+          <h3 className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('admin.paths.quality_profile')}</h3>
           <select value={qualityProfile} onChange={(e) => setQualityProfile(e.target.value)} className="input w-full text-sm">
             <option value="">Auto</option>
             {radarrProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
         <div className="card p-5">
-          <h3 className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">Films</h3>
+          <h3 className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('admin.paths.movies')}</h3>
           <select value={movieFolder} onChange={(e) => setMovieFolder(e.target.value)} className="input w-full text-sm">
             <option value="">Auto</option>
             {radarrFolders.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}
           </select>
         </div>
         <div className="card p-5">
-          <h3 className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">Séries</h3>
+          <h3 className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('admin.paths.series')}</h3>
           <select value={tvFolder} onChange={(e) => setTvFolder(e.target.value)} className="input w-full text-sm">
             <option value="">Auto</option>
             {sonarrFolders.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}
           </select>
         </div>
         <div className="card p-5">
-          <h3 className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">Animes</h3>
+          <h3 className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('admin.paths.anime')}</h3>
           <select value={animeFolder} onChange={(e) => setAnimeFolder(e.target.value)} className="input w-full text-sm">
             <option value="">Auto</option>
             {sonarrFolders.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}
@@ -352,19 +358,19 @@ function PathsTab() {
       </div>
       <button onClick={saveDefaults} disabled={saving} className={clsx('flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-xl transition-all', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-        {saved ? 'Sauvegardé' : 'Sauvegarder les chemins'}
+        {saved ? t('common.saved') : t('admin.paths.save_paths')}
       </button>
 
       {/* Folder rules */}
       <div className="card p-6">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-ndp-text uppercase tracking-wider">Règles de routage</h3>
+          <h3 className="text-sm font-semibold text-ndp-text uppercase tracking-wider">{t('admin.paths.routing_rules')}</h3>
           <button onClick={() => setShowNewRule(!showNewRule)} className="btn-primary text-xs py-1.5 flex items-center gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Nouvelle règle
+            <Plus className="w-3.5 h-3.5" /> {t('admin.paths.new_rule')}
           </button>
         </div>
         <p className="text-xs text-ndp-text-dim mb-5">
-          Les règles sont évaluées par priorité. La première qui match détermine le dossier. Si aucune ne match, le dossier par défaut est utilisé.
+          {t('admin.paths.rules_help')}
         </p>
 
         {/* System rule: anime detection (non-deletable) */}
@@ -372,16 +378,16 @@ function PathsTab() {
           <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 flex items-start gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-sm font-semibold text-ndp-text">Animes</span>
-                <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">Série</span>
-                <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">anime</span>
-                <span className="text-[10px] bg-white/5 text-ndp-text-dim px-2 py-0.5 rounded">système</span>
+                <span className="text-sm font-semibold text-ndp-text">{t('admin.paths.anime_rule')}</span>
+                <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">{t('common.series')}</span>
+                <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">{t('admin.paths.anime_tag')}</span>
+                <span className="text-[10px] bg-white/5 text-ndp-text-dim px-2 py-0.5 rounded">{t('admin.paths.system_tag')}</span>
               </div>
               <div className="flex flex-wrap gap-1.5 mb-1.5">
-                <span className="text-xs bg-white/5 text-ndp-text-muted px-2 py-0.5 rounded">genre contient <strong>Animation</strong></span>
-                <span className="text-xs bg-white/5 text-ndp-text-muted px-2 py-0.5 rounded">pays dans <strong>JP, KR, CN, TW</strong></span>
+                <span className="text-xs bg-white/5 text-ndp-text-muted px-2 py-0.5 rounded">{t('admin.paths.genre_contains', { value: 'Animation' })}</span>
+                <span className="text-xs bg-white/5 text-ndp-text-muted px-2 py-0.5 rounded">{t('admin.paths.country_in', { value: 'JP, KR, CN, TW' })}</span>
               </div>
-              <p className="text-xs text-ndp-text-dim">→ {animeFolder || <span className="italic">Configurer le dossier Animes ci-dessus</span>}</p>
+              <p className="text-xs text-ndp-text-dim">→ {animeFolder || <span className="italic">{t('admin.paths.configure_anime')}</span>}</p>
             </div>
           </div>
 
@@ -393,7 +399,7 @@ function PathsTab() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-sm font-semibold text-ndp-text">{rule.name}</span>
-                  <span className="text-[10px] bg-ndp-accent/10 text-ndp-accent px-2 py-0.5 rounded">{rule.mediaType === 'movie' ? 'Film' : rule.mediaType === 'tv' ? 'Série' : 'Tous'}</span>
+                  <span className="text-[10px] bg-ndp-accent/10 text-ndp-accent px-2 py-0.5 rounded">{rule.mediaType === 'movie' ? t('common.movie') : rule.mediaType === 'tv' ? t('common.series') : t('common.all')}</span>
                   {rule.seriesType && <span className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">{rule.seriesType}</span>}
                 </div>
                 <div className="flex flex-wrap gap-1.5 mb-1.5">
@@ -416,51 +422,51 @@ function PathsTab() {
           <div className="bg-ndp-accent/5 border border-ndp-accent/20 rounded-xl p-5 space-y-4 animate-slide-up">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="text-xs text-ndp-text-dim block mb-1">Nom</label>
+                <label className="text-xs text-ndp-text-dim block mb-1">{t('common.name')}</label>
                 <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ex: Animes japonais" className="input text-sm w-full" />
               </div>
               <div>
-                <label className="text-xs text-ndp-text-dim block mb-1">Type</label>
+                <label className="text-xs text-ndp-text-dim block mb-1">{t('common.type')}</label>
                 <select value={newMediaType} onChange={(e) => setNewMediaType(e.target.value)} className="input text-sm w-full">
-                  <option value="tv">Série</option><option value="movie">Film</option><option value="all">Tous</option>
+                  <option value="tv">{t('common.series')}</option><option value="movie">{t('common.movie')}</option><option value="all">{t('common.all')}</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs text-ndp-text-dim block mb-1">Type Sonarr</label>
+                <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.paths.sonarr_type')}</label>
                 <select value={newSeriesType} onChange={(e) => setNewSeriesType(e.target.value)} className="input text-sm w-full">
-                  <option value="">Standard</option><option value="anime">Anime</option><option value="daily">Daily</option>
+                  <option value="">{t('admin.paths.standard')}</option><option value="anime">{t('admin.paths.anime_rule')}</option><option value="daily">{t('admin.paths.daily')}</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="text-xs text-ndp-text-dim block mb-1">Dossier cible</label>
+              <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.paths.target_folder')}</label>
               <select value={newFolder} onChange={(e) => setNewFolder(e.target.value)} className="input text-sm w-full">
-                <option value="">Choisir...</option>
+                <option value="">{t('common.choose')}</option>
                 {allFolders.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}
               </select>
             </div>
 
             {/* Conditions */}
             <div>
-              <label className="text-xs text-ndp-text-dim block mb-2">Conditions (toutes doivent matcher)</label>
+              <label className="text-xs text-ndp-text-dim block mb-2">{t('admin.paths.conditions_help')}</label>
               <div className="space-y-2">
                 {newConditions.map((cond, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <select value={cond.field} onChange={(e) => { const c = [...newConditions]; c[i].field = e.target.value; setNewConditions(c); }} className="input text-sm py-1.5 w-32">
-                      <option value="genre">Genre</option>
-                      <option value="language">Langue</option>
-                      <option value="country">Pays</option>
+                      <option value="genre">{t('admin.paths.genre')}</option>
+                      <option value="language">{t('admin.paths.language')}</option>
+                      <option value="country">{t('admin.paths.country')}</option>
                     </select>
                     <select value={cond.operator} onChange={(e) => { const c = [...newConditions]; c[i].operator = e.target.value; setNewConditions(c); }} className="input text-sm py-1.5 w-32">
-                      <option value="contains">contient</option>
-                      <option value="is">est</option>
-                      <option value="in">dans</option>
+                      <option value="contains">{t('admin.paths.contains')}</option>
+                      <option value="is">{t('admin.paths.is')}</option>
+                      <option value="in">{t('admin.paths.in')}</option>
                     </select>
                     {cond.field === 'genre' ? (
                       <select value={cond.value} onChange={(e) => { const c = [...newConditions]; c[i].value = e.target.value; setNewConditions(c); }} className="input text-sm py-1.5 flex-1">
-                        <option value="">Choisir...</option>
-                        {GENRE_LIST.map(g => <option key={g} value={g}>{g}</option>)}
+                        <option value="">{t('common.choose')}</option>
+                        {GENRE_KEYS.map(g => <option key={g} value={t(`genre.${g}`)}>{t(`genre.${g}`)}</option>)}
                       </select>
                     ) : (
                       <input value={cond.value} onChange={(e) => { const c = [...newConditions]; c[i].value = e.target.value; setNewConditions(c); }}
@@ -474,13 +480,13 @@ function PathsTab() {
                 ))}
               </div>
               <button onClick={() => setNewConditions(prev => [...prev, { field: 'genre', operator: 'contains', value: '' }])} className="text-xs text-ndp-accent hover:text-ndp-accent-hover mt-2 flex items-center gap-1">
-                <Plus className="w-3 h-3" /> Ajouter une condition
+                <Plus className="w-3 h-3" /> {t('admin.paths.add_condition')}
               </button>
             </div>
 
             <div className="flex gap-2 pt-2">
-              <button onClick={addRule} disabled={!newName || !newFolder || newConditions.some(c => !c.value)} className="btn-primary text-sm">Créer la règle</button>
-              <button onClick={() => setShowNewRule(false)} className="btn-secondary text-sm">Annuler</button>
+              <button onClick={addRule} disabled={!newName || !newFolder || newConditions.some(c => !c.value)} className="btn-primary text-sm">{t('admin.paths.create_rule')}</button>
+              <button onClick={() => setShowNewRule(false)} className="btn-secondary text-sm">{t('common.cancel')}</button>
             </div>
           </div>
         )}
@@ -508,6 +514,7 @@ interface SyncToast {
 }
 
 function JobsTab() {
+  const { t } = useTranslation();
   const [jobs, setJobs] = useState<CronJobData[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
@@ -530,13 +537,13 @@ function JobsTab() {
     const parts: string[] = [];
     if (data.radarr) {
       const r = data.radarr;
-      if ('added' in r) parts.push(`Radarr : +${r.added} ajoutés, ${r.updated} mis à jour (${(r.duration / 1000).toFixed(1)}s)`);
-      else if ('imported' in r) parts.push(`Radarr : ${r.imported} importées, ${r.skipped} ignorées${r.errors ? `, ${r.errors} erreurs` : ''}`);
+      if ('added' in r) parts.push(t('admin.jobs.toast.radarr_sync', { added: r.added, updated: r.updated, duration: (r.duration / 1000).toFixed(1) }));
+      else if ('imported' in r) parts.push(t('admin.jobs.toast.radarr_requests', { imported: r.imported, skipped: r.skipped }) + (r.errors ? t('admin.jobs.toast.errors', { errors: r.errors }) : ''));
     }
     if (data.sonarr) {
       const s = data.sonarr;
-      if ('added' in s) parts.push(`Sonarr : +${s.added} ajoutés, ${s.updated} mis à jour (${(s.duration / 1000).toFixed(1)}s)`);
-      else if ('imported' in s) parts.push(`Sonarr : ${s.imported} importées, ${s.skipped} ignorées${s.errors ? `, ${s.errors} erreurs` : ''}`);
+      if ('added' in s) parts.push(t('admin.jobs.toast.sonarr_sync', { added: s.added, updated: s.updated, duration: (s.duration / 1000).toFixed(1) }));
+      else if ('imported' in s) parts.push(t('admin.jobs.toast.sonarr_requests', { imported: s.imported, skipped: s.skipped }) + (s.errors ? t('admin.jobs.toast.errors', { errors: s.errors }) : ''));
     }
     return parts.join(' — ') || JSON.stringify(data);
   };
@@ -549,10 +556,10 @@ function JobsTab() {
       if (data?.result && (data.result.radarr || data.result.sonarr)) {
         showToast({ type: 'success', message: formatSyncResult(data.result) });
       } else {
-        showToast({ type: 'success', message: `Job "${key}" terminé` });
+        showToast({ type: 'success', message: t('admin.jobs.job_done', { key }) });
       }
     } catch (err: any) {
-      showToast({ type: 'error', message: err.response?.data?.error || `Job "${key}" échoué` });
+      showToast({ type: 'error', message: err.response?.data?.error || t('admin.jobs.job_failed', { key }) });
     } finally { setRunning(null); }
   };
 
@@ -569,9 +576,9 @@ function JobsTab() {
 
   if (loading) return <Spinner />;
 
-  const formatDate = (d: string | null) => d ? new Date(d).toLocaleString('fr-FR') : '—';
+  const formatDate = (d: string | null) => d ? localizedDateTime(d) : '—';
   const cronToHuman = (expr: string) => {
-    try { return cronstrue.toString(expr, { locale: 'fr', use24HourTimeFormat: true }); }
+    try { return cronstrue.toString(expr, { locale: i18n.language, use24HourTimeFormat: true }); }
     catch { return null; }
   };
   const formatDuration = (ms: number | null) => {
@@ -601,7 +608,7 @@ function JobsTab() {
           className="flex items-center gap-2 px-5 py-2.5 btn-primary text-sm font-medium rounded-xl"
         >
           {running === 'full_sync' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Sync (nouveautés)
+          {t('admin.jobs.sync_new')}
         </button>
         <button
           onClick={async () => {
@@ -611,7 +618,7 @@ function JobsTab() {
               await fetchJobs();
               showToast({ type: 'success', message: formatSyncResult(data) });
             } catch (err: any) {
-              showToast({ type: 'error', message: err.response?.data?.error || 'Sync complète échouée' });
+              showToast({ type: 'error', message: err.response?.data?.error || t('admin.jobs.sync_complete_failed') });
             }
             finally { setForceRunning(false); }
           }}
@@ -619,7 +626,7 @@ function JobsTab() {
           className="flex items-center gap-2 px-5 py-2.5 bg-ndp-warning/10 text-ndp-warning hover:bg-ndp-warning/20 text-sm font-medium rounded-xl transition-colors"
         >
           {forceRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Sync complète (tout récupérer)
+          {t('admin.jobs.sync_all')}
         </button>
         <button
           onClick={() => runJob('request_sync')}
@@ -627,7 +634,7 @@ function JobsTab() {
           className="flex items-center gap-2 px-5 py-2.5 bg-ndp-surface hover:bg-ndp-surface-light text-ndp-text text-sm font-medium rounded-xl transition-colors"
         >
           {running === 'request_sync' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Sync des demandes
+          {t('admin.jobs.sync_requests')}
         </button>
       </div>
 
@@ -636,12 +643,12 @@ function JobsTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/5 text-left">
-              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">Job</th>
-              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">Planification</th>
-              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">Dernier lancement</th>
-              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">Durée</th>
-              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">Statut</th>
-              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider text-right">Actions</th>
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">{t('admin.jobs.header.job')}</th>
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">{t('admin.jobs.header.schedule')}</th>
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">{t('admin.jobs.header.last_run')}</th>
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">{t('admin.jobs.header.duration')}</th>
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider">{t('admin.jobs.header.status')}</th>
+              <th className="px-5 py-3 text-xs font-semibold text-ndp-text-muted uppercase tracking-wider text-right">{t('admin.jobs.header.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -690,7 +697,7 @@ function JobsTab() {
                         job.lastStatus === 'success' ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger'
                       )}>
                         {job.lastStatus === 'success' ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                        {job.lastStatus === 'success' ? 'OK' : 'Erreur'}
+                        {job.lastStatus === 'success' ? 'OK' : t('common.error')}
                       </span>
                     ) : (
                       <span className="text-xs text-ndp-text-dim">—</span>
@@ -698,10 +705,10 @@ function JobsTab() {
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => runJob(job.key)} disabled={running !== null} className="p-1.5 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors" title="Lancer">
+                      <button onClick={() => runJob(job.key)} disabled={running !== null} className="p-1.5 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors" title={t('admin.jobs.run')}>
                         {running === job.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                       </button>
-                      <button onClick={() => toggleJob(job)} className="p-1.5 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors" title={job.enabled ? 'Désactiver' : 'Activer'}>
+                      <button onClick={() => toggleJob(job)} className="p-1.5 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors" title={job.enabled ? t('common.disable') : t('common.enable')}>
                         <Power className={clsx('w-4 h-4', job.enabled && 'text-ndp-success')} />
                       </button>
                     </div>
@@ -715,13 +722,13 @@ function JobsTab() {
 
       {/* CRON help */}
       <div className="card p-5">
-        <h3 className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">Aide CRON</h3>
+        <h3 className="text-xs font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('admin.jobs.cron_help')}</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           {[
-            { expr: '*/5 * * * *', desc: 'Toutes les 5 min' },
-            { expr: '0 */2 * * *', desc: 'Toutes les 2h' },
-            { expr: '0 6 * * *', desc: 'Tous les jours à 6h' },
-            { expr: '0 0 * * 1', desc: 'Chaque lundi minuit' },
+            { expr: '*/5 * * * *', desc: t('admin.jobs.cron.every_5min') },
+            { expr: '0 */2 * * *', desc: t('admin.jobs.cron.every_2h') },
+            { expr: '0 6 * * *', desc: t('admin.jobs.cron.daily_6am') },
+            { expr: '0 0 * * 1', desc: t('admin.jobs.cron.monday_midnight') },
           ].map(({ expr, desc }) => (
             <div key={expr} className="bg-white/[0.03] px-3 py-2 rounded-lg">
               <code className="text-ndp-accent">{expr}</code>
@@ -738,6 +745,7 @@ function JobsTab() {
 interface LogEntry { id: number; level: string; label: string; message: string; createdAt: string; }
 
 function LogsTab() {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [levelFilter, setLevelFilter] = useState('');
@@ -779,33 +787,33 @@ function LogsTab() {
               className={clsx('px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
                 levelFilter === lvl ? 'bg-ndp-accent text-white' : 'bg-ndp-surface text-ndp-text-muted hover:bg-ndp-surface-light'
               )}>
-              {lvl || 'Tous'}
+              {lvl || t('common.all')}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={fetchLogs} className="btn-secondary text-xs flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5" /> Rafraîchir</button>
-          <button onClick={clearLogs} className="btn-danger text-xs flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Vider</button>
+          <button onClick={fetchLogs} className="btn-secondary text-xs flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5" /> {t('common.refresh')}</button>
+          <button onClick={clearLogs} className="btn-danger text-xs flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> {t('admin.logs.clear')}</button>
         </div>
       </div>
 
       {loading ? <Spinner /> : logs.length === 0 ? (
-        <div className="text-center py-16"><ScrollText className="w-10 h-10 text-ndp-text-dim mx-auto mb-2" /><p className="text-sm text-ndp-text-dim">Aucun log</p></div>
+        <div className="text-center py-16"><ScrollText className="w-10 h-10 text-ndp-text-dim mx-auto mb-2" /><p className="text-sm text-ndp-text-dim">{t('admin.logs.no_logs')}</p></div>
       ) : (
         <div className="card overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/5 text-ndp-text-dim text-xs">
-                <th className="text-left px-4 py-3">Date</th>
-                <th className="text-left px-4 py-3">Niveau</th>
-                <th className="text-left px-4 py-3">Label</th>
-                <th className="text-left px-4 py-3">Message</th>
+                <th className="text-left px-4 py-3">{t('common.date')}</th>
+                <th className="text-left px-4 py-3">{t('common.level')}</th>
+                <th className="text-left px-4 py-3">{t('common.label')}</th>
+                <th className="text-left px-4 py-3">{t('common.message')}</th>
               </tr>
             </thead>
             <tbody>
               {logs.map((log) => (
                 <tr key={log.id} className="border-b border-white/5 hover:bg-white/5">
-                  <td className="px-4 py-2.5 text-xs text-ndp-text-dim whitespace-nowrap">{new Date(log.createdAt).toLocaleString('fr-FR')}</td>
+                  <td className="px-4 py-2.5 text-xs text-ndp-text-dim whitespace-nowrap">{localizedDateTime(log.createdAt)}</td>
                   <td className="px-4 py-2.5"><span className={clsx('text-[10px] px-2 py-0.5 rounded font-semibold', levelColors[log.level] || '')}>{log.level}</span></td>
                   <td className="px-4 py-2.5 text-xs text-ndp-text-muted">{log.label}</td>
                   <td className="px-4 py-2.5 text-xs text-ndp-text">{log.message}</td>
@@ -818,9 +826,9 @@ function LogsTab() {
 
       {totalPages > 1 && (
         <div className="flex justify-center gap-2">
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="btn-secondary text-xs">← Précédent</button>
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="btn-secondary text-xs">← {t('common.previous')}</button>
           <span className="text-xs text-ndp-text-dim self-center">{page}/{totalPages}</span>
-          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="btn-secondary text-xs">Suivant →</button>
+          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="btn-secondary text-xs">{t('common.next')} →</button>
         </div>
       )}
     </div>
@@ -829,11 +837,11 @@ function LogsTab() {
 
 // ============ NOTIFICATIONS TAB ============
 const EVENT_TYPES = [
-  { key: 'request_new', label: 'Nouvelle demande' },
-  { key: 'request_approved', label: 'Demande approuvée' },
-  { key: 'request_declined', label: 'Demande refusée' },
-  { key: 'media_available', label: 'Média disponible' },
-  { key: 'incident_banner', label: "Bandeau d'incident" },
+  { key: 'request_new', labelKey: 'admin.notifications.event.request_new' },
+  { key: 'request_approved', labelKey: 'admin.notifications.event.request_approved' },
+  { key: 'request_declined', labelKey: 'admin.notifications.event.request_declined' },
+  { key: 'media_available', labelKey: 'admin.notifications.event.media_available' },
+  { key: 'incident_banner', labelKey: 'admin.notifications.event.incident_banner' },
 ] as const;
 
 const DEFAULT_MATRIX: Record<string, { discord: boolean; telegram: boolean; email: boolean }> = {
@@ -845,6 +853,7 @@ const DEFAULT_MATRIX: Record<string, { discord: boolean; telegram: boolean; emai
 };
 
 function NotificationsTab() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -918,7 +927,7 @@ function NotificationsTab() {
       }
       setTestResult({ channel, ok: true });
     } catch {
-      setTestResult({ channel, ok: false, message: 'Échec de l\'envoi' });
+      setTestResult({ channel, ok: false, message: t('status.connection_failed') });
     } finally {
       setTestingDiscord(false); setTestingTelegram(false); setTestingEmail(false);
       setTimeout(() => setTestResult(null), 4000);
@@ -941,11 +950,11 @@ function NotificationsTab() {
           <label className="text-xs text-ndp-text-dim block mb-1">Webhook URL</label>
           <input type="text" value={discordWebhookUrl} onChange={(e) => setDiscordWebhookUrl(e.target.value)} placeholder="https://discord.com/api/webhooks/..." className="input w-full text-sm mb-3" />
           <button onClick={() => testChannel('discord')} disabled={!hasDiscord || testingDiscord} className="btn-secondary text-xs flex items-center gap-1.5">
-            {testingDiscord ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Tester
+            {testingDiscord ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {t('common.test')}
           </button>
           {testResult?.channel === 'discord' && (
             <p className={clsx('text-xs mt-2', testResult.ok ? 'text-ndp-success' : 'text-ndp-danger')}>
-              {testResult.ok ? 'Envoyé !' : testResult.message}
+              {testResult.ok ? t('common.sent') : testResult.message}
             </p>
           )}
         </div>
@@ -953,35 +962,35 @@ function NotificationsTab() {
         {/* Telegram */}
         <div className="card p-6">
           <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Telegram</h3>
-          <label className="text-xs text-ndp-text-dim block mb-1">Bot Token</label>
+          <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.notifications.bot_token')}</label>
           <input type="text" value={telegramBotToken} onChange={(e) => setTelegramBotToken(e.target.value)} placeholder="123456:ABC-DEF..." className="input w-full text-sm mb-2" />
-          <label className="text-xs text-ndp-text-dim block mb-1">Chat ID</label>
+          <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.notifications.chat_id')}</label>
           <input type="text" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} placeholder="-1001234567890" className="input w-full text-sm mb-3" />
           <button onClick={() => testChannel('telegram')} disabled={!hasTelegram || testingTelegram} className="btn-secondary text-xs flex items-center gap-1.5">
-            {testingTelegram ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Tester
+            {testingTelegram ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {t('common.test')}
           </button>
           {testResult?.channel === 'telegram' && (
             <p className={clsx('text-xs mt-2', testResult.ok ? 'text-ndp-success' : 'text-ndp-danger')}>
-              {testResult.ok ? 'Envoyé !' : testResult.message}
+              {testResult.ok ? t('common.sent') : testResult.message}
             </p>
           )}
         </div>
 
         {/* Email (Resend) */}
         <div className="card p-6">
-          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Email (Resend)</h3>
-          <label className="text-xs text-ndp-text-dim block mb-1">API Key</label>
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.notifications.email_resend')}</h3>
+          <label className="text-xs text-ndp-text-dim block mb-1">{t('common.api_key')}</label>
           <input type="password" value={resendApiKey} onChange={(e) => setResendApiKey(e.target.value)} placeholder="re_..." className="input w-full text-sm mb-2" />
-          <label className="text-xs text-ndp-text-dim block mb-1">Email expéditeur</label>
+          <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.services.sender_email')}</label>
           <input type="text" value={resendFromEmail} onChange={(e) => setResendFromEmail(e.target.value)} placeholder="Netflix du Pauvre <notifs@domain.com>" className="input w-full text-sm mb-2" />
-          <label className="text-xs text-ndp-text-dim block mb-1">Email destinataire</label>
+          <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.services.recipient_email')}</label>
           <input type="text" value={resendToEmail} onChange={(e) => setResendToEmail(e.target.value)} placeholder="admin@domain.com" className="input w-full text-sm mb-3" />
           <button onClick={() => testChannel('email')} disabled={!hasEmail || testingEmail} className="btn-secondary text-xs flex items-center gap-1.5">
-            {testingEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Tester
+            {testingEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {t('common.test')}
           </button>
           {testResult?.channel === 'email' && (
             <p className={clsx('text-xs mt-2', testResult.ok ? 'text-ndp-success' : 'text-ndp-danger')}>
-              {testResult.ok ? 'Envoyé !' : testResult.message}
+              {testResult.ok ? t('common.sent') : testResult.message}
             </p>
           )}
         </div>
@@ -989,13 +998,13 @@ function NotificationsTab() {
 
       {/* Event Matrix */}
       <div className="card p-6">
-        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Matrice d'événements</h3>
-        <p className="text-xs text-ndp-text-dim mb-4">Choisissez quels canaux reçoivent chaque type de notification.</p>
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.notifications.matrix_title')}</h3>
+        <p className="text-xs text-ndp-text-dim mb-4">{t('admin.notifications.matrix_desc')}</p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/5 text-ndp-text-dim text-xs">
-                <th className="text-left px-4 py-3">Événement</th>
+                <th className="text-left px-4 py-3">{t('admin.notifications.event_header')}</th>
                 <th className="text-center px-4 py-3">
                   <span className={clsx(!hasDiscord && 'opacity-40')}>Discord</span>
                 </th>
@@ -1008,9 +1017,9 @@ function NotificationsTab() {
               </tr>
             </thead>
             <tbody>
-              {EVENT_TYPES.map(({ key, label }) => (
+              {EVENT_TYPES.map(({ key, labelKey }) => (
                 <tr key={key} className="border-b border-white/5">
-                  <td className="px-4 py-3 text-ndp-text">{label}</td>
+                  <td className="px-4 py-3 text-ndp-text">{t(labelKey)}</td>
                   {(['discord', 'telegram', 'email'] as const).map((ch) => {
                     const disabled = (ch === 'discord' && !hasDiscord) || (ch === 'telegram' && !hasTelegram) || (ch === 'email' && !hasEmail);
                     return (
@@ -1035,7 +1044,7 @@ function NotificationsTab() {
       {/* Save */}
       <button onClick={handleSave} disabled={saving} className={clsx('flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-xl transition-all', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-        {saved ? 'Sauvegardé' : 'Sauvegarder'}
+        {saved ? t('common.saved') : t('common.save')}
       </button>
     </div>
   );
@@ -1045,7 +1054,7 @@ function NotificationsTab() {
 
 interface ServiceField {
   key: string;
-  label: string;
+  labelKey: string;
   type: 'text' | 'password';
   placeholder?: string;
 }
@@ -1061,50 +1070,50 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
     label: 'Radarr',
     icon: '/radarr.png',
     fields: [
-      { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:7878' },
-      { key: 'apiKey', label: 'Clé API', type: 'password' },
+      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://192.168.1.50:7878' },
+      { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
     ],
   },
   sonarr: {
     label: 'Sonarr',
     icon: '/sonarr.png',
     fields: [
-      { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:8989' },
-      { key: 'apiKey', label: 'Clé API', type: 'password' },
+      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://192.168.1.50:8989' },
+      { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
     ],
   },
   plex: {
     label: 'Plex',
     icon: '/plex.png',
     fields: [
-      { key: 'url', label: 'URL du serveur', type: 'text', placeholder: 'http://192.168.1.50:32400' },
-      { key: 'token', label: 'Token', type: 'password' },
-      { key: 'machineId', label: 'Machine ID', type: 'text', placeholder: 'Voir /identity sur votre serveur' },
+      { key: 'url', labelKey: 'admin.services.server_url', type: 'text', placeholder: 'http://192.168.1.50:32400' },
+      { key: 'token', labelKey: 'common.token', type: 'password' },
+      { key: 'machineId', labelKey: 'install.machine_id', type: 'text' },
     ],
   },
   qbittorrent: {
     label: 'qBittorrent',
     icon: '/qbittorrent.svg',
     fields: [
-      { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.64:8080' },
-      { key: 'username', label: 'Utilisateur', type: 'text' },
-      { key: 'password', label: 'Mot de passe', type: 'password' },
+      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://192.168.1.64:8080' },
+      { key: 'username', labelKey: 'common.username', type: 'text' },
+      { key: 'password', labelKey: 'common.password', type: 'password' },
     ],
   },
   tautulli: {
     label: 'Tautulli',
     icon: '/tautulli.svg',
     fields: [
-      { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:8181' },
-      { key: 'apiKey', label: 'Clé API', type: 'password' },
+      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://192.168.1.50:8181' },
+      { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
     ],
   },
   trackarr: {
     label: 'Trackarr',
     icon: '/trackarr.svg',
     fields: [
-      { key: 'url', label: 'URL', type: 'text', placeholder: 'http://192.168.1.50:7333' },
-      { key: 'apiKey', label: 'Clé API', type: 'password' },
+      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://192.168.1.50:7333' },
+      { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
     ],
   },
 };
@@ -1119,6 +1128,7 @@ interface ServiceData {
 }
 
 function ServicesTab() {
+  const { t } = useTranslation();
   const [services, setServices] = useState<ServiceData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -1136,7 +1146,7 @@ function ServicesTab() {
   useEffect(() => { fetchServices(); }, [fetchServices]);
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer ce service ?')) return;
+    if (!confirm(`${t('common.delete')}?`)) return;
     await api.delete(`/admin/services/${id}`);
     fetchServices();
   };
@@ -1167,17 +1177,17 @@ function ServicesTab() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-ndp-text-muted">Gérez vos services connectés (Radarr, Sonarr, qBittorrent...)</p>
+        <p className="text-sm text-ndp-text-muted">{t('admin.services.description')}</p>
         <button onClick={() => { setEditingService(null); setShowModal(true); }} className="btn-primary flex items-center gap-2 text-sm px-4 py-2 rounded-xl">
-          <Plus className="w-4 h-4" /> Ajouter
+          <Plus className="w-4 h-4" /> {t('common.add')}
         </button>
       </div>
 
       {services.length === 0 ? (
         <div className="card p-12 text-center">
           <Server className="w-12 h-12 text-ndp-text-dim mx-auto mb-4" />
-          <p className="text-ndp-text-muted">Aucun service configuré</p>
-          <p className="text-sm text-ndp-text-dim mt-1">Ajoutez votre premier service pour commencer</p>
+          <p className="text-ndp-text-muted">{t('admin.services.no_services')}</p>
+          <p className="text-sm text-ndp-text-dim mt-1">{t('admin.services.no_services_help')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -1196,7 +1206,7 @@ function ServicesTab() {
                   </div>
                   <div className="flex items-center gap-1">
                     {service.isDefault && (
-                      <span className="px-2 py-0.5 bg-ndp-accent/10 text-ndp-accent text-[10px] font-semibold rounded-full">PAR DÉFAUT</span>
+                      <span className="px-2 py-0.5 bg-ndp-accent/10 text-ndp-accent text-[10px] font-semibold rounded-full">{t('common.default_badge')}</span>
                     )}
                     {service.enabled ? (
                       <span className="w-2 h-2 bg-ndp-success rounded-full" />
@@ -1209,34 +1219,34 @@ function ServicesTab() {
                 <div className="space-y-1 mb-4">
                   {schema?.fields.filter(f => f.type !== 'password').map((field) => (
                     <p key={field.key} className="text-xs text-ndp-text-dim">
-                      <span className="text-ndp-text-muted">{field.label}:</span> {service.config[field.key] || '—'}
+                      <span className="text-ndp-text-muted">{t(field.labelKey)}:</span> {service.config[field.key] || '—'}
                     </p>
                   ))}
                 </div>
 
                 {result && (
                   <div className={clsx('text-xs px-3 py-2 rounded-lg mb-3', result.ok ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger')}>
-                    {result.ok ? `Connecté${result.version ? ` (v${result.version})` : ''}` : 'Connexion échouée'}
+                    {result.ok ? `${t('status.connected')}${result.version ? ` (v${result.version})` : ''}` : t('status.connection_failed')}
                   </div>
                 )}
 
                 <div className="flex items-center gap-1 pt-3 border-t border-white/5">
-                  <button onClick={() => handleTest(service)} disabled={testing === service.id} className="p-2 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors" title="Tester">
+                  <button onClick={() => handleTest(service)} disabled={testing === service.id} className="p-2 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors" title={t('common.test')}>
                     {testing === service.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plug className="w-4 h-4" />}
                   </button>
-                  <button onClick={() => { setEditingService(service); setShowModal(true); }} className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors" title="Modifier">
+                  <button onClick={() => { setEditingService(service); setShowModal(true); }} className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors" title={t('common.edit')}>
                     <Pencil className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleToggle(service)} className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors" title={service.enabled ? 'Désactiver' : 'Activer'}>
+                  <button onClick={() => handleToggle(service)} className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors" title={service.enabled ? t('common.disable') : t('common.enable')}>
                     <Power className={clsx('w-4 h-4', service.enabled && 'text-ndp-success')} />
                   </button>
                   {!service.isDefault && (
-                    <button onClick={() => handleSetDefault(service)} className="p-2 text-ndp-text-dim hover:text-ndp-warning hover:bg-white/5 rounded-lg transition-colors" title="Définir par défaut">
+                    <button onClick={() => handleSetDefault(service)} className="p-2 text-ndp-text-dim hover:text-ndp-warning hover:bg-white/5 rounded-lg transition-colors" title={t('admin.services.set_default')}>
                       <Star className="w-4 h-4" />
                     </button>
                   )}
                   <div className="flex-1" />
-                  <button onClick={() => handleDelete(service.id)} className="p-2 text-ndp-text-dim hover:text-ndp-danger hover:bg-white/5 rounded-lg transition-colors" title="Supprimer">
+                  <button onClick={() => handleDelete(service.id)} className="p-2 text-ndp-text-dim hover:text-ndp-danger hover:bg-white/5 rounded-lg transition-colors" title={t('common.delete')}>
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -1258,6 +1268,7 @@ function ServicesTab() {
 }
 
 function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | null; onClose: () => void; onSaved: () => void }) {
+  const { t } = useTranslation();
   const isEdit = !!service;
   const [type, setType] = useState(service?.type || 'radarr');
   const [name, setName] = useState(service?.name || '');
@@ -1315,11 +1326,11 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onMouseDown={onClose}>
       <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-ndp-text mb-5">{isEdit ? 'Modifier le service' : 'Ajouter un service'}</h2>
+        <h2 className="text-lg font-bold text-ndp-text mb-5">{isEdit ? t('admin.services.edit_title') : t('admin.services.add_title')}</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isEdit && (
             <div>
-              <label className="text-sm text-ndp-text mb-1.5 block">Type de service</label>
+              <label className="text-sm text-ndp-text mb-1.5 block">{t('admin.services.service_type')}</label>
               <select value={type} onChange={(e) => { setType(e.target.value); setConfig({}); }} className="input w-full">
                 {Object.entries(SERVICE_SCHEMAS).map(([key, s]) => (
                   <option key={key} value={key}>{s.label}</option>
@@ -1329,13 +1340,13 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
           )}
 
           <div>
-            <label className="text-sm text-ndp-text mb-1.5 block">Nom</label>
+            <label className="text-sm text-ndp-text mb-1.5 block">{t('common.name')}</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={`${schema?.label || type} Principal`} className="input w-full" required />
           </div>
 
           {schema?.fields.map((field) => (
             <div key={field.key}>
-              <label className="text-sm text-ndp-text mb-1.5 block">{field.label}</label>
+              <label className="text-sm text-ndp-text mb-1.5 block">{t(field.labelKey)}</label>
               <div className="relative">
                 <input
                   type={field.type === 'password' && !showSecrets[field.key] ? 'password' : 'text'}
@@ -1363,7 +1374,7 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
                   className="mt-1.5 text-xs text-ndp-accent hover:text-ndp-accent-hover flex items-center gap-1 transition-colors"
                 >
                   {fetchingPlexToken ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plug className="w-3 h-3" />}
-                  Utiliser mon token Plex
+                  {t('admin.services.use_plex_token')}
                 </button>
               )}
               {type === 'plex' && field.key === 'machineId' && (
@@ -1374,7 +1385,7 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
                   className="mt-1.5 text-xs text-ndp-accent hover:text-ndp-accent-hover flex items-center gap-1 transition-colors disabled:opacity-40"
                 >
                   {detectingMachineId ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                  Détecter automatiquement
+                  {t('admin.services.auto_detect')}
                 </button>
               )}
             </div>
@@ -1382,16 +1393,16 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
 
           <label className="flex items-center gap-2 text-sm text-ndp-text-muted cursor-pointer">
             <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} className="rounded" />
-            Définir comme service par défaut
+            {t('admin.services.set_default')}
           </label>
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium bg-ndp-surface text-ndp-text-muted hover:bg-ndp-surface-light transition-colors">
-              Annuler
+              {t('common.cancel')}
             </button>
             <button type="submit" disabled={saving} className="flex-1 btn-primary flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {isEdit ? 'Sauvegarder' : 'Ajouter'}
+              {isEdit ? t('common.save') : t('common.add')}
             </button>
           </div>
         </form>
@@ -1417,6 +1428,7 @@ interface ServiceType {
 }
 
 function QualityTab() {
+  const { t } = useTranslation();
   const [options, setOptions] = useState<QualityOptionType[]>([]);
   const [services, setServices] = useState<ServiceType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1498,10 +1510,10 @@ function QualityTab() {
       {/* Quality Options */}
       <div className="card p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-ndp-text">Options de qualité</h2>
+          <h2 className="text-lg font-bold text-ndp-text">{t('admin.quality.options_title')}</h2>
           {options.length === 0 && (
             <button onClick={seedDefaults} className="btn-secondary text-sm">
-              Ajouter par défaut (SD, HD, 4K, 4K HDR)
+              {t('admin.quality.add_defaults')}
             </button>
           )}
         </div>
@@ -1522,7 +1534,7 @@ function QualityTab() {
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addOption()}
-            placeholder="Nouvelle qualité..."
+            placeholder={t('admin.quality.new_placeholder')}
             className="input flex-1 text-sm"
           />
           <button onClick={addOption} disabled={!newLabel.trim()} className="btn-primary text-sm">
@@ -1534,16 +1546,16 @@ function QualityTab() {
       {/* Quality Mappings */}
       {options.length > 0 && services.length > 0 && (
         <div className="card p-6">
-          <h2 className="text-lg font-bold text-ndp-text mb-4">Mappings qualité → service</h2>
+          <h2 className="text-lg font-bold text-ndp-text mb-4">{t('admin.quality.mapping_title')}</h2>
           <p className="text-sm text-ndp-text-muted mb-6">
-            Associez chaque qualité du site à un profil qualité d'un service Radarr/Sonarr. Cliquez sur une cellule pour configurer.
+            {t('admin.quality.mapping_desc')}
           </p>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/5">
-                  <th className="text-left py-3 px-3 text-ndp-text-muted font-medium">Qualité</th>
+                  <th className="text-left py-3 px-3 text-ndp-text-muted font-medium">{t('admin.tab.quality')}</th>
                   {services.map((svc) => (
                     <th key={svc.id} className="text-left py-3 px-3 text-ndp-text-muted font-medium">
                       {svc.name}
@@ -1578,7 +1590,7 @@ function QualityTab() {
                               className="text-ndp-text-dim hover:text-ndp-accent transition-colors text-xs flex items-center gap-1"
                             >
                               <Plus className="w-3 h-3" />
-                              Configurer
+                              {t('common.edit')}
                             </button>
                           )}
                         </td>
@@ -1596,11 +1608,11 @@ function QualityTab() {
       {editingMapping && createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onMouseDown={() => setEditingMapping(null)}>
           <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-ndp-text mb-4">Sélectionner un profil qualité</h3>
+            <h3 className="text-lg font-bold text-ndp-text mb-4">{t('admin.quality.select_profile')}</h3>
             {loadingProfiles ? (
               <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-ndp-accent" /></div>
             ) : profiles.length === 0 ? (
-              <p className="text-ndp-text-muted text-sm">Impossible de charger les profils. Vérifiez la connexion au service.</p>
+              <p className="text-ndp-text-muted text-sm">{t('admin.quality.profiles_error')}</p>
             ) : (
               <div className="space-y-2 max-h-[300px] overflow-y-auto">
                 {profiles.map((p) => (
@@ -1620,8 +1632,8 @@ function QualityTab() {
               </div>
             )}
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setEditingMapping(null)} className="btn-secondary text-sm">Annuler</button>
-              <button onClick={saveMapping} disabled={!selectedProfile} className="btn-primary text-sm">Enregistrer</button>
+              <button onClick={() => setEditingMapping(null)} className="btn-secondary text-sm">{t('common.cancel')}</button>
+              <button onClick={saveMapping} disabled={!selectedProfile} className="btn-primary text-sm">{t('common.save')}</button>
             </div>
           </div>
         </div>,
@@ -1630,7 +1642,7 @@ function QualityTab() {
 
       {services.length === 0 && options.length > 0 && (
         <div className="card p-6 text-center text-ndp-text-muted">
-          <p>Aucun service Radarr/Sonarr activé. Ajoutez des services dans l'onglet "Services" pour configurer les mappings.</p>
+          <p>{t('admin.quality.no_services')}</p>
         </div>
       )}
     </div>
@@ -1639,6 +1651,7 @@ function QualityTab() {
 
 // ============ GENERAL TAB ============
 function GeneralTab() {
+  const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [autoApproveRequests, setAutoApproveRequests] = useState(false);
@@ -1686,10 +1699,10 @@ function GeneralTab() {
   if (loading) return <Spinner />;
 
   const features = [
-    { label: 'Demandes', desc: 'Permet aux utilisateurs de demander des médias', value: requestsEnabled, set: setRequestsEnabled },
-    { label: 'Auto-acceptation', desc: 'Les demandes sont automatiquement approuvées sans validation admin', value: autoApproveRequests, set: setAutoApproveRequests },
-    { label: 'Support', desc: 'Système de tickets de support', value: supportEnabled, set: setSupportEnabled },
-    { label: 'Calendrier', desc: 'Calendrier des sorties à venir', value: calendarEnabled, set: setCalendarEnabled },
+    { label: t('admin.general.feature.requests'), desc: t('admin.general.feature.requests_desc'), value: requestsEnabled, set: setRequestsEnabled },
+    { label: t('admin.general.feature.auto_approve'), desc: t('admin.general.feature.auto_approve_desc'), value: autoApproveRequests, set: setAutoApproveRequests },
+    { label: t('admin.general.feature.support'), desc: t('admin.general.feature.support_desc'), value: supportEnabled, set: setSupportEnabled },
+    { label: t('admin.general.feature.calendar'), desc: t('admin.general.feature.calendar_desc'), value: calendarEnabled, set: setCalendarEnabled },
   ];
 
   return (
@@ -1697,9 +1710,9 @@ function GeneralTab() {
       {/* Version & Update Check */}
       {versionInfo && (
         <div className="card p-6">
-          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Oscarr</h3>
+          <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.general.oscarr')}</h3>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-ndp-text">Version actuelle : <span className="font-mono font-semibold text-ndp-accent">{versionInfo.current}</span></span>
+            <span className="text-sm text-ndp-text">{t('admin.general.current_version')} <span className="font-mono font-semibold text-ndp-accent">{versionInfo.current}</span></span>
             {versionInfo.updateAvailable && versionInfo.latest && (
               <a
                 href={versionInfo.releaseUrl}
@@ -1708,18 +1721,18 @@ function GeneralTab() {
                 className="flex items-center gap-2 px-3 py-1.5 bg-ndp-accent/10 text-ndp-accent rounded-lg text-sm font-medium hover:bg-ndp-accent/20 transition-colors"
               >
                 <ArrowUpCircle className="w-4 h-4" />
-                v{versionInfo.latest} disponible
+                {t('admin.general.update_available', { version: versionInfo.latest })}
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             )}
             {versionInfo.latest && !versionInfo.updateAvailable && (
               <span className="flex items-center gap-1.5 text-sm text-ndp-success">
                 <CheckCircle className="w-4 h-4" />
-                À jour
+                {t('admin.general.up_to_date')}
               </span>
             )}
             {!versionInfo.latest && (
-              <span className="text-sm text-ndp-text-dim">Impossible de vérifier les mises à jour</span>
+              <span className="text-sm text-ndp-text-dim">{t('admin.general.update_check_failed')}</span>
             )}
           </div>
         </div>
@@ -1727,26 +1740,26 @@ function GeneralTab() {
 
       {/* Maintenance Banner */}
       <div className="card p-6">
-        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Bandeau de maintenance</h3>
-        <p className="text-xs text-ndp-text-dim mb-3">Affiché en haut de toutes les pages. Laissez vide pour masquer.</p>
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.general.maintenance_banner')}</h3>
+        <p className="text-xs text-ndp-text-dim mb-3">{t('admin.general.maintenance_desc')}</p>
         <div className="flex gap-3">
           <input
             value={bannerText}
             onChange={(e) => setBannerText(e.target.value)}
-            placeholder="Ex: Maintenance prévue ce soir à 22h"
+            placeholder={t('admin.general.maintenance_placeholder')}
             className="input flex-1 text-sm"
           />
           <button onClick={saveBanner} className={clsx('text-sm font-medium px-4 py-2 rounded-xl transition-all flex items-center gap-2 flex-shrink-0', bannerSaved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
             {bannerSaved ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-            {bannerSaved ? 'Sauvegardé' : 'Publier'}
+            {bannerSaved ? t('common.saved') : t('admin.general.publish')}
           </button>
         </div>
       </div>
 
       {/* Feature Flags */}
       <div className="card p-6">
-        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">Fonctionnalités</h3>
-        <p className="text-xs text-ndp-text-dim mb-4">Activez ou désactivez les sections du site pour les utilisateurs</p>
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.general.features')}</h3>
+        <p className="text-xs text-ndp-text-dim mb-4">{t('admin.general.features_desc')}</p>
         <div className="space-y-3">
           {features.map(({ label, desc, value, set }) => (
             <label key={label} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] transition-colors cursor-pointer">
@@ -1768,7 +1781,7 @@ function GeneralTab() {
 
       <button onClick={handleSave} disabled={saving} className={clsx('flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-xl transition-all', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-        {saved ? 'Sauvegardé' : 'Sauvegarder'}
+        {saved ? t('common.saved') : t('common.save')}
       </button>
     </div>
   );
@@ -1776,6 +1789,7 @@ function GeneralTab() {
 
 // ============ PLUGINS TAB ============
 function PluginsTab() {
+  const { t } = useTranslation();
   const [plugins, setPlugins] = useState<{ id: string; name: string; version: string; description?: string; author?: string; enabled: boolean; hasSettings: boolean; hasFrontend: boolean; error?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
@@ -1801,10 +1815,9 @@ function PluginsTab() {
     return (
       <div className="card p-8 text-center">
         <Plug className="w-10 h-10 text-ndp-text-dim mx-auto mb-3" />
-        <p className="text-ndp-text-muted">Aucun plugin installé</p>
-        <p className="text-sm text-ndp-text-dim mt-1">
-          Ajoutez des plugins dans <code className="text-ndp-accent">packages/plugins/</code>
-        </p>
+        <p className="text-ndp-text-muted">{t('admin.plugins.no_plugins')}</p>
+        {/* Translation contains safe static HTML (<code> tag) */}
+        <p className="text-sm text-ndp-text-dim mt-1" dangerouslySetInnerHTML={{ __html: t('admin.plugins.no_plugins_help') }} />
       </div>
     );
   }
@@ -1818,7 +1831,7 @@ function PluginsTab() {
               <h3 className="text-sm font-semibold text-ndp-text">{plugin.name}</h3>
               <span className="text-xs text-ndp-text-dim">v{plugin.version}</span>
               {plugin.error && (
-                <span className="text-xs bg-ndp-danger/10 text-ndp-danger px-2 py-0.5 rounded-full">Erreur</span>
+                <span className="text-xs bg-ndp-danger/10 text-ndp-danger px-2 py-0.5 rounded-full">{t('common.error')}</span>
               )}
             </div>
             {plugin.description && (

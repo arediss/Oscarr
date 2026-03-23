@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Search } from 'lucide-react';
 import api from '@/lib/api';
 import MediaGrid from '@/components/MediaGrid';
 import type { TmdbMedia } from '@/types';
 
 export default function SearchPage() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const [results, setResults] = useState<TmdbMedia[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,7 +38,7 @@ export default function SearchPage() {
       {q && (
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-ndp-text">
-            {loading ? 'Recherche en cours...' : `${totalResults} résultat${totalResults > 1 ? 's' : ''} pour "${q}"`}
+            {loading ? t('search.searching') : t('search.result', { count: totalResults, query: q })}
           </h2>
         </div>
       )}
@@ -45,15 +47,15 @@ export default function SearchPage() {
 
       {!loading && results.length === 0 && q && (
         <div className="text-center py-20">
-          <p className="text-ndp-text-muted text-lg">Aucun résultat trouvé</p>
-          <p className="text-ndp-text-dim text-sm mt-2">Essayez avec d'autres mots-clés</p>
+          <p className="text-ndp-text-muted text-lg">{t('search.no_results')}</p>
+          <p className="text-ndp-text-dim text-sm mt-2">{t('search.try_other')}</p>
         </div>
       )}
 
       {!q && !loading && (
         <div className="text-center py-20">
           <Search className="w-16 h-16 text-ndp-text-dim mx-auto mb-4" />
-          <p className="text-ndp-text-muted text-lg">Utilisez la barre de recherche ci-dessus</p>
+          <p className="text-ndp-text-muted text-lg">{t('search.use_search_bar')}</p>
         </div>
       )}
     </div>
