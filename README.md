@@ -241,6 +241,8 @@ The long-term goal is to support more media servers beyond Plex (Emby, Jellyfin)
 
 Contributions are welcome! Whether it's a bug fix, a new feature, or a plugin — feel free to open an issue or submit a PR.
 
+> **Development workflow** — This project uses [Claude Code](https://claude.com/claude-code) as a development assistant for code reviews, security audits, brainstorming, documentation, and issue/PR management. All architecture decisions and implementation are made by the maintainers — Claude serves as a quality and productivity tool, much like a linter or a CI pipeline.
+
 ---
 
 ## License
