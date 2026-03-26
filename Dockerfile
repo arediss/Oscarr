@@ -31,10 +31,12 @@ COPY packages/backend/package.json packages/backend/
 COPY packages/frontend/package.json packages/frontend/
 RUN npm ci --omit=dev
 
-# Copy Prisma schema + generated client
+# Copy Prisma schema, migrations, generated client + CLI (needed for migrate deploy)
 COPY packages/backend/prisma packages/backend/prisma
 COPY --from=builder /app/node_modules/.prisma node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client node_modules/@prisma/client
+COPY --from=builder /app/node_modules/prisma node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma/engines node_modules/@prisma/engines
 
 # Copy built backend
 COPY --from=builder /app/packages/backend/dist packages/backend/dist
@@ -54,6 +56,6 @@ ENV PORT=3456
 
 EXPOSE 3456
 
-# Apply schema + start
-CMD npx prisma db push --schema=packages/backend/prisma/schema.prisma --skip-generate --accept-data-loss && \
+# Apply pending migrations + start
+CMD npx prisma migrate deploy --schema=packages/backend/prisma/schema.prisma && \
     node packages/backend/dist/index.js
