@@ -25,7 +25,7 @@ function InstallGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   useEffect(() => {
-    api.get('/support/install-status')
+    api.get('/setup/install-status')
       .then(({ data }) => setStatus(data.installed ? 'installed' : 'not-installed'))
       .catch(() => setStatus('installed'));
   }, [location.pathname]);

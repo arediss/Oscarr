@@ -20,6 +20,8 @@ export default function InstallPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
+  const [setupSecret, setSetupSecret] = useState('');
+  const [secretValid, setSecretValid] = useState(false);
   const [url, setUrl] = useState('');
   const [token, setToken] = useState('');
   const [machineId, setMachineId] = useState('');
@@ -45,7 +47,7 @@ export default function InstallPage() {
   const [syncResult, setSyncResult] = useState<{ radarr?: { added: number; updated: number }; sonarr?: { added: number; updated: number } } | null>(null);
 
   useEffect(() => {
-    api.get('/support/install-status')
+    api.get('/setup/install-status')
       .then(({ data }) => {
         if (data.installed) navigate('/login', { replace: true });
         else setChecking(false);
@@ -63,7 +65,7 @@ export default function InstallPage() {
     setTesting(true);
     setTestOk(null);
     try {
-      const { data } = await api.post('/support/setup/test-url', { url });
+      const { data } = await api.post('/setup/test-url', { url });
       setTestOk(true);
       if (data.machineIdentifier && !machineId) setMachineId(data.machineIdentifier);
     } catch { setTestOk(false); }
@@ -74,7 +76,7 @@ export default function InstallPage() {
     setPlexPolling(true);
     setError('');
     try {
-      const { data } = await api.post('/support/setup/plex-pin');
+      const { data } = await api.post('/setup/plex-pin');
       const { pin, authUrl } = data;
 
       window.open(authUrl, 'PlexAuth', 'width=600,height=700');
@@ -89,7 +91,7 @@ export default function InstallPage() {
           return;
         }
         try {
-          const { data: checkData } = await api.post('/support/setup/plex-check', { pinId: pin.id });
+          const { data: checkData } = await api.post('/setup/plex-check', { pinId: pin.id });
           if (checkData.token) {
             if (pollRef.current) clearInterval(pollRef.current);
             setToken(checkData.token);
@@ -132,7 +134,7 @@ export default function InstallPage() {
     setSaving(true);
     setError('');
     try {
-      await api.post('/support/setup', { url, token, machineId, name });
+      await api.post('/setup', { url, token, machineId, name });
       setStep(3);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('common.error');
@@ -166,7 +168,7 @@ export default function InstallPage() {
     if (!svc || !svc.url || !svc.apiKey) return;
     updateArrService(id, { testStatus: 'testing' });
     try {
-      await api.post('/support/setup/test-arr', { url: svc.url, apiKey: svc.apiKey });
+      await api.post('/setup/test-arr', { url: svc.url, apiKey: svc.apiKey });
       setArrServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'ok' } : s));
     } catch {
       setArrServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'error' } : s));
@@ -179,7 +181,7 @@ export default function InstallPage() {
     try {
       for (const svc of arrServices) {
         if (svc.saved || !svc.url || !svc.apiKey) continue;
-        await api.post('/support/setup/service', {
+        await api.post('/setup/service', {
           name: svc.name,
           type: svc.type,
           url: svc.url,
@@ -201,7 +203,7 @@ export default function InstallPage() {
     setSyncing(true);
     setError('');
     try {
-      const { data } = await api.post('/support/setup/sync');
+      const { data } = await api.post('/setup/sync');
       setSyncResult(data.result);
       setSyncDone(true);
       // Auto-advance after 2s
@@ -273,8 +275,42 @@ export default function InstallPage() {
             </div>
           )}
 
+          {/* Setup Secret Gate */}
+          {step === 0 && !secretValid && (
+            <div className="space-y-4 animate-fade-in">
+              <div>
+                <label className="text-sm text-ndp-text mb-1.5 block font-medium">{t('install.setup_secret', 'Setup Secret')}</label>
+                <input
+                  type="password"
+                  value={setupSecret}
+                  onChange={(e) => setSetupSecret(e.target.value)}
+                  placeholder="SETUP_SECRET"
+                  className="input w-full"
+                  autoFocus
+                />
+                <p className="text-xs text-ndp-text-dim mt-1.5">
+                  {t('install.setup_secret_help', 'Enter the SETUP_SECRET from your .env file to begin installation.')}
+                </p>
+              </div>
+              {error && (
+                <div className="text-xs px-3 py-2 rounded-lg bg-ndp-danger/10 text-ndp-danger">{error}</div>
+              )}
+              <button
+                onClick={() => {
+                  sessionStorage.setItem('setup-secret', setupSecret);
+                  setError('');
+                  setSecretValid(true);
+                }}
+                disabled={!setupSecret}
+                className="btn-primary flex items-center gap-2 text-sm w-full justify-center"
+              >
+                {t('common.next')}
+              </button>
+            </div>
+          )}
+
           {/* Step 0: URL */}
-          {step === 0 && (
+          {step === 0 && secretValid && (
             <div className="space-y-4 animate-fade-in">
               <div>
                 <label className="text-sm text-ndp-text mb-1.5 block font-medium">{t('install.plex_url')}</label>

@@ -1756,8 +1756,8 @@ function GeneralTab() {
         setCalendarEnabled(data.calendarEnabled ?? true);
         setSiteName(data.siteName ?? 'Oscarr');
       }),
-      api.get('/support/banner').then(({ data }) => setBannerText(data.banner || '')),
-      api.get('/support/version').then(({ data }) => setVersionInfo(data)),
+      api.get('/app/banner').then(({ data }) => setBannerText(data.banner || '')),
+      api.get('/app/version').then(({ data }) => setVersionInfo(data)),
     ]).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
