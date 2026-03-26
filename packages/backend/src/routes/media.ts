@@ -5,7 +5,19 @@ import { getSonarrAsync } from '../services/sonarr.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 
 export async function mediaRoutes(app: FastifyInstance) {
-  app.get('/', { preHandler: [app.authenticate] }, async (request) => {
+  app.get('/', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'string', description: 'Page number for pagination' },
+          mediaType: { type: 'string', description: 'Filter by media type (movie or tv)' },
+          status: { type: 'string', description: 'Filter by media status' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request) => {
     const { page, mediaType, status } = request.query as {
       page?: string;
       mediaType?: string;
@@ -46,7 +58,18 @@ export async function mediaRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get('/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get('/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Media ID' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const mediaId = parseId(id);
     if (!mediaId) return reply.status(400).send({ error: 'ID invalide' });
@@ -69,7 +92,19 @@ export async function mediaRoutes(app: FastifyInstance) {
     return media;
   });
 
-  app.get('/tmdb/:tmdbId/:mediaType', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get('/tmdb/:tmdbId/:mediaType', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['tmdbId', 'mediaType'],
+        properties: {
+          tmdbId: { type: 'string', description: 'TMDB ID of the media' },
+          mediaType: { type: 'string', description: 'Type of media (movie or tv)' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
     const { tmdbId, mediaType } = request.params as { tmdbId: string; mediaType: string };
     const tmdbIdNum = parseId(tmdbId);
     if (!tmdbIdNum) return reply.status(400).send({ error: 'tmdbId invalide' });
@@ -172,7 +207,17 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   // Recently added media (from Radarr/Sonarr sync)
-  app.get('/recent', { preHandler: [app.authenticate] }, async (request) => {
+  app.get('/recent', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'string', description: 'Maximum number of results (default 20, max 50)' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request) => {
     const { limit } = request.query as { limit?: string };
     const take = Math.min(parseInt(limit || '20', 10) || 20, 50);
 
@@ -204,7 +249,29 @@ export async function mediaRoutes(app: FastifyInstance) {
   });
 
   // Batch lookup: check availability for multiple TMDB IDs
-  app.post('/batch-status', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post('/batch-status', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['ids'],
+        properties: {
+          ids: {
+            type: 'array',
+            description: 'Array of TMDB IDs with media types to check status for (max 50)',
+            items: {
+              type: 'object',
+              required: ['tmdbId', 'mediaType'],
+              properties: {
+                tmdbId: { type: 'number', description: 'TMDB ID' },
+                mediaType: { type: 'string', description: 'Media type (movie or tv)' },
+              },
+            },
+          },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
     const { ids } = request.body as { ids?: unknown };
     if (!Array.isArray(ids) || ids.length === 0) {
       return reply.status(400).send({ error: 'ids requis (array of {tmdbId, mediaType})' });

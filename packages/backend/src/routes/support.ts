@@ -29,7 +29,17 @@ export async function supportRoutes(app: FastifyInstance) {
     return reply.send({ pin, authUrl });
   });
 
-  app.post('/setup/plex-check', async (request, reply) => {
+  app.post('/setup/plex-check', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['pinId'],
+        properties: {
+          pinId: { type: 'number', description: 'Plex PIN ID to check' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const existing = await prisma.service.findFirst({ where: { type: 'plex' } });
     if (existing) return reply.status(403).send({ error: 'Installation déjà effectuée' });
     const { pinId } = request.body as { pinId: number };
@@ -41,7 +51,17 @@ export async function supportRoutes(app: FastifyInstance) {
   });
 
   // Test a Plex URL from the backend (avoids browser CORS issues)
-  app.post('/setup/test-url', async (request, reply) => {
+  app.post('/setup/test-url', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['url'],
+        properties: {
+          url: { type: 'string', description: 'Plex server URL to test connectivity' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const { url } = request.body as { url: string };
     if (!url) return reply.status(400).send({ error: 'URL requis' });
     try {
@@ -56,7 +76,20 @@ export async function supportRoutes(app: FastifyInstance) {
   });
 
   // Initial setup — create first Plex service (locked once a Plex service exists)
-  app.post('/setup', async (request, reply) => {
+  app.post('/setup', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['url', 'token'],
+        properties: {
+          url: { type: 'string', description: 'Plex server URL' },
+          token: { type: 'string', description: 'Plex authentication token' },
+          machineId: { type: 'string', description: 'Plex server machine identifier' },
+          name: { type: 'string', description: 'Display name for the Plex service' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const existing = await prisma.service.findFirst({ where: { type: 'plex' } });
     if (existing) return reply.status(403).send({ error: 'Installation déjà effectuée' });
 
@@ -88,7 +121,18 @@ export async function supportRoutes(app: FastifyInstance) {
   });
 
   // Test a Radarr/Sonarr connection during install
-  app.post('/setup/test-arr', async (request, reply) => {
+  app.post('/setup/test-arr', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['url', 'apiKey'],
+        properties: {
+          url: { type: 'string', description: 'Radarr/Sonarr service URL' },
+          apiKey: { type: 'string', description: 'Radarr/Sonarr API key' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const { url, apiKey } = request.body as { url: string; apiKey: string };
     if (!url || !apiKey) return reply.status(400).send({ error: 'URL et API key requis' });
     try {
@@ -103,7 +147,20 @@ export async function supportRoutes(app: FastifyInstance) {
   });
 
   // Add a Radarr/Sonarr service during install (locked once first sync is done)
-  app.post('/setup/service', async (request, reply) => {
+  app.post('/setup/service', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['name', 'type', 'url', 'apiKey'],
+        properties: {
+          name: { type: 'string', description: 'Display name for the service' },
+          type: { type: 'string', enum: ['radarr', 'sonarr'], description: 'Service type' },
+          url: { type: 'string', description: 'Service URL' },
+          apiKey: { type: 'string', description: 'Service API key' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
     if (settings?.lastRadarrSync || settings?.lastSonarrSync) {
       return reply.status(403).send({ error: 'Installation déjà effectuée' });
@@ -239,7 +296,19 @@ export async function supportRoutes(app: FastifyInstance) {
   });
 
   // Create a ticket
-  app.post('/tickets', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post('/tickets', {
+    preHandler: [app.authenticate],
+    schema: {
+      body: {
+        type: 'object',
+        required: ['subject', 'message'],
+        properties: {
+          subject: { type: 'string', description: 'Ticket subject line' },
+          message: { type: 'string', description: 'Initial ticket message content' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const user = request.user as { id: number };
     const { subject, message } = request.body as { subject: string; message: string };
 
@@ -264,7 +333,18 @@ export async function supportRoutes(app: FastifyInstance) {
   });
 
   // Get messages for a ticket
-  app.get('/tickets/:id/messages', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get('/tickets/:id/messages', {
+    preHandler: [app.authenticate],
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Ticket ID' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     const { id } = request.params as { id: string };
     const ticketId = parseInt(id, 10);
@@ -286,7 +366,25 @@ export async function supportRoutes(app: FastifyInstance) {
   });
 
   // Post a message to a ticket
-  app.post('/tickets/:id/messages', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post('/tickets/:id/messages', {
+    preHandler: [app.authenticate],
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Ticket ID' },
+        },
+      },
+      body: {
+        type: 'object',
+        required: ['content'],
+        properties: {
+          content: { type: 'string', description: 'Message content' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     const { id } = request.params as { id: string };
     const ticketId = parseInt(id, 10);
@@ -315,7 +413,25 @@ export async function supportRoutes(app: FastifyInstance) {
   });
 
   // Close/reopen a ticket (admin only)
-  app.patch('/tickets/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.patch('/tickets/:id', {
+    preHandler: [app.authenticate],
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Ticket ID' },
+        },
+      },
+      body: {
+        type: 'object',
+        required: ['status'],
+        properties: {
+          status: { type: 'string', enum: ['open', 'closed'], description: 'New ticket status' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     if (user.role !== 'admin') return reply.status(403).send({ error: 'Admin requis' });
 
