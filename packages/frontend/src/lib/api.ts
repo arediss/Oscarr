@@ -13,6 +13,13 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   config.headers['Accept-Language'] = i18n.language;
+  // Attach setup secret for install routes
+  if (config.url?.startsWith('/setup/') || config.url === '/setup') {
+    const setupSecret = sessionStorage.getItem('setup-secret');
+    if (setupSecret) {
+      config.headers['X-Setup-Secret'] = setupSecret;
+    }
+  }
   return config;
 });
 

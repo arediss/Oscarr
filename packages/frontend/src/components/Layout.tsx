@@ -46,7 +46,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // Fetch incident banner
   useEffect(() => {
-    api.get('/support/banner').then(({ data }) => setBanner(data.banner)).catch(() => {});
+    api.get('/app/banner').then(({ data }) => setBanner(data.banner)).catch(() => {});
   }, []);
 
   // Filter nav items based on feature flags (admins see everything)

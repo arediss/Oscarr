@@ -14,6 +14,8 @@ services:
       - PORT=3456
       - NODE_ENV=production
       - FRONTEND_URL=http://localhost:3456
+      - SETUP_SECRET=${SETUP_SECRET}
+      - INSTALL_FILE_PATH=/data/install.json
 
 volumes:
   oscarr-data:
