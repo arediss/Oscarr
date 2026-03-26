@@ -153,7 +153,17 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
   });
 
   // Calendar: upcoming releases
-  app.get('/calendar', { preHandler: [app.authenticate] }, async (request) => {
+  app.get('/calendar', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          days: { type: 'string', description: 'Number of days to look ahead (default 30, max 90)' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request) => {
     const { days } = request.query as { days?: string };
     const numDays = Math.min(parseInt(days || '30', 10) || 30, 90);
     const start = new Date().toISOString().slice(0, 10);

@@ -7,6 +7,8 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import cookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { authRoutes } from './routes/auth.js';
 import { tmdbRoutes } from './routes/tmdb.js';
 import { requestRoutes } from './routes/requests.js';
@@ -15,6 +17,7 @@ import { radarrSonarrRoutes } from './routes/radarr-sonarr.js';
 import { adminRoutes } from './routes/admin.js';
 import { supportRoutes } from './routes/support.js';
 import { authenticate } from './middleware/auth.js';
+import { requireAdmin } from './middleware/auth.js';
 import { initScheduler } from './services/scheduler.js';
 import { pluginEngine } from './plugins/engine.js';
 import { pluginRoutes } from './plugins/routes.js';
@@ -41,6 +44,79 @@ async function start() {
   await app.register(cookie);
 
   app.decorate('authenticate', authenticate);
+
+  // OpenAPI / Swagger (disabled in production — no /api/docs route exposed)
+  if (process.env.NODE_ENV !== 'production') {
+    await app.register(swagger, {
+      openapi: {
+        info: {
+          title: 'Oscarr API',
+          description: 'API documentation for Oscarr — media request management',
+          version: '0.1.0-alpha',
+        },
+        components: {
+          securitySchemes: {
+            cookieAuth: {
+              type: 'apiKey',
+              in: 'cookie',
+              name: 'token',
+            },
+          },
+        },
+        security: [{ cookieAuth: [] }],
+        tags: [
+          { name: 'Public', description: 'No authentication required — open to anyone' },
+          { name: 'Auth Required', description: 'Requires a valid JWT session (logged-in user)' },
+          { name: 'Admin Only', description: 'Requires admin role — sensitive operations' },
+        ],
+      },
+    });
+
+    await app.register(swaggerUi, {
+      routePrefix: '/api/docs',
+      uiConfig: {
+        docExpansion: 'list',
+        deepLinking: true,
+      },
+      uiHooks: {
+        onRequest: async (request, reply) => {
+          await requireAdmin(request, reply);
+        },
+      },
+    });
+  }
+
+  // Auto-tag every route for Swagger: category (from prefix) + access level (from preHandler)
+  app.addHook('onRoute', (routeOptions) => {
+    if (routeOptions.url.startsWith('/api/docs')) return;
+    if (!routeOptions.url.startsWith('/api/')) return;
+
+    // Category tag: derive from the route prefix (e.g. "/api/tmdb" → "Tmdb")
+    const segment = (routeOptions.prefix || '').split('/').filter(Boolean).pop() || 'other';
+    const categoryTag = segment.charAt(0).toUpperCase() + segment.slice(1);
+
+    // Access level: inspect route-level preHandler + plugin-level conventions
+    const handlers = Array.isArray(routeOptions.preHandler)
+      ? routeOptions.preHandler
+      : routeOptions.preHandler ? [routeOptions.preHandler] : [];
+
+    const hasAuth = handlers.some((h) => h === authenticate);
+    const hasAdmin = handlers.some((h) => h === requireAdmin);
+
+    // admin.ts registers a plugin-level preHandler (not visible per-route)
+    const isAdminPrefix = routeOptions.prefix === '/api/admin';
+
+    let accessTag: string;
+    if (hasAdmin || isAdminPrefix) {
+      accessTag = 'Admin Only';
+    } else if (hasAuth) {
+      accessTag = 'Auth Required';
+    } else {
+      accessTag = 'Public';
+    }
+
+    routeOptions.schema = { ...routeOptions.schema, tags: [categoryTag, accessTag] };
+  });
 
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(tmdbRoutes, { prefix: '/api/tmdb' });

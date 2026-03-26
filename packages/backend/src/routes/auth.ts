@@ -13,7 +13,17 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send({ pin, authUrl });
   });
 
-  app.post('/plex/callback', async (request, reply) => {
+  app.post('/plex/callback', {
+    schema: {
+      body: {
+        type: 'object' as const,
+        required: ['pinId'],
+        properties: {
+          pinId: { type: 'number' as const, description: 'Plex PIN ID returned by /plex/pin' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const { pinId } = request.body as { pinId: unknown };
 
     if (typeof pinId !== 'number' || !Number.isFinite(pinId) || pinId < 1) {

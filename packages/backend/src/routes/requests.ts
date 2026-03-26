@@ -11,7 +11,19 @@ import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 const VALID_STATUSES = ['pending', 'approved', 'declined', 'processing', 'available', 'failed'];
 
 export async function requestRoutes(app: FastifyInstance) {
-  app.get('/', { preHandler: [app.authenticate] }, async (request) => {
+  app.get('/', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', description: 'Filter by request status (pending, approved, declined, processing, available, failed)' },
+          page: { type: 'string', description: 'Page number for pagination' },
+          userId: { type: 'string', description: 'Filter by user ID (admin only)' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request) => {
     const user = request.user as { id: number; role: string };
     const { status, page, userId } = request.query as { status?: string; page?: string; userId?: string };
     const pageNum = parsePage(page);
@@ -78,7 +90,22 @@ export async function requestRoutes(app: FastifyInstance) {
   });
 
   // Create a new request
-  app.post('/', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post('/', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['tmdbId', 'mediaType'],
+        properties: {
+          tmdbId: { type: 'number', description: 'TMDB ID of the media to request' },
+          mediaType: { type: 'string', enum: ['movie', 'tv'], description: 'Type of media' },
+          seasons: { type: 'array', items: { type: 'number' }, description: 'Season numbers to request (TV only)' },
+          rootFolder: { type: 'string', description: 'Root folder path override' },
+          qualityOptionId: { type: 'number', description: 'Quality option ID for quality profile mapping' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     const { tmdbId, mediaType, seasons, rootFolder, qualityOptionId } = request.body as {
       tmdbId: unknown;
@@ -189,7 +216,18 @@ export async function requestRoutes(app: FastifyInstance) {
     return reply.status(201).send(mediaRequest);
   });
 
-  app.post('/:id/approve', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post('/:id/approve', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Request ID to approve' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     if (user.role !== 'admin') {
       return reply.status(403).send({ error: 'Admin uniquement' });
@@ -228,7 +266,18 @@ export async function requestRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.post('/:id/decline', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post('/:id/decline', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Request ID to decline' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     if (user.role !== 'admin') {
       return reply.status(403).send({ error: 'Admin uniquement' });
@@ -253,7 +302,18 @@ export async function requestRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.delete('/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.delete('/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Request ID to delete' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     const { id } = request.params as { id: string };
     const requestId = parseId(id);
@@ -271,7 +331,18 @@ export async function requestRoutes(app: FastifyInstance) {
   });
 
   // Request an entire collection
-  app.post('/collection', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.post('/collection', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['collectionId'],
+        properties: {
+          collectionId: { type: 'number', description: 'TMDB collection ID to request all movies from' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     const { collectionId } = request.body as { collectionId: unknown };
 
