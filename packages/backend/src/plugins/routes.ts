@@ -11,7 +11,25 @@ export async function pluginRoutes(app: FastifyInstance) {
   // Toggle plugin enable/disable (admin only)
   app.put<{ Params: { id: string }; Body: { enabled: boolean } }>(
     '/:id/toggle',
-    { preHandler: [app.authenticate, requireAdmin] },
+    {
+      preHandler: [app.authenticate, requireAdmin],
+      schema: {
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', description: 'Plugin identifier' },
+          },
+        },
+        body: {
+          type: 'object',
+          required: ['enabled'],
+          properties: {
+            enabled: { type: 'boolean', description: 'Whether the plugin should be enabled' },
+          },
+        },
+      },
+    },
     async (request, reply) => {
       const { id } = request.params;
       const { enabled } = request.body;
@@ -27,7 +45,18 @@ export async function pluginRoutes(app: FastifyInstance) {
   // Get plugin settings schema + values (admin only)
   app.get<{ Params: { id: string } }>(
     '/:id/settings',
-    { preHandler: [app.authenticate, requireAdmin] },
+    {
+      preHandler: [app.authenticate, requireAdmin],
+      schema: {
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', description: 'Plugin identifier' },
+          },
+        },
+      },
+    },
     async (request, reply) => {
       try {
         return await pluginEngine.getSettings(request.params.id);
@@ -40,7 +69,23 @@ export async function pluginRoutes(app: FastifyInstance) {
   // Update plugin settings (admin only)
   app.put<{ Params: { id: string }; Body: Record<string, unknown> }>(
     '/:id/settings',
-    { preHandler: [app.authenticate, requireAdmin] },
+    {
+      preHandler: [app.authenticate, requireAdmin],
+      schema: {
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: { type: 'string', description: 'Plugin identifier' },
+          },
+        },
+        body: {
+          type: 'object',
+          description: 'Plugin-specific settings (schema varies by plugin)',
+          additionalProperties: true,
+        },
+      },
+    },
     async (request, reply) => {
       try {
         await pluginEngine.updateSettings(request.params.id, request.body);
@@ -54,7 +99,18 @@ export async function pluginRoutes(app: FastifyInstance) {
   // Get UI contributions for a hook point (authenticated)
   app.get<{ Params: { hookPoint: string } }>(
     '/ui/:hookPoint',
-    { preHandler: [app.authenticate] },
+    {
+      preHandler: [app.authenticate],
+      schema: {
+        params: {
+          type: 'object',
+          required: ['hookPoint'],
+          properties: {
+            hookPoint: { type: 'string', description: 'UI hook point identifier' },
+          },
+        },
+      },
+    },
     async (request) => {
       return pluginEngine.getUIContributions(request.params.hookPoint);
     }
