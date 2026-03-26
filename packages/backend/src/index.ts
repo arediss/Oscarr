@@ -15,17 +15,21 @@ import { requestRoutes } from './routes/requests.js';
 import { mediaRoutes } from './routes/media.js';
 import { radarrSonarrRoutes } from './routes/radarr-sonarr.js';
 import { adminRoutes } from './routes/admin.js';
+import { setupRoutes } from './routes/setup.js';
+import { appRoutes } from './routes/app.js';
 import { supportRoutes } from './routes/support.js';
 import { authenticate } from './middleware/auth.js';
 import { requireAdmin } from './middleware/auth.js';
 import { initScheduler } from './services/scheduler.js';
 import { pluginEngine } from './plugins/engine.js';
 import { pluginRoutes } from './plugins/routes.js';
+import { loadInstallState } from './utils/install.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = Fastify({ logger: true });
 
 async function start() {
+  loadInstallState();
   await app.register(cors, {
     origin: process.env.FRONTEND_URL || 'http://localhost:5173',
     credentials: true,
@@ -124,6 +128,8 @@ async function start() {
   await app.register(mediaRoutes, { prefix: '/api/media' });
   await app.register(radarrSonarrRoutes, { prefix: '/api/services' });
   await app.register(adminRoutes, { prefix: '/api/admin' });
+  await app.register(setupRoutes, { prefix: '/api/setup' });
+  await app.register(appRoutes, { prefix: '/api/app' });
   await app.register(supportRoutes, { prefix: '/api/support' });
 
   // Load plugins and register their routes
