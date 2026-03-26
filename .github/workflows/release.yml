@@ -122,6 +122,9 @@ jobs:
         env:
           INPUT_TAG: ${{ inputs.tag }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Create and push multi-arch manifest
         run: |
           SRC_AMD64="${REGISTRY}/${IMAGE_NAME}:build-linux-amd64"
@@ -129,8 +132,7 @@ jobs:
           for TAG in $TAGS; do
             FULL="${REGISTRY}/${IMAGE_NAME}:${TAG}"
             echo "Creating manifest for ${FULL}"
-            docker manifest create "${FULL}" "${SRC_AMD64}" "${SRC_ARM64}"
-            docker manifest push "${FULL}"
+            docker buildx imagetools create -t "${FULL}" "${SRC_AMD64}" "${SRC_ARM64}"
           done
         env:
           TAGS: ${{ steps.tags.outputs.tags }}
