@@ -62,7 +62,32 @@ export async function adminRoutes(app: FastifyInstance) {
     return settings;
   });
 
-  app.put('/settings', async (request, reply) => {
+  app.put('/settings', {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          defaultQualityProfile: { type: 'number', description: 'Default quality profile ID' },
+          defaultMovieFolder: { type: 'string', description: 'Default root folder for movies' },
+          defaultTvFolder: { type: 'string', description: 'Default root folder for TV shows' },
+          defaultAnimeFolder: { type: 'string', description: 'Default root folder for anime' },
+          plexMachineId: { type: 'string', description: 'Plex server machine identifier' },
+          discordWebhookUrl: { type: 'string', description: 'Discord webhook URL for notifications' },
+          telegramBotToken: { type: 'string', description: 'Telegram bot token for notifications' },
+          telegramChatId: { type: 'string', description: 'Telegram chat ID for notifications' },
+          resendApiKey: { type: 'string', description: 'Resend API key for email notifications' },
+          resendFromEmail: { type: 'string', description: 'Sender email address for Resend' },
+          resendToEmail: { type: 'string', description: 'Recipient email address for Resend' },
+          notificationMatrix: { type: 'string', description: 'JSON matrix mapping event types to notification channels' },
+          autoApproveRequests: { type: 'boolean', description: 'Automatically approve all requests' },
+          requestsEnabled: { type: 'boolean', description: 'Enable the request system' },
+          supportEnabled: { type: 'boolean', description: 'Enable the support/ticket system' },
+          calendarEnabled: { type: 'boolean', description: 'Enable the calendar feature' },
+          siteName: { type: 'string', description: 'Custom site name' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const body = request.body as {
       defaultQualityProfile?: number;
@@ -140,7 +165,20 @@ export async function adminRoutes(app: FastifyInstance) {
     return services.map((s) => ({ ...s, config: JSON.parse(s.config) }));
   });
 
-  app.post('/services', async (request, reply) => {
+  app.post('/services', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['name', 'type', 'config'],
+        properties: {
+          name: { type: 'string', description: 'Service display name' },
+          type: { type: 'string', description: 'Service type (radarr, sonarr, plex, qbittorrent, tautulli, trackarr)' },
+          config: { type: 'object', description: 'Service-specific configuration (url, apiKey, token, etc.)' },
+          isDefault: { type: 'boolean', description: 'Set as the default service for its type' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { name, type, config, isDefault } = request.body as {
       name: string; type: string; config: Record<string, string>; isDefault?: boolean;
@@ -159,7 +197,26 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.status(201).send({ ...service, config: JSON.parse(service.config) });
   });
 
-  app.put('/services/:id', async (request, reply) => {
+  app.put('/services/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Service ID' },
+        },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Service display name' },
+          config: { type: 'object', description: 'Service-specific configuration' },
+          isDefault: { type: 'boolean', description: 'Set as the default service for its type' },
+          enabled: { type: 'boolean', description: 'Enable or disable the service' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
@@ -186,7 +243,17 @@ export async function adminRoutes(app: FastifyInstance) {
     return { ...service, config: JSON.parse(service.config) };
   });
 
-  app.delete('/services/:id', async (request, reply) => {
+  app.delete('/services/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Service ID' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
@@ -196,7 +263,17 @@ export async function adminRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/services/:id/test', async (request, reply) => {
+  app.post('/services/:id/test', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Service ID' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
@@ -310,7 +387,16 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // === BANNER ===
 
-  app.put('/banner', async (request, reply) => {
+  app.put('/banner', {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          banner: { type: ['string', 'null'], description: 'Incident banner message, or null to clear' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { banner } = request.body as { banner: string | null };
     await prisma.appSettings.upsert({
@@ -331,7 +417,23 @@ export async function adminRoutes(app: FastifyInstance) {
     return prisma.folderRule.findMany({ orderBy: { priority: 'asc' } });
   });
 
-  app.post('/folder-rules', async (request, reply) => {
+  app.post('/folder-rules', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['name', 'mediaType', 'conditions', 'folderPath'],
+        properties: {
+          name: { type: 'string', description: 'Rule display name' },
+          mediaType: { type: 'string', description: 'Media type this rule applies to (movie, tv)' },
+          conditions: { type: 'array', description: 'Array of condition objects for matching' },
+          folderPath: { type: 'string', description: 'Target root folder path' },
+          seriesType: { type: 'string', description: 'Series type filter (e.g. anime)' },
+          priority: { type: 'number', description: 'Rule priority (lower = higher priority)' },
+          serviceId: { type: 'number', description: 'Associated service ID' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { name, mediaType, conditions, folderPath, seriesType, priority, serviceId } = request.body as {
       name: string; mediaType: string; conditions: unknown[]; folderPath: string; seriesType?: string; priority?: number; serviceId?: number;
@@ -353,7 +455,29 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.status(201).send(rule);
   });
 
-  app.put('/folder-rules/:id', async (request, reply) => {
+  app.put('/folder-rules/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Folder rule ID' },
+        },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Rule display name' },
+          mediaType: { type: 'string', description: 'Media type this rule applies to' },
+          conditions: { type: 'array', description: 'Array of condition objects for matching' },
+          folderPath: { type: 'string', description: 'Target root folder path' },
+          seriesType: { type: 'string', description: 'Series type filter (e.g. anime)' },
+          priority: { type: 'number', description: 'Rule priority (lower = higher priority)' },
+          serviceId: { type: ['number', 'null'], description: 'Associated service ID, or null to unset' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
     const ruleId = parseId(id);
@@ -376,7 +500,17 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.send(rule);
   });
 
-  app.delete('/folder-rules/:id', async (request, reply) => {
+  app.delete('/folder-rules/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Folder rule ID' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
     const ruleId = parseId(id);
@@ -474,7 +608,24 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // Change user role
-  app.put('/users/:id/role', async (request, reply) => {
+  app.put('/users/:id/role', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'User ID' },
+        },
+      },
+      body: {
+        type: 'object',
+        required: ['role'],
+        properties: {
+          role: { type: 'string', enum: ['admin', 'user'], description: 'New role for the user' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
     const userId = parseId(id);
@@ -497,7 +648,18 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // === LOGS ===
 
-  app.get('/logs', async (request, reply) => {
+  app.get('/logs', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'string', description: 'Page number (defaults to 1)' },
+          level: { type: 'string', enum: ['info', 'warn', 'error'], description: 'Filter logs by level' },
+          label: { type: 'string', description: 'Filter logs by label' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { page, level, label } = request.query as { page?: string; level?: string; label?: string };
     const pageNum = parseInt(page || '1', 10) || 1;
@@ -528,7 +690,24 @@ export async function adminRoutes(app: FastifyInstance) {
     return prisma.cronJob.findMany({ orderBy: { key: 'asc' } });
   });
 
-  app.put('/jobs/:key', async (request, reply) => {
+  app.put('/jobs/:key', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['key'],
+        properties: {
+          key: { type: 'string', description: 'Cron job key identifier' },
+        },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          cronExpression: { type: 'string', description: 'Cron expression for scheduling' },
+          enabled: { type: 'boolean', description: 'Enable or disable the job' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { key } = request.params as { key: string };
     const { cronExpression, enabled } = request.body as { cronExpression?: string; enabled?: boolean };
@@ -549,7 +728,17 @@ export async function adminRoutes(app: FastifyInstance) {
     return job;
   });
 
-  app.post('/jobs/:key/run', async (request, reply) => {
+  app.post('/jobs/:key/run', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['key'],
+        properties: {
+          key: { type: 'string', description: 'Cron job key identifier' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { key } = request.params as { key: string };
     try {
@@ -592,7 +781,17 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // === NOTIFICATION TESTS ===
 
-  app.post('/notifications/test/discord', async (request, reply) => {
+  app.post('/notifications/test/discord', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['webhookUrl'],
+        properties: {
+          webhookUrl: { type: 'string', description: 'Discord webhook URL to test' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { webhookUrl } = request.body as { webhookUrl: string };
     if (!webhookUrl) return reply.status(400).send({ error: 'URL webhook requise' });
@@ -604,7 +803,18 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/notifications/test/telegram', async (request, reply) => {
+  app.post('/notifications/test/telegram', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['botToken', 'chatId'],
+        properties: {
+          botToken: { type: 'string', description: 'Telegram bot token to test' },
+          chatId: { type: 'string', description: 'Telegram chat ID to test' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { botToken, chatId } = request.body as { botToken: string; chatId: string };
     if (!botToken || !chatId) return reply.status(400).send({ error: 'Bot token et chat ID requis' });
@@ -616,7 +826,19 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/notifications/test/email', async (request, reply) => {
+  app.post('/notifications/test/email', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['apiKey', 'from', 'to'],
+        properties: {
+          apiKey: { type: 'string', description: 'Resend API key to test' },
+          from: { type: 'string', description: 'Sender email address' },
+          to: { type: 'string', description: 'Recipient email address' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { apiKey, from, to } = request.body as { apiKey: string; from: string; to: string };
     if (!apiKey || !from || !to) return reply.status(400).send({ error: 'API key, from et to requis' });
@@ -642,7 +864,18 @@ export async function adminRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/quality-options', async (request, reply) => {
+  app.post('/quality-options', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['label'],
+        properties: {
+          label: { type: 'string', description: 'Quality option label (e.g. SD, HD, 4K)' },
+          position: { type: 'number', description: 'Display order position' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { label, position } = request.body as { label: string; position?: number };
     if (!label) return reply.status(400).send({ error: 'Label requis' });
@@ -653,7 +886,24 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.status(201).send(option);
   });
 
-  app.put('/quality-options/:id', async (request, reply) => {
+  app.put('/quality-options/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Quality option ID' },
+        },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          label: { type: 'string', description: 'Quality option label' },
+          position: { type: 'number', description: 'Display order position' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
     const optionId = parseId(id);
@@ -669,7 +919,17 @@ export async function adminRoutes(app: FastifyInstance) {
     return option;
   });
 
-  app.delete('/quality-options/:id', async (request, reply) => {
+  app.delete('/quality-options/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Quality option ID' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
     const optionId = parseId(id);
@@ -711,7 +971,20 @@ export async function adminRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/quality-mappings', async (request, reply) => {
+  app.post('/quality-mappings', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['qualityOptionId', 'serviceId', 'qualityProfileId', 'qualityProfileName'],
+        properties: {
+          qualityOptionId: { type: 'number', description: 'Quality option ID to map' },
+          serviceId: { type: 'number', description: 'Service ID (Radarr/Sonarr) to map' },
+          qualityProfileId: { type: 'number', description: 'Quality profile ID in the service' },
+          qualityProfileName: { type: 'string', description: 'Quality profile display name in the service' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { qualityOptionId, serviceId, qualityProfileId, qualityProfileName } = request.body as {
       qualityOptionId: number; serviceId: number; qualityProfileId: number; qualityProfileName: string;
@@ -736,7 +1009,17 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.status(201).send(mapping);
   });
 
-  app.delete('/quality-mappings/:id', async (request, reply) => {
+  app.delete('/quality-mappings/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Quality mapping ID' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
     const mappingId = parseId(id);
@@ -767,7 +1050,17 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // Delete a specific user (and cascade their requests/tickets)
-  app.delete('/danger/users/:id', async (request, reply) => {
+  app.delete('/danger/users/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'User ID to delete' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
     const userId = parseId(id);
@@ -795,7 +1088,17 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // === SERVICE PROFILES (fetch quality profiles from a specific service) ===
 
-  app.get('/services/:id/profiles', async (request, reply) => {
+  app.get('/services/:id/profiles', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Service ID' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
