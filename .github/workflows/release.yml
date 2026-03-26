@@ -57,8 +57,8 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-${{ steps.slug.outputs.pair }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache-${{ steps.slug.outputs.pair }}
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache-${{ steps.slug.outputs.pair }},mode=max
+          cache-from: type=local,src=/tmp/docker-cache
+          cache-to: type=local,dest=/tmp/docker-cache,mode=max
 
   # Trivy scan on the amd64 image (representative of both)
   scan:
