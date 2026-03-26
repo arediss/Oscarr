@@ -21,14 +21,19 @@ env:
   IMAGE_NAME: arediss/oscarr
 
 jobs:
-  build-scan-push:
-    name: Build, Scan & Push
-    runs-on: ubuntu-latest
+  # Build each platform natively on its own runner
+  build:
+    name: Build (${{ matrix.platform }})
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: [self-hosted, Linux, X64]
+          - platform: linux/arm64
+            runner: [self-hosted, macOS, ARM64]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up QEMU (multi-platform)
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -40,45 +45,33 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Determine image tags
-        id: tags
-        run: |
-          TAGS="${REGISTRY}/${IMAGE_NAME}:latest"
-          # From workflow_dispatch input
-          if [ -n "$INPUT_TAG" ]; then
-            TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:${INPUT_TAG}"
-          fi
-          # From git tag (v1.2.3 → 1.2.3, 1.2, 1)
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/v}"
-            TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:${VERSION}"
-            MINOR="${VERSION%.*}"
-            if [ "$MINOR" != "$VERSION" ]; then
-              TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:${MINOR}"
-              MAJOR="${MINOR%.*}"
-              if [ "$MAJOR" != "$MINOR" ]; then
-                TAGS="${TAGS},${REGISTRY}/${IMAGE_NAME}:${MAJOR}"
-              fi
-            fi
-          fi
-          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
+      - name: Platform slug
+        id: slug
+        run: echo "pair=$(echo '${{ matrix.platform }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
 
-      # Build for scanning first (single platform, loadable)
-      - name: Build image for scan
+      - name: Build & push single-platform digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          load: true
-          tags: oscarr:scan
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-${{ steps.slug.outputs.pair }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache-${{ steps.slug.outputs.pair }}
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache-${{ steps.slug.outputs.pair }},mode=max
+
+  # Trivy scan on the amd64 image (representative of both)
+  scan:
+    name: Trivy Scan
+    needs: build
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: oscarr:scan
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-linux-amd64
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
@@ -91,13 +84,53 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
 
-      # Build and push multi-platform (only if scan passed)
-      - name: Build & push multi-platform
-        uses: docker/build-push-action@v6
+  # Merge platform images into a single multi-arch manifest
+  manifest:
+    name: Create multi-arch manifest
+    needs: [build, scan]
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
         with:
-          context: .
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.tags.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tags
+        id: tags
+        run: |
+          TAGS="latest"
+          if [ -n "$INPUT_TAG" ]; then
+            TAGS="${TAGS} ${INPUT_TAG}"
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            TAGS="${TAGS} ${VERSION}"
+            MINOR="${VERSION%.*}"
+            if [ "$MINOR" != "$VERSION" ]; then
+              TAGS="${TAGS} ${MINOR}"
+              MAJOR="${MINOR%.*}"
+              if [ "$MAJOR" != "$MINOR" ]; then
+                TAGS="${TAGS} ${MAJOR}"
+              fi
+            fi
+          fi
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+
+      - name: Create and push multi-arch manifest
+        run: |
+          SRC_AMD64="${REGISTRY}/${IMAGE_NAME}:build-linux-amd64"
+          SRC_ARM64="${REGISTRY}/${IMAGE_NAME}:build-linux-arm64"
+          for TAG in $TAGS; do
+            FULL="${REGISTRY}/${IMAGE_NAME}:${TAG}"
+            echo "Creating manifest for ${FULL}"
+            docker manifest create "${FULL}" "${SRC_AMD64}" "${SRC_ARM64}"
+            docker manifest push "${FULL}"
+          done
+        env:
+          TAGS: ${{ steps.tags.outputs.tags }}
