@@ -30,6 +30,7 @@ export default {
         'slide-up': 'slideUp 0.3s ease-out',
         'slide-in-right': 'slideInRight 0.3s ease-out',
         shimmer: 'shimmer 2s infinite',
+        shake: 'shake 0.4s ease-in-out',
       },
       keyframes: {
         fadeIn: {
@@ -47,6 +48,11 @@ export default {
         shimmer: {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
+        },
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '15%, 45%, 75%': { transform: 'translateX(-6px)' },
+          '30%, 60%, 90%': { transform: 'translateX(6px)' },
         },
       },
     },

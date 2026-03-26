@@ -30,7 +30,7 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
 
   const refreshFeatures = useCallback(async () => {
     try {
-      const { data } = await api.get('/support/features');
+      const { data } = await api.get('/app/features');
       setFeatures(data);
     } catch {
       // Keep current state on error

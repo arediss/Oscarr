@@ -1150,7 +1150,7 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
     label: 'Radarr',
     icon: '/radarr.png',
     fields: [
-      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://192.168.1.50:7878' },
+      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:7878' },
       { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
     ],
   },
@@ -1158,7 +1158,7 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
     label: 'Sonarr',
     icon: '/sonarr.png',
     fields: [
-      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://192.168.1.50:8989' },
+      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:8989' },
       { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
     ],
   },
@@ -1166,7 +1166,7 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
     label: 'Plex',
     icon: '/plex.png',
     fields: [
-      { key: 'url', labelKey: 'admin.services.server_url', type: 'text', placeholder: 'http://192.168.1.50:32400' },
+      { key: 'url', labelKey: 'admin.services.server_url', type: 'text', placeholder: 'http://localhost:32400' },
       { key: 'token', labelKey: 'common.token', type: 'password' },
       { key: 'machineId', labelKey: 'install.machine_id', type: 'text' },
     ],
@@ -1184,7 +1184,7 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
     label: 'Tautulli',
     icon: '/tautulli.svg',
     fields: [
-      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://192.168.1.50:8181' },
+      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:8181' },
       { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
     ],
   },
@@ -1192,7 +1192,7 @@ const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
     label: 'Trackarr',
     icon: '/trackarr.svg',
     fields: [
-      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://192.168.1.50:7333' },
+      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:7333' },
       { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
     ],
   },
@@ -1756,8 +1756,8 @@ function GeneralTab() {
         setCalendarEnabled(data.calendarEnabled ?? true);
         setSiteName(data.siteName ?? 'Oscarr');
       }),
-      api.get('/support/banner').then(({ data }) => setBannerText(data.banner || '')),
-      api.get('/support/version').then(({ data }) => setVersionInfo(data)),
+      api.get('/app/banner').then(({ data }) => setBannerText(data.banner || '')),
+      api.get('/app/version').then(({ data }) => setVersionInfo(data)),
     ]).catch(() => {}).finally(() => setLoading(false));
   }, []);
 

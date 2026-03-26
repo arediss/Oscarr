@@ -65,7 +65,7 @@ export default function MediaDetailPage({ type }: Props) {
   }, []);
 
   useEffect(() => {
-    api.get('/support/quality-options').then(({ data }) => setQualityOptions(data)).catch(() => {});
+    api.get('/app/quality-options').then(({ data }) => setQualityOptions(data)).catch(() => {});
   }, []);
 
   useEffect(() => {
