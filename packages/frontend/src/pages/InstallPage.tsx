@@ -22,6 +22,7 @@ export default function InstallPage() {
   const [checking, setChecking] = useState(true);
   const [setupSecret, setSetupSecret] = useState('');
   const [secretValid, setSecretValid] = useState(false);
+  const [secretShake, setSecretShake] = useState(false);
   const [url, setUrl] = useState('');
   const [token, setToken] = useState('');
   const [machineId, setMachineId] = useState('');
@@ -269,7 +270,7 @@ export default function InstallPage() {
             ))}
           </div>
 
-          {error && (
+          {error && secretValid && (
             <div className="mb-6 p-3 bg-ndp-danger/10 border border-ndp-danger/20 rounded-xl text-ndp-danger text-sm text-center">
               {error}
             </div>
@@ -277,15 +278,29 @@ export default function InstallPage() {
 
           {/* Setup Secret Gate */}
           {step === 0 && !secretValid && (
-            <div className="space-y-4 animate-fade-in">
+            <form className="space-y-4 animate-fade-in" onSubmit={async (e) => {
+              e.preventDefault();
+              if (!setupSecret) return;
+              sessionStorage.setItem('setup-secret', setupSecret);
+              setError('');
+              try {
+                await api.post('/setup/verify-secret');
+                setSecretValid(true);
+              } catch {
+                setError(t('install.setup_secret_invalid', 'Invalid setup secret.'));
+                sessionStorage.removeItem('setup-secret');
+                setSecretShake(true);
+              }
+            }}>
               <div>
                 <label className="text-sm text-ndp-text mb-1.5 block font-medium">{t('install.setup_secret', 'Setup Secret')}</label>
                 <input
                   type="password"
                   value={setupSecret}
-                  onChange={(e) => setSetupSecret(e.target.value)}
+                  onChange={(e) => { setSetupSecret(e.target.value); setError(''); }}
                   placeholder="SETUP_SECRET"
-                  className="input w-full"
+                  className={`input w-full ${secretShake ? 'animate-shake border-ndp-danger' : ''}`}
+                  onAnimationEnd={() => setSecretShake(false)}
                   autoFocus
                 />
                 <p className="text-xs text-ndp-text-dim mt-1.5">
@@ -296,17 +311,13 @@ export default function InstallPage() {
                 <div className="text-xs px-3 py-2 rounded-lg bg-ndp-danger/10 text-ndp-danger">{error}</div>
               )}
               <button
-                onClick={() => {
-                  sessionStorage.setItem('setup-secret', setupSecret);
-                  setError('');
-                  setSecretValid(true);
-                }}
+                type="submit"
                 disabled={!setupSecret}
                 className="btn-primary flex items-center gap-2 text-sm w-full justify-center"
               >
                 {t('common.next')}
               </button>
-            </div>
+            </form>
           )}
 
           {/* Step 0: URL */}
@@ -318,7 +329,7 @@ export default function InstallPage() {
                   type="text"
                   value={url}
                   onChange={(e) => { setUrl(e.target.value); setTestOk(null); }}
-                  placeholder="http://192.168.1.50:32400"
+                  placeholder="http://localhost:32400"
                   className="input w-full"
                   autoFocus
                 />
@@ -494,7 +505,7 @@ export default function InstallPage() {
                       type="text"
                       value={svc.url}
                       onChange={(e) => updateArrService(svc.id, { url: e.target.value })}
-                      placeholder="http://192.168.1.50:7878"
+                      placeholder="http://localhost:7878"
                       className="input w-full text-sm"
                     />
                     <input

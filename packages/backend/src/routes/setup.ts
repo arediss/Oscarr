@@ -38,6 +38,11 @@ export async function setupRoutes(app: FastifyInstance) {
     await requireSetupSecret(request, reply);
   });
 
+  // Verify setup secret — lightweight check for the frontend
+  app.post('/verify-secret', async () => {
+    return { ok: true };
+  });
+
   // Plex OAuth for setup — just get a token without creating a user
   app.post('/plex-pin', async (_request, reply) => {
     const { createPlexPin } = await import('../services/plex.js');
