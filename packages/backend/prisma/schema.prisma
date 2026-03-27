@@ -23,6 +23,7 @@ model User {
   approvedRequests      MediaRequest[] @relation("ApprovedBy")
   supportTickets        SupportTicket[]
   ticketMessages        TicketMessage[]
+  notifications         UserNotification[]
 }
 
 model Media {
@@ -226,4 +227,20 @@ model PluginState {
   settings      String    @default("{}") // JSON blob for plugin-specific settings
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+model UserNotification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  type      String   // "request_approved" | "request_declined" | "media_available" | "plugin:xxx"
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  metadata  String?  // JSON (mediaId, requestId, tmdbId, etc.)
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([createdAt])
 }

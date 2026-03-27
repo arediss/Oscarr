@@ -369,5 +369,16 @@
   "plugin.no_settings": "This plugin has no configurable settings.",
   "plugin.load_error": "Loading error",
   "plugin.save_error": "Save error",
-  "plugin.saved": "Saved!"
+  "plugin.saved": "Saved!",
+
+  "notifications.title": "Notifications",
+  "notifications.mark_all_read": "Mark all as read",
+  "notifications.mark_read": "Mark as read",
+  "notifications.dismiss": "Delete",
+  "notifications.no_notifications": "No notifications",
+  "notifications.just_now": "Just now",
+  "notifications.request_approved": "Request approved",
+  "notifications.request_declined": "Request declined",
+  "notifications.media_available": "Media available",
+  "notifications.support_reply": "Support reply"
 }
