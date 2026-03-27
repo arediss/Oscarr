@@ -2,6 +2,7 @@ import { prisma } from '../utils/prisma.js';
 import { getRadarrAsync, type RadarrMovie } from './radarr.js';
 import { getSonarrAsync, type SonarrSeries } from './sonarr.js';
 import { sendNotification, logEvent } from './notifications.js';
+import { sendUserNotification } from './userNotifications.js';
 import { getServiceConfig } from '../utils/services.js';
 
 export interface SyncResult {
@@ -56,6 +57,7 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
               mediaType: 'movie',
               posterPath: posterPath || existing.posterPath,
             }).catch(err => console.error('[Notification] Failed:', err));
+            notifyRequesters(existing.id, existing.title || movie.title, 'movie', existing.tmdbId).catch(err => console.error('[UserNotification] Failed:', err));
           }
           await prisma.media.update({
             where: { id: existing.id },
@@ -178,6 +180,7 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
               mediaType: 'tv',
               posterPath: posterPath || existing.posterPath,
             }).catch(err => console.error('[Notification] Failed:', err));
+            notifyRequesters(existing.id, existing.title || show.title, 'tv', existing.tmdbId).catch(err => console.error('[UserNotification] Failed:', err));
           }
           await prisma.media.update({
             where: { id: existing.id },
@@ -426,6 +429,21 @@ function getSeasonStatus(season: { monitored: boolean; statistics?: { percentOfE
   if (season.statistics.episodeFileCount > 0) return 'processing';
   if (season.monitored) return 'pending';
   return 'unknown';
+}
+
+async function notifyRequesters(mediaId: number, title: string, mediaType: string, tmdbId: number): Promise<void> {
+  const requests = await prisma.mediaRequest.findMany({
+    where: { mediaId, status: { in: ['approved', 'processing'] } },
+    select: { userId: true },
+  });
+  for (const req of requests) {
+    await sendUserNotification(req.userId, {
+      type: 'media_available',
+      title,
+      message: `"${title}" est maintenant disponible.`,
+      metadata: { mediaId, tmdbId, mediaType },
+    });
+  }
 }
 
 function extractTmdbPath(url: string): string | null {

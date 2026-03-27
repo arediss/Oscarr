@@ -18,6 +18,7 @@ import { adminRoutes } from './routes/admin.js';
 import { setupRoutes } from './routes/setup.js';
 import { appRoutes } from './routes/app.js';
 import { supportRoutes } from './routes/support.js';
+import { notificationRoutes } from './routes/notifications.js';
 import { authenticate } from './middleware/auth.js';
 import { requireAdmin } from './middleware/auth.js';
 import { initScheduler } from './services/scheduler.js';
@@ -131,6 +132,7 @@ async function start() {
   await app.register(setupRoutes, { prefix: '/api/setup' });
   await app.register(appRoutes, { prefix: '/api/app' });
   await app.register(supportRoutes, { prefix: '/api/support' });
+  await app.register(notificationRoutes, { prefix: '/api/notifications' });
 
   // Load plugins and register their routes
   await pluginEngine.loadAll();

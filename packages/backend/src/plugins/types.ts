@@ -50,6 +50,7 @@ export interface PluginContext {
   getSetting(key: string): Promise<unknown>;
   setSetting(key: string, value: unknown): Promise<void>;
   sendNotification(type: string, data: NotificationData): Promise<void>;
+  sendUserNotification(userId: number, payload: { type: string; title: string; message: string; metadata?: Record<string, unknown> }): Promise<void>;
 }
 
 // ─── Plugin Registration (what register() returns) ──────────────────
