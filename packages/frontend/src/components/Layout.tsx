@@ -19,6 +19,7 @@ import {
   Globe,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import NotificationBell from '@/components/NotificationBell';
 import { PluginSlot } from '@/plugins/PluginSlot';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
 import { useFeatures } from '@/context/FeaturesContext';
@@ -186,6 +187,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               >
                 <Search className="w-5 h-5" />
               </button>
+
+              {/* Notification bell */}
+              <NotificationBell />
 
               {/* Avatar with dropdown */}
               <div className="relative" ref={avatarMenuRef}>

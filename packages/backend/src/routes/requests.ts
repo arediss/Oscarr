@@ -5,6 +5,7 @@ import { getSonarrAsync, getSonarrForService, createSonarrFromConfig } from '../
 import { getMovieDetails, getTvDetails, getCollection } from '../services/tmdb.js';
 import { matchFolderRule } from '../services/folderRules.js';
 import { sendNotification, logEvent } from '../services/notifications.js';
+import { sendUserNotification } from '../services/userNotifications.js';
 import { getServiceById, getAllServices } from '../utils/services.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 
@@ -211,6 +212,9 @@ export async function requestRoutes(app: FastifyInstance) {
     // Notify
     const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { plexUsername: true } });
     sendNotification('request_new', { title, mediaType: validMediaType, username: dbUser?.plexUsername || 'Utilisateur', posterPath: tmdbData.poster_path, tmdbId: tmdbData.id }).catch(err => console.error('[Notification] Failed:', err));
+    if (shouldAutoApprove) {
+      sendUserNotification(user.id, { type: 'request_approved', title, message: `Votre demande pour "${title}" a été approuvée automatiquement.`, metadata: { mediaId: media.id, tmdbId: tmdbData.id, mediaType: validMediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
+    }
     logEvent('info', 'Request', `${dbUser?.plexUsername} a demandé "${title}"`);
 
     return reply.status(201).send(mediaRequest);
@@ -261,6 +265,7 @@ export async function requestRoutes(app: FastifyInstance) {
     });
 
     sendNotification('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.plexUsername || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
+    sendUserNotification(updated.user.id, { type: 'request_approved', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été approuvée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
     logEvent('info', 'Request', `Demande "${updated.media.title}" approuvée`);
 
     return reply.send(updated);
@@ -297,6 +302,7 @@ export async function requestRoutes(app: FastifyInstance) {
     });
 
     sendNotification('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.plexUsername || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
+    sendUserNotification(updated.user.id, { type: 'request_declined', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été refusée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
     logEvent('info', 'Request', `Demande "${updated.media.title}" refusée`);
 
     return reply.send(updated);

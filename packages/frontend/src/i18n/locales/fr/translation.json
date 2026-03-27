@@ -369,5 +369,16 @@
   "plugin.no_settings": "Ce plugin n'a pas de paramètres configurables.",
   "plugin.load_error": "Erreur de chargement",
   "plugin.save_error": "Erreur de sauvegarde",
-  "plugin.saved": "Sauvegardé !"
+  "plugin.saved": "Sauvegardé !",
+
+  "notifications.title": "Notifications",
+  "notifications.mark_all_read": "Tout marquer comme lu",
+  "notifications.mark_read": "Marquer comme lu",
+  "notifications.dismiss": "Supprimer",
+  "notifications.no_notifications": "Aucune notification",
+  "notifications.just_now": "À l'instant",
+  "notifications.request_approved": "Demande approuvée",
+  "notifications.request_declined": "Demande refusée",
+  "notifications.media_available": "Média disponible",
+  "notifications.support_reply": "Réponse support"
 }
