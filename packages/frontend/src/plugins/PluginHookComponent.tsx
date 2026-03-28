@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, Component as ReactComponent } from 'react';
 import type { PluginUIContribution } from './types';
 
 interface Props {
@@ -8,30 +8,66 @@ interface Props {
   contribution: PluginUIContribution;
 }
 
-const componentCache = new Map<string, React.LazyExoticComponent<React.ComponentType<{ contribution: PluginUIContribution; context: Record<string, unknown> }>>>();
+const componentCache = new Map<string, React.ComponentType<any> | null>();
 
-function getHookComponent(pluginId: string, hookPoint: string) {
-  const cacheKey = `${pluginId}:${hookPoint}`;
-  if (!componentCache.has(cacheKey)) {
-    const LazyComponent = lazy(() =>
-      import(`../../plugins/${pluginId}/frontend/hooks/${hookPoint}.tsx`).catch(() => ({
-        default: () => null,
-      }))
-    );
-    componentCache.set(cacheKey, LazyComponent);
+async function loadPluginModule(pluginId: string, path: string): Promise<React.ComponentType<any> | null> {
+  try {
+    const module = await import(/* @vite-ignore */ `/api/plugins/${pluginId}/frontend/${path}.js`);
+    return module.default || null;
+  } catch {
+    return null;
   }
-  return componentCache.get(cacheKey)!;
+}
+
+// Error boundary — plugin crash never breaks the host app
+class PluginErrorBoundary extends ReactComponent<{ children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error) {
+    console.warn('[Plugin] Component error:', error.message);
+  }
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
+function PluginRenderer({ component: Comp, contribution, context }: {
+  component: React.ComponentType<any>;
+  contribution: PluginUIContribution;
+  context: Record<string, unknown>;
+}) {
+  return (
+    <PluginErrorBoundary>
+      <Comp contribution={contribution} context={context} />
+    </PluginErrorBoundary>
+  );
 }
 
 export function PluginHookComponent({ pluginId, hookPoint, context, contribution }: Props) {
-  const Component = useMemo(
-    () => getHookComponent(pluginId, hookPoint),
-    [pluginId, hookPoint]
-  );
+  const cacheKey = `${pluginId}:${hookPoint}`;
+  const [ready, setReady] = useState(false);
+  const [Comp, setComp] = useState<React.ComponentType<any> | null>(null);
 
-  return (
-    <Suspense fallback={null}>
-      <Component contribution={contribution} context={context} />
-    </Suspense>
-  );
+  useEffect(() => {
+    const cached = componentCache.get(cacheKey);
+    if (cached) {
+      setComp(() => cached);
+      setReady(true);
+      return;
+    }
+
+    let cancelled = false;
+    loadPluginModule(pluginId, `hooks/${hookPoint}`).then((loaded) => {
+      if (cancelled) return;
+      componentCache.set(cacheKey, loaded);
+      if (loaded) setComp(() => loaded);
+      setReady(true);
+    });
+    return () => { cancelled = true; };
+  }, [pluginId, hookPoint]);
+
+  if (!ready || !Comp) return null;
+
+  return <PluginRenderer component={Comp} contribution={contribution} context={context} />;
 }
