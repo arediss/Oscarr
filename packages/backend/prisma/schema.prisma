@@ -10,23 +10,36 @@ datasource db {
 model User {
   id                    Int       @id @default(autoincrement())
   email                 String    @unique
-  authProvider          String    @default("plex") // "plex" | "email" | "discord" | ...
   displayName           String?
   passwordHash          String?
-  plexId                Int?      @unique
-  plexToken             String?
-  plexUsername           String?
   avatar                String?
   role                  String    @default("user") // "admin" | "user"
-  hasPlexServerAccess   Boolean   @default(false)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  providers             UserProvider[]
   requests              MediaRequest[]
   approvedRequests      MediaRequest[] @relation("ApprovedBy")
   supportTickets        SupportTicket[]
   ticketMessages        TicketMessage[]
   notifications         UserNotification[]
+}
+
+model UserProvider {
+  id                Int       @id @default(autoincrement())
+  userId            Int
+  provider          String    // "plex" | "email" | "discord" | "jellyfin" | ...
+  providerId        String?   // External ID from the provider (plexId, discordId, etc.)
+  providerToken     String?   // OAuth token for API calls
+  providerUsername  String?   // Username from the provider
+  providerEmail     String?   // Email from the provider (may differ from user email)
+  createdAt         DateTime  @default(now())
+
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@unique([userId, provider])
+  @@index([userId])
 }
 
 model Media {

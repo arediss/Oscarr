@@ -1,12 +1,16 @@
+export interface UserProviderInfo {
+  provider: string;
+  username?: string | null;
+  email?: string | null;
+}
+
 export interface User {
   id: number;
   email: string;
   displayName: string | null;
   avatar: string | null;
   role: 'admin' | 'user';
-  authProvider?: string;
-  hasPlexServerAccess?: boolean;
-  plexId?: number | null;
+  providers?: UserProviderInfo[];
   createdAt?: string;
 }
 

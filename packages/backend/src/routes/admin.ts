@@ -4,7 +4,7 @@ import { getRadarrAsync, createRadarrFromConfig } from '../services/radarr.js';
 import { getSonarrAsync, createSonarrFromConfig } from '../services/sonarr.js';
 import { getServiceById } from '../utils/services.js';
 import { syncRadarr, syncSonarr, runFullSync, syncAvailabilityDates } from '../services/sync.js';
-import { getSharedServerUsers } from '../services/plex.js';
+import { getProvider } from './auth.js';
 import { syncRequestsFromTags } from '../services/requestSync.js';
 import { testDiscord, testTelegram, testEmail, sendNotification, logEvent } from '../services/notifications.js';
 import { triggerJob, updateJobSchedule } from '../services/scheduler.js';
@@ -80,6 +80,7 @@ export async function adminRoutes(app: FastifyInstance) {
           resendToEmail: { type: 'string', description: 'Recipient email address for Resend' },
           notificationMatrix: { type: 'string', description: 'JSON matrix mapping event types to notification channels' },
           autoApproveRequests: { type: 'boolean', description: 'Automatically approve all requests' },
+          registrationEnabled: { type: 'boolean', description: 'Allow new account registration' },
           requestsEnabled: { type: 'boolean', description: 'Enable the request system' },
           supportEnabled: { type: 'boolean', description: 'Enable the support/ticket system' },
           calendarEnabled: { type: 'boolean', description: 'Enable the calendar feature' },
@@ -103,6 +104,7 @@ export async function adminRoutes(app: FastifyInstance) {
       resendToEmail?: string;
       notificationMatrix?: string;
       autoApproveRequests?: boolean;
+      registrationEnabled?: boolean;
       requestsEnabled?: boolean;
       supportEnabled?: boolean;
       calendarEnabled?: boolean;
@@ -125,6 +127,7 @@ export async function adminRoutes(app: FastifyInstance) {
         resendToEmail: body.resendToEmail ?? undefined,
         notificationMatrix: body.notificationMatrix ?? undefined,
         autoApproveRequests: body.autoApproveRequests ?? undefined,
+        registrationEnabled: body.registrationEnabled ?? undefined,
         requestsEnabled: body.requestsEnabled ?? undefined,
         supportEnabled: body.supportEnabled ?? undefined,
         calendarEnabled: body.calendarEnabled ?? undefined,
@@ -145,6 +148,7 @@ export async function adminRoutes(app: FastifyInstance) {
         resendToEmail: body.resendToEmail,
         notificationMatrix: body.notificationMatrix,
         autoApproveRequests: body.autoApproveRequests,
+        registrationEnabled: body.registrationEnabled,
         requestsEnabled: body.requestsEnabled,
         supportEnabled: body.supportEnabled,
         calendarEnabled: body.calendarEnabled,
@@ -330,20 +334,12 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get('/plex-token', async (request, reply) => {
     await requireAdmin(request, reply);
-    // Prefer service config token, fallback to admin user token
-    const plexService = await prisma.service.findFirst({
-      where: { type: 'plex', enabled: true },
-    });
-    const plexConfig = plexService ? JSON.parse(plexService.config) : null;
-    if (plexConfig?.token) return { token: plexConfig.token };
-
+    const provider = getProvider('plex');
+    if (!provider?.getToken) return reply.status(404).send({ error: 'Provider Plex non disponible' });
     const adminUser = request.user as { id: number };
-    const admin = await prisma.user.findUnique({
-      where: { id: adminUser.id },
-      select: { plexToken: true },
-    });
-    if (!admin?.plexToken) return reply.status(404).send({ error: 'Aucun token Plex trouvé' });
-    return { token: admin.plexToken };
+    const token = await provider.getToken(adminUser.id);
+    if (!token) return reply.status(404).send({ error: 'Aucun token Plex trouvé' });
+    return { token };
   });
 
   // === SERVICE CONFIG (Radarr/Sonarr profiles & folders) ===
@@ -528,78 +524,77 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // === USER MANAGEMENT ===
 
-  // Import Plex friends as users
-  app.post('/users/import-plex', async (request, reply) => {
+  // Import users from a provider (e.g. Plex shared users, Jellyfin users)
+  app.post('/users/import/:provider', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['provider'],
+        properties: {
+          provider: { type: 'string', description: 'Provider ID (e.g. "plex")' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     await requireAdmin(request, reply);
+    const { provider: providerId } = request.params as { provider: string };
+    const authProvider = getProvider(providerId);
 
-    // Get Plex token: prefer service config, fallback to admin user token
-    const plexService = await prisma.service.findFirst({
-      where: { type: 'plex', enabled: true },
-    });
-    const plexConfig = plexService ? JSON.parse(plexService.config) : null;
-    let plexToken = plexConfig?.token || null;
-
-    if (!plexToken) {
-      const adminUser = request.user as { id: number };
-      const admin = await prisma.user.findUnique({
-        where: { id: adminUser.id },
-        select: { plexToken: true },
-      });
-      plexToken = admin?.plexToken || null;
+    if (!authProvider?.importUsers) {
+      return reply.status(400).send({ error: `Le provider "${providerId}" ne supporte pas l'import d'utilisateurs.` });
     }
 
-    if (!plexToken) {
-      return reply.status(400).send({ error: 'Aucun token Plex trouvé. Configurez un service Plex dans les paramètres.' });
+    const adminUser = request.user as { id: number };
+    try {
+      const result = await authProvider.importUsers(adminUser.id);
+      return result;
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg === 'NO_TOKEN') return reply.status(400).send({ error: `Aucun token ${providerId} trouvé. Configurez le service dans les paramètres.` });
+      if (msg === 'NO_MACHINE_ID') return reply.status(400).send({ error: `Aucun serveur ${providerId} configuré.` });
+      console.error(`Failed to import ${providerId} users:`, err);
+      logEvent('error', 'User', `Import ${providerId} échoué : ${err}`);
+      return reply.status(502).send({ error: `Impossible de récupérer les utilisateurs ${providerId}` });
     }
+  });
 
-    // Get server machine ID to query shared users
-    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-    if (!settings?.plexMachineId) {
-      return reply.status(400).send({ error: 'Aucun serveur Plex configuré. Configurez le Machine ID dans les paramètres.' });
+  // Link a provider to a user (admin only)
+  app.post('/users/:id/link-provider', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', description: 'User ID' } },
+      },
+      body: {
+        type: 'object',
+        required: ['provider', 'pinId'],
+        properties: {
+          provider: { type: 'string', description: 'Provider ID (e.g. "plex")' },
+          pinId: { type: 'number', description: 'OAuth PIN ID' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    await requireAdmin(request, reply);
+    const { id } = request.params as { id: string };
+    const userId = parseId(id);
+    if (!userId) return reply.status(400).send({ error: 'ID invalide' });
+
+    const { provider: providerId, pinId } = request.body as { provider: string; pinId: number };
+    const authProvider = getProvider(providerId);
+    if (!authProvider?.linkAccount) {
+      return reply.status(400).send({ error: `Le provider "${providerId}" ne supporte pas le linking.` });
     }
 
     try {
-      const sharedUsers = await getSharedServerUsers(plexToken, settings.plexMachineId);
-      let imported = 0;
-      let skipped = 0;
-
-      for (const user of sharedUsers) {
-        // Check if user already exists
-        const existing = await prisma.user.findFirst({
-          where: {
-            OR: [
-              ...(user.id ? [{ plexId: user.id }] : []),
-              ...(user.email ? [{ email: user.email.toLowerCase() }] : []),
-            ],
-          },
-        });
-
-        if (existing) {
-          skipped++;
-          continue;
-        }
-
-        await prisma.user.create({
-          data: {
-            email: (user.email || `${user.username}@plex.local`).toLowerCase(),
-            authProvider: 'plex',
-            displayName: user.username || user.title,
-            plexId: user.id,
-            plexUsername: user.username || user.title,
-            avatar: user.thumb,
-            role: 'user',
-            hasPlexServerAccess: true,
-          },
-        });
-        imported++;
-      }
-
-      logEvent('info', 'User', `Import Plex : ${imported} importés, ${skipped} existants`);
-      return { imported, skipped, total: sharedUsers.length };
+      const result = await authProvider.linkAccount(pinId, userId);
+      return reply.send({ success: true, providerUsername: result.providerUsername });
     } catch (err) {
-      console.error('Failed to import Plex users:', err);
-      logEvent('error', 'User', `Import Plex échoué : ${err}`);
-      return reply.status(502).send({ error: 'Impossible de récupérer les utilisateurs Plex' });
+      const msg = (err as Error).message;
+      if (msg === 'PIN_INVALID') return reply.status(400).send({ error: 'PIN non validé. Réessayez.' });
+      if (msg === 'PROVIDER_ALREADY_LINKED') return reply.status(409).send({ error: 'Ce compte est déjà lié à un autre utilisateur.' });
+      throw err;
     }
   });
 
@@ -610,12 +605,10 @@ export async function adminRoutes(app: FastifyInstance) {
         id: true,
         email: true,
         displayName: true,
-        authProvider: true,
-        plexId: true,
         avatar: true,
         role: true,
-        hasPlexServerAccess: true,
         createdAt: true,
+        providers: { select: { provider: true, providerUsername: true, providerEmail: true } },
         _count: { select: { requests: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -623,6 +616,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     return users.map((u) => ({
       ...u,
+      providers: u.providers,
       requestCount: u._count.requests,
     }));
   });
