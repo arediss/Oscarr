@@ -20,7 +20,7 @@ import { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import MediaRow from '@/components/MediaRow';
 import { useDownloadForMedia, useOnDownloadComplete } from '@/hooks/useDownloads';
-import { invalidateMediaStatus } from '@/hooks/useMediaStatus';
+import { invalidateMediaStatus, updateMediaStatusCache } from '@/hooks/useMediaStatus';
 import type { TmdbMedia, Media } from '@/types';
 
 interface Props {
@@ -63,7 +63,12 @@ export default function MediaDetailPage({ type }: Props) {
     if (data.inLibrary) setInLibrary(true);
     if (data.status === 'available' && !data.id) setInLibrary(true);
     if (data.activeQualityOptionIds) setActiveQualityOptionIds(data.activeQualityOptionIds as number[]);
-  }, []);
+    // Update global status cache so list pages reflect the latest state on back navigation
+    if (data.status && id) {
+      const tmdbId = parseInt(id, 10);
+      if (tmdbId) updateMediaStatusCache(tmdbId, type, data.status as string);
+    }
+  }, [id, type]);
 
   useEffect(() => {
     api.get('/app/quality-options').then(({ data }) => setQualityOptions(data)).catch(() => {});
