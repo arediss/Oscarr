@@ -188,6 +188,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <Search className="w-5 h-5" />
               </button>
 
+              {/* Plugin hook: header actions */}
+              <PluginSlot hookPoint="header.actions" context={{ user }} />
+
               {/* Notification bell */}
               <NotificationBell />
 
@@ -249,6 +252,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         </select>
                       </div>
                     </div>
+
+                    {/* Plugin hook: avatar menu */}
+                    <PluginSlot hookPoint="avatar.menu" context={{ user, isAdmin }} />
 
                     <button
                       onClick={handleLogout}

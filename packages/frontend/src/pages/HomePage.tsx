@@ -5,6 +5,7 @@ import { Info, Star } from 'lucide-react';
 import api from '@/lib/api';
 import { backdropUrl } from '@/lib/api';
 import MediaRow from '@/components/MediaRow';
+import { PluginSlot } from '@/plugins/PluginSlot';
 import GenreRow from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
 
@@ -216,6 +217,8 @@ export default function HomePage() {
           <MediaRow title={t('home.popular_series')} media={popularTv.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/tv-popular" />
           <MediaRow title={t('home.trending_anime')} media={trendingAnime.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/anime-trending" />
           <GenreRow />
+          {/* Plugin hook: home rows */}
+          <PluginSlot hookPoint="home.rows" />
           <MediaRow title={t('home.coming_soon')} media={upcoming.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-upcoming" />
         </div>
       </div>
