@@ -13,7 +13,7 @@ export default function NoAccessPage() {
         <ShieldX className="w-16 h-16 text-ndp-warning mx-auto mb-6" />
         <h1 className="text-2xl font-bold text-ndp-text mb-2">{t('noAccess.title')}</h1>
         <p className="text-ndp-text-muted mb-6">
-          {t('noAccess.greeting', { username: user?.plexUsername || user?.email })}
+          {t('noAccess.greeting', { username: user?.displayName || user?.email })}
         </p>
 
         <div className="space-y-4 text-left mb-8">

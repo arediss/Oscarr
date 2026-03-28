@@ -10,6 +10,9 @@ datasource db {
 model User {
   id                    Int       @id @default(autoincrement())
   email                 String    @unique
+  authProvider          String    @default("plex") // "plex" | "email" | "discord" | ...
+  displayName           String?
+  passwordHash          String?
   plexId                Int?      @unique
   plexToken             String?
   plexUsername           String?
@@ -132,6 +135,7 @@ model AppSettings {
   supportEnabled        Boolean   @default(true)
   calendarEnabled       Boolean   @default(true)
   siteName              String    @default("Oscarr")
+  registrationEnabled   Boolean   @default(true)
   updatedAt             DateTime  @updatedAt
 }
 

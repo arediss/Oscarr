@@ -21,9 +21,9 @@ interface Ticket {
   status: 'open' | 'closed';
   createdAt: string;
   closedAt: string | null;
-  user: { id: number; plexUsername: string; avatar: string | null };
+  user: { id: number; displayName: string; avatar: string | null };
   messageCount: number;
-  lastMessage: { content: string; createdAt: string; user: { plexUsername: string } } | null;
+  lastMessage: { content: string; createdAt: string; user: { displayName: string } } | null;
 }
 
 interface TicketMsg {
@@ -32,7 +32,7 @@ interface TicketMsg {
   userId: number;
   content: string;
   createdAt: string;
-  user: { id: number; plexUsername: string; avatar: string | null; role: string };
+  user: { id: number; displayName: string; avatar: string | null; role: string };
 }
 
 export default function MessagesPage() {
@@ -219,11 +219,11 @@ export default function MessagesPage() {
                       <span className="text-[10px] text-ndp-text-dim flex-shrink-0">{formatTime(ticket.createdAt)}</span>
                     </div>
                     {isAdmin && (
-                      <p className="text-[11px] text-ndp-accent mt-0.5">{ticket.user.plexUsername}</p>
+                      <p className="text-[11px] text-ndp-accent mt-0.5">{ticket.user.displayName}</p>
                     )}
                     {ticket.lastMessage && (
                       <p className="text-xs text-ndp-text-dim truncate mt-0.5">
-                        {ticket.lastMessage.user.plexUsername}: {ticket.lastMessage.content}
+                        {ticket.lastMessage.user.displayName}: {ticket.lastMessage.content}
                       </p>
                     )}
                   </div>
@@ -245,7 +245,7 @@ export default function MessagesPage() {
                 <p className="text-sm font-semibold text-ndp-text truncate">{activeTicket.subject}</p>
                 <p className="text-[11px] text-ndp-text-dim">
                   {activeTicket.status === 'open' ? t('messages.open') : t('messages.closed')}
-                  {isAdmin && ` · ${activeTicket.user.plexUsername}`}
+                  {isAdmin && ` · ${activeTicket.user.displayName}`}
                 </p>
               </div>
               {isAdmin && (
@@ -281,10 +281,10 @@ export default function MessagesPage() {
                               <img src={msg.user.avatar} alt="" className="w-5 h-5 rounded-full" />
                             ) : (
                               <div className="w-5 h-5 rounded-full bg-ndp-accent/20 flex items-center justify-center text-[9px] text-ndp-accent font-bold">
-                                {(msg.user.plexUsername || '?')[0].toUpperCase()}
+                                {(msg.user.displayName || '?')[0].toUpperCase()}
                               </div>
                             )}
-                            <span className="text-xs font-medium text-ndp-text-muted">{msg.user.plexUsername}</span>
+                            <span className="text-xs font-medium text-ndp-text-muted">{msg.user.displayName}</span>
                             {msg.user.role === 'admin' && <span className="text-[8px] bg-ndp-accent/10 text-ndp-accent px-1 py-0.5 rounded">Admin</span>}
                           </div>
                         )}

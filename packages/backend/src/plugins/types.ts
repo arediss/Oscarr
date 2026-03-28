@@ -44,7 +44,7 @@ export interface UIContribution {
 // ─── Plugin Context (V1 API passed to plugins) ──────────────────────
 
 export interface PluginContext {
-  getUser(userId: number): Promise<{ id: number; email: string; plexUsername: string | null; role: string } | null>;
+  getUser(userId: number): Promise<{ id: number; email: string; displayName: string | null; role: string } | null>;
   getAppSettings(): Promise<Record<string, unknown>>;
   log: FastifyBaseLogger;
   getSetting(key: string): Promise<unknown>;

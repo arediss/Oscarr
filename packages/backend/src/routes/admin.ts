@@ -566,6 +566,8 @@ export async function adminRoutes(app: FastifyInstance) {
         await prisma.user.create({
           data: {
             email: (user.email || `${user.username}@plex.local`).toLowerCase(),
+            authProvider: 'plex',
+            displayName: user.username || user.title,
             plexId: user.id,
             plexUsername: user.username || user.title,
             avatar: user.thumb,
@@ -591,7 +593,9 @@ export async function adminRoutes(app: FastifyInstance) {
       select: {
         id: true,
         email: true,
-        plexUsername: true,
+        displayName: true,
+        authProvider: true,
+        plexId: true,
         avatar: true,
         role: true,
         hasPlexServerAccess: true,
@@ -639,10 +643,10 @@ export async function adminRoutes(app: FastifyInstance) {
     const user = await prisma.user.update({
       where: { id: userId },
       data: { role },
-      select: { id: true, plexUsername: true, role: true },
+      select: { id: true, displayName: true, role: true },
     });
 
-    logEvent('info', 'User', `Rôle de ${user.plexUsername} changé en ${role}`);
+    logEvent('info', 'User', `Rôle de ${user.displayName} changé en ${role}`);
     return user;
   });
 
@@ -1073,7 +1077,7 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!user) return reply.status(404).send({ error: 'Utilisateur introuvable' });
 
     await prisma.user.delete({ where: { id: userId } });
-    logEvent('warn', 'Admin', `Utilisateur supprimé : ${user.plexUsername || user.email}`);
+    logEvent('warn', 'Admin', `Utilisateur supprimé : ${user.displayName || user.email}`);
     return { ok: true };
   });
 
