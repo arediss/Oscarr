@@ -108,6 +108,8 @@ export default function MediaDetailPage({ type }: Props) {
     fetchData();
   }, [id, type, applyDbData]);
 
+  const [requestError, setRequestError] = useState('');
+
   const handleRequest = async () => {
     if (!media) return;
     setRequesting(true);
@@ -124,8 +126,10 @@ export default function MediaDetailPage({ type }: Props) {
       const { data } = await api.get(`/media/tmdb/${id}/${type}`);
       applyDbData(data);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('common.error');
-      console.error('Request failed:', message);
+      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const message = apiError || (err instanceof Error ? err.message : t('common.error'));
+      setRequestError(message);
+      setTimeout(() => setRequestError(''), 5000);
     } finally {
       setRequesting(false);
     }
@@ -447,6 +451,13 @@ export default function MediaDetailPage({ type }: Props) {
                   {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                   {t('media.request')}
                 </button>
+              )}
+
+              {/* Request error message */}
+              {requestError && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-ndp-danger/10 border border-ndp-danger/20 text-ndp-danger text-sm animate-fade-in">
+                  {requestError}
+                </div>
               )}
 
               {/* Plugin hook: media detail actions */}

@@ -1,9 +1,11 @@
 import { readdir, readFile } from 'fs/promises';
-import { join, resolve } from 'path';
+import { join, resolve, dirname } from 'path';
 import { existsSync } from 'fs';
+import { fileURLToPath } from 'url';
 import type { PluginManifest } from './types.js';
 
-const PLUGINS_DIR = resolve(import.meta.dirname, '../../../../plugins');
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PLUGINS_DIR = resolve(__dirname, '../../../plugins');
 
 export interface DiscoveredPlugin {
   dir: string;

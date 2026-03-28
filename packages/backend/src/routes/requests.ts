@@ -430,6 +430,14 @@ export async function requestRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'collectionId invalide' });
     }
 
+    // Run plugin guards
+    if (user.role !== 'admin') {
+      const guardResult = await pluginEngine.runGuards('request.create', user.id);
+      if (guardResult?.blocked) {
+        return reply.status(guardResult.statusCode || 403).send({ error: guardResult.error });
+      }
+    }
+
     const collection = await getCollection(collectionId);
     if (!collection?.parts?.length) {
       return reply.status(404).send({ error: 'Collection introuvable' });

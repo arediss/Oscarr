@@ -79,7 +79,7 @@ export default function AdminPage() {
   useEffect(() => { refreshWarnings(); }, [currentTab, refreshWarnings]);
 
   const pluginTabItems = pluginTabs.map((c) => ({
-    id: `plugin:${c.props.id}` as string,
+    id: `plugin:${c.pluginId}` as string,
     label: c.props.label as string,
     pluginIcon: c.props.icon as string,
   }));
