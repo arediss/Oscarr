@@ -54,8 +54,8 @@ export async function requestRoutes(app: FastifyInstance) {
         where,
         include: {
           media: true,
-          user: { select: { id: true, plexUsername: true, avatar: true } },
-          approvedBy: { select: { id: true, plexUsername: true } },
+          user: { select: { id: true, displayName: true, avatar: true } },
+          approvedBy: { select: { id: true, displayName: true } },
         },
         orderBy: { createdAt: 'desc' },
         take,
@@ -199,23 +199,23 @@ export async function requestRoutes(app: FastifyInstance) {
       },
       include: {
         media: true,
-        user: { select: { id: true, plexUsername: true, avatar: true } },
+        user: { select: { id: true, displayName: true, avatar: true } },
       },
     });
 
     if (shouldAutoApprove) {
-      const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { plexUsername: true, email: true } });
-      const tagName = dbUser?.plexUsername || dbUser?.email || `user-${user.id}`;
+      const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { displayName: true, email: true } });
+      const tagName = dbUser?.displayName || dbUser?.email || `user-${user.id}`;
       await sendToService(media, validMediaType, tagName, validSeasons, qualityOptionId);
     }
 
     // Notify
-    const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { plexUsername: true } });
-    sendNotification('request_new', { title, mediaType: validMediaType, username: dbUser?.plexUsername || 'Utilisateur', posterPath: tmdbData.poster_path, tmdbId: tmdbData.id }).catch(err => console.error('[Notification] Failed:', err));
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { displayName: true } });
+    sendNotification('request_new', { title, mediaType: validMediaType, username: dbUser?.displayName || 'Utilisateur', posterPath: tmdbData.poster_path, tmdbId: tmdbData.id }).catch(err => console.error('[Notification] Failed:', err));
     if (shouldAutoApprove) {
       sendUserNotification(user.id, { type: 'request_approved', title, message: `Votre demande pour "${title}" a été approuvée automatiquement.`, metadata: { mediaId: media.id, tmdbId: tmdbData.id, mediaType: validMediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
     }
-    logEvent('info', 'Request', `${dbUser?.plexUsername} a demandé "${title}"`);
+    logEvent('info', 'Request', `${dbUser?.displayName} a demandé "${title}"`);
 
     return reply.status(201).send(mediaRequest);
   });
@@ -243,7 +243,7 @@ export async function requestRoutes(app: FastifyInstance) {
 
     const mediaRequest = await prisma.mediaRequest.findUnique({
       where: { id: requestId },
-      include: { media: true, user: { select: { plexUsername: true, email: true, id: true } } },
+      include: { media: true, user: { select: { displayName: true, email: true, id: true } } },
     });
 
     if (!mediaRequest) return reply.status(404).send({ error: 'Demande introuvable' });
@@ -252,7 +252,7 @@ export async function requestRoutes(app: FastifyInstance) {
     }
 
     const seasons = mediaRequest.seasons ? JSON.parse(mediaRequest.seasons) : undefined;
-    const tagName = mediaRequest.user.plexUsername || mediaRequest.user.email || `user-${mediaRequest.user.id}`;
+    const tagName = mediaRequest.user.displayName || mediaRequest.user.email || `user-${mediaRequest.user.id}`;
     await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, seasons, mediaRequest.qualityOptionId ?? undefined);
 
     const updated = await prisma.mediaRequest.update({
@@ -260,11 +260,11 @@ export async function requestRoutes(app: FastifyInstance) {
       data: { status: 'approved', approvedById: user.id },
       include: {
         media: true,
-        user: { select: { id: true, plexUsername: true, avatar: true } },
+        user: { select: { id: true, displayName: true, avatar: true } },
       },
     });
 
-    sendNotification('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.plexUsername || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
+    sendNotification('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
     sendUserNotification(updated.user.id, { type: 'request_approved', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été approuvée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
     logEvent('info', 'Request', `Demande "${updated.media.title}" approuvée`);
 
@@ -297,11 +297,11 @@ export async function requestRoutes(app: FastifyInstance) {
       data: { status: 'declined', approvedById: user.id },
       include: {
         media: true,
-        user: { select: { id: true, plexUsername: true, avatar: true } },
+        user: { select: { id: true, displayName: true, avatar: true } },
       },
     });
 
-    sendNotification('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.plexUsername || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
+    sendNotification('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
     sendUserNotification(updated.user.id, { type: 'request_declined', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été refusée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
     logEvent('info', 'Request', `Demande "${updated.media.title}" refusée`);
 
@@ -414,8 +414,8 @@ export async function requestRoutes(app: FastifyInstance) {
 
       // Auto-send if admin
       if (user.role === 'admin') {
-        const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { plexUsername: true, email: true } });
-        const tagName = dbUser?.plexUsername || dbUser?.email || `user-${user.id}`;
+        const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { displayName: true, email: true } });
+        const tagName = dbUser?.displayName || dbUser?.email || `user-${user.id}`;
         await sendToService(media, 'movie', tagName);
       }
 

@@ -383,7 +383,7 @@ export default function InstallPage() {
                   </>
                 ) : (
                   <>
-                    {t('login.button')}
+                    {t('login.oauth_button', { provider: 'Plex' })}
                   </>
                 )}
               </button>
