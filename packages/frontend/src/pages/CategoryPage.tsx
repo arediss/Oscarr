@@ -27,6 +27,11 @@ const CATEGORIES: Record<string, { titleKey: string; endpoint: string; mediaType
     endpoint: '/tmdb/movies/upcoming',
     mediaType: 'movie',
   },
+  'anime-trending': {
+    titleKey: 'category.trending_anime',
+    endpoint: '/tmdb/tv/trending-anime',
+    mediaType: 'tv',
+  },
 };
 
 export default function CategoryPage() {
@@ -46,9 +51,12 @@ export default function CategoryPage() {
     setResults([]);
     setPage(1);
     setLoading(true);
-    seenIds.current.clear();
+    seenIds.current = new Set();
 
+    const currentSlug = slug;
     api.get(`${category.endpoint}?page=1`).then(({ data }) => {
+      if (currentSlug !== slug) return; // stale request
+      seenIds.current = new Set();
       const items = dedup(data.results.map((r: TmdbMedia) => ({
         ...r,
         media_type: r.media_type || category.mediaType || (r.title ? 'movie' : 'tv'),

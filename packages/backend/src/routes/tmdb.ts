@@ -4,6 +4,7 @@ import {
   getPopularMovies,
   getPopularTv,
   getUpcomingMovies,
+  getTrendingAnime,
   searchMulti,
   getMovieDetails,
   getTvDetails,
@@ -56,6 +57,14 @@ export async function tmdbRoutes(app: FastifyInstance) {
   }, async (request) => {
     const { page } = request.query as { page?: string };
     return getPopularTv(parsePage(page), getLang(request));
+  });
+
+  app.get('/tv/trending-anime', {
+    schema: { querystring: pageQuerySchema },
+    preHandler: [app.authenticate],
+  }, async (request) => {
+    const { page } = request.query as { page?: string };
+    return getTrendingAnime(parsePage(page), getLang(request));
   });
 
   app.get('/movies/upcoming', {
