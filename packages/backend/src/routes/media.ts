@@ -308,4 +308,49 @@ export async function mediaRoutes(app: FastifyInstance) {
 
     return results;
   });
+
+  // Get episodes for a season from Sonarr
+  app.get('/episodes', {
+    schema: {
+      querystring: {
+        type: 'object',
+        required: ['tmdbId', 'seasonNumber'],
+        properties: {
+          tmdbId: { type: 'string', description: 'TMDB ID of the TV series' },
+          seasonNumber: { type: 'string', description: 'Season number' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
+    const { tmdbId, seasonNumber } = request.query as { tmdbId: string; seasonNumber: string };
+    const tmdbIdNum = parseId(tmdbId);
+    const seasonNum = parseInt(seasonNumber, 10);
+    if (!tmdbIdNum || isNaN(seasonNum)) return reply.status(400).send({ error: 'Paramètres invalides' });
+
+    // Find the media in our DB to get sonarrId
+    const media = await prisma.media.findUnique({
+      where: { tmdbId_mediaType: { tmdbId: tmdbIdNum, mediaType: 'tv' } },
+    });
+
+    if (!media?.sonarrId) {
+      return reply.status(404).send({ error: 'Série non trouvée dans Sonarr' });
+    }
+
+    try {
+      const sonarr = await getSonarrAsync();
+      const episodes = await sonarr.getEpisodes(media.sonarrId, seasonNum);
+      return episodes.map((ep) => ({
+        episodeNumber: ep.episodeNumber,
+        title: ep.title,
+        airDateUtc: ep.airDateUtc,
+        hasFile: ep.hasFile,
+        monitored: ep.monitored,
+        quality: ep.episodeFile?.quality?.quality?.name || null,
+        size: ep.episodeFile?.size || null,
+      }));
+    } catch {
+      return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
+    }
+  });
 }
