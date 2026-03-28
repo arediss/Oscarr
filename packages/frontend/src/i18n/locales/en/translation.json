@@ -87,6 +87,7 @@
   "home.trending_week": "Trending this week",
   "home.popular_movies": "Popular movies",
   "home.popular_series": "Popular series",
+  "home.trending_anime": "Trending anime",
   "home.coming_soon": "Coming soon in theaters",
 
   "login.title": "Sign in with your Plex account",
@@ -184,6 +185,7 @@
   "category.trending": "Trending this week",
   "category.popular_movies": "Popular movies",
   "category.popular_series": "Popular series",
+  "category.trending_anime": "Trending anime",
   "category.coming_soon": "Coming soon in theaters",
 
   "messages.title": "Support",

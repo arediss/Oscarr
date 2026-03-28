@@ -164,6 +164,22 @@ export async function getPopularTv(page = 1, lang?: string) {
   }, 6);
 }
 
+const ANIME_KEYWORD_ID = 210024; // TMDB keyword "anime"
+
+export async function getTrendingAnime(page = 1, lang?: string) {
+  const l = normalizeLang(lang);
+  return cachedRequest(`trending:anime:${page}:${l}`, async () => {
+    const { data } = await getTmdbApi(l).get('/discover/tv', {
+      params: {
+        with_keywords: ANIME_KEYWORD_ID,
+        sort_by: 'popularity.desc',
+        page,
+      },
+    });
+    return data;
+  }, 6);
+}
+
 export async function getUpcomingMovies(page = 1, lang?: string) {
   const l = normalizeLang(lang);
   return cachedRequest(`upcoming:movies:${page}:${l}`, async () => {
