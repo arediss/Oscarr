@@ -47,7 +47,7 @@ export default function HomePage() {
           api.get('/tmdb/tv/trending-anime'),
         ]);
         // Map DB media to TmdbMedia shape for MediaRow
-        setRecentlyAdded(recentRes.data.map((m: { tmdbId: number; mediaType: string; title: string; posterPath: string | null; backdropPath: string | null; releaseDate: string | null; voteAverage: number | null }) => ({
+        setRecentlyAdded(recentRes.data.map((m: { tmdbId: number; mediaType: string; title: string; posterPath: string | null; backdropPath: string | null; releaseDate: string | null; voteAverage: number | null; lastEpisodeInfo?: { season: number; episode: number; title: string } | null }) => ({
           id: m.tmdbId > 0 ? m.tmdbId : 0,
           title: m.mediaType === 'movie' ? m.title : undefined,
           name: m.mediaType === 'tv' ? m.title : undefined,
@@ -59,6 +59,7 @@ export default function HomePage() {
           vote_count: 0,
           overview: '',
           media_type: m.mediaType,
+          lastEpisodeInfo: m.lastEpisodeInfo,
         })));
         setTrending(trendingRes.data.results);
         setPopularMovies(moviesRes.data.results);

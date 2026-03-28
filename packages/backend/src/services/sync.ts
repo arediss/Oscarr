@@ -359,17 +359,24 @@ export async function syncAvailabilityDates(since?: Date | null): Promise<{ upda
     const sonarr = await getSonarrAsync();
     const sonarrHistory = await sonarr.getHistory(since);
 
-    // Build a map of sonarrId → most recent import date
-    const sonarrDates = new Map<number, Date>();
+    // Build a map of sonarrId → most recent import date + episode info
+    const sonarrLatest = new Map<number, { date: Date; episode?: { season: number; episode: number; title: string } }>();
     for (const record of sonarrHistory) {
       const date = new Date(record.date);
-      const existing = sonarrDates.get(record.seriesId);
-      if (!existing || date > existing) {
-        sonarrDates.set(record.seriesId, date);
+      const existing = sonarrLatest.get(record.seriesId);
+      if (!existing || date > existing.date) {
+        sonarrLatest.set(record.seriesId, {
+          date,
+          episode: record.episode ? {
+            season: record.episode.seasonNumber,
+            episode: record.episode.episodeNumber,
+            title: record.episode.title,
+          } : undefined,
+        });
       }
     }
 
-    for (const [sonarrId, date] of sonarrDates) {
+    for (const [sonarrId, { date, episode }] of sonarrLatest) {
       const result = await prisma.media.updateMany({
         where: {
           sonarrId,
@@ -378,12 +385,15 @@ export async function syncAvailabilityDates(since?: Date | null): Promise<{ upda
             { availableAt: { lt: date } },
           ],
         },
-        data: { availableAt: date },
+        data: {
+          availableAt: date,
+          ...(episode ? { lastEpisodeInfo: JSON.stringify(episode) } : {}),
+        },
       });
       updated += result.count;
     }
 
-    console.log(`[Sync] Sonarr availability: ${sonarrDates.size} history events → ${updated - radarrUpdated} media updated`);
+    console.log(`[Sync] Sonarr availability: ${sonarrLatest.size} history events → ${updated - radarrUpdated} media updated`);
   } catch (err) {
     console.error('[Sync] Sonarr availability sync failed:', err);
   }
