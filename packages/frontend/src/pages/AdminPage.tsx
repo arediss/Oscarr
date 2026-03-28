@@ -1768,6 +1768,7 @@ function GeneralTab() {
   const [requestsEnabled, setRequestsEnabled] = useState(true);
   const [supportEnabled, setSupportEnabled] = useState(true);
   const [calendarEnabled, setCalendarEnabled] = useState(true);
+  const [missingSearchCooldownMin, setMissingSearchCooldownMin] = useState(60);
   const [siteName, setSiteName] = useState('Oscarr');
   const [bannerText, setBannerText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1781,6 +1782,7 @@ function GeneralTab() {
         setRequestsEnabled(data.requestsEnabled ?? true);
         setSupportEnabled(data.supportEnabled ?? true);
         setCalendarEnabled(data.calendarEnabled ?? true);
+        setMissingSearchCooldownMin(data.missingSearchCooldownMin ?? 60);
         setSiteName(data.siteName ?? 'Oscarr');
       }),
       api.get('/app/banner').then(({ data }) => setBannerText(data.banner || '')),
@@ -1798,6 +1800,7 @@ function GeneralTab() {
           requestsEnabled,
           supportEnabled,
           calendarEnabled,
+          missingSearchCooldownMin,
           siteName: siteName.trim() || 'Oscarr',
         }),
         api.put('/admin/banner', { banner: bannerText.trim() || null }),
@@ -1868,6 +1871,23 @@ function GeneralTab() {
               </button>
             </label>
           ))}
+        </div>
+      </div>
+
+      {/* Missing search cooldown */}
+      <div className="card p-6">
+        <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-4">{t('admin.general.search_cooldown')}</h3>
+        <p className="text-xs text-ndp-text-dim mb-3">{t('admin.general.search_cooldown_desc')}</p>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            min={1}
+            max={1440}
+            value={missingSearchCooldownMin}
+            onChange={(e) => setMissingSearchCooldownMin(Math.max(1, parseInt(e.target.value) || 60))}
+            className="input w-24 text-sm text-center"
+          />
+          <span className="text-sm text-ndp-text-dim">minutes</span>
         </div>
       </div>
 

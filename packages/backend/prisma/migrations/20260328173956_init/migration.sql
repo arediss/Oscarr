@@ -41,6 +41,7 @@ CREATE TABLE "Media" (
     "sonarrId" INTEGER,
     "qualityProfileId" INTEGER,
     "availableAt" DATETIME,
+    "lastMissingSearchAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );
@@ -121,6 +122,7 @@ CREATE TABLE "AppSettings" (
     "calendarEnabled" BOOLEAN NOT NULL DEFAULT true,
     "siteName" TEXT NOT NULL DEFAULT 'Oscarr',
     "registrationEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "missingSearchCooldownMin" INTEGER NOT NULL DEFAULT 60,
     "updatedAt" DATETIME NOT NULL
 );
 
@@ -276,3 +278,4 @@ CREATE INDEX "UserNotification_userId_read_idx" ON "UserNotification"("userId", 
 
 -- CreateIndex
 CREATE INDEX "UserNotification_createdAt_idx" ON "UserNotification"("createdAt");
+

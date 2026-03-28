@@ -59,6 +59,7 @@ model Media {
   sonarrId            Int?
   qualityProfileId    Int?      // Quality profile ID from Radarr/Sonarr
   availableAt         DateTime? // Set when status transitions to "available"
+  lastMissingSearchAt DateTime? // Last time a missing episode search was triggered
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -149,6 +150,7 @@ model AppSettings {
   calendarEnabled       Boolean   @default(true)
   siteName              String    @default("Oscarr")
   registrationEnabled   Boolean   @default(true)
+  missingSearchCooldownMin Int   @default(60) // Minutes before allowing another missing search
   updatedAt             DateTime  @updatedAt
 }
 

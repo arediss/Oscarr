@@ -55,6 +55,10 @@ class RadarrService {
     return data;
   }
 
+  async searchMovie(movieId: number): Promise<void> {
+    await this.api.post('/command', { name: 'MoviesSearch', movieIds: [movieId] });
+  }
+
   async getMovieByTmdbId(tmdbId: number): Promise<RadarrMovie | null> {
     const { data } = await this.api.get('/movie', { params: { tmdbId } });
     return data[0] ?? null;

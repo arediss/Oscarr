@@ -113,14 +113,32 @@ export default function MediaDetailPage({ type }: Props) {
         body.qualityOptionId = selectedQuality;
       }
       await api.post('/requests', body);
-      // Invalidate badge cache so homepage updates without F5
       invalidateMediaStatus(media.id, type);
-      // Refresh DB media state
       const { data } = await api.get(`/media/tmdb/${id}/${type}`);
       applyDbData(data);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('common.error');
       console.error('Request failed:', message);
+    } finally {
+      setRequesting(false);
+    }
+  };
+
+  const [searchMissingState, setSearchMissingState] = useState<'idle' | 'searching' | 'error'>('idle');
+  const [searchMissingError, setSearchMissingError] = useState('');
+
+  const handleSearchMissing = async () => {
+    if (!media) return;
+    setRequesting(true);
+    setSearchMissingError('');
+    try {
+      await api.post('/requests/search-missing', { tmdbId: media.id, mediaType: type });
+      setSearchMissingState('searching');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setSearchMissingError(msg || t('common.error'));
+      setSearchMissingState('error');
+      setTimeout(() => { setSearchMissingState('idle'); setSearchMissingError(''); }, 5000);
     } finally {
       setRequesting(false);
     }
@@ -346,23 +364,39 @@ export default function MediaDetailPage({ type }: Props) {
                   )}
                   {t('media.request')}
                 </button>
-              ) : userHasRequest && !canRequestNewQuality ? (
+              ) : userHasRequest && !canRequestNewQuality && !isPartiallyAvailable ? (
                 <button disabled className="btn-success flex items-center gap-2 cursor-default">
                   <Check className="w-4 h-4" />
                   {t('status.already_requested')}
                 </button>
+              ) : isPartiallyAvailable ? (
+                searchMissingState === 'searching' ? (
+                  <button disabled className="btn-success flex items-center gap-2 cursor-default">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {t('media.search_missing_in_progress')}
+                  </button>
+                ) : searchMissingState === 'error' ? (
+                  <button disabled className="btn-danger flex items-center gap-2 cursor-default text-sm">
+                    {searchMissingError}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSearchMissing}
+                    disabled={requesting}
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    {t('media.request_rest')}
+                  </button>
+                )
               ) : (
                 <button
                   onClick={handleRequest}
                   disabled={requesting}
                   className="btn-primary flex items-center gap-2"
                 >
-                  {requesting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4" />
-                  )}
-                  {isPartiallyAvailable ? t('media.request_rest') : t('media.request')}
+                  {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  {t('media.request')}
                 </button>
               )}
             </div>
