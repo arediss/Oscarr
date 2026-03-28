@@ -19,6 +19,7 @@ import api from '@/lib/api';
 import { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import MediaRow from '@/components/MediaRow';
+import { PluginSlot } from '@/plugins/PluginSlot';
 import { useDownloadForMedia, useOnDownloadComplete } from '@/hooks/useDownloads';
 import { invalidateMediaStatus, updateMediaStatusCache } from '@/hooks/useMediaStatus';
 import type { TmdbMedia, Media } from '@/types';
@@ -337,6 +338,9 @@ export default function MediaDetailPage({ type }: Props) {
             <div className="mt-6">
               <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-2">{t('media.synopsis')}</h3>
               <p className="text-ndp-text leading-relaxed">{media.overview || t('media.no_description')}</p>
+
+              {/* Plugin hook: media detail info */}
+              <PluginSlot hookPoint="media.detail.info" context={{ media, type, dbMedia }} />
             </div>
 
             {/* Director */}
@@ -444,6 +448,9 @@ export default function MediaDetailPage({ type }: Props) {
                   {t('media.request')}
                 </button>
               )}
+
+              {/* Plugin hook: media detail actions */}
+              <PluginSlot hookPoint="media.detail.actions" context={{ media, type, isAvailable, dbMedia }} />
             </div>
 
             {/* Quality selection */}

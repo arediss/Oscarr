@@ -216,10 +216,60 @@ Jobs appear in the admin Jobs & Sync tab where admins can:
 
 ### Hook points
 
-| Hook point | Description | Required props |
-|------------|-------------|----------------|
-| `nav` | Navigation bar item | `path`, `label`, `icon` |
-| `admin.tabs` | Admin panel tab | `label`, `icon` |
+There are two types of hook points:
+
+**Simple hooks** — rendered by the host app using `renderItem` callback (e.g. nav links):
+
+| Hook point | Description | Props | Mode |
+|------------|-------------|-------|------|
+| `nav` | Navigation bar item | `path`, `label`, `icon` | Simple |
+| `admin.tabs` | Admin panel tab | `label`, `icon` | Simple |
+
+**Component hooks** — your plugin provides a React component that receives contextual data:
+
+| Hook point | Description | Context provided | Mode |
+|------------|-------------|-----------------|------|
+| `media.detail.actions` | Buttons on media detail page (after Request/Play) | `media`, `type`, `isAvailable`, `dbMedia` | Component |
+| `media.detail.info` | Info sections on media detail page (after synopsis) | `media`, `type`, `dbMedia` | Component |
+| `media.card.overlay` | Overlay on media card hover | `media`, `type`, `availability` | Component |
+| `home.rows` | Additional rows on home page | — | Component |
+| `header.actions` | Actions in the header bar (before notification bell) | `user` | Component |
+| `avatar.menu` | Items in the avatar dropdown (before logout) | `user`, `isAdmin` | Component |
+
+### Component hooks
+
+For component hooks, your plugin must export a React component for each hook point:
+
+```
+plugins/my-plugin/frontend/
+  index.tsx                            # Full page
+  hooks/
+    media.detail.actions.tsx            # Component for this hook
+    header.actions.tsx                  # Component for this hook
+```
+
+Each hook component receives `{ contribution, context }`:
+
+```tsx
+// plugins/my-plugin/frontend/hooks/media.detail.actions.tsx
+import type { HookComponentProps } from '../../../../frontend/src/plugins/types';
+
+export default function MediaActions({ context }: HookComponentProps) {
+  const media = context.media as { id: number; title?: string; name?: string };
+  const isAvailable = context.isAvailable as boolean;
+
+  if (!isAvailable) return null;
+
+  return (
+    <button
+      onClick={() => window.open(`https://jellyfin.local/play/${media.id}`)}
+      className="btn-primary flex items-center gap-2"
+    >
+      Play in Jellyfin
+    </button>
+  );
+}
+```
 
 ### Navigation item
 

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Star, CheckCircle, Clock, Film, Tv, Search, CalendarClock, Plus, Loader2 } from 'lucide-react';
 import { posterUrl } from '@/lib/api';
+import { PluginSlot } from '@/plugins/PluginSlot';
 import api from '@/lib/api';
 import type { TmdbMedia } from '@/types';
 import { clsx } from 'clsx';
@@ -102,6 +103,9 @@ export default function MediaCard({ media, className, availability, index = 0 }:
             <CheckCircle className="w-4 h-4 text-white" />
           </div>
         )}
+
+        {/* Plugin hook: card overlay */}
+        <PluginSlot hookPoint="media.card.overlay" context={{ media, type, availability }} />
       </div>
 
       {/* Top-left: media type badge (hidden on hover) */}
