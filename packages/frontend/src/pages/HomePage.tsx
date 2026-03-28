@@ -15,6 +15,7 @@ export default function HomePage() {
   const [popularMovies, setPopularMovies] = useState<TmdbMedia[]>([]);
   const [popularTv, setPopularTv] = useState<TmdbMedia[]>([]);
   const [upcoming, setUpcoming] = useState<TmdbMedia[]>([]);
+  const [trendingAnime, setTrendingAnime] = useState<TmdbMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroVisible, setHeroVisible] = useState(true);
@@ -37,12 +38,13 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [recentRes, trendingRes, moviesRes, tvRes, upcomingRes] = await Promise.all([
+        const [recentRes, trendingRes, moviesRes, tvRes, upcomingRes, animeRes] = await Promise.all([
           api.get('/media/recent?limit=20'),
           api.get('/tmdb/trending'),
           api.get('/tmdb/movies/popular'),
           api.get('/tmdb/tv/popular'),
           api.get('/tmdb/movies/upcoming'),
+          api.get('/tmdb/tv/trending-anime'),
         ]);
         // Map DB media to TmdbMedia shape for MediaRow
         setRecentlyAdded(recentRes.data.map((m: { tmdbId: number; mediaType: string; title: string; posterPath: string | null; backdropPath: string | null; releaseDate: string | null; voteAverage: number | null }) => ({
@@ -62,6 +64,7 @@ export default function HomePage() {
         setPopularMovies(moviesRes.data.results);
         setPopularTv(tvRes.data.results);
         setUpcoming(upcomingRes.data.results);
+        setTrendingAnime(animeRes.data.results);
       } catch (err) {
         console.error('Failed to fetch homepage data', err);
       } finally {
@@ -210,6 +213,7 @@ export default function HomePage() {
           <MediaRow title={t('home.trending_week')} media={trending} loading={loading} href="/category/trending" size="large" />
           <MediaRow title={t('home.popular_movies')} media={popularMovies.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-popular" />
           <MediaRow title={t('home.popular_series')} media={popularTv.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/tv-popular" />
+          <MediaRow title={t('home.trending_anime')} media={trendingAnime.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/anime-trending" />
           <GenreRow />
           <MediaRow title={t('home.coming_soon')} media={upcoming.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-upcoming" />
         </div>
