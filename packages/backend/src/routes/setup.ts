@@ -95,8 +95,8 @@ export async function setupRoutes(app: FastifyInstance) {
     }
   });
 
-  // Initial setup — create first Plex service
-  app.post('/', {
+  // Save Plex service (optional during setup)
+  app.post('/plex-service', {
     schema: {
       body: {
         type: 'object',
