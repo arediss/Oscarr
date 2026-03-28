@@ -200,12 +200,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {user?.avatar ? (
                     <img
                       src={user.avatar}
-                      alt={user.plexUsername || ''}
+                      alt={user.displayName || ''}
                       className="w-8 h-8 rounded-full ring-2 ring-white/10"
                     />
                   ) : (
                     <div className="w-8 h-8 rounded-full bg-ndp-accent/20 flex items-center justify-center text-ndp-accent text-sm font-bold">
-                      {(user?.plexUsername || user?.email || '?')[0].toUpperCase()}
+                      {(user?.displayName || user?.email || '?')[0].toUpperCase()}
                     </div>
                   )}
                   <ChevronDown className={clsx(
@@ -219,7 +219,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <div className="absolute right-0 top-full mt-2 w-56 card shadow-2xl shadow-black/50 border border-white/10 animate-fade-in py-1">
                     {/* User info */}
                     <div className="px-4 py-3 border-b border-white/5">
-                      <p className="text-sm font-semibold text-ndp-text truncate">{user?.plexUsername || user?.email}</p>
+                      <p className="text-sm font-semibold text-ndp-text truncate">{user?.displayName || user?.email}</p>
                       <p className="text-xs text-ndp-text-dim truncate">{user?.email}</p>
                     </div>
 

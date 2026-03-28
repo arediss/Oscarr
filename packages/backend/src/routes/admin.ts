@@ -330,6 +330,13 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get('/plex-token', async (request, reply) => {
     await requireAdmin(request, reply);
+    // Prefer service config token, fallback to admin user token
+    const plexService = await prisma.service.findFirst({
+      where: { type: 'plex', enabled: true },
+    });
+    const plexConfig = plexService ? JSON.parse(plexService.config) : null;
+    if (plexConfig?.token) return { token: plexConfig.token };
+
     const adminUser = request.user as { id: number };
     const admin = await prisma.user.findUnique({
       where: { id: adminUser.id },
@@ -525,15 +532,24 @@ export async function adminRoutes(app: FastifyInstance) {
   app.post('/users/import-plex', async (request, reply) => {
     await requireAdmin(request, reply);
 
-    // Get admin's Plex token
-    const adminUser = request.user as { id: number };
-    const admin = await prisma.user.findUnique({
-      where: { id: adminUser.id },
-      select: { plexToken: true },
+    // Get Plex token: prefer service config, fallback to admin user token
+    const plexService = await prisma.service.findFirst({
+      where: { type: 'plex', enabled: true },
     });
+    const plexConfig = plexService ? JSON.parse(plexService.config) : null;
+    let plexToken = plexConfig?.token || null;
 
-    if (!admin?.plexToken) {
-      return reply.status(400).send({ error: 'Token Plex admin introuvable. Reconnectez-vous.' });
+    if (!plexToken) {
+      const adminUser = request.user as { id: number };
+      const admin = await prisma.user.findUnique({
+        where: { id: adminUser.id },
+        select: { plexToken: true },
+      });
+      plexToken = admin?.plexToken || null;
+    }
+
+    if (!plexToken) {
+      return reply.status(400).send({ error: 'Aucun token Plex trouvé. Configurez un service Plex dans les paramètres.' });
     }
 
     // Get server machine ID to query shared users
@@ -543,7 +559,7 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     try {
-      const sharedUsers = await getSharedServerUsers(admin.plexToken, settings.plexMachineId);
+      const sharedUsers = await getSharedServerUsers(plexToken, settings.plexMachineId);
       let imported = 0;
       let skipped = 0;
 
@@ -566,6 +582,8 @@ export async function adminRoutes(app: FastifyInstance) {
         await prisma.user.create({
           data: {
             email: (user.email || `${user.username}@plex.local`).toLowerCase(),
+            authProvider: 'plex',
+            displayName: user.username || user.title,
             plexId: user.id,
             plexUsername: user.username || user.title,
             avatar: user.thumb,
@@ -591,7 +609,9 @@ export async function adminRoutes(app: FastifyInstance) {
       select: {
         id: true,
         email: true,
-        plexUsername: true,
+        displayName: true,
+        authProvider: true,
+        plexId: true,
         avatar: true,
         role: true,
         hasPlexServerAccess: true,
@@ -639,10 +659,10 @@ export async function adminRoutes(app: FastifyInstance) {
     const user = await prisma.user.update({
       where: { id: userId },
       data: { role },
-      select: { id: true, plexUsername: true, role: true },
+      select: { id: true, displayName: true, role: true },
     });
 
-    logEvent('info', 'User', `Rôle de ${user.plexUsername} changé en ${role}`);
+    logEvent('info', 'User', `Rôle de ${user.displayName} changé en ${role}`);
     return user;
   });
 
@@ -1073,7 +1093,7 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!user) return reply.status(404).send({ error: 'Utilisateur introuvable' });
 
     await prisma.user.delete({ where: { id: userId } });
-    logEvent('warn', 'Admin', `Utilisateur supprimé : ${user.plexUsername || user.email}`);
+    logEvent('warn', 'Admin', `Utilisateur supprimé : ${user.displayName || user.email}`);
     return { ok: true };
   });
 

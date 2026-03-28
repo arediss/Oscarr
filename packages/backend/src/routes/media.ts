@@ -37,7 +37,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         include: {
           requests: {
             include: {
-              user: { select: { id: true, plexUsername: true, avatar: true } },
+              user: { select: { id: true, displayName: true, avatar: true } },
             },
             orderBy: { createdAt: 'desc' },
           },
@@ -79,8 +79,8 @@ export async function mediaRoutes(app: FastifyInstance) {
       include: {
         requests: {
           include: {
-            user: { select: { id: true, plexUsername: true, avatar: true } },
-            approvedBy: { select: { id: true, plexUsername: true } },
+            user: { select: { id: true, displayName: true, avatar: true } },
+            approvedBy: { select: { id: true, displayName: true } },
           },
           orderBy: { createdAt: 'desc' },
         },
@@ -120,7 +120,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       include: {
         requests: {
           include: {
-            user: { select: { id: true, plexUsername: true, avatar: true } },
+            user: { select: { id: true, displayName: true, avatar: true } },
           },
         },
         seasons: { orderBy: { seasonNumber: 'asc' } },

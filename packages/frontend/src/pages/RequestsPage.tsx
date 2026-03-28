@@ -255,10 +255,10 @@ function RequestCard({
                 <img src={req.user.avatar} alt="" className="w-5 h-5 rounded-full ring-1 ring-white/20" />
               ) : (
                 <div className="w-5 h-5 rounded-full bg-ndp-accent/30 flex items-center justify-center text-[10px] text-white font-bold">
-                  {(req.user?.plexUsername || '?')[0].toUpperCase()}
+                  {(req.user?.displayName || '?')[0].toUpperCase()}
                 </div>
               )}
-              <span className="text-xs text-white/70">{req.user?.plexUsername}</span>
+              <span className="text-xs text-white/70">{req.user?.displayName}</span>
             </div>
           </div>
 

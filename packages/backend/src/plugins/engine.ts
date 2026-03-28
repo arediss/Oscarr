@@ -195,7 +195,7 @@ export class PluginEngine {
       async getUser(userId: number) {
         return prisma.user.findUnique({
           where: { id: userId },
-          select: { id: true, email: true, plexUsername: true, role: true },
+          select: { id: true, email: true, displayName: true, role: true },
         });
       },
       async getAppSettings() {

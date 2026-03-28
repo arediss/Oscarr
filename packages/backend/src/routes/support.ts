@@ -11,11 +11,11 @@ export async function supportRoutes(app: FastifyInstance) {
     const tickets = await prisma.supportTicket.findMany({
       where: user.role === 'admin' ? {} : { userId: user.id },
       include: {
-        user: { select: { id: true, plexUsername: true, avatar: true } },
+        user: { select: { id: true, displayName: true, avatar: true } },
         messages: {
           take: 1,
           orderBy: { createdAt: 'desc' },
-          include: { user: { select: { plexUsername: true } } },
+          include: { user: { select: { displayName: true } } },
         },
         _count: { select: { messages: true } },
       },
@@ -63,11 +63,11 @@ export async function supportRoutes(app: FastifyInstance) {
         },
       },
       include: {
-        user: { select: { id: true, plexUsername: true, avatar: true } },
+        user: { select: { id: true, displayName: true, avatar: true } },
       },
     });
 
-    logEvent('info', 'Support', `Ticket créé par ${ticket.user.plexUsername} : "${subject.trim()}"`);
+    logEvent('info', 'Support', `Ticket créé par ${ticket.user.displayName} : "${subject.trim()}"`);
     return reply.status(201).send(ticket);
   });
 
@@ -97,7 +97,7 @@ export async function supportRoutes(app: FastifyInstance) {
 
     const messages = await prisma.ticketMessage.findMany({
       where: { ticketId },
-      include: { user: { select: { id: true, plexUsername: true, avatar: true, role: true } } },
+      include: { user: { select: { id: true, displayName: true, avatar: true, role: true } } },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -145,7 +145,7 @@ export async function supportRoutes(app: FastifyInstance) {
 
     const message = await prisma.ticketMessage.create({
       data: { ticketId, userId: user.id, content: content.trim() },
-      include: { user: { select: { id: true, plexUsername: true, avatar: true, role: true } } },
+      include: { user: { select: { id: true, displayName: true, avatar: true, role: true } } },
     });
 
     // Notify ticket owner when an admin replies
