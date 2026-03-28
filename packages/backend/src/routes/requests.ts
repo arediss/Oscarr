@@ -308,6 +308,62 @@ export async function requestRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
+  // Trigger search for missing episodes/movie on existing media
+  app.post('/search-missing', {
+    schema: {
+      body: {
+        type: 'object' as const,
+        required: ['tmdbId', 'mediaType'],
+        properties: {
+          tmdbId: { type: 'number', description: 'TMDB ID of the media' },
+          mediaType: { type: 'string', enum: ['movie', 'tv'], description: 'Media type' },
+        },
+      },
+    },
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
+    const { tmdbId, mediaType } = request.body as { tmdbId: number; mediaType: string };
+
+    const media = await prisma.media.findUnique({
+      where: { tmdbId_mediaType: { tmdbId, mediaType } },
+    });
+    if (!media) return reply.status(404).send({ error: 'Média introuvable' });
+
+    // Check cooldown
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    const cooldownMin = settings?.missingSearchCooldownMin ?? 60;
+    if (media.lastMissingSearchAt) {
+      const elapsed = Date.now() - new Date(media.lastMissingSearchAt).getTime();
+      const remaining = Math.ceil((cooldownMin * 60 * 1000 - elapsed) / 60000);
+      if (elapsed < cooldownMin * 60 * 1000) {
+        return reply.status(429).send({ error: `Recherche déjà lancée récemment. Réessayez dans ${remaining} min.`, cooldownRemaining: remaining });
+      }
+    }
+
+    try {
+      if (mediaType === 'tv' && media.sonarrId) {
+        const sonarr = await getSonarrAsync();
+        await sonarr.searchMissingEpisodes(media.sonarrId);
+      } else if (mediaType === 'movie' && media.radarrId) {
+        const radarr = await getRadarrAsync();
+        await radarr.searchMovie(media.radarrId);
+      } else {
+        return reply.status(400).send({ error: 'Ce média n\'est pas encore dans Sonarr/Radarr' });
+      }
+
+      await prisma.media.update({
+        where: { id: media.id },
+        data: { lastMissingSearchAt: new Date() },
+      });
+
+      logEvent('info', 'Request', `Recherche des manquants lancée pour "${media.title}"`);
+      return reply.send({ ok: true });
+    } catch (err) {
+      console.error('Search missing failed:', err);
+      return reply.status(502).send({ error: 'Erreur lors du lancement de la recherche' });
+    }
+  });
+
   app.delete('/:id', {
     schema: {
       params: {
@@ -488,7 +544,10 @@ async function sendToService(
       const folderPath = ruleMatch?.folderPath || defaultFolder || (await radarr.getRootFolders())[0]?.path || '/movies';
       const tagId = await radarr.getOrCreateTag(username);
       const existing = await radarr.getMovieByTmdbId(media.tmdbId);
-      if (!existing) {
+      if (existing) {
+        // Movie already in Radarr — trigger a new search
+        await radarr.searchMovie(existing.id);
+      } else {
         const profileId = targetProfileId ?? defaultProfileId ?? (await radarr.getQualityProfiles())[0]?.id ?? 1;
         await radarr.addMovie({
           title: media.title,
@@ -507,7 +566,10 @@ async function sendToService(
       const seriesType = (ruleMatch?.seriesType as 'anime' | 'standard' | 'daily') || 'standard';
       const tagId = await sonarr.getOrCreateTag(username);
       const existing = await sonarr.getSeriesByTvdbId(media.tvdbId);
-      if (!existing) {
+      if (existing) {
+        // Series already in Sonarr — trigger search for missing episodes
+        await sonarr.searchMissingEpisodes(existing.id);
+      } else {
         const profileId = targetProfileId ?? defaultProfileId ?? (await sonarr.getQualityProfiles())[0]?.id ?? 1;
         await sonarr.addSeries({
           title: media.title,

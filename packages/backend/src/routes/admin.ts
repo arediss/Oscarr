@@ -81,6 +81,7 @@ export async function adminRoutes(app: FastifyInstance) {
           notificationMatrix: { type: 'string', description: 'JSON matrix mapping event types to notification channels' },
           autoApproveRequests: { type: 'boolean', description: 'Automatically approve all requests' },
           registrationEnabled: { type: 'boolean', description: 'Allow new account registration' },
+          missingSearchCooldownMin: { type: 'number', description: 'Cooldown in minutes before allowing another missing search' },
           requestsEnabled: { type: 'boolean', description: 'Enable the request system' },
           supportEnabled: { type: 'boolean', description: 'Enable the support/ticket system' },
           calendarEnabled: { type: 'boolean', description: 'Enable the calendar feature' },
@@ -105,6 +106,7 @@ export async function adminRoutes(app: FastifyInstance) {
       notificationMatrix?: string;
       autoApproveRequests?: boolean;
       registrationEnabled?: boolean;
+      missingSearchCooldownMin?: number;
       requestsEnabled?: boolean;
       supportEnabled?: boolean;
       calendarEnabled?: boolean;
@@ -128,6 +130,7 @@ export async function adminRoutes(app: FastifyInstance) {
         notificationMatrix: body.notificationMatrix ?? undefined,
         autoApproveRequests: body.autoApproveRequests ?? undefined,
         registrationEnabled: body.registrationEnabled ?? undefined,
+        missingSearchCooldownMin: body.missingSearchCooldownMin ?? undefined,
         requestsEnabled: body.requestsEnabled ?? undefined,
         supportEnabled: body.supportEnabled ?? undefined,
         calendarEnabled: body.calendarEnabled ?? undefined,
@@ -149,6 +152,7 @@ export async function adminRoutes(app: FastifyInstance) {
         notificationMatrix: body.notificationMatrix,
         autoApproveRequests: body.autoApproveRequests,
         registrationEnabled: body.registrationEnabled,
+        missingSearchCooldownMin: body.missingSearchCooldownMin,
         requestsEnabled: body.requestsEnabled,
         supportEnabled: body.supportEnabled,
         calendarEnabled: body.calendarEnabled,

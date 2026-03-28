@@ -164,6 +164,10 @@ class SonarrService {
     return created.id;
   }
 
+  async searchMissingEpisodes(seriesId: number): Promise<void> {
+    await this.api.post('/command', { name: 'MissingEpisodeSearch', seriesId });
+  }
+
   async getHistory(since?: Date | null): Promise<SonarrHistoryRecord[]> {
     if (since) {
       const { data } = await this.api.get('/history/since', { params: { date: since.toISOString() } });
