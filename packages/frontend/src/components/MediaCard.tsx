@@ -121,6 +121,13 @@ export default function MediaCard({ media, className, availability, index = 0 }:
         </div>
       )}
 
+      {/* Bottom-left: latest episode badge for TV */}
+      {media.lastEpisodeInfo && type === 'tv' && (
+        <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-black/60 text-white backdrop-blur-sm transition-opacity duration-300 group-hover:opacity-0">
+          S{String(media.lastEpisodeInfo.season).padStart(2, '0')}E{String(media.lastEpisodeInfo.episode).padStart(2, '0')}
+        </div>
+      )}
+
       {/* Bottom-right: availability status (hidden on hover) */}
       {statusBadge && (
         <div className={clsx(

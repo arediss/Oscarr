@@ -242,10 +242,14 @@ export async function mediaRoutes(app: FastifyInstance) {
         releaseDate: true,
         voteAverage: true,
         status: true,
+        lastEpisodeInfo: true,
       },
     });
 
-    return media;
+    return media.map((m) => ({
+      ...m,
+      lastEpisodeInfo: m.lastEpisodeInfo ? JSON.parse(m.lastEpisodeInfo) : null,
+    }));
   });
 
   // Batch lookup: check availability for multiple TMDB IDs

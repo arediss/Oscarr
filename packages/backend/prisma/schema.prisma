@@ -60,6 +60,7 @@ model Media {
   qualityProfileId    Int?      // Quality profile ID from Radarr/Sonarr
   availableAt         DateTime? // Set when status transitions to "available"
   lastMissingSearchAt DateTime? // Last time a missing episode search was triggered
+  lastEpisodeInfo     String?   // JSON: latest episode added (e.g. {"season":2,"episode":5,"title":"..."})
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

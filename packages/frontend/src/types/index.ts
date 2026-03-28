@@ -56,6 +56,7 @@ export interface TmdbMedia {
   vote_average: number;
   vote_count: number;
   media_type?: string;
+  lastEpisodeInfo?: { season: number; episode: number; title: string } | null;
   genre_ids?: number[];
   genres?: { id: number; name: string }[];
   runtime?: number;
