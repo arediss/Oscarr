@@ -55,10 +55,18 @@ export interface PluginContext {
 
 // ─── Plugin Registration (what register() returns) ──────────────────
 
+/** Guard result — return null to allow, or an error to block */
+export interface PluginGuardResult {
+  blocked: true;
+  error: string;
+  statusCode?: number;
+}
+
 export interface PluginRegistration {
   manifest: PluginManifest;
   registerRoutes?(app: FastifyInstance, ctx: PluginContext): Promise<void>;
   registerJobs?(ctx: PluginContext): Record<string, () => Promise<unknown>>;
+  registerGuards?(ctx: PluginContext): Record<string, (userId: number) => Promise<PluginGuardResult | null>>;
   onInstall?(ctx: PluginContext): Promise<void>;
 }
 
