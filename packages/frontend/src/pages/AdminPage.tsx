@@ -45,16 +45,16 @@ import type { AdminUser, QualityProfile, RootFolder } from '@/types';
 
 type Tab = 'users' | 'services' | 'quality' | 'support' | 'notifications' | 'paths' | 'jobs' | 'logs' | 'general' | (string & {});
 
-const TABS: { id: Tab; labelKey: string; icon: LucideIcon }[] = [
-  { id: 'general', labelKey: 'admin.tab.general', icon: Settings },
-  { id: 'users', labelKey: 'admin.tab.users', icon: Users },
-  { id: 'services', labelKey: 'admin.tab.services', icon: Server },
-  { id: 'quality', labelKey: 'admin.tab.quality', icon: Star },
-  { id: 'notifications', labelKey: 'admin.tab.notifications', icon: Bell },
-  { id: 'paths', labelKey: 'admin.tab.paths', icon: FolderTree },
-  { id: 'jobs', labelKey: 'admin.tab.jobs', icon: RefreshCw },
-  { id: 'logs', labelKey: 'admin.tab.logs', icon: ScrollText },
-  { id: 'plugins', labelKey: 'admin.tab.plugins', icon: Plug },
+const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: 'general', label: 'admin.tab.general', icon: Settings },
+  { id: 'users', label: 'admin.tab.users', icon: Users },
+  { id: 'services', label: 'admin.tab.services', icon: Server },
+  { id: 'quality', label: 'admin.tab.quality', icon: Star },
+  { id: 'notifications', label: 'admin.tab.notifications', icon: Bell },
+  { id: 'paths', label: 'admin.tab.paths', icon: FolderTree },
+  { id: 'jobs', label: 'admin.tab.jobs', icon: RefreshCw },
+  { id: 'logs', label: 'admin.tab.logs', icon: ScrollText },
+  { id: 'plugins', label: 'admin.tab.plugins', icon: Plug },
 ];
 
 export default function AdminPage() {
@@ -102,7 +102,7 @@ export default function AdminPage() {
       </div>
 
       <div className="flex gap-3 mb-8 overflow-x-auto pb-2 pt-1" style={{ scrollbarWidth: 'none' }}>
-        {TABS.map(({ id, labelKey, icon: Icon }) => (
+        {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
@@ -113,7 +113,7 @@ export default function AdminPage() {
             )}
           >
             <Icon className="w-4 h-4" />
-            {t(labelKey)}
+            {t(label)}
             {warnings[id] && (
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-ndp-danger rounded-full flex items-center justify-center text-[10px] font-bold text-white">!</span>
             )}
@@ -1013,11 +1013,11 @@ function LogsTab() {
 
 // ============ NOTIFICATIONS TAB ============
 const EVENT_TYPES = [
-  { key: 'request_new', labelKey: 'admin.notifications.event.request_new' },
-  { key: 'request_approved', labelKey: 'admin.notifications.event.request_approved' },
-  { key: 'request_declined', labelKey: 'admin.notifications.event.request_declined' },
-  { key: 'media_available', labelKey: 'admin.notifications.event.media_available' },
-  { key: 'incident_banner', labelKey: 'admin.notifications.event.incident_banner' },
+  { key: 'request_new', label: 'admin.notifications.event.request_new' },
+  { key: 'request_approved', label: 'admin.notifications.event.request_approved' },
+  { key: 'request_declined', label: 'admin.notifications.event.request_declined' },
+  { key: 'media_available', label: 'admin.notifications.event.media_available' },
+  { key: 'incident_banner', label: 'admin.notifications.event.incident_banner' },
 ] as const;
 
 const DEFAULT_MATRIX: Record<string, { discord: boolean; telegram: boolean; email: boolean }> = {
@@ -1193,9 +1193,9 @@ function NotificationsTab() {
               </tr>
             </thead>
             <tbody>
-              {EVENT_TYPES.map(({ key, labelKey }) => (
+              {EVENT_TYPES.map(({ key, label }) => (
                 <tr key={key} className="border-b border-white/5">
-                  <td className="px-4 py-3 text-ndp-text">{t(labelKey)}</td>
+                  <td className="px-4 py-3 text-ndp-text">{t(label)}</td>
                   {(['discord', 'telegram', 'email'] as const).map((ch) => {
                     const disabled = (ch === 'discord' && !hasDiscord) || (ch === 'telegram' && !hasTelegram) || (ch === 'email' && !hasEmail);
                     return (
@@ -1228,82 +1228,10 @@ function NotificationsTab() {
 
 // ============ SERVICES TAB ============
 
-interface ServiceField {
-  key: string;
-  labelKey: string;
-  type: 'text' | 'password';
-  placeholder?: string;
-}
-
-interface ServiceSchema {
-  label: string;
-  icon: string;
-  fields: ServiceField[];
-}
-
-const SERVICE_SCHEMAS: Record<string, ServiceSchema> = {
-  radarr: {
-    label: 'Radarr',
-    icon: '/radarr.png',
-    fields: [
-      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:7878' },
-      { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
-    ],
-  },
-  sonarr: {
-    label: 'Sonarr',
-    icon: '/sonarr.png',
-    fields: [
-      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:8989' },
-      { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
-    ],
-  },
-  plex: {
-    label: 'Plex',
-    icon: '/plex.png',
-    fields: [
-      { key: 'url', labelKey: 'admin.services.server_url', type: 'text', placeholder: 'http://localhost:32400' },
-      { key: 'token', labelKey: 'common.token', type: 'password' },
-      { key: 'machineId', labelKey: 'install.machine_id', type: 'text' },
-    ],
-  },
-  qbittorrent: {
-    label: 'qBittorrent',
-    icon: '/qbittorrent.svg',
-    fields: [
-      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://192.168.1.64:8080' },
-      { key: 'username', labelKey: 'common.username', type: 'text' },
-      { key: 'password', labelKey: 'common.password', type: 'password' },
-    ],
-  },
-  tautulli: {
-    label: 'Tautulli',
-    icon: '/tautulli.svg',
-    fields: [
-      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:8181' },
-      { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
-    ],
-  },
-  trackarr: {
-    label: 'Trackarr',
-    icon: '/trackarr.svg',
-    fields: [
-      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:7333' },
-      { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
-    ],
-  },
-};
-
-interface ServiceData {
-  id: number;
-  name: string;
-  type: string;
-  config: Record<string, string>;
-  isDefault: boolean;
-  enabled: boolean;
-}
+import { useServiceSchemas, type ServiceData } from '@/hooks/useServiceSchemas';
 
 function ServicesTab() {
+  const { schemas: SERVICE_SCHEMAS } = useServiceSchemas();
   const { t } = useTranslation();
   const [services, setServices] = useState<ServiceData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1445,6 +1373,7 @@ function ServicesTab() {
 
 function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | null; onClose: () => void; onSaved: () => void }) {
   const { t } = useTranslation();
+  const { schemas: SERVICE_SCHEMAS } = useServiceSchemas();
   const isEdit = !!service;
   const [type, setType] = useState(service?.type || 'radarr');
   const [name, setName] = useState(service?.name || '');

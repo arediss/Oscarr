@@ -1,6 +1,11 @@
 import { prisma } from '../../utils/prisma.js';
 import { hashPassword, verifyPassword } from '../../utils/password.js';
-import type { AuthResult } from '../types.js';
+interface AuthResult {
+  email: string;
+  displayName: string;
+  avatar?: string | null;
+  providerData: Record<string, unknown>;
+}
 
 export async function registerEmail(email: string, password: string, displayName: string): Promise<AuthResult> {
   const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });

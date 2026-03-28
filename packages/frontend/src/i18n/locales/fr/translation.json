@@ -109,6 +109,8 @@
   "register.submit": "Créer le compte",
   "register.password_mismatch": "Les mots de passe ne correspondent pas",
 
+  "provider.plex.machine_id": "Machine ID",
+
   "install.title": "Installation",
   "install.subtitle": "Configurez votre instance pour commencer",
   "install.admin_title": "Compte administrateur",
