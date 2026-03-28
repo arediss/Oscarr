@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -29,6 +29,7 @@ import {
   Power,
   Star,
   Plug,
+  Link,
   Eye,
   EyeOff,
   type LucideIcon,
@@ -159,6 +160,9 @@ function UsersTab() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number; total: number } | null>(null);
   const [deletingUser, setDeletingUser] = useState<number | null>(null);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<number | null>(null);
+  const [linkingUser, setLinkingUser] = useState<number | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -179,10 +183,46 @@ function UsersTab() {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  const handleLinkPlex = async (userId: number) => {
+    setLinkingUser(userId);
+    try {
+      const { data } = await api.post('/auth/plex/pin');
+      const { pin, authUrl } = data;
+      window.open(authUrl, 'PlexAuth', 'width=600,height=700');
+
+      let attempts = 0;
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(async () => {
+        attempts++;
+        if (attempts >= 120) {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          setLinkingUser(null);
+          return;
+        }
+        try {
+          const { data: linkData } = await api.post(`/admin/users/${userId}/link-provider`, { provider: 'plex', pinId: pin.id });
+          if (linkData.success) {
+            clearInterval(pollRef.current!);
+            pollRef.current = null;
+            setLinkingUser(null);
+            fetchUsers();
+          }
+        } catch { /* keep polling */ }
+      }, 1000);
+    } catch {
+      setLinkingUser(null);
+    }
+  };
+
   const handleImportPlex = async () => {
     setImporting(true); setImportResult(null);
     try {
-      const { data } = await api.post('/admin/users/import-plex');
+      const { data } = await api.post('/admin/users/import/plex');
       setImportResult(data);
       fetchUsers();
     } catch (err) { console.error('Import failed:', err); }
@@ -242,10 +282,30 @@ function UsersTab() {
                 </div>
                 <div className="flex items-center gap-4 flex-shrink-0">
                   <span className="text-xs text-ndp-text-dim tabular-nums">{u.requestCount} {t('requests.title').toLowerCase()}</span>
-                  <span className="text-[10px] bg-white/5 text-ndp-text-dim px-2 py-0.5 rounded-full font-medium">Plex</span>
+                  {(u.providers || []).map((p) => (
+                    <span key={p.provider} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                      p.provider === 'plex' ? 'bg-[#e5a00d]/10 text-[#e5a00d]' :
+                      p.provider === 'email' ? 'bg-ndp-accent/10 text-ndp-accent' :
+                      'bg-white/5 text-ndp-text-dim'
+                    }`} title={p.email && p.email !== u.email ? p.email : p.username || undefined}>
+                      {p.provider.charAt(0).toUpperCase() + p.provider.slice(1)}
+                      {p.email && p.email !== u.email && <span className="ml-1 opacity-60">({p.email})</span>}
+                    </span>
+                  ))}
+                  {!(u.providers || []).some((p) => p.provider === 'plex') && (
+                    <button
+                      onClick={() => handleLinkPlex(u.id)}
+                      disabled={linkingUser === u.id}
+                      className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#e5a00d]/5 text-[#e5a00d]/60 hover:bg-[#e5a00d]/15 hover:text-[#e5a00d] transition-colors flex items-center gap-1"
+                      title={t('admin.users.link_plex')}
+                    >
+                      {linkingUser === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link className="w-3 h-3" />}
+                      Plex
+                    </button>
+                  )}
                   {u.id !== currentUser?.id && (
                     <button
-                      onClick={() => handleDeleteUser(u.id)}
+                      onClick={() => setConfirmDeleteUser(u.id)}
                       disabled={deletingUser === u.id}
                       className="p-1.5 rounded-lg text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors"
                       title={t('admin.danger.delete_user')}
@@ -258,6 +318,42 @@ function UsersTab() {
             </div>
         ))}
       </div>
+
+      {/* Delete confirmation modal */}
+      {confirmDeleteUser && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="card p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-ndp-text mb-2">{t('admin.danger.confirm_title')}</h3>
+            <p className="text-sm text-ndp-text-muted mb-1">
+              {t('admin.users.confirm_delete', { name: users.find(u => u.id === confirmDeleteUser)?.displayName || users.find(u => u.id === confirmDeleteUser)?.email })}
+            </p>
+            <p className="text-xs text-ndp-text-dim mb-6">
+              {t('admin.users.confirm_delete_desc')}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDeleteUser(null)}
+                className="btn-secondary text-sm flex-1"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={async () => {
+                  const userId = confirmDeleteUser;
+                  setConfirmDeleteUser(null);
+                  await handleDeleteUser(userId);
+                }}
+                disabled={deletingUser !== null}
+                className="btn-danger text-sm flex-1 flex items-center justify-center gap-2"
+              >
+                {deletingUser ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {t('admin.danger.delete_user')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -1739,6 +1835,7 @@ function GeneralTab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [autoApproveRequests, setAutoApproveRequests] = useState(false);
+  const [registrationEnabled, setRegistrationEnabled] = useState(true);
   const [requestsEnabled, setRequestsEnabled] = useState(true);
   const [supportEnabled, setSupportEnabled] = useState(true);
   const [calendarEnabled, setCalendarEnabled] = useState(true);
@@ -1751,6 +1848,7 @@ function GeneralTab() {
     Promise.all([
       api.get('/admin/settings').then(({ data }) => {
         setAutoApproveRequests(data.autoApproveRequests ?? false);
+        setRegistrationEnabled(data.registrationEnabled ?? true);
         setRequestsEnabled(data.requestsEnabled ?? true);
         setSupportEnabled(data.supportEnabled ?? true);
         setCalendarEnabled(data.calendarEnabled ?? true);
@@ -1767,6 +1865,7 @@ function GeneralTab() {
       await Promise.all([
         api.put('/admin/settings', {
           autoApproveRequests,
+          registrationEnabled,
           requestsEnabled,
           supportEnabled,
           calendarEnabled,
@@ -1782,6 +1881,7 @@ function GeneralTab() {
   if (loading) return <Spinner />;
 
   const features = [
+    { label: t('admin.general.feature.registration'), desc: t('admin.general.feature.registration_desc'), value: registrationEnabled, set: setRegistrationEnabled },
     { label: t('admin.general.feature.requests'), desc: t('admin.general.feature.requests_desc'), value: requestsEnabled, set: setRequestsEnabled },
     { label: t('admin.general.feature.auto_approve'), desc: t('admin.general.feature.auto_approve_desc'), value: autoApproveRequests, set: setAutoApproveRequests },
     { label: t('admin.general.feature.support'), desc: t('admin.general.feature.support_desc'), value: supportEnabled, set: setSupportEnabled },

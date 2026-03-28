@@ -24,15 +24,17 @@ function extractUsernameFromTag(label: string): string | null {
 
 export async function syncRequestsFromTags(): Promise<{ radarr: SyncResult; sonarr: SyncResult }> {
   const users = await prisma.user.findMany({
-    select: { id: true, displayName: true, plexUsername: true, email: true },
+    select: { id: true, displayName: true, email: true, providers: { select: { providerUsername: true } } },
   });
 
-  // Build a map of lowercase username -> userId (search by displayName, plexUsername, and email)
+  // Build a map of lowercase username -> userId (search by displayName, provider usernames, and email)
   const usernameMap = new Map<string, number>();
   for (const u of users) {
     if (u.displayName) usernameMap.set(u.displayName.toLowerCase(), u.id);
-    if (u.plexUsername) usernameMap.set(u.plexUsername.toLowerCase(), u.id);
     if (u.email) usernameMap.set(u.email.toLowerCase(), u.id);
+    for (const p of u.providers) {
+      if (p.providerUsername) usernameMap.set(p.providerUsername.toLowerCase(), u.id);
+    }
   }
 
   const radarrResult = await syncRadarrRequests(usernameMap);

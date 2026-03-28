@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
-import { Film, Loader2, CheckCircle, RefreshCw, PartyPopper, Plus, Trash2, XCircle, Eye, EyeOff, Mail } from 'lucide-react';
+import { Film, Loader2, CheckCircle, RefreshCw, PartyPopper, Plus, Trash2, XCircle, Eye, EyeOff, Mail, Pencil } from 'lucide-react';
 import api from '@/lib/api';
 
 interface ArrService {
@@ -402,59 +402,83 @@ export default function InstallPage() {
                 <p className="text-xs text-ndp-text-dim">{t('install.arr_desc')}</p>
               </div>
 
-              <div className="space-y-4">
-                {arrServices.map((svc) => (
-                  <div key={svc.id} className="p-4 bg-white/5 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <select
-                        value={svc.type}
-                        onChange={(e) => {
-                          const type = e.target.value as 'radarr' | 'sonarr';
-                          updateArrService(svc.id, { type, name: type === 'radarr' ? 'Radarr' : 'Sonarr' });
-                        }}
-                        className="input text-sm w-auto"
+              <div className="space-y-3">
+                {arrServices.map((svc) => {
+                  const isCollapsed = svc.testStatus === 'ok';
+                  return (
+                    <div key={svc.id} className="bg-white/5 rounded-xl overflow-hidden transition-all duration-300">
+                      {/* Collapsed header — always visible */}
+                      <div
+                        className={`flex items-center gap-3 px-4 transition-all duration-300 ${isCollapsed ? 'py-3' : 'py-0 h-0 opacity-0 overflow-hidden'}`}
                       >
-                        <option value="radarr">Radarr</option>
-                        <option value="sonarr">Sonarr</option>
-                      </select>
-                      {arrServices.length > 1 && (
-                        <button onClick={() => removeArrService(svc.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
-                          <Trash2 className="w-4 h-4" />
+                        <CheckCircle className="w-4 h-4 text-ndp-success flex-shrink-0" />
+                        <span className="text-sm font-medium text-ndp-text">{svc.type === 'radarr' ? 'Radarr' : 'Sonarr'}</span>
+                        <span className="text-xs text-ndp-text-dim truncate flex-1">{svc.url}</span>
+                        <button onClick={() => updateArrService(svc.id, { testStatus: 'idle' })} className="text-ndp-text-dim hover:text-ndp-text transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
                         </button>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      value={svc.url}
-                      onChange={(e) => updateArrService(svc.id, { url: e.target.value })}
-                      placeholder="http://localhost:7878"
-                      className="input w-full text-sm"
-                    />
-                    <input
-                      type="text"
-                      value={svc.apiKey}
-                      onChange={(e) => updateArrService(svc.id, { apiKey: e.target.value })}
-                      placeholder={t('common.api_key')}
-                      className="input w-full text-sm"
-                    />
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => testArrService(svc.id)}
-                        disabled={!svc.url || !svc.apiKey || svc.testStatus === 'testing'}
-                        className="btn-secondary text-xs flex items-center gap-1.5 px-3 py-1.5"
+                        {arrServices.length > 1 && (
+                          <button onClick={() => removeArrService(svc.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Expanded form */}
+                      <div
+                        className={`transition-all duration-300 ease-in-out ${isCollapsed ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-96 opacity-100'}`}
                       >
-                        {svc.testStatus === 'testing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                        {t('common.test')}
-                      </button>
-                      {svc.testStatus === 'ok' && (
-                        <span className="flex items-center gap-1 text-xs text-ndp-success"><CheckCircle className="w-3.5 h-3.5" /> {t('status.connected')}</span>
-                      )}
-                      {svc.testStatus === 'error' && (
-                        <span className="flex items-center gap-1 text-xs text-ndp-danger"><XCircle className="w-3.5 h-3.5" /> {t('status.connection_failed')}</span>
-                      )}
+                        <div className="p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <select
+                              value={svc.type}
+                              onChange={(e) => {
+                                const type = e.target.value as 'radarr' | 'sonarr';
+                                updateArrService(svc.id, { type, name: type === 'radarr' ? 'Radarr' : 'Sonarr' });
+                              }}
+                              className="input text-sm w-auto"
+                            >
+                              <option value="radarr">Radarr</option>
+                              <option value="sonarr">Sonarr</option>
+                            </select>
+                            {arrServices.length > 1 && (
+                              <button onClick={() => removeArrService(svc.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          <input
+                            type="text"
+                            value={svc.url}
+                            onChange={(e) => updateArrService(svc.id, { url: e.target.value })}
+                            placeholder="http://localhost:7878"
+                            className="input w-full text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={svc.apiKey}
+                            onChange={(e) => updateArrService(svc.id, { apiKey: e.target.value })}
+                            placeholder={t('common.api_key')}
+                            className="input w-full text-sm"
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => testArrService(svc.id)}
+                              disabled={!svc.url || !svc.apiKey || svc.testStatus === 'testing'}
+                              className="btn-secondary text-xs flex items-center gap-1.5 px-3 py-1.5"
+                            >
+                              {svc.testStatus === 'testing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                              {t('common.test')}
+                            </button>
+                            {svc.testStatus === 'error' && (
+                              <span className="flex items-center gap-1 text-xs text-ndp-danger"><XCircle className="w-3.5 h-3.5" /> {t('status.connection_failed')}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <button onClick={addArrService} className="btn-secondary text-xs flex items-center gap-1.5 w-full justify-center">

@@ -45,10 +45,9 @@ export async function setupRoutes(app: FastifyInstance) {
 
   // Plex OAuth for setup — just get a token without creating a user
   app.post('/plex-pin', async (_request, reply) => {
-    const { createPlexPin } = await import('../services/plex.js');
-    const pin = await createPlexPin('oscarr-client');
-    const authUrl = `https://app.plex.tv/auth#?clientID=oscarr-client&code=${pin.code}&context%5Bdevice%5D%5Bproduct%5D=Oscarr`;
-    return reply.send({ pin, authUrl });
+    const { plexCreatePin } = await import('../auth/providers/plex.js');
+    const result = await plexCreatePin();
+    return reply.send(result);
   });
 
   app.post('/plex-check', {
@@ -64,8 +63,8 @@ export async function setupRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { pinId } = request.body as { pinId: number };
     if (!pinId) return reply.status(400).send({ error: 'pinId requis' });
-    const { checkPlexPin } = await import('../services/plex.js');
-    const authToken = await checkPlexPin(pinId, 'oscarr-client');
+    const { plexCheckPin } = await import('../auth/providers/plex.js');
+    const authToken = await plexCheckPin(pinId);
     if (!authToken) return reply.status(400).send({ error: 'PIN non validé' });
     return reply.send({ token: authToken });
   });

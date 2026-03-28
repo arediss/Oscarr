@@ -9,7 +9,6 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isAdmin: boolean;
   hasAccess: boolean;
-  hasPlexServerAccess: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -56,13 +55,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isAdmin = user?.role === 'admin';
-  const hasPlexServerAccess = user?.hasPlexServerAccess ?? false;
-  const hasAccess = isAdmin || hasPlexServerAccess;
+  const hasAccess = isAdmin || (user?.providers ?? []).length > 0;
 
   return (
     <AuthContext.Provider value={{
       user, loading, login, logout,
-      isAdmin, hasAccess, hasPlexServerAccess,
+      isAdmin, hasAccess,
     }}>
       {children}
     </AuthContext.Provider>
