@@ -192,7 +192,7 @@ function UsersTab() {
   if (loading) return <Spinner />;
 
   const sortedUsers = [...users].sort((a, b) => {
-    if (sortBy === 'username') return (a.plexUsername || a.email).localeCompare(b.plexUsername || b.email);
+    if (sortBy === 'username') return (a.displayName || a.email).localeCompare(b.displayName || b.email);
     if (sortBy === 'role') return a.role === b.role ? 0 : a.role === 'admin' ? -1 : 1;
     return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
   });
@@ -232,10 +232,10 @@ function UsersTab() {
         {sortedUsers.map((u) => (
             <div key={u.id} className="card">
               <div className="flex items-center gap-4 p-4">
-                {u.avatar ? <img src={u.avatar} alt="" className="w-10 h-10 rounded-full" /> : <div className="w-10 h-10 rounded-full bg-ndp-accent/20 flex items-center justify-center text-ndp-accent font-bold">{(u.plexUsername || u.email)[0].toUpperCase()}</div>}
+                {u.avatar ? <img src={u.avatar} alt="" className="w-10 h-10 rounded-full" /> : <div className="w-10 h-10 rounded-full bg-ndp-accent/20 flex items-center justify-center text-ndp-accent font-bold">{(u.displayName || u.email)[0].toUpperCase()}</div>}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-ndp-text">{u.plexUsername || u.email}</span>
+                    <span className="text-sm font-semibold text-ndp-text">{u.displayName || u.email}</span>
                     {u.role === 'admin' && <span className="text-[10px] bg-ndp-accent/10 text-ndp-accent px-2 py-0.5 rounded-full font-semibold">Admin</span>}
                   </div>
                   <span className="text-xs text-ndp-text-dim mt-0.5 block">{u.email}</span>

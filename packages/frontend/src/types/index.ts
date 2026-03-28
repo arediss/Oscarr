@@ -1,15 +1,23 @@
 export interface User {
   id: number;
   email: string;
-  plexUsername: string | null;
+  displayName: string | null;
   avatar: string | null;
   role: 'admin' | 'user';
+  authProvider?: string;
   hasPlexServerAccess?: boolean;
+  plexId?: number | null;
   createdAt?: string;
 }
 
 export interface AdminUser extends User {
   requestCount?: number;
+}
+
+export interface AuthProviderConfig {
+  id: string;
+  label: string;
+  type: 'oauth' | 'credentials';
 }
 
 export interface RootFolder {
@@ -131,8 +139,8 @@ export interface MediaRequest {
   createdAt: string;
   updatedAt: string;
   media?: Media;
-  user?: Pick<User, 'id' | 'plexUsername' | 'avatar'>;
-  approvedBy?: Pick<User, 'id' | 'plexUsername'>;
+  user?: Pick<User, 'id' | 'displayName' | 'avatar'>;
+  approvedBy?: Pick<User, 'id' | 'displayName'>;
 }
 
 export interface QueueItem {
