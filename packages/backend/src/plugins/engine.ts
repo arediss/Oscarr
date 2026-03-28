@@ -7,6 +7,7 @@ import { discoverPlugins } from './loader.js';
 import type {
   LoadedPlugin,
   PluginContext,
+  PluginGuardResult,
   PluginInfo,
   PluginManifest,
   PluginRegistration,
@@ -186,6 +187,24 @@ export class PluginEngine {
       where: { pluginId: id },
       data: { settings: JSON.stringify(values) },
     });
+  }
+
+  /** Run all plugin guards for a given hook. Returns the first block result, or null if all pass. */
+  async runGuards(guardName: string, userId: number): Promise<PluginGuardResult | null> {
+    for (const [id, plugin] of this.plugins) {
+      if (!plugin.enabled || plugin.error || !plugin.registration.registerGuards) continue;
+      try {
+        const ctx = this.createContext(plugin.manifest, console as unknown as FastifyBaseLogger);
+        const guards = plugin.registration.registerGuards(ctx);
+        const guard = guards[guardName];
+        if (!guard) continue;
+        const result = await guard(userId);
+        if (result?.blocked) return result;
+      } catch (err) {
+        console.error(`[PluginEngine] Guard "${guardName}" failed for plugin "${id}":`, err);
+      }
+    }
+    return null;
   }
 
   private createContext(manifest: PluginManifest, logger: FastifyBaseLogger): PluginContext {

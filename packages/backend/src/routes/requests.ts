@@ -8,6 +8,7 @@ import { sendNotification, logEvent } from '../services/notifications.js';
 import { sendUserNotification } from '../services/userNotifications.js';
 import { getServiceById, getAllServices } from '../utils/services.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
+import { pluginEngine } from '../plugins/engine.js';
 
 const VALID_STATUSES = ['pending', 'approved', 'declined', 'processing', 'available', 'failed'];
 
@@ -126,6 +127,14 @@ export async function requestRoutes(app: FastifyInstance) {
     const validSeasons = Array.isArray(seasons) && seasons.every((s) => typeof s === 'number' && Number.isFinite(s))
       ? (seasons as number[])
       : undefined;
+
+    // Run plugin guards (e.g. subscription check)
+    if (user.role !== 'admin') {
+      const guardResult = await pluginEngine.runGuards('request.create', user.id);
+      if (guardResult?.blocked) {
+        return reply.status(guardResult.statusCode || 403).send({ error: guardResult.error });
+      }
+    }
 
     const tmdbData = validMediaType === 'movie'
       ? await getMovieDetails(tmdbId)
@@ -322,7 +331,16 @@ export async function requestRoutes(app: FastifyInstance) {
     },
     preHandler: [app.authenticate],
   }, async (request, reply) => {
+    const user = request.user as { id: number; role: string };
     const { tmdbId, mediaType } = request.body as { tmdbId: number; mediaType: string };
+
+    // Run plugin guards
+    if (user.role !== 'admin') {
+      const guardResult = await pluginEngine.runGuards('request.create', user.id);
+      if (guardResult?.blocked) {
+        return reply.status(guardResult.statusCode || 403).send({ error: guardResult.error });
+      }
+    }
 
     const media = await prisma.media.findUnique({
       where: { tmdbId_mediaType: { tmdbId, mediaType } },
