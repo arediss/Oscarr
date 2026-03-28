@@ -330,6 +330,13 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get('/plex-token', async (request, reply) => {
     await requireAdmin(request, reply);
+    // Prefer service config token, fallback to admin user token
+    const plexService = await prisma.service.findFirst({
+      where: { type: 'plex', enabled: true },
+    });
+    const plexConfig = plexService ? JSON.parse(plexService.config) : null;
+    if (plexConfig?.token) return { token: plexConfig.token };
+
     const adminUser = request.user as { id: number };
     const admin = await prisma.user.findUnique({
       where: { id: adminUser.id },
@@ -525,15 +532,24 @@ export async function adminRoutes(app: FastifyInstance) {
   app.post('/users/import-plex', async (request, reply) => {
     await requireAdmin(request, reply);
 
-    // Get admin's Plex token
-    const adminUser = request.user as { id: number };
-    const admin = await prisma.user.findUnique({
-      where: { id: adminUser.id },
-      select: { plexToken: true },
+    // Get Plex token: prefer service config, fallback to admin user token
+    const plexService = await prisma.service.findFirst({
+      where: { type: 'plex', enabled: true },
     });
+    const plexConfig = plexService ? JSON.parse(plexService.config) : null;
+    let plexToken = plexConfig?.token || null;
 
-    if (!admin?.plexToken) {
-      return reply.status(400).send({ error: 'Token Plex admin introuvable. Reconnectez-vous.' });
+    if (!plexToken) {
+      const adminUser = request.user as { id: number };
+      const admin = await prisma.user.findUnique({
+        where: { id: adminUser.id },
+        select: { plexToken: true },
+      });
+      plexToken = admin?.plexToken || null;
+    }
+
+    if (!plexToken) {
+      return reply.status(400).send({ error: 'Aucun token Plex trouvé. Configurez un service Plex dans les paramètres.' });
     }
 
     // Get server machine ID to query shared users
@@ -543,7 +559,7 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     try {
-      const sharedUsers = await getSharedServerUsers(admin.plexToken, settings.plexMachineId);
+      const sharedUsers = await getSharedServerUsers(plexToken, settings.plexMachineId);
       let imported = 0;
       let skipped = 0;
 
