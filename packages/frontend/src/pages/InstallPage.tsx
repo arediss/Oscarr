@@ -4,22 +4,23 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
 import { Film, Loader2, CheckCircle, RefreshCw, PartyPopper, Plus, Trash2, XCircle, Eye, EyeOff, Mail, Pencil } from 'lucide-react';
 import api from '@/lib/api';
+import { useServiceSchemas } from '@/hooks/useServiceSchemas';
 
-interface ArrService {
+interface WizardService {
   id: string;
-  type: 'radarr' | 'sonarr';
+  type: string;
   name: string;
-  url: string;
-  apiKey: string;
+  config: Record<string, string>;
   testStatus: 'idle' | 'testing' | 'ok' | 'error';
   saved: boolean;
 }
 
-const TOTAL_STEPS = 6; // 0-5
+const TOTAL_STEPS = 5; // 0-4
 
 export default function InstallPage() {
   const { t } = useTranslation();
   const { login } = useAuth();
+  const { schemas: SERVICE_SCHEMAS } = useServiceSchemas('/setup/service-schemas');
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
   const [setupSecret, setSetupSecret] = useState('');
@@ -36,28 +37,19 @@ export default function InstallPage() {
   const [adminDisplayName, setAdminDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Step 2: Arr services
-  const [arrServices, setArrServices] = useState<ArrService[]>([
-    { id: '1', type: 'radarr', name: 'Radarr', url: '', apiKey: '', testStatus: 'idle', saved: false },
+  // Step 2: Services (unified)
+  const [services, setServices] = useState<WizardService[]>([
+    { id: '1', type: 'radarr', name: 'Radarr', config: { url: '', apiKey: '' }, testStatus: 'idle', saved: false },
   ]);
 
-  // Step 3: Plex optional
-  const [wantPlex, setWantPlex] = useState(false);
-  const [plexUrl, setPlexUrl] = useState('');
-  const [plexToken, setPlexToken] = useState('');
-  const [plexMachineId, setPlexMachineId] = useState('');
-  const [plexName, setPlexName] = useState('Plex');
-  const [plexPolling, setPlexPolling] = useState(false);
-  const [plexTestOk, setPlexTestOk] = useState<boolean | null>(null);
-  const [plexTesting, setPlexTesting] = useState(false);
-  const [plexDetecting, setPlexDetecting] = useState(false);
-  const [plexAuthed, setPlexAuthed] = useState(false);
+  // Plex OAuth helpers
+  const [plexPolling, setPlexPolling] = useState<string | null>(null); // service id being polled
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Step 4: Sync
+  // Step 3: Sync
   const [syncing, setSyncing] = useState(false);
   const [syncDone, setSyncDone] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ radarr?: { added: number; updated: number }; sonarr?: { added: number; updated: number } } | null>(null);
+  const [syncResult, setSyncResult] = useState<{ radarr?: { added: number }; sonarr?: { added: number } } | null>(null);
 
   useEffect(() => {
     api.get('/setup/install-status')
@@ -80,9 +72,7 @@ export default function InstallPage() {
     setError('');
     try {
       const { data } = await api.post('/auth/register', {
-        email: adminEmail,
-        password: adminPassword,
-        displayName: adminDisplayName,
+        email: adminEmail, password: adminPassword, displayName: adminDisplayName,
       });
       login(data.token, data.user);
       setStep(2);
@@ -92,45 +82,135 @@ export default function InstallPage() {
     } finally { setSaving(false); }
   };
 
-  // ─── Step 2: Arr services ──────────────────────────────────────────
+  // ─── Step 2: Services ──────────────────────────────────────────────
 
-  const addArrService = () => {
-    setArrServices(prev => [...prev, {
-      id: String(Date.now()),
-      type: prev.some(s => s.type === 'radarr') ? 'sonarr' : 'radarr',
-      name: prev.some(s => s.type === 'radarr') ? 'Sonarr' : 'Radarr',
-      url: '', apiKey: '', testStatus: 'idle', saved: false,
+  const addService = () => {
+    const existing = services.map(s => s.type);
+    const nextType = !existing.includes('sonarr') ? 'sonarr' : !existing.includes('radarr') ? 'radarr' : 'sonarr';
+    const schema = SERVICE_SCHEMAS[nextType];
+    const emptyConfig: Record<string, string> = {};
+    schema?.fields.forEach(f => { emptyConfig[f.key] = ''; });
+    setServices(prev => [...prev, {
+      id: String(Date.now()), type: nextType, name: schema?.label || nextType,
+      config: emptyConfig, testStatus: 'idle', saved: false,
     }]);
   };
 
-  const removeArrService = (id: string) => {
-    setArrServices(prev => prev.filter(s => s.id !== id));
+  const removeService = (id: string) => {
+    setServices(prev => prev.filter(s => s.id !== id));
   };
 
-  const updateArrService = (id: string, updates: Partial<ArrService>) => {
-    setArrServices(prev => prev.map(s => s.id === id ? { ...s, ...updates, testStatus: updates.url !== undefined || updates.apiKey !== undefined ? 'idle' as const : s.testStatus } : s));
+  const updateService = (id: string, updates: Partial<WizardService>) => {
+    setServices(prev => prev.map(s => {
+      if (s.id !== id) return s;
+      const updated = { ...s, ...updates };
+      // Reset test status if config changed
+      if (updates.config) updated.testStatus = 'idle';
+      return updated;
+    }));
   };
 
-  const testArrService = async (id: string) => {
-    const svc = arrServices.find(s => s.id === id);
-    if (!svc || !svc.url || !svc.apiKey) return;
-    updateArrService(id, { testStatus: 'testing' });
+  const changeServiceType = (id: string, newType: string) => {
+    const schema = SERVICE_SCHEMAS[newType];
+    if (!schema) return;
+    const emptyConfig: Record<string, string> = {};
+    schema.fields.forEach(f => { emptyConfig[f.key] = ''; });
+    updateService(id, { type: newType, name: schema.label, config: emptyConfig, testStatus: 'idle' });
+  };
+
+  const testService = async (id: string) => {
+    const svc = services.find(s => s.id === id);
+    if (!svc) return;
+    updateService(id, { testStatus: 'testing' });
     try {
-      await api.post('/setup/test-arr', { url: svc.url, apiKey: svc.apiKey });
-      setArrServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'ok' } : s));
+      await api.post('/setup/test-service', { type: svc.type, config: svc.config });
+      setServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'ok' as const } : s));
     } catch {
-      setArrServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'error' } : s));
+      setServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'error' as const } : s));
     }
   };
 
-  const saveArrServices = async () => {
+  const startPlexOAuth = (serviceId: string) => {
+    setPlexPolling(serviceId);
+    setError('');
+    api.post('/auth/plex/pin').then(({ data }) => {
+      const { pin, authUrl } = data;
+      window.open(authUrl, 'PlexAuth', 'width=600,height=700');
+
+      let attempts = 0;
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(async () => {
+        attempts++;
+        if (attempts >= 120) {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          setPlexPolling(null);
+          setError(t('login.expired'));
+          return;
+        }
+        try {
+          const { data: checkData } = await api.post('/setup/plex-check', { pinId: pin.id });
+          if (checkData.token) {
+            clearInterval(pollRef.current!);
+            pollRef.current = null;
+            setPlexPolling(null);
+            // Fill the token field
+            setServices(prev => prev.map(s => s.id === serviceId
+              ? { ...s, config: { ...s.config, token: checkData.token }, testStatus: 'idle' as const }
+              : s
+            ));
+            // Try to auto-detect machineId
+            const svc = services.find(s => s.id === serviceId);
+            if (svc?.config.url) {
+              try {
+                const res = await fetch(`${svc.config.url}/identity`, {
+                  headers: { 'X-Plex-Token': checkData.token, Accept: 'application/json' },
+                });
+                const json = await res.json();
+                const mid = json.MediaContainer?.machineIdentifier;
+                if (mid) {
+                  setServices(prev => prev.map(s => s.id === serviceId
+                    ? { ...s, config: { ...s.config, machineId: mid } }
+                    : s
+                  ));
+                }
+              } catch { /* ignore */ }
+            }
+          }
+        } catch { /* keep polling */ }
+      }, 1000);
+    }).catch(() => {
+      setPlexPolling(null);
+      setError(t('login.error'));
+    });
+  };
+
+  const detectPlexMachineId = async (serviceId: string) => {
+    const svc = services.find(s => s.id === serviceId);
+    if (!svc?.config.url || !svc?.config.token) return;
+    try {
+      const res = await fetch(`${svc.config.url}/identity`, {
+        headers: { 'X-Plex-Token': svc.config.token, Accept: 'application/json' },
+      });
+      const json = await res.json();
+      const mid = json.MediaContainer?.machineIdentifier;
+      if (mid) {
+        setServices(prev => prev.map(s => s.id === serviceId
+          ? { ...s, config: { ...s.config, machineId: mid } }
+          : s
+        ));
+      }
+    } catch { /* ignore */ }
+  };
+
+  const saveServices = async () => {
     setSaving(true);
     setError('');
     try {
-      for (const svc of arrServices) {
-        if (svc.saved || !svc.url || !svc.apiKey) continue;
-        await api.post('/setup/service', { name: svc.name, type: svc.type, url: svc.url, apiKey: svc.apiKey });
-        setArrServices(prev => prev.map(s => s.id === svc.id ? { ...s, saved: true } : s));
+      for (const svc of services) {
+        if (svc.saved || svc.testStatus !== 'ok') continue;
+        await api.post('/setup/service', { name: svc.name, type: svc.type, config: svc.config });
+        setServices(prev => prev.map(s => s.id === svc.id ? { ...s, saved: true } : s));
       }
       setStep(3);
     } catch (err: unknown) {
@@ -139,92 +219,9 @@ export default function InstallPage() {
     } finally { setSaving(false); }
   };
 
-  const canSaveArr = arrServices.some(s => s.url && s.apiKey && s.testStatus === 'ok');
+  const hasArrService = services.some(s => (s.type === 'radarr' || s.type === 'sonarr') && s.testStatus === 'ok');
 
-  // ─── Step 3: Plex optional ────────────────────────────────────────
-
-  const testPlexConnection = async () => {
-    if (!plexUrl) return;
-    setPlexTesting(true);
-    setPlexTestOk(null);
-    try {
-      const { data } = await api.post('/setup/test-url', { url: plexUrl });
-      setPlexTestOk(true);
-      if (data.machineIdentifier && !plexMachineId) setPlexMachineId(data.machineIdentifier);
-    } catch { setPlexTestOk(false); }
-    finally { setPlexTesting(false); }
-  };
-
-  const startPlexAuth = async () => {
-    setPlexPolling(true);
-    setError('');
-    try {
-      const { data } = await api.post('/setup/plex-pin');
-      const { pin, authUrl } = data;
-      window.open(authUrl, 'PlexAuth', 'width=600,height=700');
-
-      let attempts = 0;
-      pollRef.current = setInterval(async () => {
-        attempts++;
-        if (attempts >= 120) {
-          if (pollRef.current) clearInterval(pollRef.current);
-          setPlexPolling(false);
-          setError(t('login.expired'));
-          return;
-        }
-        try {
-          const { data: checkData } = await api.post('/setup/plex-check', { pinId: pin.id });
-          if (checkData.token) {
-            if (pollRef.current) clearInterval(pollRef.current);
-            setPlexToken(checkData.token);
-            setPlexPolling(false);
-            setPlexAuthed(true);
-            try {
-              const res = await fetch(`${plexUrl}/identity`, {
-                headers: { 'X-Plex-Token': checkData.token, Accept: 'application/json' },
-              });
-              const json = await res.json();
-              const mid = json.MediaContainer?.machineIdentifier;
-              if (mid) setPlexMachineId(mid);
-            } catch { /* empty */ }
-          }
-        } catch { /* still polling */ }
-      }, 1000);
-    } catch {
-      setPlexPolling(false);
-      setError(t('login.error'));
-    }
-  };
-
-  const detectPlexMachineId = async () => {
-    if (!plexUrl || !plexToken) return;
-    setPlexDetecting(true);
-    try {
-      const res = await fetch(`${plexUrl}/identity`, {
-        headers: { 'X-Plex-Token': plexToken, Accept: 'application/json' },
-      });
-      const json = await res.json();
-      const mid = json.MediaContainer?.machineIdentifier;
-      if (mid) setPlexMachineId(mid);
-    } catch { /* empty */ }
-    finally { setPlexDetecting(false); }
-  };
-
-  const savePlexAndContinue = async () => {
-    setSaving(true);
-    setError('');
-    try {
-      if (wantPlex && plexToken && plexUrl) {
-        await api.post('/setup/plex-service', { url: plexUrl, token: plexToken, machineId: plexMachineId, name: plexName });
-      }
-      setStep(4);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('common.error');
-      setError(msg);
-    } finally { setSaving(false); }
-  };
-
-  // ─── Step 4: Sync ──────────────────────────────────────────────────
+  // ─── Step 3: Sync ──────────────────────────────────────────────────
 
   const handleSync = async () => {
     setSyncing(true);
@@ -233,7 +230,7 @@ export default function InstallPage() {
       const { data } = await api.post('/setup/sync');
       setSyncResult(data.result);
       setSyncDone(true);
-      setTimeout(() => setStep(5), 2000);
+      setTimeout(() => setStep(4), 2000);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('common.error');
       setError(msg);
@@ -241,13 +238,11 @@ export default function InstallPage() {
   };
 
   useEffect(() => {
-    if (step === 4 && !syncing && !syncDone) handleSync();
+    if (step === 3 && !syncing && !syncDone) handleSync();
   }, [step]);
 
-  // ─── Step 5: Countdown ────────────────────────────────────────────
-
   useEffect(() => {
-    if (step !== 5) return;
+    if (step !== 4) return;
     if (countdown <= 0) { navigate('/', { replace: true }); return; }
     const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
     return () => clearTimeout(timer);
@@ -328,22 +323,18 @@ export default function InstallPage() {
                   {t('install.setup_secret_help', 'Enter the SETUP_SECRET from your .env file to begin installation.')}
                 </p>
               </div>
-              {error && (
-                <div className="text-xs px-3 py-2 rounded-lg bg-ndp-danger/10 text-ndp-danger">{error}</div>
-              )}
+              {error && <div className="text-xs px-3 py-2 rounded-lg bg-ndp-danger/10 text-ndp-danger">{error}</div>}
               <button type="submit" disabled={!setupSecret} className="btn-primary flex items-center gap-2 text-sm w-full justify-center">
                 {t('common.next')}
               </button>
             </form>
           )}
 
-          {/* Step 0 (after secret): Skip to step 1 */}
+          {/* Step 0 after secret → go to step 1 */}
           {step === 0 && secretValid && (
             <div className="space-y-4 animate-fade-in">
               <p className="text-sm text-ndp-text-muted text-center">{t('install.admin_desc')}</p>
-              <button onClick={() => setStep(1)} className="btn-primary text-sm w-full">
-                {t('common.next')}
-              </button>
+              <button onClick={() => setStep(1)} className="btn-primary text-sm w-full">{t('common.next')}</button>
             </div>
           )}
 
@@ -354,39 +345,14 @@ export default function InstallPage() {
                 <h2 className="text-sm font-semibold text-ndp-text mb-1">{t('install.admin_title')}</h2>
                 <p className="text-xs text-ndp-text-dim">{t('install.admin_desc')}</p>
               </div>
-
-              <input
-                type="text"
-                value={adminDisplayName}
-                onChange={(e) => setAdminDisplayName(e.target.value)}
-                placeholder={t('register.displayname')}
-                required
-                className="input w-full"
-                autoFocus
-              />
-              <input
-                type="email"
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-                placeholder={t('login.email_placeholder')}
-                required
-                className="input w-full"
-              />
+              <input type="text" value={adminDisplayName} onChange={(e) => setAdminDisplayName(e.target.value)} placeholder={t('register.displayname')} required className="input w-full" autoFocus />
+              <input type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder={t('login.email_placeholder')} required className="input w-full" />
               <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder={t('login.password_placeholder')}
-                  required
-                  minLength={8}
-                  className="input w-full pr-10"
-                />
+                <input type={showPassword ? 'text' : 'password'} value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder={t('login.password_placeholder')} required minLength={8} className="input w-full pr-10" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-
               <button type="submit" disabled={saving} className="btn-primary w-full flex items-center justify-center gap-2 text-sm">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                 {t('install.create_admin')}
@@ -394,7 +360,7 @@ export default function InstallPage() {
             </form>
           )}
 
-          {/* Step 2: Radarr/Sonarr config */}
+          {/* Step 2: Services (all types, dynamic) */}
           {step === 2 && (
             <div className="space-y-4 animate-fade-in">
               <div>
@@ -403,68 +369,101 @@ export default function InstallPage() {
               </div>
 
               <div className="space-y-3">
-                {arrServices.map((svc) => {
+                {services.map((svc) => {
+                  const schema = SERVICE_SCHEMAS[svc.type];
                   const isCollapsed = svc.testStatus === 'ok';
+
                   return (
                     <div key={svc.id} className="bg-white/5 rounded-xl overflow-hidden transition-all duration-300">
-                      {/* Collapsed header — always visible */}
-                      <div
-                        className={`flex items-center gap-3 px-4 transition-all duration-300 ${isCollapsed ? 'py-3' : 'py-0 h-0 opacity-0 overflow-hidden'}`}
-                      >
+                      {/* Collapsed view */}
+                      <div className={`flex items-center gap-3 px-4 transition-all duration-300 ${isCollapsed ? 'py-3' : 'py-0 h-0 opacity-0 overflow-hidden'}`}>
                         <CheckCircle className="w-4 h-4 text-ndp-success flex-shrink-0" />
-                        <span className="text-sm font-medium text-ndp-text">{svc.type === 'radarr' ? 'Radarr' : 'Sonarr'}</span>
-                        <span className="text-xs text-ndp-text-dim truncate flex-1">{svc.url}</span>
-                        <button onClick={() => updateArrService(svc.id, { testStatus: 'idle' })} className="text-ndp-text-dim hover:text-ndp-text transition-colors">
+                        {schema && <img src={schema.icon} alt="" className="w-5 h-5" />}
+                        <span className="text-sm font-medium text-ndp-text">{schema?.label || svc.type}</span>
+                        <span className="text-xs text-ndp-text-dim truncate flex-1">{svc.config.url}</span>
+                        <button onClick={() => updateService(svc.id, { testStatus: 'idle' })} className="text-ndp-text-dim hover:text-ndp-text transition-colors">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        {arrServices.length > 1 && (
-                          <button onClick={() => removeArrService(svc.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
+                        {services.length > 1 && (
+                          <button onClick={() => removeService(svc.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </div>
 
                       {/* Expanded form */}
-                      <div
-                        className={`transition-all duration-300 ease-in-out ${isCollapsed ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-96 opacity-100'}`}
-                      >
+                      <div className={`transition-all duration-300 ease-in-out ${isCollapsed ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-[500px] opacity-100'}`}>
                         <div className="p-4 space-y-3">
                           <div className="flex items-center justify-between">
                             <select
                               value={svc.type}
-                              onChange={(e) => {
-                                const type = e.target.value as 'radarr' | 'sonarr';
-                                updateArrService(svc.id, { type, name: type === 'radarr' ? 'Radarr' : 'Sonarr' });
-                              }}
+                              onChange={(e) => changeServiceType(svc.id, e.target.value)}
                               className="input text-sm w-auto"
                             >
-                              <option value="radarr">Radarr</option>
-                              <option value="sonarr">Sonarr</option>
+                              {Object.entries(SERVICE_SCHEMAS).map(([key, s]) => (
+                                <option key={key} value={key}>{s.label}</option>
+                              ))}
                             </select>
-                            {arrServices.length > 1 && (
-                              <button onClick={() => removeArrService(svc.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
+                            {services.length > 1 && (
+                              <button onClick={() => removeService(svc.id)} className="text-ndp-text-dim hover:text-ndp-danger transition-colors">
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             )}
                           </div>
-                          <input
-                            type="text"
-                            value={svc.url}
-                            onChange={(e) => updateArrService(svc.id, { url: e.target.value })}
-                            placeholder="http://localhost:7878"
-                            className="input w-full text-sm"
-                          />
-                          <input
-                            type="text"
-                            value={svc.apiKey}
-                            onChange={(e) => updateArrService(svc.id, { apiKey: e.target.value })}
-                            placeholder={t('common.api_key')}
-                            className="input w-full text-sm"
-                          />
+
+                          {schema?.fields.map((field) => (
+                            <div key={field.key}>
+                              {field.helper === 'plex-oauth' ? (
+                                <div className="flex gap-2">
+                                  <input
+                                    type={field.type}
+                                    value={svc.config[field.key] || ''}
+                                    onChange={(e) => updateService(svc.id, { config: { ...svc.config, [field.key]: e.target.value } })}
+                                    placeholder={t(field.labelKey)}
+                                    className="input flex-1 text-sm"
+                                  />
+                                  <button
+                                    onClick={() => startPlexOAuth(svc.id)}
+                                    disabled={plexPolling === svc.id}
+                                    className="btn-secondary text-xs flex items-center gap-1.5 px-3 whitespace-nowrap"
+                                  >
+                                    {plexPolling === svc.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                                    {plexPolling === svc.id ? t('login.waiting') : 'OAuth'}
+                                  </button>
+                                </div>
+                              ) : field.helper === 'plex-detect-machine-id' ? (
+                                <div className="flex gap-2">
+                                  <input
+                                    type={field.type}
+                                    value={svc.config[field.key] || ''}
+                                    onChange={(e) => updateService(svc.id, { config: { ...svc.config, [field.key]: e.target.value } })}
+                                    placeholder={t(field.labelKey)}
+                                    className="input flex-1 text-sm"
+                                  />
+                                  <button
+                                    onClick={() => detectPlexMachineId(svc.id)}
+                                    disabled={!svc.config.url || !svc.config.token}
+                                    className="btn-secondary text-sm flex items-center gap-1.5 px-3"
+                                  >
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <input
+                                  type={field.type}
+                                  value={svc.config[field.key] || ''}
+                                  onChange={(e) => updateService(svc.id, { config: { ...svc.config, [field.key]: e.target.value } })}
+                                  placeholder={field.placeholder || t(field.labelKey)}
+                                  className="input w-full text-sm"
+                                />
+                              )}
+                            </div>
+                          ))}
+
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => testArrService(svc.id)}
-                              disabled={!svc.url || !svc.apiKey || svc.testStatus === 'testing'}
+                              onClick={() => testService(svc.id)}
+                              disabled={svc.testStatus === 'testing'}
                               className="btn-secondary text-xs flex items-center gap-1.5 px-3 py-1.5"
                             >
                               {svc.testStatus === 'testing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -481,14 +480,14 @@ export default function InstallPage() {
                 })}
               </div>
 
-              <button onClick={addArrService} className="btn-secondary text-xs flex items-center gap-1.5 w-full justify-center">
+              <button onClick={addService} className="btn-secondary text-xs flex items-center gap-1.5 w-full justify-center">
                 <Plus className="w-3.5 h-3.5" />
                 {t('install.arr_add')}
               </button>
 
               <div className="flex gap-2">
                 <button onClick={() => setStep(1)} className="btn-secondary text-sm flex-1">{t('common.back')}</button>
-                <button onClick={saveArrServices} disabled={!canSaveArr || saving} className="btn-primary flex items-center justify-center gap-2 text-sm flex-1">
+                <button onClick={saveServices} disabled={!hasArrService || saving} className="btn-primary flex items-center justify-center gap-2 text-sm flex-1">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   {t('common.next')}
                 </button>
@@ -496,105 +495,8 @@ export default function InstallPage() {
             </div>
           )}
 
-          {/* Step 3: Plex optional */}
+          {/* Step 3: Sync */}
           {step === 3 && (
-            <div className="space-y-4 animate-fade-in">
-              <div>
-                <h2 className="text-sm font-semibold text-ndp-text mb-1">{t('install.plex_optional_title')}</h2>
-                <p className="text-xs text-ndp-text-dim">{t('install.plex_optional_desc')}</p>
-              </div>
-
-              {/* Toggle */}
-              <label className="flex items-center justify-between p-3 bg-white/5 rounded-xl cursor-pointer">
-                <span className="text-sm text-ndp-text">{t('install.plex_toggle')}</span>
-                <div className="relative">
-                  <input type="checkbox" checked={wantPlex} onChange={(e) => setWantPlex(e.target.checked)} className="sr-only" />
-                  <div className={`w-10 h-5 rounded-full transition-colors ${wantPlex ? 'bg-ndp-accent' : 'bg-white/10'}`}>
-                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${wantPlex ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                  </div>
-                </div>
-              </label>
-
-              {wantPlex && !plexAuthed && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-sm text-ndp-text mb-1.5 block font-medium">{t('install.plex_url')}</label>
-                    <input
-                      type="text"
-                      value={plexUrl}
-                      onChange={(e) => { setPlexUrl(e.target.value); setPlexTestOk(null); }}
-                      placeholder="http://localhost:32400"
-                      className="input w-full"
-                    />
-                  </div>
-
-                  {plexTestOk !== null && (
-                    <div className={`text-xs px-3 py-2 rounded-lg ${plexTestOk ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger'}`}>
-                      {plexTestOk ? t('install.server_ok') : t('install.server_error')}
-                    </div>
-                  )}
-
-                  <button onClick={testPlexConnection} disabled={!plexUrl || plexTesting} className="btn-secondary text-xs flex items-center gap-1.5 w-full justify-center">
-                    {plexTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    {t('common.test')}
-                  </button>
-
-                  <p className="text-sm text-ndp-text-muted text-center">{t('install.plex_auth')}</p>
-
-                  <button
-                    onClick={startPlexAuth}
-                    disabled={plexPolling || !plexUrl}
-                    className="w-full flex items-center justify-center gap-3 bg-[#e5a00d] hover:bg-[#cc8c00] text-black font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50"
-                  >
-                    {plexPolling ? (
-                      <><div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />{t('login.waiting')}</>
-                    ) : (
-                      t('login.oauth_button', { provider: 'Plex' })
-                    )}
-                  </button>
-                </div>
-              )}
-
-              {wantPlex && plexAuthed && (
-                <div className="space-y-3">
-                  <div className="p-3 bg-ndp-success/10 border border-ndp-success/20 rounded-xl text-ndp-success text-sm text-center flex items-center justify-center gap-2">
-                    <CheckCircle className="w-4 h-4" />
-                    {t('install.plex_success')}
-                  </div>
-                  <div>
-                    <label className="text-sm text-ndp-text mb-1.5 block font-medium">{t('install.machine_id')}</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={plexMachineId}
-                        onChange={(e) => setPlexMachineId(e.target.value)}
-                        placeholder={t('admin.services.auto_detect')}
-                        className="input flex-1"
-                      />
-                      <button onClick={detectPlexMachineId} disabled={plexDetecting} className="btn-secondary text-sm flex items-center gap-1.5 px-3">
-                        {plexDetecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <button onClick={() => setStep(2)} className="btn-secondary text-sm flex-1">{t('common.back')}</button>
-                <button
-                  onClick={savePlexAndContinue}
-                  disabled={saving || (wantPlex && !plexAuthed)}
-                  className="btn-primary flex items-center justify-center gap-2 text-sm flex-1"
-                >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {wantPlex ? t('common.next') : t('install.skip_plex')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Sync */}
-          {step === 4 && (
             <div className="space-y-6 animate-fade-in text-center">
               <div>
                 <h2 className="text-lg font-bold text-ndp-text mb-1">{t('install.sync_title')}</h2>
@@ -622,8 +524,8 @@ export default function InstallPage() {
             </div>
           )}
 
-          {/* Step 5: Done */}
-          {step === 5 && (
+          {/* Step 4: Done */}
+          {step === 4 && (
             <div className="space-y-6 animate-fade-in text-center">
               <div className="flex justify-center">
                 <div className="w-16 h-16 bg-ndp-success/10 rounded-full flex items-center justify-center">
@@ -636,10 +538,7 @@ export default function InstallPage() {
               </div>
               <p className="text-sm text-ndp-text-dim">{t('install.redirect', { seconds: countdown })}</p>
               <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-                <div
-                  className="h-full bg-ndp-success rounded-full transition-all duration-1000 ease-linear"
-                  style={{ width: `${((5 - countdown) / 5) * 100}%` }}
-                />
+                <div className="h-full bg-ndp-success rounded-full transition-all duration-1000 ease-linear" style={{ width: `${((5 - countdown) / 5) * 100}%` }} />
               </div>
               <button onClick={() => navigate('/', { replace: true })} className="btn-primary text-sm">
                 {t('install.go_now')}

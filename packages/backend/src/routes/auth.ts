@@ -2,18 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { logEvent } from '../services/notifications.js';
 import { registerEmail, loginEmail } from '../auth/providers/email.js';
-import { plexProvider } from '../auth/providers/plex.js';
-import type { AuthProvider, AuthHelpers } from '../auth/types.js';
-
-// ─── Provider registry ──────────────────────────────────────────────
-// Add new providers here — they auto-register routes and appear on the login page
-const PROVIDERS: AuthProvider[] = [
-  plexProvider,
-];
-
-export function getProvider(id: string): AuthProvider | undefined {
-  return PROVIDERS.find((p) => p.config.id === id);
-}
+import { getAuthProviders, getAuthProvider, getAuthProviderConfigs } from '../providers/index.js';
+import type { AuthHelpers } from '../providers/types.js';
 
 function buildHelpers(app: FastifyInstance): AuthHelpers {
   return {
@@ -51,7 +41,6 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
     },
 
     async findOrCreateUser(opts) {
-      // Find by provider link
       const existingProvider = opts.providerId
         ? await prisma.userProvider.findUnique({
             where: { provider_providerId: { provider: opts.provider, providerId: opts.providerId } },
@@ -89,7 +78,6 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
         return { ...user, isNew: true };
       }
 
-      // Upsert provider on existing user
       await prisma.userProvider.upsert({
         where: { userId_provider: { userId: user.id, provider: opts.provider } },
         update: {
@@ -126,12 +114,7 @@ export async function authRoutes(app: FastifyInstance) {
   const helpers = buildHelpers(app);
 
   // GET /providers — list available auth providers for the login page
-  app.get('/providers', async () => {
-    return [
-      { id: 'email', label: 'Email', type: 'credentials' },
-      ...PROVIDERS.map((p) => p.config),
-    ];
-  });
+  app.get('/providers', async () => getAuthProviderConfigs());
 
   // ─── Email/Password (built-in) ────────────────────────────────────
 
@@ -141,9 +124,9 @@ export async function authRoutes(app: FastifyInstance) {
         type: 'object' as const,
         required: ['email', 'password', 'displayName'],
         properties: {
-          email: { type: 'string', description: 'User email' },
-          password: { type: 'string', description: 'Password (min 8 chars)' },
-          displayName: { type: 'string', description: 'Display name' },
+          email: { type: 'string' },
+          password: { type: 'string' },
+          displayName: { type: 'string' },
         },
       },
     },
@@ -162,18 +145,14 @@ export async function authRoutes(app: FastifyInstance) {
 
     try {
       const result = await registerEmail(email, password, displayName);
-
       const user = await prisma.user.create({
         data: {
           email: result.email,
           displayName: result.displayName,
           passwordHash: result.providerData.passwordHash as string,
           role: isFirstUser ? 'admin' : 'user',
-          providers: {
-            create: { provider: 'email', providerId: result.email },
-          },
+          providers: { create: { provider: 'email', providerId: result.email } },
         },
-        include: { providers: true },
       });
 
       logEvent('info', 'Auth', `Nouveau compte email créé : ${result.displayName} (${isFirstUser ? 'admin' : 'user'})`);
@@ -193,8 +172,8 @@ export async function authRoutes(app: FastifyInstance) {
         type: 'object' as const,
         required: ['email', 'password'],
         properties: {
-          email: { type: 'string', description: 'User email' },
-          password: { type: 'string', description: 'Password' },
+          email: { type: 'string' },
+          password: { type: 'string' },
         },
       },
     },
@@ -206,7 +185,7 @@ export async function authRoutes(app: FastifyInstance) {
     } catch (err) {
       const msg = (err as Error).message;
       if (msg === 'INVALID_CREDENTIALS') return reply.status(401).send({ error: 'Email ou mot de passe incorrect.' });
-      if (msg === 'PLEX_ACCOUNT') return reply.status(400).send({ error: 'Ce compte utilise la connexion Plex.' });
+      if (msg === 'PLEX_ACCOUNT') return reply.status(400).send({ error: 'Ce compte utilise un provider OAuth.' });
       throw err;
     }
 
@@ -217,9 +196,9 @@ export async function authRoutes(app: FastifyInstance) {
     return helpers.signAndSend(reply, user.id);
   });
 
-  // ─── Register all OAuth providers ─────────────────────────────────
+  // ─── Register all OAuth providers from registry ───────────────────
 
-  for (const provider of PROVIDERS) {
+  for (const provider of getAuthProviders()) {
     await provider.registerRoutes(app, helpers);
   }
 
@@ -231,8 +210,8 @@ export async function authRoutes(app: FastifyInstance) {
         type: 'object' as const,
         required: ['provider', 'pinId'],
         properties: {
-          provider: { type: 'string', description: 'Provider to link (e.g. "plex")' },
-          pinId: { type: 'number', description: 'OAuth PIN ID' },
+          provider: { type: 'string' },
+          pinId: { type: 'number' },
         },
       },
     },
@@ -241,7 +220,7 @@ export async function authRoutes(app: FastifyInstance) {
     const currentUser = request.user as { id: number };
     const { provider: providerId, pinId } = request.body as { provider: string; pinId: number };
 
-    const provider = PROVIDERS.find((p) => p.config.id === providerId);
+    const provider = getAuthProvider(providerId);
     if (!provider?.linkAccount) {
       return reply.status(400).send({ error: `Provider "${providerId}" ne supporte pas le linking.` });
     }
@@ -264,19 +243,11 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({
       where: { id },
       select: {
-        id: true,
-        email: true,
-        displayName: true,
-        avatar: true,
-        role: true,
-        createdAt: true,
-        providers: {
-          select: { provider: true, providerUsername: true, providerEmail: true },
-        },
+        id: true, email: true, displayName: true, avatar: true, role: true, createdAt: true,
+        providers: { select: { provider: true, providerUsername: true, providerEmail: true } },
       },
     });
     if (!user) return reply.status(404).send({ error: 'Utilisateur introuvable' });
-
     return reply.send(user);
   });
 

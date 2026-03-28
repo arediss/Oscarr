@@ -4,7 +4,7 @@ import { getRadarrAsync, createRadarrFromConfig } from '../services/radarr.js';
 import { getSonarrAsync, createSonarrFromConfig } from '../services/sonarr.js';
 import { getServiceById } from '../utils/services.js';
 import { syncRadarr, syncSonarr, runFullSync, syncAvailabilityDates } from '../services/sync.js';
-import { getProvider } from './auth.js';
+import { getAuthProvider, getServiceDefinition, getServiceSchemas } from '../providers/index.js';
 import { syncRequestsFromTags } from '../services/requestSync.js';
 import { testDiscord, testTelegram, testEmail, sendNotification, logEvent } from '../services/notifications.js';
 import { triggerJob, updateJobSchedule } from '../services/scheduler.js';
@@ -163,6 +163,12 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // === SERVICES REGISTRY ===
 
+  // Service schemas — used by frontend to build dynamic forms
+  app.get('/service-schemas', async (request, reply) => {
+    await requireAdmin(request, reply);
+    return getServiceSchemas();
+  });
+
   app.get('/services', async (request, reply) => {
     await requireAdmin(request, reply);
     const services = await prisma.service.findMany({ orderBy: { createdAt: 'asc' } });
@@ -286,45 +292,11 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!service) return reply.status(404).send({ error: 'Service introuvable' });
     const config = JSON.parse(service.config) as Record<string, string>;
 
+    const def = getServiceDefinition(service.type);
+    if (!def) return reply.status(400).send({ error: 'Test non supporté pour ce type de service' });
+
     try {
-      if (service.type === 'radarr' || service.type === 'sonarr') {
-        const { default: axios } = await import('axios');
-        const { data } = await axios.get(`${config.url}/api/v3/system/status`, {
-          params: { apikey: config.apiKey },
-          timeout: 5000,
-        });
-        return { ok: true, version: data.version };
-      }
-      if (service.type === 'plex') {
-        const { default: axios } = await import('axios');
-        const { data } = await axios.get(`${config.url}/identity`, {
-          headers: { 'X-Plex-Token': config.token, Accept: 'application/json' },
-          timeout: 5000,
-        });
-        return { ok: true, version: data.MediaContainer?.version };
-      }
-      if (service.type === 'qbittorrent') {
-        const { default: axios } = await import('axios');
-        await axios.get(`${config.url}/api/v2/app/version`, { timeout: 5000 });
-        return { ok: true };
-      }
-      if (service.type === 'tautulli') {
-        const { default: axios } = await import('axios');
-        const { data } = await axios.get(`${config.url}/api/v2`, {
-          params: { apikey: config.apiKey, cmd: 'arnold' },
-          timeout: 5000,
-        });
-        return { ok: true, version: data?.response?.data?.version };
-      }
-      if (service.type === 'trackarr') {
-        const { default: axios } = await import('axios');
-        await axios.get(`${config.url}/api/health`, {
-          headers: { 'X-Api-Key': config.apiKey },
-          timeout: 5000,
-        });
-        return { ok: true };
-      }
-      return reply.status(400).send({ error: 'Test non supporté pour ce type de service' });
+      return await def.test(config);
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter le service' });
     }
@@ -334,7 +306,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get('/plex-token', async (request, reply) => {
     await requireAdmin(request, reply);
-    const provider = getProvider('plex');
+    const provider = getAuthProvider('plex');
     if (!provider?.getToken) return reply.status(404).send({ error: 'Provider Plex non disponible' });
     const adminUser = request.user as { id: number };
     const token = await provider.getToken(adminUser.id);
@@ -538,7 +510,7 @@ export async function adminRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     await requireAdmin(request, reply);
     const { provider: providerId } = request.params as { provider: string };
-    const authProvider = getProvider(providerId);
+    const authProvider = getAuthProvider(providerId);
 
     if (!authProvider?.importUsers) {
       return reply.status(400).send({ error: `Le provider "${providerId}" ne supporte pas l'import d'utilisateurs.` });
@@ -582,7 +554,7 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!userId) return reply.status(400).send({ error: 'ID invalide' });
 
     const { provider: providerId, pinId } = request.body as { provider: string; pinId: number };
-    const authProvider = getProvider(providerId);
+    const authProvider = getAuthProvider(providerId);
     if (!authProvider?.linkAccount) {
       return reply.status(400).send({ error: `Le provider "${providerId}" ne supporte pas le linking.` });
     }
