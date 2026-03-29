@@ -77,6 +77,14 @@ export function invalidateMediaStatus(tmdbId: number, mediaType: string) {
   delete globalCache[key];
 }
 
+/** Update cache for a specific media with a known status (avoids stale data on back navigation) */
+export function updateMediaStatusCache(tmdbId: number, mediaType: string, status: string, requestStatus?: string) {
+  const key = `${mediaType}:${tmdbId}`;
+  globalCache[key] = { status, requestStatus };
+  cacheTimes[key] = Date.now();
+  listeners.forEach((cb) => cb());
+}
+
 /** Invalidate all cached statuses */
 export function invalidateAllMediaStatuses() {
   for (const key of Object.keys(cacheTimes)) {

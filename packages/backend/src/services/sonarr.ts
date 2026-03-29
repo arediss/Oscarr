@@ -164,9 +164,20 @@ class SonarrService {
     return created.id;
   }
 
+  async getEpisodes(seriesId: number, seasonNumber?: number): Promise<SonarrEpisode[]> {
+    const params: Record<string, unknown> = { seriesId };
+    if (seasonNumber !== undefined) params.seasonNumber = seasonNumber;
+    const { data } = await this.api.get('/episode', { params });
+    return data;
+  }
+
+  async searchMissingEpisodes(seriesId: number): Promise<void> {
+    await this.api.post('/command', { name: 'MissingEpisodeSearch', seriesId });
+  }
+
   async getHistory(since?: Date | null): Promise<SonarrHistoryRecord[]> {
     if (since) {
-      const { data } = await this.api.get('/history/since', { params: { date: since.toISOString() } });
+      const { data } = await this.api.get('/history/since', { params: { date: since.toISOString(), includeEpisode: true } });
       return (Array.isArray(data) ? data : data.records ?? [])
         .filter((r: SonarrHistoryRecord) => r.eventType === 'downloadFolderImported');
     }
@@ -175,15 +186,19 @@ class SonarrService {
     while (true) {
       try {
         const { data } = await this.api.get('/history', {
-          params: { pageSize: 500, page, sortKey: 'date', sortDirection: 'descending' },
+          params: { pageSize: 500, page, sortKey: 'date', sortDirection: 'descending', includeEpisode: true },
         });
         const records: SonarrHistoryRecord[] = data.records ?? data;
         all.push(...records.filter(r => r.eventType === 'downloadFolderImported'));
         if (records.length < 500) break;
         page++;
-      } catch {
-        // Sonarr can crash on corrupted history entries — stop pagination gracefully
-        console.warn(`[Sonarr] History pagination failed at page ${page}, using ${all.length} records collected so far`);
+      } catch (err) {
+        // Sonarr can crash on corrupted history entries — log details for debugging
+        const statusCode = (err as { response?: { status?: number } })?.response?.status;
+        const errorBody = (err as { response?: { data?: unknown } })?.response?.data;
+        console.warn(`[Sonarr] History pagination failed at page ${page} (records ${(page - 1) * 500}-${page * 500}), HTTP ${statusCode || 'unknown'}`);
+        if (errorBody) console.warn(`[Sonarr] Error details:`, typeof errorBody === 'string' ? errorBody.slice(0, 500) : JSON.stringify(errorBody).slice(0, 500));
+        console.warn(`[Sonarr] Using ${all.length} records collected so far`);
         break;
       }
     }
@@ -191,10 +206,31 @@ class SonarrService {
   }
 }
 
+export interface SonarrEpisode {
+  id: number;
+  seriesId: number;
+  seasonNumber: number;
+  episodeNumber: number;
+  title: string;
+  airDateUtc: string | null;
+  hasFile: boolean;
+  monitored: boolean;
+  episodeFile?: {
+    quality: { quality: { name: string } };
+    size: number;
+  } | null;
+}
+
 export interface SonarrHistoryRecord {
   seriesId: number;
+  episodeId: number;
   date: string;
   eventType: string;
+  episode?: {
+    seasonNumber: number;
+    episodeNumber: number;
+    title: string;
+  };
 }
 
 const _serviceCache = new Map<number, { instance: SonarrService; configKey: string }>();

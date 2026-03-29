@@ -1,53 +1,122 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { getPlexUser, createPlexPin, checkPlexPin, checkPlexServerAccess } from '../services/plex.js';
-import { getServiceConfig } from '../utils/services.js';
 import { logEvent } from '../services/notifications.js';
 import { registerEmail, loginEmail } from '../auth/providers/email.js';
-import type { AuthProviderConfig } from '../auth/types.js';
+import { getAuthProviders, getAuthProvider, getAuthProviderConfigs } from '../providers/index.js';
+import type { AuthHelpers } from '../providers/types.js';
 
-const PLEX_CLIENT_ID = 'oscarr-client';
+function buildHelpers(app: FastifyInstance): AuthHelpers {
+  return {
+    async signAndSend(reply, userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { providers: true },
+      });
+      if (!user) return reply.status(500).send({ error: 'User not found after auth' });
 
-const AUTH_PROVIDERS: AuthProviderConfig[] = [
-  { id: 'email', label: 'Email', type: 'credentials' },
-  { id: 'plex', label: 'Plex', type: 'oauth' },
-];
+      const token = app.jwt.sign(
+        { id: user.id, email: user.email, role: user.role },
+        { expiresIn: '30d' }
+      );
 
-function sendAuthResponse(app: FastifyInstance, reply: import('fastify').FastifyReply, user: { id: number; email: string; displayName: string | null; avatar: string | null; role: string; hasPlexServerAccess: boolean; authProvider: string }) {
-  const token = app.jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
-    { expiresIn: '30d' }
-  );
+      return reply
+        .setCookie('token', token, {
+          path: '/',
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 30 * 24 * 60 * 60,
+        })
+        .send({
+          user: {
+            id: user.id,
+            email: user.email,
+            displayName: user.displayName,
+            avatar: user.avatar,
+            role: user.role,
+            providers: user.providers.map((p) => ({ provider: p.provider, username: p.providerUsername, email: p.providerEmail })),
+          },
+          token,
+        });
+    },
 
-  return reply
-    .setCookie('token', token, {
-      path: '/',
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60,
-    })
-    .send({
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        avatar: user.avatar,
-        role: user.role,
-        hasPlexServerAccess: user.hasPlexServerAccess,
-        authProvider: user.authProvider,
-      },
-      token,
-    });
+    async findOrCreateUser(opts) {
+      const existingProvider = opts.providerId
+        ? await prisma.userProvider.findUnique({
+            where: { provider_providerId: { provider: opts.provider, providerId: opts.providerId } },
+            include: { user: { include: { providers: true } } },
+          })
+        : null;
+
+      let user = existingProvider?.user || await prisma.user.findUnique({
+        where: { email: opts.email },
+        include: { providers: true },
+      });
+
+      const userCount = await prisma.user.count();
+      const isFirstUser = userCount === 0;
+
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            email: opts.email,
+            displayName: opts.displayName,
+            avatar: opts.avatar,
+            role: isFirstUser ? 'admin' : 'user',
+            providers: {
+              create: {
+                provider: opts.provider,
+                providerId: opts.providerId,
+                providerToken: opts.providerToken,
+                providerUsername: opts.providerUsername,
+                providerEmail: opts.providerEmail,
+              },
+            },
+          },
+          include: { providers: true },
+        });
+        return { ...user, isNew: true };
+      }
+
+      await prisma.userProvider.upsert({
+        where: { userId_provider: { userId: user.id, provider: opts.provider } },
+        update: {
+          providerId: opts.providerId,
+          providerToken: opts.providerToken,
+          providerUsername: opts.providerUsername,
+          providerEmail: opts.providerEmail,
+        },
+        create: {
+          userId: user.id,
+          provider: opts.provider,
+          providerId: opts.providerId,
+          providerToken: opts.providerToken,
+          providerUsername: opts.providerUsername,
+          providerEmail: opts.providerEmail,
+        },
+      });
+
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          displayName: user.displayName || opts.displayName,
+          avatar: opts.avatar || user.avatar,
+        },
+        include: { providers: true },
+      });
+
+      return { ...user, isNew: false };
+    },
+  };
 }
 
 export async function authRoutes(app: FastifyInstance) {
-  // GET /providers — list available auth providers
-  app.get('/providers', async () => {
-    return AUTH_PROVIDERS;
-  });
+  const helpers = buildHelpers(app);
 
-  // ─── Email/Password ────────────────────────────────────────────────
+  // GET /providers — list available auth providers for the login page
+  app.get('/providers', async () => getAuthProviderConfigs());
+
+  // ─── Email/Password (built-in) ────────────────────────────────────
 
   app.post('/register', {
     schema: {
@@ -55,9 +124,9 @@ export async function authRoutes(app: FastifyInstance) {
         type: 'object' as const,
         required: ['email', 'password', 'displayName'],
         properties: {
-          email: { type: 'string', description: 'User email' },
-          password: { type: 'string', description: 'Password (min 8 chars)' },
-          displayName: { type: 'string', description: 'Display name' },
+          email: { type: 'string' },
+          password: { type: 'string' },
+          displayName: { type: 'string' },
         },
       },
     },
@@ -76,20 +145,18 @@ export async function authRoutes(app: FastifyInstance) {
 
     try {
       const result = await registerEmail(email, password, displayName);
-
       const user = await prisma.user.create({
         data: {
           email: result.email,
-          authProvider: 'email',
           displayName: result.displayName,
           passwordHash: result.providerData.passwordHash as string,
           role: isFirstUser ? 'admin' : 'user',
-          hasPlexServerAccess: isFirstUser,
+          providers: { create: { provider: 'email', providerId: result.email } },
         },
       });
 
       logEvent('info', 'Auth', `Nouveau compte email créé : ${result.displayName} (${isFirstUser ? 'admin' : 'user'})`);
-      return sendAuthResponse(app, reply, user);
+      return helpers.signAndSend(reply, user.id);
     } catch (err) {
       const msg = (err as Error).message;
       if (msg === 'EMAIL_EXISTS') return reply.status(409).send({ error: 'Cet email est déjà utilisé.' });
@@ -105,8 +172,8 @@ export async function authRoutes(app: FastifyInstance) {
         type: 'object' as const,
         required: ['email', 'password'],
         properties: {
-          email: { type: 'string', description: 'User email' },
-          password: { type: 'string', description: 'Password' },
+          email: { type: 'string' },
+          password: { type: 'string' },
         },
       },
     },
@@ -118,7 +185,7 @@ export async function authRoutes(app: FastifyInstance) {
     } catch (err) {
       const msg = (err as Error).message;
       if (msg === 'INVALID_CREDENTIALS') return reply.status(401).send({ error: 'Email ou mot de passe incorrect.' });
-      if (msg === 'PLEX_ACCOUNT') return reply.status(400).send({ error: 'Ce compte utilise la connexion Plex.' });
+      if (msg === 'PLEX_ACCOUNT') return reply.status(400).send({ error: 'Ce compte utilise un provider OAuth.' });
       throw err;
     }
 
@@ -126,90 +193,47 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user) return reply.status(401).send({ error: 'Email ou mot de passe incorrect.' });
 
     logEvent('info', 'Auth', `${user.displayName} s'est connecté (email)`);
-    return sendAuthResponse(app, reply, user);
+    return helpers.signAndSend(reply, user.id);
   });
 
-  // ─── Plex OAuth ────────────────────────────────────────────────────
+  // ─── Register all OAuth providers from registry ───────────────────
 
-  app.post('/plex/pin', async (_request, reply) => {
-    const pin = await createPlexPin(PLEX_CLIENT_ID);
-    const authUrl = `https://app.plex.tv/auth#?clientID=${PLEX_CLIENT_ID}&code=${pin.code}&context%5Bdevice%5D%5Bproduct%5D=Oscarr`;
-    return reply.send({ pin, authUrl });
-  });
+  for (const provider of getAuthProviders()) {
+    await provider.registerRoutes(app, helpers);
+  }
 
-  app.post('/plex/callback', {
+  // ─── Link provider to current account ─────────────────────────────
+
+  app.post('/link-provider', {
     schema: {
       body: {
         type: 'object' as const,
-        required: ['pinId'],
+        required: ['provider', 'pinId'],
         properties: {
-          pinId: { type: 'number' as const, description: 'Plex PIN ID returned by /plex/pin' },
+          provider: { type: 'string' },
+          pinId: { type: 'number' },
         },
       },
     },
+    preHandler: [app.authenticate],
   }, async (request, reply) => {
-    const { pinId } = request.body as { pinId: unknown };
+    const currentUser = request.user as { id: number };
+    const { provider: providerId, pinId } = request.body as { provider: string; pinId: number };
 
-    if (typeof pinId !== 'number' || !Number.isFinite(pinId) || pinId < 1) {
-      return reply.status(400).send({ error: 'pinId invalide' });
+    const provider = getAuthProvider(providerId);
+    if (!provider?.linkAccount) {
+      return reply.status(400).send({ error: `Provider "${providerId}" ne supporte pas le linking.` });
     }
 
-    const authToken = await checkPlexPin(pinId, PLEX_CLIENT_ID);
-    if (!authToken) {
-      logEvent('warn', 'Auth', `Échec de validation PIN (pinId: ${pinId})`);
-      return reply.status(400).send({ error: 'PIN non validé. Réessayez.' });
+    try {
+      const result = await provider.linkAccount(pinId, currentUser.id);
+      return reply.send({ success: true, providerUsername: result.providerUsername });
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg === 'PIN_INVALID') return reply.status(400).send({ error: 'PIN non validé. Réessayez.' });
+      if (msg === 'PROVIDER_ALREADY_LINKED') return reply.status(409).send({ error: 'Ce compte est déjà lié à un autre utilisateur.' });
+      throw err;
     }
-
-    const plexAccount = await getPlexUser(authToken);
-
-    const plexConfig = await getServiceConfig('plex');
-    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-    const machineId = plexConfig?.machineId || settings?.plexMachineId || null;
-    const hasServerAccess = await checkPlexServerAccess(authToken, machineId);
-
-    let user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { plexId: plexAccount.id },
-          { email: plexAccount.email.toLowerCase() },
-        ],
-      },
-    });
-
-    const userCount = await prisma.user.count();
-    const isFirstUser = userCount === 0;
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          email: plexAccount.email.toLowerCase(),
-          authProvider: 'plex',
-          displayName: plexAccount.username,
-          plexId: plexAccount.id,
-          plexToken: authToken,
-          plexUsername: plexAccount.username,
-          avatar: plexAccount.thumb,
-          role: isFirstUser ? 'admin' : 'user',
-          hasPlexServerAccess: isFirstUser || hasServerAccess,
-        },
-      });
-      logEvent('info', 'Auth', `Nouveau compte créé : ${plexAccount.username} (${isFirstUser ? 'admin' : 'user'})`);
-    } else {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          plexToken: authToken,
-          plexId: plexAccount.id,
-          plexUsername: plexAccount.username,
-          displayName: user.displayName || plexAccount.username,
-          avatar: plexAccount.thumb,
-          hasPlexServerAccess: user.role === 'admin' || hasServerAccess,
-        },
-      });
-    }
-
-    logEvent('info', 'Auth', `${user.displayName} s'est connecté (plex)`);
-    return sendAuthResponse(app, reply, user);
   });
 
   // ─── Common ────────────────────────────────────────────────────────
@@ -219,18 +243,11 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({
       where: { id },
       select: {
-        id: true,
-        email: true,
-        displayName: true,
-        avatar: true,
-        role: true,
-        hasPlexServerAccess: true,
-        authProvider: true,
-        createdAt: true,
+        id: true, email: true, displayName: true, avatar: true, role: true, createdAt: true,
+        providers: { select: { provider: true, providerUsername: true, providerEmail: true } },
       },
     });
     if (!user) return reply.status(404).send({ error: 'Utilisateur introuvable' });
-
     return reply.send(user);
   });
 
