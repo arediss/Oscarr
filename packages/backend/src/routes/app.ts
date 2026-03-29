@@ -16,16 +16,14 @@ export async function appRoutes(app: FastifyInstance) {
       current: APP_VERSION,
     };
     try {
-      const { data } = await axios.get('https://api.github.com/repos/arediss/Oscarr/releases/latest', {
-        headers: { Accept: 'application/vnd.github.v3+json' },
+      const { data } = await axios.get('https://raw.githubusercontent.com/arediss/Oscarr/main/version.json', {
         timeout: 5000,
       });
-      const latest = (data.tag_name as string).replace(/^v/, '');
-      result.latest = latest;
-      result.updateAvailable = latest !== APP_VERSION;
-      result.releaseUrl = data.html_url;
+      result.latest = data.latest;
+      result.updateAvailable = data.latest !== APP_VERSION;
+      result.releaseUrl = data.releaseUrl;
     } catch {
-      // GitHub unreachable or no releases yet
+      // GitHub unreachable
     }
     return result;
   });
