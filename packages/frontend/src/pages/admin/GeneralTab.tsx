@@ -197,7 +197,7 @@ export function DangerZone() {
       id: 'requests',
       label: t('admin.danger.purge_requests'),
       desc: t('admin.danger.purge_requests_desc'),
-      keyword: 'SUPPRIMER',
+      keyword: t('admin.danger.keyword'),
       onConfirm: async () => {
         const { data } = await api.delete('/admin/danger/requests');
         setResult(t('admin.danger.deleted_requests', { count: data.deleted }));
@@ -207,7 +207,7 @@ export function DangerZone() {
       id: 'media',
       label: t('admin.danger.purge_media'),
       desc: t('admin.danger.purge_media_desc'),
-      keyword: 'SUPPRIMER',
+      keyword: t('admin.danger.keyword'),
       onConfirm: async () => {
         const { data } = await api.delete('/admin/danger/media');
         setResult(t('admin.danger.deleted_media', { media: data.deleted.media, seasons: data.deleted.seasons, requests: data.deleted.requests }));
@@ -217,7 +217,7 @@ export function DangerZone() {
       id: 'users',
       label: t('admin.danger.purge_users'),
       desc: t('admin.danger.purge_users_desc'),
-      keyword: 'SUPPRIMER',
+      keyword: t('admin.danger.keyword'),
       onConfirm: async () => {
         const { data } = await api.delete('/admin/danger/users');
         setResult(t('admin.danger.deleted_users', { count: data.deleted }));

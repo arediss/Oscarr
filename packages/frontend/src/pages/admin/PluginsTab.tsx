@@ -58,7 +58,7 @@ export function PluginsTab() {
               <p className="text-sm text-ndp-text-muted mt-0.5">{plugin.description}</p>
             )}
             {plugin.author && (
-              <p className="text-xs text-ndp-text-dim mt-0.5">par {plugin.author}</p>
+              <p className="text-xs text-ndp-text-dim mt-0.5">{t('common.by')} {plugin.author}</p>
             )}
             {plugin.error && (
               <p className="text-xs text-ndp-danger mt-1">{plugin.error}</p>

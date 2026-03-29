@@ -34,6 +34,8 @@
   "common.label": "Label",
   "common.message": "Message",
   "common.ok": "OK",
+  "common.by": "by",
+  "common.selected": "{{count}} selected",
   "common.choose": "Choose...",
 
   "nav.home": "Home",
@@ -307,6 +309,7 @@
   "admin.paths.contains": "contains",
   "admin.paths.is": "is",
   "admin.paths.in": "in",
+  "admin.paths.rule_name_placeholder": "E.g. Japanese anime",
   "admin.paths.add_condition": "Add a condition",
   "admin.paths.create_rule": "Create rule",
 
@@ -321,6 +324,7 @@
   "admin.notifications.event_header": "Event",
   "admin.notifications.bot_token": "Bot Token",
   "admin.notifications.chat_id": "Chat ID",
+  "admin.notifications.webhook_url": "Webhook URL",
   "admin.notifications.email_resend": "Email (Resend)",
 
   "admin.quality.options_title": "Quality options",
@@ -402,6 +406,7 @@
   "admin.danger.confirm_text": "Type <strong>{{keyword}}</strong> to confirm:",
   "admin.danger.deleted_requests": "{{count}} requests deleted",
   "admin.danger.deleted_media": "{{media}} media, {{seasons}} seasons, {{requests}} requests deleted",
+  "admin.danger.keyword": "DELETE",
   "admin.danger.deleted_users": "{{count}} users deleted",
   "admin.danger.deleted_user": "User deleted",
 

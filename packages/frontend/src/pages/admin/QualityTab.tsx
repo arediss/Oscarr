@@ -106,20 +106,26 @@ export function QualityTab() {
   useEffect(() => { load(); }, [load]);
 
   const seedDefaults = async () => {
-    await api.post('/admin/quality-options/seed');
-    load();
+    try {
+      await api.post('/admin/quality-options/seed');
+      load();
+    } catch { /* ignore */ }
   };
 
   const addOption = async () => {
     if (!newLabel.trim()) return;
-    await api.post('/admin/quality-options', { label: newLabel.trim() });
-    setNewLabel('');
-    load();
+    try {
+      await api.post('/admin/quality-options', { label: newLabel.trim() });
+      setNewLabel('');
+      load();
+    } catch { /* ignore */ }
   };
 
   const deleteOption = async (id: number) => {
-    await api.delete(`/admin/quality-options/${id}`);
-    load();
+    try {
+      await api.delete(`/admin/quality-options/${id}`);
+      load();
+    } catch { /* ignore */ }
   };
 
   const openMapping = async (qualityOptionId: number, serviceId: number) => {
@@ -153,12 +159,14 @@ export function QualityTab() {
       }
       setEditingMapping(null);
       load();
-    } finally { setSavingMapping(false); }
+    } catch { /* ignore */ } finally { setSavingMapping(false); }
   };
 
   const deleteMapping = async (mappingId: number) => {
-    await api.delete(`/admin/quality-mappings/${mappingId}`);
-    load();
+    try {
+      await api.delete(`/admin/quality-mappings/${mappingId}`);
+      load();
+    } catch { /* ignore */ }
   };
 
   const toggleProfile = (id: number) => {
@@ -283,7 +291,7 @@ export function QualityTab() {
             )}
             <div className="flex items-center justify-between mt-6">
               <span className="text-xs text-ndp-text-dim">
-                {selectedProfiles.size > 0 && `${selectedProfiles.size} selected`}
+                {selectedProfiles.size > 0 && t('common.selected', { count: selectedProfiles.size })}
               </span>
               <div className="flex gap-2">
                 <button onClick={() => setEditingMapping(null)} className="btn-secondary text-sm">{t('common.cancel')}</button>
