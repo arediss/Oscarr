@@ -20,11 +20,11 @@ const TOTAL_STEPS = 5; // 0-4
 export default function InstallPage() {
   const { t } = useTranslation();
   const { login } = useAuth();
-  const { schemas: SERVICE_SCHEMAS } = useServiceSchemas('/setup/service-schemas');
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
   const [setupSecret, setSetupSecret] = useState('');
   const [secretValid, setSecretValid] = useState(false);
+  const { schemas: SERVICE_SCHEMAS } = useServiceSchemas('/setup/service-schemas', secretValid);
   const [secretShake, setSecretShake] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
