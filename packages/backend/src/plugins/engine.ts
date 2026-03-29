@@ -7,6 +7,7 @@ import { discoverPlugins } from './loader.js';
 import type {
   LoadedPlugin,
   PluginContext,
+  PluginGuardResult,
   PluginInfo,
   PluginManifest,
   PluginRegistration,
@@ -37,7 +38,7 @@ export class PluginEngine {
           throw new Error(`Plugin "${manifest.id}" does not export a register() function`);
         }
 
-        const ctx = this.createContext(manifest, console as unknown as FastifyBaseLogger);
+        const ctx = this.createContext(manifest, this.createFallbackLogger());
         const registration: PluginRegistration = await mod.register(ctx);
 
         // Run onInstall on first load
@@ -94,7 +95,7 @@ export class PluginEngine {
     for (const [id, plugin] of this.plugins) {
       if (!plugin.enabled || plugin.error || !plugin.registration.registerJobs) continue;
       try {
-        const ctx = this.createContext(plugin.manifest, console as unknown as FastifyBaseLogger);
+        const ctx = this.createContext(plugin.manifest, this.createFallbackLogger());
         const jobs = plugin.registration.registerJobs(ctx);
         for (const [key, handler] of Object.entries(jobs)) {
           handlers[key] = handler;
@@ -186,6 +187,39 @@ export class PluginEngine {
       where: { pluginId: id },
       data: { settings: JSON.stringify(values) },
     });
+  }
+
+  /** Run all plugin guards for a given hook. Returns the first block result, or null if all pass. */
+  async runGuards(guardName: string, userId: number): Promise<PluginGuardResult | null> {
+    for (const [id, plugin] of this.plugins) {
+      if (!plugin.enabled || plugin.error || !plugin.registration.registerGuards) continue;
+      try {
+        const ctx = this.createContext(plugin.manifest, this.createFallbackLogger());
+        const guards = plugin.registration.registerGuards(ctx);
+        const guard = guards[guardName];
+        if (!guard) continue;
+        const result = await guard(userId);
+        if (result?.blocked) return result;
+      } catch (err) {
+        console.error(`[PluginEngine] Guard "${guardName}" failed for plugin "${id}":`, err);
+      }
+    }
+    return null;
+  }
+
+  private createFallbackLogger(): FastifyBaseLogger {
+    const log = Object.assign((...args: unknown[]) => console.log(...args), {
+      info: (...args: unknown[]) => console.info('[Plugin]', ...args),
+      warn: (...args: unknown[]) => console.warn('[Plugin]', ...args),
+      error: (...args: unknown[]) => console.error('[Plugin]', ...args),
+      debug: (...args: unknown[]) => console.debug('[Plugin]', ...args),
+      fatal: (...args: unknown[]) => console.error('[Plugin:FATAL]', ...args),
+      trace: (...args: unknown[]) => console.debug('[Plugin:TRACE]', ...args),
+      silent: () => {},
+      child: () => log,
+      level: 'info',
+    });
+    return log as unknown as FastifyBaseLogger;
   }
 
   private createContext(manifest: PluginManifest, logger: FastifyBaseLogger): PluginContext {

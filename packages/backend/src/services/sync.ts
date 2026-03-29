@@ -292,7 +292,9 @@ export async function runNewMediaSync(): Promise<{ radarr: SyncResult; sonarr: S
   const earliestSync = [settings?.lastRadarrSync, settings?.lastSonarrSync]
     .filter(Boolean)
     .sort((a, b) => a!.getTime() - b!.getTime())[0] || null;
-  await syncAvailabilityDates(earliestSync);
+  const avail = await syncAvailabilityDates(earliestSync);
+  radarrResult.updated += avail.radarrUpdated;
+  sonarrResult.updated += avail.sonarrUpdated;
   return { radarr: radarrResult, sonarr: sonarrResult };
 }
 
@@ -301,7 +303,9 @@ export async function runFullSync(): Promise<{ radarr: SyncResult; sonarr: SyncR
   const radarrResult = await syncRadarr(null);
   const sonarrResult = await syncSonarr(null);
   // After full sync, also sync availability dates from history
-  await syncAvailabilityDates(null);
+  const avail = await syncAvailabilityDates(null);
+  radarrResult.updated += avail.radarrUpdated;
+  sonarrResult.updated += avail.sonarrUpdated;
   return { radarr: radarrResult, sonarr: sonarrResult };
 }
 
@@ -310,8 +314,9 @@ export async function runFullSync(): Promise<{ radarr: SyncResult; sonarr: SyncR
  * Queries the history API for "imported" events and updates our DB.
  * Only 2 API calls total (1 Radarr + 1 Sonarr), regardless of library size.
  */
-export async function syncAvailabilityDates(since?: Date | null): Promise<{ updated: number }> {
-  let updated = 0;
+export async function syncAvailabilityDates(since?: Date | null): Promise<{ radarrUpdated: number; sonarrUpdated: number }> {
+  let radarrUpdated = 0;
+  let sonarrUpdated = 0;
 
   try {
     // Guard: skip if no Radarr service configured
@@ -342,15 +347,13 @@ export async function syncAvailabilityDates(since?: Date | null): Promise<{ upda
         },
         data: { availableAt: date },
       });
-      updated += result.count;
+      radarrUpdated += result.count;
     }
 
-    console.log(`[Sync] Radarr availability: ${radarrDates.size} history events → ${updated} media updated`);
+    console.log(`[Sync] Radarr availability: ${radarrDates.size} history events → ${radarrUpdated} media updated`);
   } catch (err) {
     console.error('[Sync] Radarr availability sync failed:', err);
   }
-
-  const radarrUpdated = updated;
 
   try {
     // Guard: skip if no Sonarr service configured
@@ -359,17 +362,24 @@ export async function syncAvailabilityDates(since?: Date | null): Promise<{ upda
     const sonarr = await getSonarrAsync();
     const sonarrHistory = await sonarr.getHistory(since);
 
-    // Build a map of sonarrId → most recent import date
-    const sonarrDates = new Map<number, Date>();
+    // Build a map of sonarrId → most recent import date + episode info
+    const sonarrLatest = new Map<number, { date: Date; episode?: { season: number; episode: number; title: string } }>();
     for (const record of sonarrHistory) {
       const date = new Date(record.date);
-      const existing = sonarrDates.get(record.seriesId);
-      if (!existing || date > existing) {
-        sonarrDates.set(record.seriesId, date);
+      const existing = sonarrLatest.get(record.seriesId);
+      if (!existing || date > existing.date) {
+        sonarrLatest.set(record.seriesId, {
+          date,
+          episode: record.episode ? {
+            season: record.episode.seasonNumber,
+            episode: record.episode.episodeNumber,
+            title: record.episode.title,
+          } : undefined,
+        });
       }
     }
 
-    for (const [sonarrId, date] of sonarrDates) {
+    for (const [sonarrId, { date, episode }] of sonarrLatest) {
       const result = await prisma.media.updateMany({
         where: {
           sonarrId,
@@ -378,17 +388,20 @@ export async function syncAvailabilityDates(since?: Date | null): Promise<{ upda
             { availableAt: { lt: date } },
           ],
         },
-        data: { availableAt: date },
+        data: {
+          availableAt: date,
+          ...(episode ? { lastEpisodeInfo: JSON.stringify(episode) } : {}),
+        },
       });
-      updated += result.count;
+      sonarrUpdated += result.count;
     }
 
-    console.log(`[Sync] Sonarr availability: ${sonarrDates.size} history events → ${updated - radarrUpdated} media updated`);
+    console.log(`[Sync] Sonarr availability: ${sonarrLatest.size} history events → ${sonarrUpdated} media updated`);
   } catch (err) {
     console.error('[Sync] Sonarr availability sync failed:', err);
   }
 
-  return { updated };
+  return { radarrUpdated, sonarrUpdated };
 }
 
 // Helpers

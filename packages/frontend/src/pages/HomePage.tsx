@@ -5,6 +5,7 @@ import { Info, Star } from 'lucide-react';
 import api from '@/lib/api';
 import { backdropUrl } from '@/lib/api';
 import MediaRow from '@/components/MediaRow';
+import { PluginSlot } from '@/plugins/PluginSlot';
 import GenreRow from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
 
@@ -47,7 +48,7 @@ export default function HomePage() {
           api.get('/tmdb/tv/trending-anime'),
         ]);
         // Map DB media to TmdbMedia shape for MediaRow
-        setRecentlyAdded(recentRes.data.map((m: { tmdbId: number; mediaType: string; title: string; posterPath: string | null; backdropPath: string | null; releaseDate: string | null; voteAverage: number | null }) => ({
+        setRecentlyAdded(recentRes.data.map((m: { tmdbId: number; mediaType: string; title: string; posterPath: string | null; backdropPath: string | null; releaseDate: string | null; voteAverage: number | null; lastEpisodeInfo?: { season: number; episode: number; title: string } | null }) => ({
           id: m.tmdbId > 0 ? m.tmdbId : 0,
           title: m.mediaType === 'movie' ? m.title : undefined,
           name: m.mediaType === 'tv' ? m.title : undefined,
@@ -59,6 +60,7 @@ export default function HomePage() {
           vote_count: 0,
           overview: '',
           media_type: m.mediaType,
+          lastEpisodeInfo: m.lastEpisodeInfo,
         })));
         setTrending(trendingRes.data.results);
         setPopularMovies(moviesRes.data.results);
@@ -215,6 +217,8 @@ export default function HomePage() {
           <MediaRow title={t('home.popular_series')} media={popularTv.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/tv-popular" />
           <MediaRow title={t('home.trending_anime')} media={trendingAnime.map(m => ({ ...m, media_type: 'tv' }))} loading={loading} href="/category/anime-trending" />
           <GenreRow />
+          {/* Plugin hook: home rows */}
+          <PluginSlot hookPoint="home.rows" />
           <MediaRow title={t('home.coming_soon')} media={upcoming.map(m => ({ ...m, media_type: 'movie' }))} loading={loading} href="/category/movies-upcoming" />
         </div>
       </div>

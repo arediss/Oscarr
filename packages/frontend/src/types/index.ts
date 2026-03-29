@@ -1,12 +1,16 @@
+export interface UserProviderInfo {
+  provider: string;
+  username?: string | null;
+  email?: string | null;
+}
+
 export interface User {
   id: number;
   email: string;
   displayName: string | null;
   avatar: string | null;
   role: 'admin' | 'user';
-  authProvider?: string;
-  hasPlexServerAccess?: boolean;
-  plexId?: number | null;
+  providers?: UserProviderInfo[];
   createdAt?: string;
 }
 
@@ -52,6 +56,7 @@ export interface TmdbMedia {
   vote_average: number;
   vote_count: number;
   media_type?: string;
+  lastEpisodeInfo?: { season: number; episode: number; title: string } | null;
   genre_ids?: number[];
   genres?: { id: number; name: string }[];
   runtime?: number;

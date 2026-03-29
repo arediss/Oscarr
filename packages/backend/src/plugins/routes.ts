@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify';
+import { join, extname, resolve, sep } from 'path';
+import { existsSync, createReadStream } from 'fs';
 import { pluginEngine } from './engine.js';
 import { requireAdmin } from '../middleware/auth.js';
 
@@ -115,6 +117,43 @@ export async function pluginRoutes(app: FastifyInstance) {
       return pluginEngine.getUIContributions(request.params.hookPoint);
     }
   );
+
+  // Serve plugin frontend files as ESM modules
+  app.get('/:id/frontend/*', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const filePath = (request.params as Record<string, string>)['*'];
+    const plugin = pluginEngine.getPlugin(id);
+    if (!plugin || !plugin.enabled || plugin.error) {
+      return reply.status(404).send({ error: 'Plugin not found' });
+    }
+
+    // Security: sanitize path
+    const safePath = (filePath || '').replace(/^\//, '');
+    if (!safePath) return reply.status(400).send({ error: 'File path required' });
+
+    const fullPath = resolve(join(plugin.dir, 'dist', 'frontend', safePath));
+    const pluginBoundary = resolve(plugin.dir) + sep;
+
+    // Verify the resolved path stays inside the plugin directory
+    if (!fullPath.startsWith(pluginBoundary)) {
+      return reply.status(403).send({ error: 'Access denied' });
+    }
+
+    if (!existsSync(fullPath)) {
+      return reply.status(404).send({ error: 'File not found' });
+    }
+
+    const ext = extname(fullPath);
+    const contentTypes: Record<string, string> = {
+      '.js': 'application/javascript',
+      '.mjs': 'application/javascript',
+      '.css': 'text/css',
+      '.json': 'application/json',
+    };
+    reply.header('content-type', contentTypes[ext] || 'text/plain');
+    reply.header('cache-control', process.env.NODE_ENV === 'production' ? 'public, max-age=3600' : 'no-cache');
+    return reply.send(createReadStream(fullPath));
+  });
 
   // Get plugin feature flags (no auth - needed before login)
   app.get('/features', async () => {

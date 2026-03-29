@@ -2,14 +2,25 @@
 CREATE TABLE "User" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "email" TEXT NOT NULL,
-    "plexId" INTEGER,
-    "plexToken" TEXT,
-    "plexUsername" TEXT,
+    "displayName" TEXT,
+    "passwordHash" TEXT,
     "avatar" TEXT,
     "role" TEXT NOT NULL DEFAULT 'user',
-    "hasPlexServerAccess" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "UserProvider" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "userId" INTEGER NOT NULL,
+    "provider" TEXT NOT NULL,
+    "providerId" TEXT,
+    "providerToken" TEXT,
+    "providerUsername" TEXT,
+    "providerEmail" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "UserProvider_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -30,6 +41,7 @@ CREATE TABLE "Media" (
     "sonarrId" INTEGER,
     "qualityProfileId" INTEGER,
     "availableAt" DATETIME,
+    "lastMissingSearchAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );
@@ -109,6 +121,8 @@ CREATE TABLE "AppSettings" (
     "supportEnabled" BOOLEAN NOT NULL DEFAULT true,
     "calendarEnabled" BOOLEAN NOT NULL DEFAULT true,
     "siteName" TEXT NOT NULL DEFAULT 'Oscarr',
+    "registrationEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "missingSearchCooldownMin" INTEGER NOT NULL DEFAULT 60,
     "updatedAt" DATETIME NOT NULL
 );
 
@@ -201,11 +215,30 @@ CREATE TABLE "PluginState" (
     "updatedAt" DATETIME NOT NULL
 );
 
+-- CreateTable
+CREATE TABLE "UserNotification" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "userId" INTEGER NOT NULL,
+    "type" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "read" BOOLEAN NOT NULL DEFAULT false,
+    "metadata" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "UserNotification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_plexId_key" ON "User"("plexId");
+CREATE INDEX "UserProvider_userId_idx" ON "UserProvider"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserProvider_provider_providerId_key" ON "UserProvider"("provider", "providerId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserProvider_userId_provider_key" ON "UserProvider"("userId", "provider");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Media_tmdbId_mediaType_key" ON "Media"("tmdbId", "mediaType");
@@ -239,4 +272,10 @@ CREATE UNIQUE INDEX "TmdbCache_cacheKey_key" ON "TmdbCache"("cacheKey");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PluginState_pluginId_key" ON "PluginState"("pluginId");
+
+-- CreateIndex
+CREATE INDEX "UserNotification_userId_read_idx" ON "UserNotification"("userId", "read");
+
+-- CreateIndex
+CREATE INDEX "UserNotification_createdAt_idx" ON "UserNotification"("createdAt");
 

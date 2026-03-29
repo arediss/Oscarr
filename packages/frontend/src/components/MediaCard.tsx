@@ -102,6 +102,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
             <CheckCircle className="w-4 h-4 text-white" />
           </div>
         )}
+
       </div>
 
       {/* Top-left: media type badge (hidden on hover) */}
@@ -118,6 +119,13 @@ export default function MediaCard({ media, className, availability, index = 0 }:
         <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded-md transition-opacity duration-300 group-hover:opacity-0">
           <Star className="w-3 h-3 fill-ndp-gold text-ndp-gold" />
           <span className="text-xs font-medium text-white">{media.vote_average.toFixed(1)}</span>
+        </div>
+      )}
+
+      {/* Bottom-left: latest episode badge for TV */}
+      {media.lastEpisodeInfo && type === 'tv' && (
+        <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-black/60 text-white backdrop-blur-sm transition-opacity duration-300 group-hover:opacity-0">
+          S{String(media.lastEpisodeInfo.season).padStart(2, '0')}E{String(media.lastEpisodeInfo.episode).padStart(2, '0')}
         </div>
       )}
 

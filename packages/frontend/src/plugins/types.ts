@@ -29,3 +29,9 @@ export interface PluginSettings {
   schema: PluginSettingDef[];
   values: Record<string, unknown>;
 }
+
+/** Props received by a plugin hook component */
+export interface HookComponentProps {
+  contribution: PluginUIContribution;
+  context: Record<string, unknown>;
+}
