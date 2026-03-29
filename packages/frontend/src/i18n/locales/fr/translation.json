@@ -34,6 +34,8 @@
   "common.label": "Label",
   "common.message": "Message",
   "common.ok": "OK",
+  "common.by": "par",
+  "common.selected": "{{count}} sélectionné(s)",
   "common.choose": "Choisir...",
 
   "nav.home": "Accueil",
@@ -307,6 +309,7 @@
   "admin.paths.contains": "contient",
   "admin.paths.is": "est",
   "admin.paths.in": "dans",
+  "admin.paths.rule_name_placeholder": "Ex : Animes japonais",
   "admin.paths.add_condition": "Ajouter une condition",
   "admin.paths.create_rule": "Créer la règle",
 
@@ -321,6 +324,7 @@
   "admin.notifications.event_header": "Événement",
   "admin.notifications.bot_token": "Bot Token",
   "admin.notifications.chat_id": "Chat ID",
+  "admin.notifications.webhook_url": "URL du Webhook",
   "admin.notifications.email_resend": "Email (Resend)",
 
   "admin.quality.options_title": "Options de qualité",
@@ -402,6 +406,7 @@
   "admin.danger.confirm_text": "Tapez <strong>{{keyword}}</strong> pour confirmer :",
   "admin.danger.deleted_requests": "{{count}} demandes supprimées",
   "admin.danger.deleted_media": "{{media}} médias, {{seasons}} saisons, {{requests}} demandes supprimés",
+  "admin.danger.keyword": "SUPPRIMER",
   "admin.danger.deleted_users": "{{count}} utilisateurs supprimés",
   "admin.danger.deleted_user": "Utilisateur supprimé",
 

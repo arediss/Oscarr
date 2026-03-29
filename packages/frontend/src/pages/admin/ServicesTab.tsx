@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Loader2, CheckCircle, XCircle, RefreshCw, Plus, Trash2, Pencil, Power, Save, Server, Star, Plug, Eye, EyeOff } from 'lucide-react';
+import { Loader2, RefreshCw, Plus, Trash2, Pencil, Power, Save, Server, Star, Plug, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
@@ -54,13 +54,17 @@ export function ServicesTab() {
   };
 
   const handleToggle = async (service: ServiceData) => {
-    await api.put(`/admin/services/${service.id}`, { enabled: !service.enabled });
-    fetchServices();
+    try {
+      await api.put(`/admin/services/${service.id}`, { enabled: !service.enabled });
+      fetchServices();
+    } catch { /* ignore */ }
   };
 
   const handleSetDefault = async (service: ServiceData) => {
-    await api.put(`/admin/services/${service.id}`, { isDefault: true });
-    fetchServices();
+    try {
+      await api.put(`/admin/services/${service.id}`, { isDefault: true });
+      fetchServices();
+    } catch { /* ignore */ }
   };
 
   const handleTest = async (service: ServiceData) => {

@@ -52,7 +52,7 @@ export function NotificationsTab() {
   const channels: ChannelDef[] = [
     {
       id: 'discord', label: 'Discord', enabledKey: 'discordWebhookUrl',
-      fields: [{ key: 'discordWebhookUrl', label: 'Webhook URL', type: 'password', placeholder: 'https://discord.com/api/webhooks/...' }],
+      fields: [{ key: 'discordWebhookUrl', label: t('admin.notifications.webhook_url'), type: 'password', placeholder: 'https://discord.com/api/webhooks/...' }],
     },
     {
       id: 'telegram', label: 'Telegram', enabledKey: 'telegramBotToken',

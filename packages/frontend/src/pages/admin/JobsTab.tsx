@@ -77,14 +77,18 @@ export function JobsTab() {
   };
 
   const toggleJob = async (job: CronJobData) => {
-    await api.put(`/admin/jobs/${job.key}`, { enabled: !job.enabled });
-    fetchJobs();
+    try {
+      await api.put(`/admin/jobs/${job.key}`, { enabled: !job.enabled });
+      fetchJobs();
+    } catch { /* ignore */ }
   };
 
   const saveCron = async (key: string, cronExpression: string) => {
-    await api.put(`/admin/jobs/${key}`, { cronExpression });
-    setEditingCron(null);
-    fetchJobs();
+    try {
+      await api.put(`/admin/jobs/${key}`, { cronExpression });
+      setEditingCron(null);
+      fetchJobs();
+    } catch { /* ignore */ }
   };
 
   if (loading) return <Spinner />;
@@ -168,7 +172,7 @@ export function JobsTab() {
                       job.lastStatus === 'success' ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger'
                     )}>
                       {job.lastStatus === 'success' ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                      {job.lastStatus === 'success' ? 'OK' : t('common.error')}
+                      {job.lastStatus === 'success' ? t('common.ok') : t('common.error')}
                     </span>
                   )}
                 </div>

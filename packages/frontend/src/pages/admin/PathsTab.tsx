@@ -186,7 +186,8 @@ export function PathsTab() {
 
           {/* Custom rules */}
           {rules.map((rule) => {
-            const conds: RuleCondition[] = JSON.parse(rule.conditions);
+            let conds: RuleCondition[];
+            try { conds = JSON.parse(rule.conditions); } catch { conds = []; }
             return (
               <div key={rule.id} className="card">
                 <div className="flex items-center gap-4 p-4">
@@ -220,7 +221,7 @@ export function PathsTab() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs text-ndp-text-dim block mb-1">{t('common.name')}</label>
-                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ex: Animes japonais" className="input text-sm w-full" />
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t('admin.paths.rule_name_placeholder')} className="input text-sm w-full" />
               </div>
               <div>
                 <label className="text-xs text-ndp-text-dim block mb-1">{t('common.type')}</label>
