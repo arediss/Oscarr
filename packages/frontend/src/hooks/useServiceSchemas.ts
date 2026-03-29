@@ -28,19 +28,19 @@ export interface ServiceData {
 
 let cachedSchemas: Record<string, ServiceSchema> | null = null;
 
-export function useServiceSchemas(endpoint = '/admin/service-schemas') {
+export function useServiceSchemas(endpoint = '/admin/service-schemas', enabled = true) {
   const [schemas, setSchemas] = useState<Record<string, ServiceSchema>>(cachedSchemas || {});
   const [loading, setLoading] = useState(!cachedSchemas);
 
   useEffect(() => {
-    if (cachedSchemas) return;
+    if (!enabled || cachedSchemas) return;
     api.get(endpoint).then(({ data }) => {
       const map: Record<string, ServiceSchema> = {};
       for (const s of data as ServiceSchema[]) map[s.id] = s;
       cachedSchemas = map;
       setSchemas(map);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, [endpoint]);
+  }, [endpoint, enabled]);
 
   return { schemas, loading };
 }
