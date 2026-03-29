@@ -161,7 +161,7 @@ export const plexProvider: Provider = {
   service: {
     id: 'plex',
     label: 'Plex',
-    icon: 'https://www.plex.tv/wp-content/uploads/2018/01/pmp-icon.png',
+    icon: 'https://www.vectorlogo.zone/logos/plextv/plextv-tile.svg',
     category: 'media-server',
     fields: [
       { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:32400' },
