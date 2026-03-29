@@ -42,6 +42,7 @@ CREATE TABLE "Media" (
     "qualityProfileId" INTEGER,
     "availableAt" DATETIME,
     "lastMissingSearchAt" DATETIME,
+    "lastEpisodeInfo" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );
@@ -278,4 +279,3 @@ CREATE INDEX "UserNotification_userId_read_idx" ON "UserNotification"("userId", 
 
 -- CreateIndex
 CREATE INDEX "UserNotification_createdAt_idx" ON "UserNotification"("createdAt");
-
