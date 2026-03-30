@@ -37,7 +37,7 @@ const idParamSchema = {
 export async function tmdbRoutes(app: FastifyInstance) {
   app.get('/trending', {
     schema: { querystring: pageQuerySchema },
-    preHandler: [app.authenticate],
+
   }, async (request) => {
     const { page } = request.query as { page?: string };
     return getTrending(parsePage(page), getLang(request));
@@ -45,7 +45,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   app.get('/movies/popular', {
     schema: { querystring: pageQuerySchema },
-    preHandler: [app.authenticate],
+
   }, async (request) => {
     const { page } = request.query as { page?: string };
     return getPopularMovies(parsePage(page), getLang(request));
@@ -53,7 +53,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   app.get('/tv/popular', {
     schema: { querystring: pageQuerySchema },
-    preHandler: [app.authenticate],
+
   }, async (request) => {
     const { page } = request.query as { page?: string };
     return getPopularTv(parsePage(page), getLang(request));
@@ -61,7 +61,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   app.get('/tv/trending-anime', {
     schema: { querystring: pageQuerySchema },
-    preHandler: [app.authenticate],
+
   }, async (request) => {
     const { page } = request.query as { page?: string };
     return getTrendingAnime(parsePage(page), getLang(request));
@@ -69,7 +69,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   app.get('/movies/upcoming', {
     schema: { querystring: pageQuerySchema },
-    preHandler: [app.authenticate],
+
   }, async (request) => {
     const { page } = request.query as { page?: string };
     return getUpcomingMovies(parsePage(page), getLang(request));
@@ -86,7 +86,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request) => {
     const { q, page } = request.query as { q: string; page?: string };
     if (!q || q.trim().length === 0) {
@@ -97,7 +97,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   app.get('/movie/:id', {
     schema: { params: idParamSchema },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const movieId = parseId(id);
@@ -107,7 +107,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   app.get('/tv/:id', {
     schema: { params: idParamSchema },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const tvId = parseId(id);
@@ -117,7 +117,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   app.get('/movie/:id/recommendations', {
     schema: { params: idParamSchema },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const movieId = parseId(id);
@@ -127,7 +127,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   app.get('/tv/:id/recommendations', {
     schema: { params: idParamSchema },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const tvId = parseId(id);
@@ -137,7 +137,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   app.get('/collection/:id', {
     schema: { params: idParamSchema },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const collectionId = parseId(id);
@@ -157,7 +157,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
       },
       querystring: pageQuerySchema,
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const { mediaType, genreId } = request.params as { mediaType: string; genreId: string };
     const { page } = request.query as { page?: string };

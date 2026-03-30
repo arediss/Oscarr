@@ -16,7 +16,7 @@ export async function notificationRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const user = request.user as { id: number };
     const { page, unreadOnly } = request.query as { page?: string; unreadOnly?: string };
@@ -50,7 +50,7 @@ export async function notificationRoutes(app: FastifyInstance) {
 
   // GET /unread-count
   app.get('/unread-count', {
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const user = request.user as { id: number };
     const count = await prisma.userNotification.count({
@@ -68,7 +68,7 @@ export async function notificationRoutes(app: FastifyInstance) {
         properties: { id: { type: 'string' } },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const user = request.user as { id: number };
     const { id } = request.params as { id: string };
@@ -90,7 +90,7 @@ export async function notificationRoutes(app: FastifyInstance) {
 
   // PUT /read-all — mark all as read
   app.put('/read-all', {
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const user = request.user as { id: number };
     await prisma.userNotification.updateMany({
@@ -109,7 +109,7 @@ export async function notificationRoutes(app: FastifyInstance) {
         properties: { id: { type: 'string' } },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const user = request.user as { id: number };
     const { id } = request.params as { id: string };

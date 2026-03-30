@@ -1,0 +1,301 @@
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { prisma } from '../utils/prisma.js';
+
+// ── Special permission markers ───────────────────────────────────────────────
+export const PUBLIC = '$public';
+export const AUTH = '$authenticated';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface RouteRule {
+  permission: string;
+  ownerScoped?: boolean;
+}
+
+// ── Route permissions map (METHOD:path -> rule) ───────────────────────────────
+// Paths must match Fastify's routeOptions.url (parameterized, with prefix)
+const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
+  // ── Auth (public) ──
+  'GET:/api/auth/providers':             { permission: PUBLIC },
+  'POST:/api/auth/register':             { permission: PUBLIC },
+  'POST:/api/auth/login':                { permission: PUBLIC },
+  'POST:/api/auth/link-provider':        { permission: AUTH },
+  'GET:/api/auth/me':                    { permission: AUTH },
+  'POST:/api/auth/logout':               { permission: AUTH },
+
+  // ── TMDB (any user) ──
+  'GET:/api/tmdb/trending':                            { permission: AUTH },
+  'GET:/api/tmdb/movies/popular':                      { permission: AUTH },
+  'GET:/api/tmdb/tv/popular':                          { permission: AUTH },
+  'GET:/api/tmdb/tv/trending-anime':                   { permission: AUTH },
+  'GET:/api/tmdb/movies/upcoming':                     { permission: AUTH },
+  'GET:/api/tmdb/search':                              { permission: AUTH },
+  'GET:/api/tmdb/movie/:id':                           { permission: AUTH },
+  'GET:/api/tmdb/tv/:id':                              { permission: AUTH },
+  'GET:/api/tmdb/movie/:id/recommendations':           { permission: AUTH },
+  'GET:/api/tmdb/tv/:id/recommendations':              { permission: AUTH },
+  'GET:/api/tmdb/collection/:id':                      { permission: AUTH },
+  'GET:/api/tmdb/discover/:mediaType/genre/:genreId':  { permission: AUTH },
+
+  // ── Requests ──
+  'GET:/api/requests/':                  { permission: 'requests.read', ownerScoped: true },
+  'GET:/api/requests/stats':             { permission: 'requests.read', ownerScoped: true },
+  'POST:/api/requests/':                 { permission: 'requests.create' },
+  'POST:/api/requests/collection':       { permission: 'requests.create' },
+  'POST:/api/requests/search-missing':   { permission: 'requests.create' },
+  'POST:/api/requests/:id/approve':      { permission: 'requests.approve' },
+  'POST:/api/requests/:id/decline':      { permission: 'requests.decline' },
+  'DELETE:/api/requests/:id':            { permission: 'requests.delete', ownerScoped: true },
+
+  // ── Media (any user) ──
+  'GET:/api/media/':                     { permission: AUTH },
+  'GET:/api/media/:id':                  { permission: AUTH },
+  'GET:/api/media/tmdb/:tmdbId/:mediaType': { permission: AUTH },
+  'GET:/api/media/recent':               { permission: AUTH },
+  'POST:/api/media/batch-status':        { permission: AUTH },
+  'GET:/api/media/episodes':             { permission: AUTH },
+
+  // ── Services status (any user) ──
+  'GET:/api/services/radarr/status':     { permission: AUTH },
+  'GET:/api/services/sonarr/status':     { permission: AUTH },
+  'GET:/api/services/radarr/queue':      { permission: AUTH },
+  'GET:/api/services/sonarr/queue':      { permission: AUTH },
+  'GET:/api/services/downloads':         { permission: AUTH },
+  'GET:/api/services/stats':             { permission: AUTH },
+  'GET:/api/services/calendar':          { permission: AUTH },
+
+  // ── App ──
+  'GET:/api/app/version':                { permission: AUTH },
+  'GET:/api/app/banner':                 { permission: PUBLIC },
+  'GET:/api/app/quality-options':        { permission: AUTH },
+  'GET:/api/app/features':               { permission: PUBLIC },
+
+  // ── Support ──
+  'GET:/api/support/tickets':                   { permission: 'support.read', ownerScoped: true },
+  'POST:/api/support/tickets':                  { permission: 'support.create' },
+  'GET:/api/support/tickets/:id/messages':      { permission: 'support.read', ownerScoped: true },
+  'POST:/api/support/tickets/:id/messages':     { permission: 'support.write', ownerScoped: true },
+  'PATCH:/api/support/tickets/:id':             { permission: 'support.manage' },
+
+  // ── Notifications (always own) ──
+  'GET:/api/notifications/':             { permission: AUTH },
+  'GET:/api/notifications/unread-count': { permission: AUTH },
+  'PUT:/api/notifications/:id/read':     { permission: AUTH },
+  'PUT:/api/notifications/read-all':     { permission: AUTH },
+  'DELETE:/api/notifications/:id':       { permission: AUTH },
+
+  // ── Plugins ──
+  'GET:/api/plugins/':                   { permission: 'admin.plugins' },
+  'PUT:/api/plugins/:id/toggle':         { permission: 'admin.plugins' },
+  'GET:/api/plugins/:id/settings':       { permission: 'admin.plugins' },
+  'PUT:/api/plugins/:id/settings':       { permission: 'admin.plugins' },
+  'GET:/api/plugins/ui/:hookPoint':      { permission: AUTH },
+  'GET:/api/plugins/:id/frontend/*':     { permission: AUTH },
+  'GET:/api/plugins/features':           { permission: PUBLIC },
+
+  // ── Admin RBAC routes ──
+  'GET:/api/admin/roles':                { permission: 'admin.roles' },
+  'POST:/api/admin/roles':               { permission: 'admin.roles' },
+  'PUT:/api/admin/roles/:id':            { permission: 'admin.roles' },
+  'DELETE:/api/admin/roles/:id':         { permission: 'admin.roles' },
+  'GET:/api/admin/permissions':          { permission: 'admin.roles' },
+};
+
+// ── Prefix-based fallback (first match wins — order matters) ────────────────
+const PREFIX_DEFAULTS: [string, RouteRule][] = [
+  ['/api/admin',  { permission: 'admin.*' }],
+  ['/api/setup',  { permission: PUBLIC }],    // setup has its own secret-based guards
+  ['/api/auth',   { permission: PUBLIC }],    // OAuth callback routes registered dynamically
+];
+
+// ── DB-backed role cache ────────────────────────────────────────────────────
+let roleCache: Record<string, string[]> = {};
+let roleCacheReady = false;
+
+// Fallback used before DB is available (app boot)
+const FALLBACK_ROLES: Record<string, string[]> = {
+  admin: ['*'],
+  user: [AUTH, 'requests.read', 'requests.create', 'requests.delete', 'support.read', 'support.create', 'support.write'],
+};
+
+async function loadRolesFromDb(): Promise<void> {
+  try {
+    const roles = await prisma.role.findMany();
+    const map: Record<string, string[]> = {};
+    for (const role of roles) {
+      map[role.name] = JSON.parse(role.permissions) as string[];
+    }
+    roleCache = map;
+    roleCacheReady = true;
+  } catch (err) {
+    console.warn('[RBAC] Failed to load roles from DB, using fallback:', err);
+    roleCache = { ...FALLBACK_ROLES };
+  }
+}
+
+/** Call this after any role CRUD to refresh the cache */
+export async function invalidateRoleCache(): Promise<void> {
+  await loadRolesFromDb();
+}
+
+// ── Permission descriptions (for admin UI) ─────────────────────────────────
+const PERMISSION_DESCRIPTIONS: Record<string, string> = {
+  'admin.*':           'Full access to the admin panel',
+  'admin.plugins':     'Manage plugins (enable/disable, settings)',
+  'admin.roles':       'Manage roles and permissions',
+  'requests.read':     'View media requests',
+  'requests.create':   'Create new media requests',
+  'requests.delete':   'Delete own media requests',
+  'requests.approve':  'Approve pending requests',
+  'requests.decline':  'Decline pending requests',
+  'support.read':      'View support tickets',
+  'support.create':    'Create support tickets',
+  'support.write':     'Reply to support tickets',
+  'support.manage':    'Close and reopen support tickets',
+};
+
+// ── Plugin overrides (plugins can add/replace rules at runtime) ─────────────
+const pluginOverrides: Record<string, RouteRule> = {};
+const pluginPermissions: { key: string; description?: string }[] = [];
+
+/**
+ * Allow plugins to register custom route permissions.
+ */
+export function registerRoutePermission(key: string, rule: RouteRule): void {
+  pluginOverrides[key] = rule;
+}
+
+/**
+ * Allow plugins to declare new permissions (visible in admin role editor).
+ */
+export function registerPluginPermission(permission: string, description?: string): void {
+  if (!pluginPermissions.some(p => p.key === permission)) {
+    pluginPermissions.push({ key: permission, description });
+  }
+}
+
+/**
+ * Get all available permissions (core + plugins) for the admin role editor.
+ */
+export function getAllPermissions(): { key: string; description: string; source: 'core' | 'plugin' }[] {
+  const corePerms = new Set<string>();
+  for (const rule of Object.values(ROUTE_PERMISSIONS)) {
+    if (rule.permission !== PUBLIC && rule.permission !== AUTH) {
+      corePerms.add(rule.permission);
+    }
+  }
+  corePerms.add('admin.*');
+
+  const result: { key: string; description: string; source: 'core' | 'plugin' }[] = [];
+  for (const p of [...corePerms].sort()) {
+    result.push({ key: p, description: PERMISSION_DESCRIPTIONS[p] || p, source: 'core' });
+  }
+  for (const p of [...pluginPermissions].sort((a, b) => a.key.localeCompare(b.key))) {
+    result.push({ key: p.key, description: p.description || p.key, source: 'plugin' });
+  }
+  return result;
+}
+
+// ── Permission check ────────────────────────────────────────────────────────
+function hasPermission(role: string, required: string): boolean {
+  const permissions = roleCacheReady ? roleCache[role] : FALLBACK_ROLES[role];
+  if (!permissions) return false;
+
+  return permissions.some((p) => {
+    if (p === '*') return true;
+    if (p === required) return true;
+    if (p.endsWith('.*')) {
+      const prefix = p.slice(0, -2);
+      return required.startsWith(prefix + '.') || required === prefix;
+    }
+    return false;
+  });
+}
+
+// ── ownerScoped: skip if the role has broader access (e.g. can approve) ──────
+function shouldOwnerScope(role: string, permission: string): boolean {
+  // If the role has wildcard access, never owner-scope
+  if (hasPermission(role, '*')) return false;
+  // If the role has a broader permission in the same domain (e.g. requests.approve
+  // alongside requests.read), it needs to see all resources — not just its own
+  const domain = permission.split('.')[0];
+  const broaderPerms = [`${domain}.approve`, `${domain}.decline`, `${domain}.manage`];
+  for (const bp of broaderPerms) {
+    if (hasPermission(role, bp)) return false;
+  }
+  return true;
+}
+
+// ── Route rule resolution ───────────────────────────────────────────────────
+function resolveRule(method: string, url: string): RouteRule | null {
+  const key = `${method}:${url}`;
+
+  // 1. Plugin overrides first (highest priority)
+  if (pluginOverrides[key]) return pluginOverrides[key];
+
+  // 2. Exact match in static map
+  if (ROUTE_PERMISSIONS[key]) return ROUTE_PERMISSIONS[key];
+
+  // 3. Prefix-based fallback (longest match)
+  for (const [prefix, rule] of PREFIX_DEFAULTS) {
+    if (url.startsWith(prefix)) return rule;
+  }
+
+  return null;
+}
+
+// ── Swagger tag helper ──────────────────────────────────────────────────────
+export function getAccessTag(method: string, url: string): string {
+  const rule = resolveRule(method, url);
+  if (!rule || rule.permission === PUBLIC) return 'Public';
+  if (rule.permission === AUTH) return 'Auth Required';
+  if (rule.permission.startsWith('admin')) return 'Admin Only';
+  return 'Auth Required';
+}
+
+// ── Fastify RBAC plugin ─────────────────────────────────────────────────────
+export function rbacPlugin(app: FastifyInstance): void {
+  // Load roles from DB on startup
+  app.addHook('onReady', async () => {
+    await loadRolesFromDb();
+  });
+
+  app.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
+    const url = request.routeOptions?.url;
+    const method = request.method;
+
+    // Skip non-API routes (SPA fallback, static files)
+    if (!url?.startsWith('/api/')) return;
+
+    const rule = resolveRule(method, url);
+
+    if (!rule) {
+      // Fail-closed: no rule -> deny
+      request.log.warn(`RBAC: no rule for ${method}:${url}, denying`);
+      return reply.status(403).send({ error: 'Forbidden' });
+    }
+
+    // Public route — no auth needed
+    if (rule.permission === PUBLIC) return;
+
+    // All non-public routes need a valid JWT
+    try {
+      await request.jwtVerify();
+    } catch {
+      return reply.status(401).send({ error: 'Non autorisé' });
+    }
+
+    // Any authenticated user is enough
+    if (rule.permission === AUTH) return;
+
+    // Check role-based permission
+    const user = request.user as { id: number; role: string };
+    if (!hasPermission(user.role, rule.permission)) {
+      return reply.status(403).send({ error: 'Accès refusé' });
+    }
+
+    // Flag owner-scoped routes for handlers
+    if (rule.ownerScoped && shouldOwnerScope(user.role, rule.permission)) {
+      request.ownerScoped = true;
+    }
+  });
+}

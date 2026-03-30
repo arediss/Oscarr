@@ -24,7 +24,7 @@ export async function requestRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request) => {
     const user = request.user as { id: number; role: string };
     const { status, page, userId } = request.query as { status?: string; page?: string; userId?: string };
@@ -33,7 +33,7 @@ export async function requestRoutes(app: FastifyInstance) {
     const skip = (pageNum - 1) * take;
 
     const where: Record<string, unknown> = {};
-    if (user.role !== 'admin') {
+    if (request.ownerScoped) {
       where.userId = user.id;
     } else if (userId) {
       const uid = parseId(userId);
@@ -74,9 +74,9 @@ export async function requestRoutes(app: FastifyInstance) {
   });
 
   // Stats for the current user (or all if admin)
-  app.get('/stats', { preHandler: [app.authenticate] }, async (request) => {
+  app.get('/stats', async (request) => {
     const user = request.user as { id: number; role: string };
-    const userFilter = user.role !== 'admin' ? { userId: user.id } : {};
+    const userFilter = request.ownerScoped ? { userId: user.id } : {};
 
     const [total, pending, approved, available, declined, searching, upcoming] = await Promise.all([
       prisma.mediaRequest.count({ where: userFilter }),
@@ -106,7 +106,7 @@ export async function requestRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     const { tmdbId, mediaType, seasons, rootFolder, qualityOptionId } = request.body as {
@@ -239,12 +239,9 @@ export async function requestRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
-    if (user.role !== 'admin') {
-      return reply.status(403).send({ error: 'Admin uniquement' });
-    }
 
     const { id } = request.params as { id: string };
     const requestId = parseId(id);
@@ -290,12 +287,9 @@ export async function requestRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
-    if (user.role !== 'admin') {
-      return reply.status(403).send({ error: 'Admin uniquement' });
-    }
 
     const { id } = request.params as { id: string };
     const requestId = parseId(id);
@@ -329,7 +323,7 @@ export async function requestRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     const { tmdbId, mediaType } = request.body as { tmdbId: number; mediaType: string };
@@ -392,7 +386,7 @@ export async function requestRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     const { id } = request.params as { id: string };
@@ -402,7 +396,7 @@ export async function requestRoutes(app: FastifyInstance) {
     const mediaRequest = await prisma.mediaRequest.findUnique({ where: { id: requestId } });
 
     if (!mediaRequest) return reply.status(404).send({ error: 'Demande introuvable' });
-    if (user.role !== 'admin' && mediaRequest.userId !== user.id) {
+    if (request.ownerScoped && mediaRequest.userId !== user.id) {
       return reply.status(403).send({ error: 'Non autorisé' });
     }
 
@@ -421,7 +415,7 @@ export async function requestRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     const { collectionId } = request.body as { collectionId: unknown };

@@ -244,6 +244,7 @@
   "admin.title": "Administration",
   "admin.tab.general": "General",
   "admin.tab.users": "Users",
+  "admin.tab.roles": "Roles",
   "admin.tab.services": "Services",
   "admin.tab.quality": "Quality",
   "admin.tab.media": "Media",

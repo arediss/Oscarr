@@ -215,7 +215,7 @@ export async function authRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const currentUser = request.user as { id: number };
     const { provider: providerId, pinId } = request.body as { provider: string; pinId: number };
@@ -238,7 +238,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   // ─── Common ────────────────────────────────────────────────────────
 
-  app.get('/me', { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get('/me', async (request, reply) => {
     const { id } = request.user as { id: number };
     const user = await prisma.user.findUnique({
       where: { id },
@@ -251,7 +251,7 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send(user);
   });
 
-  app.post('/logout', { preHandler: [app.authenticate] }, async (_request, reply) => {
+  app.post('/logout', async (_request, reply) => {
     reply.clearCookie('token', { path: '/' }).send({ ok: true });
   });
 }

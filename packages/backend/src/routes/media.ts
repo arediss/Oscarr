@@ -16,7 +16,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request) => {
     const { page, mediaType, status } = request.query as {
       page?: string;
@@ -68,7 +68,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const mediaId = parseId(id);
@@ -103,7 +103,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const { tmdbId, mediaType } = request.params as { tmdbId: string; mediaType: string };
     const tmdbIdNum = parseId(tmdbId);
@@ -216,7 +216,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request) => {
     const { limit } = request.query as { limit?: string };
     const take = Math.min(parseInt(limit || '20', 10) || 20, 50);
@@ -274,7 +274,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const { ids } = request.body as { ids?: unknown };
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -325,7 +325,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request, reply) => {
     const { tmdbId, seasonNumber } = request.query as { tmdbId: string; seasonNumber: string };
     const tmdbIdNum = parseId(tmdbId);
