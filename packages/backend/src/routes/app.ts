@@ -11,7 +11,7 @@ const APP_VERSION = JSON.parse(
 
 export async function appRoutes(app: FastifyInstance) {
   // Get app version + check for updates
-  app.get('/version', { preHandler: [app.authenticate] }, async () => {
+  app.get('/version', async () => {
     const result: { current: string; latest?: string; updateAvailable?: boolean; releaseUrl?: string } = {
       current: APP_VERSION,
     };
@@ -35,7 +35,7 @@ export async function appRoutes(app: FastifyInstance) {
   });
 
   // Quality options available for requests (only those with at least one mapping)
-  app.get('/quality-options', { preHandler: [app.authenticate] }, async () => {
+  app.get('/quality-options', async () => {
     return prisma.qualityOption.findMany({
       where: { mappings: { some: {} } },
       orderBy: { position: 'asc' },

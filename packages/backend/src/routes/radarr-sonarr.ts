@@ -5,7 +5,7 @@ import { prisma } from '../utils/prisma.js';
 
 export async function radarrSonarrRoutes(app: FastifyInstance) {
   // Radarr status
-  app.get('/radarr/status', { preHandler: [app.authenticate] }, async (_request, reply) => {
+  app.get('/radarr/status', async (_request, reply) => {
     try {
       const radarr = await getRadarrAsync();
       const status = await radarr.getSystemStatus();
@@ -16,7 +16,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
   });
 
   // Sonarr status
-  app.get('/sonarr/status', { preHandler: [app.authenticate] }, async (_request, reply) => {
+  app.get('/sonarr/status', async (_request, reply) => {
     try {
       const sonarr = await getSonarrAsync();
       const status = await sonarr.getSystemStatus();
@@ -27,7 +27,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
   });
 
   // Radarr queue (download status)
-  app.get('/radarr/queue', { preHandler: [app.authenticate] }, async () => {
+  app.get('/radarr/queue', async () => {
     const radarr = await getRadarrAsync();
     const queue = await radarr.getQueue();
     return queue.records.map(item => ({
@@ -43,7 +43,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
   });
 
   // Sonarr queue (download status)
-  app.get('/sonarr/queue', { preHandler: [app.authenticate] }, async () => {
+  app.get('/sonarr/queue', async () => {
     const sonarr = await getSonarrAsync();
     const queue = await sonarr.getQueue();
     return queue.records.map(item => ({
@@ -60,7 +60,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
   });
 
   // Combined download queue mapped to tmdbId
-  app.get('/downloads', { preHandler: [app.authenticate] }, async () => {
+  app.get('/downloads', async () => {
     try {
       const [radarr, sonarr] = await Promise.all([
         getRadarrAsync(),
@@ -121,7 +121,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
   });
 
   // Library stats
-  app.get('/stats', { preHandler: [app.authenticate] }, async () => {
+  app.get('/stats', async () => {
     try {
       const [radarr, sonarr] = await Promise.all([
         getRadarrAsync(),
@@ -162,7 +162,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
         },
       },
     },
-    preHandler: [app.authenticate],
+
   }, async (request) => {
     const { days } = request.query as { days?: string };
     const numDays = Math.min(parseInt(days || '30', 10) || 30, 90);

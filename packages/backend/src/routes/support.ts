@@ -5,11 +5,11 @@ import { sendUserNotification } from '../services/userNotifications.js';
 
 export async function supportRoutes(app: FastifyInstance) {
   // List tickets (user sees own, admin sees all)
-  app.get('/tickets', { preHandler: [app.authenticate] }, async (request) => {
+  app.get('/tickets', async (request) => {
     const user = request.user as { id: number; role: string };
 
     const tickets = await prisma.supportTicket.findMany({
-      where: user.role === 'admin' ? {} : { userId: user.id },
+      where: request.ownerScoped ? { userId: user.id } : {},
       include: {
         user: { select: { id: true, displayName: true, avatar: true } },
         messages: {
@@ -36,7 +36,7 @@ export async function supportRoutes(app: FastifyInstance) {
 
   // Create a ticket
   app.post('/tickets', {
-    preHandler: [app.authenticate],
+    
     schema: {
       body: {
         type: 'object',
@@ -73,7 +73,7 @@ export async function supportRoutes(app: FastifyInstance) {
 
   // Get messages for a ticket
   app.get('/tickets/:id/messages', {
-    preHandler: [app.authenticate],
+    
     schema: {
       params: {
         type: 'object',
@@ -91,7 +91,7 @@ export async function supportRoutes(app: FastifyInstance) {
 
     const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
     if (!ticket) return reply.status(404).send({ error: 'Ticket introuvable' });
-    if (user.role !== 'admin' && ticket.userId !== user.id) {
+    if (request.ownerScoped && ticket.userId !== user.id) {
       return reply.status(403).send({ error: 'Accès refusé' });
     }
 
@@ -106,7 +106,7 @@ export async function supportRoutes(app: FastifyInstance) {
 
   // Post a message to a ticket
   app.post('/tickets/:id/messages', {
-    preHandler: [app.authenticate],
+    
     schema: {
       params: {
         type: 'object',
@@ -134,7 +134,7 @@ export async function supportRoutes(app: FastifyInstance) {
 
     const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
     if (!ticket) return reply.status(404).send({ error: 'Ticket introuvable' });
-    if (user.role !== 'admin' && ticket.userId !== user.id) {
+    if (request.ownerScoped && ticket.userId !== user.id) {
       return reply.status(403).send({ error: 'Accès refusé' });
     }
 
@@ -163,7 +163,7 @@ export async function supportRoutes(app: FastifyInstance) {
 
   // Close/reopen a ticket (admin only)
   app.patch('/tickets/:id', {
-    preHandler: [app.authenticate],
+    
     schema: {
       params: {
         type: 'object',
@@ -181,9 +181,6 @@ export async function supportRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    const user = request.user as { id: number; role: string };
-    if (user.role !== 'admin') return reply.status(403).send({ error: 'Admin requis' });
-
     const { id } = request.params as { id: string };
     const ticketId = parseInt(id, 10);
     if (isNaN(ticketId)) return reply.status(400).send({ error: 'ID invalide' });

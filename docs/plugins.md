@@ -172,19 +172,15 @@ await ctx.sendUserNotification(userId, {
 
 Routes registered by plugins are automatically prefixed with the plugin's route prefix (default: `/api/plugins/<pluginId>`).
 
+All plugin routes require authentication by default (handled by the RBAC middleware). You can register custom permissions for your routes — see [Permissions & RBAC](#permissions--rbac).
+
 ```typescript
 async registerRoutes(app, ctx) {
   // Available at: GET /api/plugins/my-plugin/stats
-  app.get('/stats', async () => {
-    return { users: 42 };
-  });
-
-  // Use auth middleware
-  app.get('/private', {
-    preHandler: [app.authenticate],
-  }, async (request) => {
+  // Requires authentication (default for all plugin routes)
+  app.get('/stats', async (request) => {
     const user = request.user as { id: number; role: string };
-    return { userId: user.id };
+    return { userId: user.id, role: user.role };
   });
 }
 ```
@@ -466,12 +462,136 @@ model PluginState {
 | `manifest` | Yes | The plugin manifest |
 | `registerRoutes(app, ctx)` | No | Register Fastify routes |
 | `registerJobs(ctx)` | No | Return job handlers |
+| `registerGuards(ctx)` | No | Return guard handlers (see [Guards](#guards)) |
 | `onInstall(ctx)` | No | Run once on first install |
+
+## Guards
+
+Guards let plugins intercept actions before they happen (e.g. block a request based on a subscription check). Guards run **before** the action is processed and can block it with a custom error message.
+
+### Registering guards
+
+```typescript
+export function register(ctx: PluginContext): PluginRegistration {
+  return {
+    manifest: require('./manifest.json'),
+
+    registerGuards(ctx) {
+      return {
+        // Runs before a media request is created
+        'request.create': async (userId: number) => {
+          const sub = await ctx.getSetting('subscriptions');
+          const userSub = JSON.parse(sub || '{}')[userId];
+          if (!userSub || new Date(userSub.expiresAt) < new Date()) {
+            return { blocked: true, error: 'Active subscription required', statusCode: 403 };
+          }
+          return null; // Allow the action
+        },
+      };
+    },
+  };
+}
+```
+
+### Available guard points
+
+| Guard name | When it runs | Bypassed by |
+|------------|-------------|-------------|
+| `request.create` | Before creating a media request | Admin role |
+| `request.create` | Before triggering a missing episode search | Admin role |
+
+Guards return `null` to allow the action, or `{ blocked: true, error: string, statusCode?: number }` to block it.
+
+## Permissions & RBAC
+
+Oscarr uses a centralized RBAC (Role-Based Access Control) middleware. Roles and their permissions are stored in the database and managed from the admin panel (Roles tab). Plugins can extend this system.
+
+### Registering custom permissions
+
+Declare new permissions so admins can assign them to roles:
+
+```typescript
+import { registerPluginPermission, registerRoutePermission } from '../../../backend/src/middleware/rbac.js';
+
+export function register(ctx: PluginContext): PluginRegistration {
+  // 1. Declare the permission (appears in admin role editor)
+  registerPluginPermission('myplugin.access', 'Access My Plugin features');
+  registerPluginPermission('myplugin.admin', 'Manage My Plugin settings');
+
+  // 2. Protect your routes with these permissions
+  registerRoutePermission('GET:/api/plugins/my-plugin/data', { permission: 'myplugin.access' });
+  registerRoutePermission('PUT:/api/plugins/my-plugin/config', { permission: 'myplugin.admin' });
+
+  return {
+    manifest: require('./manifest.json'),
+    // ...
+  };
+}
+```
+
+### How it works
+
+1. **Plugin registers permissions** via `registerPluginPermission(key, description)` — these appear in the admin Roles tab with a "plugin" badge
+2. **Plugin protects routes** via `registerRoutePermission(routeKey, rule)` — the RBAC middleware enforces the permission
+3. **Admin assigns permissions** to roles from the admin panel — users with matching roles get access
+
+### Route rule format
+
+The `registerRoutePermission` key is `METHOD:/full/path` matching Fastify's parameterized URL:
+
+```typescript
+// Exact route
+registerRoutePermission('GET:/api/plugins/my-plugin/stats', {
+  permission: 'myplugin.access',
+});
+
+// Owner-scoped route (non-admin users only see their own data)
+registerRoutePermission('GET:/api/plugins/my-plugin/history', {
+  permission: 'myplugin.access',
+  ownerScoped: true,
+});
+```
+
+When `ownerScoped: true`, the RBAC middleware sets `request.ownerScoped = true` for non-privileged users. Your route handler should use this flag to filter data:
+
+```typescript
+app.get('/history', async (request) => {
+  const user = request.user as { id: number };
+  const where = request.ownerScoped ? { userId: user.id } : {};
+  return db.history.findMany({ where });
+});
+```
+
+### Built-in permissions
+
+| Permission | Description |
+|------------|-------------|
+| `*` | Full access (admin wildcard) |
+| `admin.*` | All admin panel operations |
+| `admin.plugins` | Manage plugins |
+| `admin.roles` | Manage roles and permissions |
+| `requests.read` | View media requests |
+| `requests.create` | Create media requests |
+| `requests.delete` | Delete own media requests |
+| `requests.approve` | Approve pending requests |
+| `requests.decline` | Decline pending requests |
+| `support.read` | View support tickets |
+| `support.create` | Create support tickets |
+| `support.write` | Reply to support tickets |
+| `support.manage` | Close/reopen tickets |
+
+### Default roles
+
+| Role | Permissions | Notes |
+|------|-------------|-------|
+| `admin` | `*` (all) | System role, cannot be deleted |
+| `user` | `requests.read/create/delete`, `support.read/create/write` | System role, default for new users |
+
+Admins can create custom roles (e.g. "moderator") with any combination of permissions from the Roles tab.
 
 ## Current limitations
 
 - Plugins cannot modify the database schema (no Prisma migrations)
-- Plugins cannot add middleware to existing routes
 - Plugin frontend components are lazy-loaded and cannot import from the main app bundle
 - No plugin dependency system
 - No hot-reload — server restart required after adding/removing plugins

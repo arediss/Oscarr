@@ -135,7 +135,10 @@ export function UsersTab() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-ndp-text">{u.displayName || u.email}</span>
-                    {u.role === 'admin' && <span className="text-[10px] bg-ndp-accent/10 text-ndp-accent px-2 py-0.5 rounded-full font-semibold">Admin</span>}
+                    <span className={clsx(
+                      'text-[10px] px-2 py-0.5 rounded-full font-semibold capitalize',
+                      u.role === 'admin' ? 'bg-ndp-accent/10 text-ndp-accent' : 'bg-white/5 text-ndp-text-dim'
+                    )}>{u.role}</span>
                   </div>
                   <span className="text-xs text-ndp-text-dim mt-0.5 block">{u.email}</span>
                 </div>
