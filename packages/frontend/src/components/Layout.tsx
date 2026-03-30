@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
-import { AlertTriangle, X as XIcon } from 'lucide-react';
+import { AlertTriangle, X as XIcon, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -42,6 +42,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [banner, setBanner] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [viewAsRole, setViewAsRole] = useState<string | null>(sessionStorage.getItem('view-as-role'));
+  const [availableRoles, setAvailableRoles] = useState<{ name: string }[]>([]);
   const { features } = useFeatures();
   const avatarMenuRef = useRef<HTMLDivElement>(null);
 
@@ -49,6 +51,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     api.get('/app/banner').then(({ data }) => setBanner(data.banner)).catch(() => {});
   }, []);
+
+  // Fetch roles for the "view as" selector (admin only)
+  useEffect(() => {
+    if (isAdmin) {
+      api.get('/admin/roles').then(({ data }) => setAvailableRoles(data)).catch(() => {});
+    }
+  }, [isAdmin]);
+
+  const startViewAs = (roleName: string) => {
+    sessionStorage.setItem('view-as-role', roleName);
+    setViewAsRole(roleName);
+    setAvatarMenuOpen(false);
+  };
+
+  const stopViewAs = () => {
+    sessionStorage.removeItem('view-as-role');
+    setViewAsRole(null);
+  };
 
   // Filter nav items based on feature flags (admins see everything)
   const navItems = ALL_NAV.filter(({ feature }) => !feature || features[feature]);
@@ -103,6 +123,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, []);
 
   const hasBanner = banner && !bannerDismissed;
+  const hasViewAsBanner = !!viewAsRole;
+  const topOffset = (hasBanner ? 10 : 0) + (hasViewAsBanner ? 10 : 0);
 
   return (
     <div className="min-h-screen bg-ndp-bg">
@@ -117,11 +139,33 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <nav className={clsx(
-        'fixed left-0 right-0 z-50 transition-all duration-300',
-        scrolled ? 'glass border-none' : 'bg-transparent',
-        hasBanner ? 'top-10' : 'top-0'
-      )}>
+      {/* View as role banner */}
+      {viewAsRole && (
+        <div className={clsx(
+          'fixed left-0 right-0 z-[59] bg-purple-600/90 backdrop-blur-sm text-white px-4 py-2 flex items-center justify-center gap-3',
+          hasBanner ? 'top-10' : 'top-0'
+        )}>
+          <Eye className="w-4 h-4 flex-shrink-0" />
+          <p className="text-sm font-medium">
+            {t('admin.view_as.active', 'Viewing as "{{role}}"', { role: viewAsRole })}
+          </p>
+          <button
+            onClick={stopViewAs}
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
+          >
+            <EyeOff className="w-3 h-3" />
+            {t('admin.view_as.stop', 'Stop')}
+          </button>
+        </div>
+      )}
+
+      <nav
+        className={clsx(
+          'fixed left-0 right-0 z-50 transition-all duration-300',
+          scrolled ? 'glass border-none' : 'bg-transparent',
+        )}
+        style={{ top: `${topOffset * 4}px` }}
+      >
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6">
           <div className="relative flex items-center justify-between h-16">
 
@@ -227,13 +271,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </div>
 
                     {isAdmin && (
-                      <Link
-                        to="/admin"
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ndp-text-muted hover:text-ndp-accent hover:bg-white/5 transition-colors"
-                      >
-                        <Shield className="w-4 h-4" />
-                        {t('nav.admin')}
-                      </Link>
+                      <>
+                        <Link
+                          to="/admin"
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ndp-text-muted hover:text-ndp-accent hover:bg-white/5 transition-colors"
+                        >
+                          <Shield className="w-4 h-4" />
+                          {t('nav.admin')}
+                        </Link>
+
+                        {/* View as role selector */}
+                        <div className="px-4 py-2 border-t border-white/5">
+                          <div className="flex items-center gap-2.5">
+                            <Eye className="w-4 h-4 text-ndp-text-dim flex-shrink-0" />
+                            <select
+                              value={viewAsRole || ''}
+                              onChange={(e) => e.target.value ? startViewAs(e.target.value) : stopViewAs()}
+                              className="flex-1 bg-white/5 border border-white/10 rounded-lg text-sm text-ndp-text px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500/40 cursor-pointer appearance-none"
+                            >
+                              <option value="">{t('admin.view_as.off', 'View as role...')}</option>
+                              {availableRoles.filter(r => r.name !== 'admin').map(r => (
+                                <option key={r.name} value={r.name}>{r.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </>
                     )}
 
                     <div className="px-4 py-2.5 border-t border-white/5">
@@ -351,7 +414,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         )}
       </nav>
 
-      <main className={clsx('min-h-screen', location.pathname === '/' ? '' : hasBanner ? 'pt-[104px]' : 'pt-16')}>
+      <main
+        className="min-h-screen"
+        style={location.pathname === '/' ? undefined : { paddingTop: `${64 + topOffset * 4}px` }}
+      >
         {children}
       </main>
     </div>

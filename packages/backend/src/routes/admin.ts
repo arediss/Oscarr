@@ -8,18 +8,13 @@ import { getAuthProvider, getServiceDefinition, getServiceSchemas } from '../pro
 import { syncRequestsFromTags } from '../services/requestSync.js';
 import { testDiscord, testTelegram, testEmail, sendNotification, logEvent } from '../services/notifications.js';
 import { triggerJob, updateJobSchedule } from '../services/scheduler.js';
+import { invalidateRoleCache, getAllPermissions } from '../middleware/rbac.js';
 import nodeSchedule from 'node-cron';
 import { parseId } from '../utils/params.js';
-import { requireAdmin } from '../middleware/auth.js';
-
 export async function adminRoutes(app: FastifyInstance) {
-  // All admin routes require auth + admin role
-  app.addHook('preHandler', app.authenticate);
-
   // === SETUP STATUS (checklist) ===
 
   app.get('/setup-status', async (request, reply) => {
-    await requireAdmin(request, reply);
 
     const [radarr, sonarr, plex, settings, qualityMappings, folderRules, userCount, requestSyncJob] = await Promise.all([
       prisma.service.findFirst({ where: { type: 'radarr', enabled: true } }),
@@ -52,7 +47,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // === SETTINGS ===
 
   app.get('/settings', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     let settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
     if (!settings) {
       settings = await prisma.appSettings.create({
@@ -90,7 +85,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const body = request.body as {
       defaultQualityProfile?: number;
       defaultMovieFolder?: string;
@@ -169,12 +164,12 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // Service schemas — used by frontend to build dynamic forms
   app.get('/service-schemas', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     return getServiceSchemas();
   });
 
   app.get('/services', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const services = await prisma.service.findMany({ orderBy: { createdAt: 'asc' } });
     return services.map((s) => ({ ...s, config: JSON.parse(s.config) }));
   });
@@ -193,7 +188,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { name, type, config, isDefault } = request.body as {
       name: string; type: string; config: Record<string, string>; isDefault?: boolean;
     };
@@ -231,7 +226,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
     if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
@@ -268,7 +263,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
     if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
@@ -288,7 +283,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
     if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
@@ -309,7 +304,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // === PLEX TOKEN HELPER (for service setup) ===
 
   app.get('/plex-token', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const provider = getAuthProvider('plex');
     if (!provider?.getToken) return reply.status(404).send({ error: 'Provider Plex non disponible' });
     const adminUser = request.user as { id: number };
@@ -321,7 +316,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // === SERVICE CONFIG (Radarr/Sonarr profiles & folders) ===
 
   app.get('/radarr/profiles', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     try {
       const radarr = await getRadarrAsync();
       const profiles = await radarr.getQualityProfiles();
@@ -332,7 +327,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.get('/radarr/rootfolders', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     try {
       const radarr = await getRadarrAsync();
       const folders = await radarr.getRootFolders();
@@ -343,7 +338,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.get('/sonarr/profiles', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     try {
       const sonarr = await getSonarrAsync();
       const profiles = await sonarr.getQualityProfiles();
@@ -354,7 +349,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.get('/sonarr/rootfolders', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     try {
       const sonarr = await getSonarrAsync();
       const folders = await sonarr.getRootFolders();
@@ -376,7 +371,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { banner } = request.body as { banner: string | null };
     await prisma.appSettings.upsert({
       where: { id: 1 },
@@ -392,7 +387,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // === FOLDER RULES ===
 
   app.get('/folder-rules', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     return prisma.folderRule.findMany({ orderBy: { priority: 'asc' } });
   });
 
@@ -413,7 +408,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { name, mediaType, conditions, folderPath, seriesType, priority, serviceId } = request.body as {
       name: string; mediaType: string; conditions: unknown[]; folderPath: string; seriesType?: string; priority?: number; serviceId?: number;
     };
@@ -457,7 +452,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const ruleId = parseId(id);
     if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
@@ -490,7 +485,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const ruleId = parseId(id);
     if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
@@ -512,7 +507,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { provider: providerId } = request.params as { provider: string };
     const authProvider = getAuthProvider(providerId);
 
@@ -552,7 +547,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const userId = parseId(id);
     if (!userId) return reply.status(400).send({ error: 'ID invalide' });
@@ -575,7 +570,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.get('/users', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -611,20 +606,21 @@ export async function adminRoutes(app: FastifyInstance) {
         type: 'object',
         required: ['role'],
         properties: {
-          role: { type: 'string', enum: ['admin', 'user'], description: 'New role for the user' },
+          role: { type: 'string', description: 'Role name to assign' },
         },
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const userId = parseId(id);
     if (!userId) return reply.status(400).send({ error: 'ID invalide' });
 
     const { role } = request.body as { role: string };
-    if (role !== 'admin' && role !== 'user') {
-      return reply.status(400).send({ error: 'Rôle invalide' });
-    }
+
+    // Validate role exists in DB
+    const roleExists = await prisma.role.findUnique({ where: { name: role } });
+    if (!roleExists) return reply.status(400).send({ error: 'Rôle invalide' });
 
     const user = await prisma.user.update({
       where: { id: userId },
@@ -650,7 +646,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { page, level, label } = request.query as { page?: string; level?: string; label?: string };
     const pageNum = parseInt(page || '1', 10) || 1;
     const take = 50;
@@ -668,7 +664,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.delete('/logs', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     await prisma.appLog.deleteMany();
     return { ok: true };
   });
@@ -676,7 +672,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // === CRON JOBS ===
 
   app.get('/jobs', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     return prisma.cronJob.findMany({ orderBy: { key: 'asc' } });
   });
 
@@ -698,7 +694,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { key } = request.params as { key: string };
     const { cronExpression, enabled } = request.body as { cronExpression?: string; enabled?: boolean };
 
@@ -729,7 +725,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { key } = request.params as { key: string };
     try {
       const result = await triggerJob(key);
@@ -742,7 +738,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // Keep legacy sync endpoints for backwards compat
   app.get('/sync/status', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
     return {
       lastRadarrSync: settings?.lastRadarrSync,
@@ -752,12 +748,12 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.post('/sync/run', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     return triggerJob('full_sync');
   });
 
   app.post('/sync/force', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     await prisma.appSettings.upsert({
       where: { id: 1 },
       update: { lastRadarrSync: null, lastSonarrSync: null },
@@ -782,7 +778,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { webhookUrl } = request.body as { webhookUrl: string };
     if (!webhookUrl) return reply.status(400).send({ error: 'URL webhook requise' });
     try {
@@ -805,7 +801,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { botToken, chatId } = request.body as { botToken: string; chatId: string };
     if (!botToken || !chatId) return reply.status(400).send({ error: 'Bot token et chat ID requis' });
     try {
@@ -829,7 +825,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { apiKey, from, to } = request.body as { apiKey: string; from: string; to: string };
     if (!apiKey || !from || !to) return reply.status(400).send({ error: 'API key, from et to requis' });
     try {
@@ -843,7 +839,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // === QUALITY OPTIONS ===
 
   app.get('/quality-options', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     return prisma.qualityOption.findMany({
       orderBy: { position: 'asc' },
       include: {
@@ -866,7 +862,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { label, position } = request.body as { label: string; position?: number };
     if (!label) return reply.status(400).send({ error: 'Label requis' });
     const maxPos = await prisma.qualityOption.aggregate({ _max: { position: true } });
@@ -894,7 +890,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const optionId = parseId(id);
     if (!optionId) return reply.status(400).send({ error: 'ID invalide' });
@@ -920,7 +916,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const optionId = parseId(id);
     if (!optionId) return reply.status(400).send({ error: 'ID invalide' });
@@ -930,7 +926,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // Seed default quality options
   app.post('/quality-options/seed', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const defaults = [
       { label: 'SD', position: 1 },
       { label: 'HD', position: 2 },
@@ -951,7 +947,7 @@ export async function adminRoutes(app: FastifyInstance) {
   // === QUALITY MAPPINGS ===
 
   app.get('/quality-mappings', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     return prisma.qualityMapping.findMany({
       include: {
         qualityOption: true,
@@ -975,7 +971,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { qualityOptionId, serviceId, qualityProfileId, qualityProfileName } = request.body as {
       qualityOptionId: number; serviceId: number; qualityProfileId: number; qualityProfileName: string;
     };
@@ -1010,7 +1006,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const mappingId = parseId(id);
     if (!mappingId) return reply.status(400).send({ error: 'ID invalide' });
@@ -1022,7 +1018,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // Purge all requests
   app.delete('/danger/requests', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { count } = await prisma.mediaRequest.deleteMany();
     logEvent('warn', 'Admin', `Purge : ${count} demandes supprimées`);
     return { ok: true, deleted: count };
@@ -1030,7 +1026,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // Purge all media (to re-import fresh)
   app.delete('/danger/media', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     // Requests reference media, delete them first
     const { count: reqCount } = await prisma.mediaRequest.deleteMany();
     const { count: seasonCount } = await prisma.season.deleteMany();
@@ -1051,7 +1047,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const userId = parseId(id);
     if (!userId) return reply.status(400).send({ error: 'ID invalide' });
@@ -1069,7 +1065,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   // Purge all users except current admin
   app.delete('/danger/users', async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const currentUser = request.user as { id: number };
     const { count } = await prisma.user.deleteMany({ where: { id: { not: currentUser.id } } });
     logEvent('warn', 'Admin', `Purge : ${count} utilisateurs supprimés`);
@@ -1089,7 +1085,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    await requireAdmin(request, reply);
+
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
     if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
@@ -1108,5 +1104,135 @@ export async function adminRoutes(app: FastifyInstance) {
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter le service' });
     }
+  });
+
+  // === RBAC: ROLES MANAGEMENT ===
+
+  // List all roles
+  app.get('/roles', async () => {
+    return prisma.role.findMany({ orderBy: { position: 'asc' } });
+  });
+
+  // List all available permissions (core + plugins)
+  app.get('/permissions', async () => {
+    return getAllPermissions();
+  });
+
+  // Create a new role
+  app.post('/roles', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['name', 'permissions'],
+        properties: {
+          name: { type: 'string' },
+          permissions: { type: 'array', items: { type: 'string' } },
+          position: { type: 'number' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { name, permissions, position } = request.body as { name: string; permissions: string[]; position?: number };
+
+    if (!name?.trim()) return reply.status(400).send({ error: 'Nom requis' });
+
+    const existing = await prisma.role.findUnique({ where: { name: name.trim().toLowerCase() } });
+    if (existing) return reply.status(409).send({ error: 'Ce rôle existe déjà' });
+
+    const maxPos = await prisma.role.aggregate({ _max: { position: true } });
+    const role = await prisma.role.create({
+      data: {
+        name: name.trim().toLowerCase(),
+        permissions: JSON.stringify(permissions),
+        position: position ?? (maxPos._max.position ?? 0) + 1,
+      },
+    });
+
+    await invalidateRoleCache();
+    logEvent('info', 'Admin', `Rôle créé : ${role.name}`);
+    return reply.status(201).send(role);
+  });
+
+  // Update a role
+  app.put('/roles/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          permissions: { type: 'array', items: { type: 'string' } },
+          isDefault: { type: 'boolean' },
+          position: { type: 'number' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const roleId = parseId((request.params as { id: string }).id);
+    if (!roleId) return reply.status(400).send({ error: 'ID invalide' });
+
+    const role = await prisma.role.findUnique({ where: { id: roleId } });
+    if (!role) return reply.status(404).send({ error: 'Rôle introuvable' });
+
+    const { name, permissions, isDefault, position } = request.body as {
+      name?: string; permissions?: string[]; isDefault?: boolean; position?: number;
+    };
+
+    // System roles cannot be renamed
+    if (role.isSystem && name && name !== role.name) {
+      return reply.status(400).send({ error: 'Impossible de renommer un rôle système' });
+    }
+
+    // If setting as default, unset other defaults
+    if (isDefault) {
+      await prisma.role.updateMany({ where: { isDefault: true }, data: { isDefault: false } });
+    }
+
+    const updated = await prisma.role.update({
+      where: { id: roleId },
+      data: {
+        ...(name && !role.isSystem ? { name: name.trim().toLowerCase() } : {}),
+        ...(permissions ? { permissions: JSON.stringify(permissions) } : {}),
+        ...(isDefault !== undefined ? { isDefault } : {}),
+        ...(position !== undefined ? { position } : {}),
+      },
+    });
+
+    await invalidateRoleCache();
+    logEvent('info', 'Admin', `Rôle modifié : ${updated.name}`);
+    return updated;
+  });
+
+  // Delete a role
+  app.delete('/roles/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    const roleId = parseId((request.params as { id: string }).id);
+    if (!roleId) return reply.status(400).send({ error: 'ID invalide' });
+
+    const role = await prisma.role.findUnique({ where: { id: roleId } });
+    if (!role) return reply.status(404).send({ error: 'Rôle introuvable' });
+    if (role.isSystem) return reply.status(400).send({ error: 'Impossible de supprimer un rôle système' });
+
+    // Check if any users still have this role
+    const usersWithRole = await prisma.user.count({ where: { role: role.name } });
+    if (usersWithRole > 0) {
+      return reply.status(400).send({ error: `${usersWithRole} utilisateur(s) ont encore ce rôle. Réassignez-les d'abord.` });
+    }
+
+    await prisma.role.delete({ where: { id: roleId } });
+    await invalidateRoleCache();
+    logEvent('info', 'Admin', `Rôle supprimé : ${role.name}`);
+    return { ok: true };
   });
 }
