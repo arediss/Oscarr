@@ -32,12 +32,14 @@ import { NotificationsTab } from './admin/NotificationsTab';
 import { JobsTab } from './admin/JobsTab';
 import { LogsTab } from './admin/LogsTab';
 import { PluginsTab } from './admin/PluginsTab';
+import { RolesTab } from './admin/RolesTab';
 
 type Tab = 'users' | 'services' | 'media' | 'support' | 'notifications' | 'jobs' | 'logs' | 'general' | (string & {});
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'general', label: 'admin.tab.general', icon: Settings },
   { id: 'users', label: 'admin.tab.users', icon: Users },
+  { id: 'roles', label: 'admin.tab.roles', icon: Shield },
   { id: 'services', label: 'admin.tab.services', icon: Server },
   { id: 'media', label: 'admin.tab.media', icon: Film },
   { id: 'notifications', label: 'admin.tab.notifications', icon: Bell },
@@ -168,6 +170,7 @@ export default function AdminPage() {
         <main className="flex-1 min-w-0 md:pl-8" key={activeTab}>
           {activeTab === 'general' && <GeneralTab />}
           {activeTab === 'users' && <UsersTab />}
+          {activeTab === 'roles' && <RolesTab />}
           {activeTab === 'services' && <ServicesTab />}
           {activeTab === 'media' && <MediaConfigTab />}
           {activeTab === 'notifications' && <NotificationsTab />}

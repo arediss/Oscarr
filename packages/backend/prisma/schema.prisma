@@ -25,6 +25,17 @@ model User {
   notifications         UserNotification[]
 }
 
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // "admin", "user", "moderator", etc.
+  permissions String   @default("[]") // JSON array of permission strings
+  isDefault   Boolean  @default(false) // Assigned to new users automatically
+  isSystem    Boolean  @default(false) // Cannot be deleted (admin, user)
+  position    Int      @default(0) // Display order (lower = higher priority, like Discord)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model UserProvider {
   id                Int       @id @default(autoincrement())
   userId            Int

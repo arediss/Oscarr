@@ -19,8 +19,7 @@ import { setupRoutes } from './routes/setup.js';
 import { appRoutes } from './routes/app.js';
 import { supportRoutes } from './routes/support.js';
 import { notificationRoutes } from './routes/notifications.js';
-import { authenticate } from './middleware/auth.js';
-import { requireAdmin } from './middleware/auth.js';
+import { rbacPlugin, getAccessTag } from './middleware/rbac.js';
 import { initScheduler } from './services/scheduler.js';
 import { pluginEngine } from './plugins/engine.js';
 import { pluginRoutes } from './plugins/routes.js';
@@ -48,7 +47,8 @@ async function start() {
 
   await app.register(cookie);
 
-  app.decorate('authenticate', authenticate);
+  // Register RBAC middleware (central access control for all routes)
+  rbacPlugin(app);
 
   // OpenAPI / Swagger (disabled in production — no /api/docs route exposed)
   if (process.env.NODE_ENV !== 'production') {
@@ -84,41 +84,25 @@ async function start() {
         deepLinking: true,
       },
       uiHooks: {
-        onRequest: async (request, reply) => {
-          await requireAdmin(request, reply);
+        preHandler: async (request, reply) => {
+          try { await request.jwtVerify(); } catch { return reply.status(401).send({ error: 'Non autorisé' }); }
+          const user = request.user as { id: number; role: string };
+          if (user.role !== 'admin') return reply.status(403).send({ error: 'Admin only' });
         },
       },
     });
   }
 
-  // Auto-tag every route for Swagger: category (from prefix) + access level (from preHandler)
+  // Auto-tag every route for Swagger using the RBAC permission map
   app.addHook('onRoute', (routeOptions) => {
     if (routeOptions.url.startsWith('/api/docs')) return;
     if (!routeOptions.url.startsWith('/api/')) return;
 
-    // Category tag: derive from the route prefix (e.g. "/api/tmdb" → "Tmdb")
     const segment = (routeOptions.prefix || '').split('/').filter(Boolean).pop() || 'other';
     const categoryTag = segment.charAt(0).toUpperCase() + segment.slice(1);
 
-    // Access level: inspect route-level preHandler + plugin-level conventions
-    const handlers = Array.isArray(routeOptions.preHandler)
-      ? routeOptions.preHandler
-      : routeOptions.preHandler ? [routeOptions.preHandler] : [];
-
-    const hasAuth = handlers.some((h) => h === authenticate);
-    const hasAdmin = handlers.some((h) => h === requireAdmin);
-
-    // admin.ts registers a plugin-level preHandler (not visible per-route)
-    const isAdminPrefix = routeOptions.prefix === '/api/admin';
-
-    let accessTag: string;
-    if (hasAdmin || isAdminPrefix) {
-      accessTag = 'Admin Only';
-    } else if (hasAuth) {
-      accessTag = 'Auth Required';
-    } else {
-      accessTag = 'Public';
-    }
+    const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
+    const accessTag = getAccessTag(methods[0], routeOptions.url);
 
     routeOptions.schema = { ...routeOptions.schema, tags: [categoryTag, accessTag] };
   });

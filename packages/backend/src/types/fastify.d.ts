@@ -1,8 +1,9 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 
 declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  interface FastifyRequest {
+    /** Set by RBAC middleware — true when user should only see own resources */
+    ownerScoped?: boolean;
   }
 }
 

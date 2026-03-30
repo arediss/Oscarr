@@ -13,6 +13,11 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   config.headers['Accept-Language'] = i18n.language;
+  // "View as role" simulation for admin testing
+  const viewAsRole = sessionStorage.getItem('view-as-role');
+  if (viewAsRole) {
+    config.headers['X-View-As-Role'] = viewAsRole;
+  }
   // Attach setup secret for install routes
   if (config.url?.startsWith('/setup/') || config.url === '/setup') {
     const setupSecret = sessionStorage.getItem('setup-secret');
