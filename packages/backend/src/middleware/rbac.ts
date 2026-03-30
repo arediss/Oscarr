@@ -235,7 +235,12 @@ function resolveRule(method: string, url: string): RouteRule | null {
   // 2. Exact match in static map
   if (ROUTE_PERMISSIONS[key]) return ROUTE_PERMISSIONS[key];
 
-  // 3. Prefix-based fallback (longest match)
+  // 3. Try with/without trailing slash
+  const alt = url.endsWith('/') ? `${method}:${url.slice(0, -1)}` : `${method}:${url}/`;
+  if (pluginOverrides[alt]) return pluginOverrides[alt];
+  if (ROUTE_PERMISSIONS[alt]) return ROUTE_PERMISSIONS[alt];
+
+  // 4. Prefix-based fallback (first match wins — order matters)
   for (const [prefix, rule] of PREFIX_DEFAULTS) {
     if (url.startsWith(prefix)) return rule;
   }
