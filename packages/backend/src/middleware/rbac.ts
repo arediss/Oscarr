@@ -281,7 +281,7 @@ export function rbacPlugin(app: FastifyInstance): void {
     try {
       await request.jwtVerify();
     } catch {
-      return reply.status(401).send({ error: 'Non autorisé' });
+      return reply.status(401).send({ error: 'Unauthorized' });
     }
 
     // Any authenticated user is enough
@@ -289,12 +289,19 @@ export function rbacPlugin(app: FastifyInstance): void {
 
     // Check role-based permission
     const user = request.user as { id: number; role: string };
-    if (!hasPermission(user.role, rule.permission)) {
-      return reply.status(403).send({ error: 'Accès refusé' });
+
+    // "View as role" simulation — admin only, never applies to admin routes
+    const viewAsRole = request.headers['x-view-as-role'] as string | undefined;
+    const effectiveRole = (viewAsRole && user.role === 'admin' && !rule.permission.startsWith('admin'))
+      ? viewAsRole
+      : user.role;
+
+    if (!hasPermission(effectiveRole, rule.permission)) {
+      return reply.status(403).send({ error: 'Forbidden' });
     }
 
     // Flag owner-scoped routes for handlers
-    if (rule.ownerScoped && shouldOwnerScope(user.role, rule.permission)) {
+    if (rule.ownerScoped && shouldOwnerScope(effectiveRole, rule.permission)) {
       request.ownerScoped = true;
     }
   });
