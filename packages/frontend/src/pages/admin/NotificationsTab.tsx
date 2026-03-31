@@ -7,28 +7,35 @@ import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 
-const EVENT_TYPES = [
-  { key: 'request_new', label: 'admin.notifications.event.request_new' },
-  { key: 'request_approved', label: 'admin.notifications.event.request_approved' },
-  { key: 'request_declined', label: 'admin.notifications.event.request_declined' },
-  { key: 'media_available', label: 'admin.notifications.event.media_available' },
-  { key: 'incident_banner', label: 'admin.notifications.event.incident_banner' },
-] as const;
+// ─── Types from registry API ────────────────────────────
 
-const DEFAULT_MATRIX: Record<string, { discord: boolean; telegram: boolean; email: boolean }> = {
-  request_new: { discord: true, telegram: true, email: false },
-  request_approved: { discord: true, telegram: true, email: false },
-  request_declined: { discord: true, telegram: true, email: false },
-  media_available: { discord: true, telegram: true, email: false },
-  incident_banner: { discord: true, telegram: true, email: false },
-};
-
-interface ChannelDef {
-  id: 'discord' | 'telegram' | 'email';
-  label: string;
-  fields: { key: string; label: string; type: 'text' | 'password'; placeholder: string }[];
-  enabledKey: string; // key in config to check if has value
+interface SettingField {
+  key: string;
+  labelKey: string;
+  type: 'text' | 'password';
+  placeholder?: string;
+  required?: boolean;
 }
+
+interface ProviderMeta {
+  id: string;
+  nameKey: string;
+  icon: string;
+  settingsSchema: SettingField[];
+}
+
+interface EventTypeMeta {
+  key: string;
+  labelKey: string;
+}
+
+interface ProviderConfig {
+  providerId: string;
+  enabled: boolean;
+  settings: string; // JSON
+}
+
+// ─── Component ──────────────────────────────────────────
 
 export function NotificationsTab() {
   const { t } = useTranslation();
@@ -36,119 +43,139 @@ export function NotificationsTab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const [config, setConfig] = useState<Record<string, string>>({
-    discordWebhookUrl: '', telegramBotToken: '', telegramChatId: '',
-    resendApiKey: '', resendFromEmail: '', resendToEmail: '',
-  });
-  const [channelEnabled, setChannelEnabled] = useState<Record<string, boolean>>({ discord: false, telegram: false, email: false });
-  const [matrix, setMatrix] = useState<Record<string, { discord: boolean; telegram: boolean; email: boolean }>>(DEFAULT_MATRIX);
+  // Registry metadata
+  const [providers, setProviders] = useState<ProviderMeta[]>([]);
+  const [eventTypes, setEventTypes] = useState<EventTypeMeta[]>([]);
 
-  const [editingChannel, setEditingChannel] = useState<string | null>(null);
-  const [editConfig, setEditConfig] = useState<Record<string, string>>({});
+  // Per-provider state
+  const [configs, setConfigs] = useState<Record<string, { enabled: boolean; settings: Record<string, string> }>>({});
+  const [matrix, setMatrix] = useState<Record<string, Record<string, boolean>>>({});
+
+  // Modal state
+  const [editingProvider, setEditingProvider] = useState<string | null>(null);
+  const [editSettings, setEditSettings] = useState<Record<string, string>>({});
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
-  const [testingChannel, setTestingChannel] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{ channel: string; ok: boolean } | null>(null);
 
-  const channels: ChannelDef[] = [
-    {
-      id: 'discord', label: 'Discord', enabledKey: 'discordWebhookUrl',
-      fields: [{ key: 'discordWebhookUrl', label: t('admin.notifications.webhook_url'), type: 'password', placeholder: 'https://discord.com/api/webhooks/...' }],
-    },
-    {
-      id: 'telegram', label: 'Telegram', enabledKey: 'telegramBotToken',
-      fields: [
-        { key: 'telegramBotToken', label: t('admin.notifications.bot_token'), type: 'password', placeholder: '123456:ABC-DEF...' },
-        { key: 'telegramChatId', label: t('admin.notifications.chat_id'), type: 'text', placeholder: '-1001234567890' },
-      ],
-    },
-    {
-      id: 'email', label: t('admin.notifications.email_resend'), enabledKey: 'resendApiKey',
-      fields: [
-        { key: 'resendApiKey', label: t('common.api_key'), type: 'password', placeholder: 're_...' },
-        { key: 'resendFromEmail', label: t('admin.services.sender_email'), type: 'text', placeholder: 'Oscarr <notifs@domain.com>' },
-        { key: 'resendToEmail', label: t('admin.services.recipient_email'), type: 'text', placeholder: 'admin@domain.com' },
-      ],
-    },
-  ];
+  // Test state
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ providerId: string; ok: boolean } | null>(null);
 
   useEffect(() => {
-    api.get('/admin/settings').then(({ data }) => {
-      const cfg: Record<string, string> = {
-        discordWebhookUrl: data.discordWebhookUrl || '',
-        telegramBotToken: data.telegramBotToken || '',
-        telegramChatId: data.telegramChatId || '',
-        resendApiKey: data.resendApiKey || '',
-        resendFromEmail: data.resendFromEmail || '',
-        resendToEmail: data.resendToEmail || '',
-      };
-      setConfig(cfg);
-      setChannelEnabled({
-        discord: !!cfg.discordWebhookUrl,
-        telegram: !!cfg.telegramBotToken && !!cfg.telegramChatId,
-        email: !!cfg.resendApiKey && !!cfg.resendFromEmail && !!cfg.resendToEmail,
-      });
-      if (data.notificationMatrix) {
-        try { setMatrix({ ...DEFAULT_MATRIX, ...JSON.parse(data.notificationMatrix) }); } catch {}
+    Promise.all([
+      api.get('/admin/notifications/meta'),
+      api.get('/admin/notifications/providers'),
+      api.get('/admin/settings'),
+    ]).then(([metaRes, configsRes, settingsRes]) => {
+      const meta = metaRes.data;
+      setProviders(meta.providers);
+      setEventTypes(meta.eventTypes);
+
+      // Build configs map from DB
+      const cfgMap: Record<string, { enabled: boolean; settings: Record<string, string> }> = {};
+      for (const p of meta.providers) {
+        cfgMap[p.id] = { enabled: false, settings: {} };
       }
+      for (const cfg of configsRes.data as ProviderConfig[]) {
+        cfgMap[cfg.providerId] = {
+          enabled: cfg.enabled,
+          settings: cfg.settings ? JSON.parse(cfg.settings) : {},
+        };
+      }
+      setConfigs(cfgMap);
+
+      // Parse matrix
+      const savedMatrix = settingsRes.data.notificationMatrix
+        ? JSON.parse(settingsRes.data.notificationMatrix)
+        : {};
+      const fullMatrix: Record<string, Record<string, boolean>> = {};
+      for (const et of meta.eventTypes) {
+        fullMatrix[et.key] = {};
+        for (const p of meta.providers) {
+          fullMatrix[et.key][p.id] = savedMatrix[et.key]?.[p.id] ?? false;
+        }
+      }
+      setMatrix(fullMatrix);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
 
-  const isConfigured = (chId: string) => channelEnabled[chId] && !!config[channels.find(c => c.id === chId)?.enabledKey || ''];
-
-  const toggleChannel = (chId: string) => {
-    setChannelEnabled(prev => ({ ...prev, [chId]: !prev[chId] }));
+  const isConfigured = (providerId: string) => {
+    const cfg = configs[providerId];
+    if (!cfg?.enabled) return false;
+    const provider = providers.find(p => p.id === providerId);
+    if (!provider) return false;
+    return provider.settingsSchema
+      .filter(f => f.required !== false)
+      .every(f => !!cfg.settings[f.key]);
   };
 
-  const openEditModal = (chId: string) => {
-    const ch = channels.find(c => c.id === chId);
-    if (!ch) return;
-    const cfg: Record<string, string> = {};
-    ch.fields.forEach(f => { cfg[f.key] = config[f.key] || ''; });
-    setEditConfig(cfg);
+  const toggleProvider = (providerId: string) => {
+    setConfigs(prev => ({
+      ...prev,
+      [providerId]: { ...prev[providerId], enabled: !prev[providerId]?.enabled },
+    }));
+  };
+
+  const openEditModal = (providerId: string) => {
+    setEditSettings({ ...configs[providerId]?.settings });
     setShowSecrets({});
-    setEditingChannel(chId);
+    setEditingProvider(providerId);
   };
 
-  const saveChannelConfig = () => {
-    setConfig(prev => ({ ...prev, ...editConfig }));
-    setChannelEnabled(prev => ({ ...prev, [editingChannel!]: true }));
-    setEditingChannel(null);
+  const saveProviderConfig = () => {
+    if (!editingProvider) return;
+    setConfigs(prev => ({
+      ...prev,
+      [editingProvider]: { ...prev[editingProvider], enabled: true, settings: { ...editSettings } },
+    }));
+    setEditingProvider(null);
   };
 
-  const testChannel = async (channel: 'discord' | 'telegram' | 'email') => {
-    setTestingChannel(channel);
+  const testProvider = async (providerId: string) => {
+    setTestingProvider(providerId);
     setTestResult(null);
     try {
-      if (channel === 'discord') await api.post('/admin/notifications/test/discord', { webhookUrl: config.discordWebhookUrl });
-      else if (channel === 'telegram') await api.post('/admin/notifications/test/telegram', { botToken: config.telegramBotToken, chatId: config.telegramChatId });
-      else await api.post('/admin/notifications/test/email', { apiKey: config.resendApiKey, from: config.resendFromEmail, to: config.resendToEmail });
-      setTestResult({ channel, ok: true });
+      await api.post(`/admin/notifications/test/${providerId}`, configs[providerId]?.settings || {});
+      setTestResult({ providerId, ok: true });
     } catch {
-      setTestResult({ channel, ok: false });
+      setTestResult({ providerId, ok: false });
     } finally {
-      setTestingChannel(null);
+      setTestingProvider(null);
       setTimeout(() => setTestResult(null), 4000);
     }
   };
 
-  const toggleMatrix = (event: string, channel: 'discord' | 'telegram' | 'email') => {
-    setMatrix(prev => ({ ...prev, [event]: { ...prev[event], [channel]: !prev[event][channel] } }));
+  const toggleMatrix = (eventKey: string, providerId: string) => {
+    setMatrix(prev => ({
+      ...prev,
+      [eventKey]: { ...prev[eventKey], [providerId]: !prev[eventKey]?.[providerId] },
+    }));
   };
 
   const handleSave = async () => {
-    setSaving(true); setSaved(false);
+    setSaving(true);
+    setSaved(false);
     try {
-      await api.put('/admin/settings', {
-        discordWebhookUrl: channelEnabled.discord ? (config.discordWebhookUrl || null) : null,
-        telegramBotToken: channelEnabled.telegram ? (config.telegramBotToken || null) : null,
-        telegramChatId: channelEnabled.telegram ? (config.telegramChatId || null) : null,
-        resendApiKey: channelEnabled.email ? (config.resendApiKey || null) : null,
-        resendFromEmail: channelEnabled.email ? (config.resendFromEmail || null) : null,
-        resendToEmail: channelEnabled.email ? (config.resendToEmail || null) : null,
+      // Save each provider config
+      const providerSaves = Object.entries(configs).map(([providerId, cfg]) =>
+        api.put(`/admin/notifications/providers/${providerId}`, {
+          enabled: cfg.enabled,
+          settings: cfg.settings,
+        })
+      );
+
+      // Save matrix
+      const matrixSave = api.put('/admin/settings', {
         notificationMatrix: JSON.stringify(matrix),
       });
-      setSaved(true); setTimeout(() => setSaved(false), 3000);
-    } catch (err) { console.error(err); } finally { setSaving(false); }
+
+      await Promise.all([...providerSaves, matrixSave]);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <Spinner />;
@@ -163,56 +190,59 @@ export function NotificationsTab() {
         </button>
       }
     >
-      {/* Channels */}
+      {/* Providers */}
       <div>
+        {providers.length === 0 ? (
+          <p className="text-sm text-ndp-text-dim">{t('admin.notifications.no_providers')}</p>
+        ) : (
+          <div className="space-y-3">
+            {providers.map((provider) => {
+              const configured = isConfigured(provider.id);
+              const enabled = configs[provider.id]?.enabled ?? false;
+              const result = testResult?.providerId === provider.id ? testResult : null;
 
-        <div className="space-y-3">
-          {channels.map((ch) => {
-            const configured = isConfigured(ch.id);
-            const enabled = channelEnabled[ch.id];
-            const result = testResult?.channel === ch.id ? testResult : null;
+              return (
+                <div key={provider.id} className={clsx('card', !enabled && 'opacity-50')}>
+                  <div className="flex items-center gap-4 p-4">
+                    <span className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0', configured && enabled ? 'bg-ndp-success' : 'bg-ndp-text-dim')} />
+                    <span className="text-sm font-semibold text-ndp-text flex-1">{t(provider.nameKey)}</span>
 
-            return (
-              <div key={ch.id} className={clsx('card', !enabled && 'opacity-50')}>
-                <div className="flex items-center gap-4 p-4">
-                  <span className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0', configured && enabled ? 'bg-ndp-success' : 'bg-ndp-text-dim')} />
-                  <span className="text-sm font-semibold text-ndp-text flex-1">{ch.label}</span>
+                    {result && (
+                      <span className={clsx('text-xs px-2 py-1 rounded-lg flex-shrink-0', result.ok ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger')}>
+                        {result.ok ? t('admin.notifications.test_success') : t('admin.notifications.test_failed')}
+                      </span>
+                    )}
 
-                  {result && (
-                    <span className={clsx('text-xs px-2 py-1 rounded-lg flex-shrink-0', result.ok ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger')}>
-                      {result.ok ? t('common.sent') : t('status.connection_failed')}
-                    </span>
-                  )}
-
-                  <div className="flex items-center gap-0.5 flex-shrink-0">
-                    <button
-                      onClick={() => testChannel(ch.id)}
-                      disabled={!configured || !enabled || testingChannel === ch.id}
-                      className="p-2 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors"
-                      title={t('common.test')}
-                    >
-                      {testingChannel === ch.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={() => openEditModal(ch.id)}
-                      className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors"
-                      title={t('common.configure')}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => toggleChannel(ch.id)}
-                      className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors"
-                      title={enabled ? t('common.disable') : t('common.enable')}
-                    >
-                      <Power className={clsx('w-4 h-4', enabled && 'text-ndp-success')} />
-                    </button>
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                      <button
+                        onClick={() => testProvider(provider.id)}
+                        disabled={!configured || !enabled || testingProvider === provider.id}
+                        className="p-2 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors"
+                        title={t('common.test')}
+                      >
+                        {testingProvider === provider.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => openEditModal(provider.id)}
+                        className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors"
+                        title={t('common.configure')}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => toggleProvider(provider.id)}
+                        className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors"
+                        title={enabled ? t('common.disable') : t('common.enable')}
+                      >
+                        <Power className={clsx('w-4 h-4', enabled && 'text-ndp-success')} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Event Matrix */}
@@ -221,17 +251,17 @@ export function NotificationsTab() {
         <p className="text-xs text-ndp-text-dim mb-4">{t('admin.notifications.matrix_desc')}</p>
 
         <div className="space-y-3">
-          {EVENT_TYPES.map(({ key, label }) => (
-            <div key={key} className="card">
+          {eventTypes.map((et) => (
+            <div key={et.key} className="card">
               <div className="flex items-center gap-4 p-4">
-                <span className="text-sm text-ndp-text flex-1">{t(label)}</span>
-                {channels.map((ch) => {
-                  const enabled = channelEnabled[ch.id];
-                  const active = matrix[key]?.[ch.id] ?? false;
+                <span className="text-sm text-ndp-text flex-1">{t(et.labelKey)}</span>
+                {providers.map((provider) => {
+                  const enabled = configs[provider.id]?.enabled ?? false;
+                  const active = matrix[et.key]?.[provider.id] ?? false;
                   return (
                     <button
-                      key={ch.id}
-                      onClick={() => enabled && toggleMatrix(key, ch.id)}
+                      key={provider.id}
+                      onClick={() => enabled && toggleMatrix(et.key, provider.id)}
                       disabled={!enabled}
                       className={clsx(
                         'px-3 py-1 rounded-lg text-xs font-medium transition-colors',
@@ -239,7 +269,7 @@ export function NotificationsTab() {
                         active ? 'bg-ndp-accent/10 text-ndp-accent' : 'bg-white/5 text-ndp-text-dim hover:bg-white/10'
                       )}
                     >
-                      {ch.label}
+                      {t(provider.nameKey)}
                     </button>
                   );
                 })}
@@ -249,48 +279,50 @@ export function NotificationsTab() {
         </div>
       </div>
 
-      {/* Channel config modal */}
-      {editingChannel && createPortal(
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onMouseDown={() => setEditingChannel(null)}>
-          <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-ndp-text mb-4">
-              {channels.find(c => c.id === editingChannel)?.label}
-            </h3>
-            <div className="space-y-4">
-              {channels.find(c => c.id === editingChannel)?.fields.map((field) => (
-                <div key={field.key}>
-                  <label className="text-xs text-ndp-text-dim block mb-1">{field.label}</label>
-                  <div className="relative">
-                    <input
-                      type={field.type === 'password' && !showSecrets[field.key] ? 'password' : 'text'}
-                      value={editConfig[field.key] || ''}
-                      onChange={(e) => setEditConfig(prev => ({ ...prev, [field.key]: e.target.value }))}
-                      placeholder={field.placeholder}
-                      className="input w-full text-sm pr-10"
-                    />
-                    {field.type === 'password' && (
-                      <button
-                        type="button"
-                        onClick={() => setShowSecrets(prev => ({ ...prev, [field.key]: !prev[field.key] }))}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text"
-                      >
-                        {showSecrets[field.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    )}
+      {/* Provider config modal */}
+      {editingProvider && (() => {
+        const provider = providers.find(p => p.id === editingProvider);
+        if (!provider) return null;
+        return createPortal(
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onMouseDown={() => setEditingProvider(null)}>
+            <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-ndp-text mb-4">{t(provider.nameKey)}</h3>
+              <div className="space-y-4">
+                {provider.settingsSchema.map((field) => (
+                  <div key={field.key}>
+                    <label className="text-xs text-ndp-text-dim block mb-1">{t(field.labelKey)}</label>
+                    <div className="relative">
+                      <input
+                        type={field.type === 'password' && !showSecrets[field.key] ? 'password' : 'text'}
+                        value={editSettings[field.key] || ''}
+                        onChange={(e) => setEditSettings(prev => ({ ...prev, [field.key]: e.target.value }))}
+                        placeholder={field.placeholder}
+                        className="input w-full text-sm pr-10"
+                      />
+                      {field.type === 'password' && (
+                        <button
+                          type="button"
+                          onClick={() => setShowSecrets(prev => ({ ...prev, [field.key]: !prev[field.key] }))}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text"
+                        >
+                          {showSecrets[field.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button onClick={() => setEditingProvider(null)} className="btn-secondary text-sm flex-1">{t('common.cancel')}</button>
+                <button onClick={saveProviderConfig} className="btn-primary text-sm flex-1 flex items-center justify-center gap-2">
+                  <Save className="w-4 h-4" /> {t('common.save')}
+                </button>
+              </div>
             </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setEditingChannel(null)} className="btn-secondary text-sm flex-1">{t('common.cancel')}</button>
-              <button onClick={saveChannelConfig} className="btn-primary text-sm flex-1 flex items-center justify-center gap-2">
-                <Save className="w-4 h-4" /> {t('common.save')}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body
+        );
+      })()}
     </AdminTabLayout>
   );
 }
