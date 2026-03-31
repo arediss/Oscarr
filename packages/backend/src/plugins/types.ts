@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
-import type { NotificationData } from '../services/notifications.js';
+import type { NotificationPayload } from '../notifications/types.js';
 
 // ─── Plugin Manifest (manifest.json) ────────────────────────────────
 
@@ -49,7 +49,7 @@ export interface PluginContext {
   log: FastifyBaseLogger;
   getSetting(key: string): Promise<unknown>;
   setSetting(key: string, value: unknown): Promise<void>;
-  sendNotification(type: string, data: NotificationData): Promise<void>;
+  sendNotification(type: string, data: NotificationPayload): Promise<void>;
   sendUserNotification(userId: number, payload: { type: string; title: string; message: string; metadata?: Record<string, unknown> }): Promise<void>;
 }
 
