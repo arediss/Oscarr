@@ -766,6 +766,50 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   });
 
+  // Get registry metadata (providers + event types) for the frontend
+  app.get('/notifications/meta', async () => {
+    return notificationRegistry.toJSON();
+  });
+
+  // Get all provider configs from DB
+  app.get('/notifications/providers', async () => {
+    return prisma.notificationProviderConfig.findMany();
+  });
+
+  // Save a provider's config
+  app.put<{ Params: { providerId: string } }>('/notifications/providers/:providerId', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['providerId'],
+        properties: { providerId: { type: 'string' } },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          enabled: { type: 'boolean' },
+          settings: { type: 'object', additionalProperties: { type: 'string' } },
+        },
+      },
+    },
+  }, async (request) => {
+    const { providerId } = request.params;
+    const { enabled, settings } = request.body as { enabled?: boolean; settings?: Record<string, string> };
+
+    return prisma.notificationProviderConfig.upsert({
+      where: { providerId },
+      update: {
+        ...(enabled !== undefined && { enabled }),
+        ...(settings && { settings: JSON.stringify(settings) }),
+      },
+      create: {
+        providerId,
+        enabled: enabled ?? false,
+        settings: settings ? JSON.stringify(settings) : '{}',
+      },
+    });
+  });
+
   // === QUALITY OPTIONS ===
 
   app.get('/quality-options', async (request, reply) => {
