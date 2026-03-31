@@ -25,7 +25,7 @@ export const discordProvider: NotificationProvider = {
     const posterUrl = payload.posterPath ? `https://image.tmdb.org/t/p/w185${payload.posterPath}` : undefined;
     await axios.post(settings.webhookUrl, {
       embeds: [{
-        title: payload.type,
+        title: payload.label ?? payload.type,
         description: buildDescription(payload),
         color: payload.color ?? 0x808080,
         thumbnail: posterUrl ? { url: posterUrl } : undefined,

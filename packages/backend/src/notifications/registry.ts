@@ -52,7 +52,7 @@ export class NotificationRegistry {
 
   async send(type: string, data: Omit<NotificationPayload, 'type'>): Promise<void> {
     const eventType = this.eventTypes.get(type);
-    const payload: NotificationPayload = { ...data, type, color: eventType?.color };
+    const payload: NotificationPayload = { ...data, type, label: eventType?.label ?? type, color: eventType?.color };
 
     try {
       // Load all provider configs from DB
