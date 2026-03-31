@@ -4,7 +4,7 @@ import { getRadarrAsync, getRadarrForService, createRadarrFromConfig } from '../
 import { getSonarrAsync, getSonarrForService, createSonarrFromConfig } from '../services/sonarr.js';
 import { getMovieDetails, getTvDetails, getCollection } from '../services/tmdb.js';
 import { matchFolderRule } from '../services/folderRules.js';
-import { sendNotification } from '../services/notifications.js';
+import { notificationRegistry } from '../notifications/index.js';
 import { logEvent } from '../utils/logEvent.js';
 import { sendUserNotification } from '../services/userNotifications.js';
 import { getServiceById, getAllServices } from '../utils/services.js';
@@ -221,7 +221,7 @@ export async function requestRoutes(app: FastifyInstance) {
 
     // Notify
     const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { displayName: true } });
-    sendNotification('request_new', { title, mediaType: validMediaType, username: dbUser?.displayName || 'Utilisateur', posterPath: tmdbData.poster_path, tmdbId: tmdbData.id }).catch(err => console.error('[Notification] Failed:', err));
+    notificationRegistry.send('request_new', { title, mediaType: validMediaType, username: dbUser?.displayName || 'Utilisateur', posterPath: tmdbData.poster_path, tmdbId: tmdbData.id }).catch(err => console.error('[Notification] Failed:', err));
     if (shouldAutoApprove) {
       sendUserNotification(user.id, { type: 'request_approved', title, message: `Votre demande pour "${title}" a été approuvée automatiquement.`, metadata: { mediaId: media.id, tmdbId: tmdbData.id, mediaType: validMediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
     }
@@ -271,7 +271,7 @@ export async function requestRoutes(app: FastifyInstance) {
       },
     });
 
-    sendNotification('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
+    notificationRegistry.send('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
     sendUserNotification(updated.user.id, { type: 'request_approved', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été approuvée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
     logEvent('info', 'Request', `Demande "${updated.media.title}" approuvée`);
 
@@ -305,7 +305,7 @@ export async function requestRoutes(app: FastifyInstance) {
       },
     });
 
-    sendNotification('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
+    notificationRegistry.send('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
     sendUserNotification(updated.user.id, { type: 'request_declined', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été refusée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
     logEvent('info', 'Request', `Demande "${updated.media.title}" refusée`);
 

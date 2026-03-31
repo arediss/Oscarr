@@ -1,7 +1,7 @@
 import { prisma } from '../utils/prisma.js';
 import { getRadarrAsync, type RadarrMovie } from './radarr.js';
 import { getSonarrAsync, type SonarrSeries } from './sonarr.js';
-import { sendNotification } from './notifications.js';
+import { notificationRegistry } from '../notifications/index.js';
 import { logEvent } from '../utils/logEvent.js';
 import { sendUserNotification } from './userNotifications.js';
 import { getServiceConfig } from '../utils/services.js';
@@ -53,7 +53,7 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
         if (existing) {
           const becameAvailable = status === 'available' && existing.status !== 'available';
           if (becameAvailable) {
-            sendNotification('media_available', {
+            notificationRegistry.send('media_available', {
               title: existing.title || movie.title,
               mediaType: 'movie',
               posterPath: posterPath || existing.posterPath,
@@ -176,7 +176,7 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
 
         if (existing) {
           if (status === 'available' && existing.status !== 'available') {
-            sendNotification('media_available', {
+            notificationRegistry.send('media_available', {
               title: existing.title || show.title,
               mediaType: 'tv',
               posterPath: posterPath || existing.posterPath,
