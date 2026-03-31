@@ -4,7 +4,8 @@ import { getRadarrAsync, getRadarrForService, createRadarrFromConfig } from '../
 import { getSonarrAsync, getSonarrForService, createSonarrFromConfig } from '../services/sonarr.js';
 import { getMovieDetails, getTvDetails, getCollection } from '../services/tmdb.js';
 import { matchFolderRule } from '../services/folderRules.js';
-import { sendNotification, logEvent } from '../services/notifications.js';
+import { sendNotification } from '../services/notifications.js';
+import { logEvent } from '../utils/logEvent.js';
 import { sendUserNotification } from '../services/userNotifications.js';
 import { getServiceById, getAllServices } from '../utils/services.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
