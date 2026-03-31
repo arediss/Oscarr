@@ -121,13 +121,23 @@ export function NotificationsTab() {
     setEditingProvider(providerId);
   };
 
-  const saveProviderConfig = () => {
+  const saveProviderConfig = async () => {
     if (!editingProvider) return;
+    const newSettings = { ...editSettings };
     setConfigs(prev => ({
       ...prev,
-      [editingProvider]: { ...prev[editingProvider], enabled: true, settings: { ...editSettings } },
+      [editingProvider]: { ...prev[editingProvider], enabled: true, settings: newSettings },
     }));
     setEditingProvider(null);
+    // Persist immediately to DB
+    try {
+      await api.put(`/admin/notifications/providers/${editingProvider}`, {
+        enabled: true,
+        settings: newSettings,
+      });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const testProvider = async (providerId: string) => {
