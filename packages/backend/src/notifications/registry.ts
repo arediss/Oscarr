@@ -51,7 +51,8 @@ export class NotificationRegistry {
   // ─── Dispatch ──────────────────────────────────────────
 
   async send(type: string, data: Omit<NotificationPayload, 'type'>): Promise<void> {
-    const payload: NotificationPayload = { ...data, type };
+    const eventType = this.eventTypes.get(type);
+    const payload: NotificationPayload = { ...data, type, color: eventType?.color };
 
     try {
       // Load all provider configs from DB
@@ -92,7 +93,7 @@ export class NotificationRegistry {
         );
       }
 
-      await Promise.allSettled(promises);
+      await Promise.all(promises);
     } catch (err) {
       console.error('[Notification] Dispatch failed:', err);
     }
