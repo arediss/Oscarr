@@ -3,7 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { runFullSync, runNewMediaSync } from './sync.js';
 import { syncRequestsFromTags, cleanupOrphanedRequests } from './requestSync.js';
 import type { PluginEngine } from '../plugins/engine.js';
-import { logEvent } from './notifications.js';
+import { logEvent } from '../utils/logEvent.js';
 
 // Map of job keys to their handler functions
 const JOB_HANDLERS: Record<string, () => Promise<unknown>> = {

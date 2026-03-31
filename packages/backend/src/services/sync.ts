@@ -1,7 +1,8 @@
 import { prisma } from '../utils/prisma.js';
 import { getRadarrAsync, type RadarrMovie } from './radarr.js';
 import { getSonarrAsync, type SonarrSeries } from './sonarr.js';
-import { sendNotification, logEvent } from './notifications.js';
+import { sendNotification } from './notifications.js';
+import { logEvent } from '../utils/logEvent.js';
 import { sendUserNotification } from './userNotifications.js';
 import { getServiceConfig } from '../utils/services.js';
 

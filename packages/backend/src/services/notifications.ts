@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Resend } from 'resend';
 import { prisma } from '../utils/prisma.js';
+import { logEvent } from '../utils/logEvent.js';
 
 export type NotificationType =
   | 'request_new'
@@ -153,13 +154,4 @@ export async function testTelegram(botToken: string, chatId: string) {
 export async function testEmail(apiKey: string, from: string, to: string) {
   const resend = new Resend(apiKey);
   await resend.emails.send({ from, to: [to], subject: '[Oscarr] Test', html: '<h2>Test</h2><p>Notification Email OK !</p>' });
-}
-
-// Log events for the admin logs
-export async function logEvent(level: 'info' | 'warn' | 'error', label: string, message: string) {
-  try {
-    await prisma.appLog.create({ data: { level, label, message } });
-  } catch {
-    // Silently fail if table doesn't exist yet
-  }
 }
