@@ -28,6 +28,24 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Lightweight toast for global error feedback (no React dependency)
+function showErrorToast(message: string) {
+  const existing = document.getElementById('api-error-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'api-error-toast';
+  toast.textContent = message;
+  Object.assign(toast.style, {
+    position: 'fixed', bottom: '24px', right: '24px', zIndex: '9999',
+    padding: '12px 20px', borderRadius: '12px', fontSize: '14px', fontWeight: '500',
+    background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
+    color: '#ef4444', backdropFilter: 'blur(8px)', transition: 'opacity 0.3s',
+  });
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -42,6 +60,9 @@ api.interceptors.response.use(
           window.location.href = '/login';
         }
       }
+    }
+    if (error.response?.status === 403) {
+      showErrorToast(i18n.t('common.forbidden', 'Access denied'));
     }
     return Promise.reject(error);
   }

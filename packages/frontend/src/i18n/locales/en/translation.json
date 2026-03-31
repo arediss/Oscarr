@@ -17,6 +17,7 @@
   "common.configure": "Configure",
   "common.refresh": "Refresh",
   "common.error": "Error",
+  "common.forbidden": "Access denied — insufficient permissions",
   "common.send": "Send",
   "common.sent": "Sent!",
   "common.enable": "Enable",
