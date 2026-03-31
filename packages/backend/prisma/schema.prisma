@@ -148,12 +148,6 @@ model AppSettings {
   lastRadarrSync        DateTime? // Last Radarr sync timestamp
   lastSonarrSync        DateTime? // Last Sonarr sync timestamp
   syncIntervalHours     Int       @default(6) // Auto-sync interval in hours
-  discordWebhookUrl     String?   // Discord webhook URL for notifications
-  telegramBotToken      String?
-  telegramChatId        String?
-  resendApiKey          String?
-  resendFromEmail       String?
-  resendToEmail         String?
   notificationMatrix    String?
   incidentBanner        String?   // Global incident banner text (null = no banner)
   autoApproveRequests   Boolean   @default(false)
@@ -241,6 +235,15 @@ model AppLog {
 
   @@index([label])
   @@index([createdAt])
+}
+
+model NotificationProviderConfig {
+  id         Int      @id @default(autoincrement())
+  providerId String   @unique          // "discord", "telegram", "email", "plugin:slack", etc.
+  enabled    Boolean  @default(false)
+  settings   String   @default("{}")   // JSON blob: { "webhookUrl": "...", "botToken": "..." }
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model TmdbCache {
