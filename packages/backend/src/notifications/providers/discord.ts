@@ -1,14 +1,6 @@
 import axios from 'axios';
 import type { NotificationProvider, NotificationPayload } from '../types.js';
 
-const COLORS: Record<string, number> = {
-  request_new: 0xf59e0b,
-  request_approved: 0x6366f1,
-  request_declined: 0xef4444,
-  media_available: 0x10b981,
-  incident_banner: 0xef4444,
-};
-
 function buildDescription(payload: NotificationPayload): string {
   if (payload.type === 'incident_banner') return payload.message || '';
   const mediaLabel = payload.mediaType === 'movie' ? 'Film' : 'Series';
@@ -35,7 +27,7 @@ export const discordProvider: NotificationProvider = {
       embeds: [{
         title: payload.type,
         description: buildDescription(payload),
-        color: COLORS[payload.type] ?? 0x808080,
+        color: payload.color ?? 0x808080,
         thumbnail: posterUrl ? { url: posterUrl } : undefined,
         footer: { text: 'Oscarr' },
         timestamp: new Date().toISOString(),

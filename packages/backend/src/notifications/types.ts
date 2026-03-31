@@ -21,6 +21,7 @@ export interface NotificationPayload {
   posterPath?: string | null;
   tmdbId?: number;
   message?: string;
+  color?: number;
 }
 
 /**
