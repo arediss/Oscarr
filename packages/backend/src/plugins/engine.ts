@@ -48,6 +48,12 @@ export class PluginEngine {
           console.log(`[PluginEngine] Ran onInstall for "${manifest.id}"`);
         }
 
+        // Register notification providers from plugin
+        if (registration.registerNotificationProviders) {
+          registration.registerNotificationProviders(notificationRegistry);
+          console.log(`[PluginEngine] Registered notification providers for "${manifest.id}"`);
+        }
+
         this.plugins.set(manifest.id, {
           manifest,
           registration,
@@ -258,6 +264,7 @@ export class PluginEngine {
       async sendUserNotification(userId: number, payload: { type: string; title: string; message: string; metadata?: Record<string, unknown> }) {
         await sendUserNotification(userId, payload);
       },
+      notificationRegistry: notificationRegistry,
     };
   }
 }
