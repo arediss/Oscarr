@@ -4,7 +4,7 @@ import type { NotificationProvider, NotificationPayload } from '../types.js';
 function buildText(payload: NotificationPayload): string {
   if (payload.type === 'incident_banner') return `*Incident*\n${payload.message || ''}`;
   const mediaLabel = payload.mediaType === 'movie' ? 'Film' : 'Series';
-  return `*${payload.type}*\n${payload.title} (${mediaLabel})${payload.username ? ` — ${payload.username}` : ''}`;
+  return `*${payload.label ?? payload.type}*\n${payload.title} (${mediaLabel})${payload.username ? ` — ${payload.username}` : ''}`;
 }
 
 export const telegramProvider: NotificationProvider = {

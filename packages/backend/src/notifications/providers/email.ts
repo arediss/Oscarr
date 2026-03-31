@@ -16,7 +16,7 @@ function buildHtml(payload: NotificationPayload): string {
   if (payload.type === 'incident_banner') {
     return `<h2 style="margin:0 0 12px">Incident</h2><p style="margin:0">${escapeHtml(payload.message || '')}</p>`;
   }
-  return `<h2 style="margin:0 0 12px">${escapeHtml(payload.type)}</h2><p style="margin:0">${msg}</p>${poster}`;
+  return `<h2 style="margin:0 0 12px">${escapeHtml(payload.label ?? payload.type)}</h2><p style="margin:0">${msg}</p>${poster}`;
 }
 
 export const emailProvider: NotificationProvider = {
@@ -52,7 +52,7 @@ export const emailProvider: NotificationProvider = {
     await resend.emails.send({
       from: settings.fromEmail,
       to: [settings.toEmail],
-      subject: `[Oscarr] ${payload.type}`,
+      subject: `[Oscarr] ${payload.label ?? payload.type}`,
       html: buildHtml(payload),
     });
   },

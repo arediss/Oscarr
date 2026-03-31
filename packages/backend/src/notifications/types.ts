@@ -15,6 +15,7 @@ export interface ProviderSettingField {
  */
 export interface NotificationPayload {
   type: string;
+  label?: string;
   title: string;
   mediaType?: 'movie' | 'tv';
   username?: string;
@@ -29,6 +30,7 @@ export interface NotificationPayload {
  */
 export interface NotificationEventType {
   key: string;
+  label: string;          // Human-readable fallback label for push notifications
   labelKey: string;       // i18n key for admin UI display
   color?: number;         // Hex color for embeds (Discord, etc.)
 }
