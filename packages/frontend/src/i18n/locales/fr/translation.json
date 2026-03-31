@@ -17,6 +17,7 @@
   "common.configure": "Configurer",
   "common.refresh": "Rafraîchir",
   "common.error": "Erreur",
+  "common.forbidden": "Accès refusé — permissions insuffisantes",
   "common.send": "Envoyer",
   "common.sent": "Envoyé !",
   "common.enable": "Activer",
