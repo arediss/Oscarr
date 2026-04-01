@@ -2,6 +2,7 @@ import cron, { type ScheduledTask } from 'node-cron';
 import { prisma } from '../utils/prisma.js';
 import { runFullSync, runNewMediaSync } from './sync.js';
 import { syncRequestsFromTags, cleanupOrphanedRequests } from './requestSync.js';
+import { getGenreBackdrops } from './tmdb.js';
 import type { PluginEngine } from '../plugins/engine.js';
 import { logEvent } from '../utils/logEvent.js';
 
@@ -11,6 +12,7 @@ const JOB_HANDLERS: Record<string, () => Promise<unknown>> = {
   full_sync: async () => runFullSync(),
   request_sync: async () => syncRequestsFromTags(),
   cleanup_orphans: async () => cleanupOrphanedRequests(),
+  genre_backdrops_refresh: async () => getGenreBackdrops(),
 };
 
 // Default job definitions (seeded on first boot)
@@ -19,6 +21,7 @@ const DEFAULT_JOBS = [
   { key: 'full_sync', label: 'Full sync (Radarr + Sonarr)', cronExpression: '0 6 * * *', enabled: true },
   { key: 'request_sync', label: 'Sync requests', cronExpression: '*/5 * * * *', enabled: true },
   { key: 'cleanup_orphans', label: 'Cleanup orphaned requests', cronExpression: '0 3 * * *', enabled: true },
+  { key: 'genre_backdrops_refresh', label: 'Refresh genre backdrops', cronExpression: '0 4 * * *', enabled: true },
 ];
 
 const activeTasks = new Map<string, ScheduledTask>();
