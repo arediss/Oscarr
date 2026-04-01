@@ -1,7 +1,8 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import api, { backdropUrl } from '@/lib/api';
 
 export interface GenreItem {
   id: number;
@@ -36,6 +37,29 @@ const GENRE_GRADIENTS: Record<number, string> = {
 
 const DEFAULT_GRADIENT = 'from-ndp-accent to-purple-600';
 
+const GENRE_OVERLAY_COLORS: Record<number, string> = {
+  28: 'rgba(220,38,38,0.65), rgba(249,115,22,0.4)',
+  12: 'rgba(5,150,105,0.65), rgba(20,184,166,0.4)',
+  16: 'rgba(124,58,237,0.65), rgba(168,85,247,0.4)',
+  35: 'rgba(245,158,11,0.65), rgba(250,204,21,0.4)',
+  80: 'rgba(71,85,105,0.65), rgba(75,85,99,0.4)',
+  99: 'rgba(13,148,136,0.65), rgba(6,182,212,0.4)',
+  18: 'rgba(29,78,216,0.65), rgba(79,70,229,0.4)',
+  10751: 'rgba(236,72,153,0.65), rgba(251,113,133,0.4)',
+  14: 'rgba(126,34,206,0.65), rgba(217,70,239,0.4)',
+  36: 'rgba(180,83,9,0.65), rgba(234,88,12,0.4)',
+  27: 'rgba(153,27,27,0.65), rgba(220,38,38,0.4)',
+  10402: 'rgba(192,38,211,0.65), rgba(236,72,153,0.4)',
+  9648: 'rgba(67,56,202,0.65), rgba(124,58,237,0.4)',
+  10749: 'rgba(225,29,72,0.65), rgba(244,114,182,0.4)',
+  878: 'rgba(8,145,178,0.65), rgba(59,130,246,0.4)',
+  53: 'rgba(39,39,42,0.65), rgba(82,82,91,0.4)',
+  10752: 'rgba(68,64,60,0.65), rgba(82,82,91,0.4)',
+  37: 'rgba(194,65,12,0.65), rgba(217,119,6,0.4)',
+};
+
+const DEFAULT_OVERLAY = 'rgba(109,40,217,0.65), rgba(147,51,234,0.4)';
+
 // Deduplicated genre list - one card per genre name
 // Genres shared by movie & TV use the movie ID (TMDB discover works with both)
 export const ALL_GENRES: GenreItem[] = [
@@ -62,6 +86,24 @@ export const ALL_GENRES: GenreItem[] = [
 export default function GenreRow() {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [backdrops, setBackdrops] = useState<Record<number, string | null>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get<Record<number, string | null>>('/tmdb/genre-backdrops')
+      .then(({ data }) => {
+        if (cancelled) return;
+        setBackdrops(data);
+        for (const path of Object.values(data)) {
+          if (path) {
+            const img = new Image();
+            img.src = backdropUrl(path, 'w780');
+          }
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const scroll = (direction: 'left' | 'right') => {
     if (!scrollRef.current) return;
@@ -92,24 +134,38 @@ export default function GenreRow() {
 
         <div
           ref={scrollRef}
-          className="flex gap-3 overflow-x-auto px-4 sm:px-8 pb-2"
+          className="flex gap-3 overflow-x-auto px-4 sm:px-8 py-2 -my-2"
           style={{ scrollbarWidth: 'none' }}
         >
           {ALL_GENRES.map((genre) => {
             const gradient = GENRE_GRADIENTS[genre.id] || DEFAULT_GRADIENT;
+            const bdPath = backdrops[genre.id];
             return (
               <Link
                 key={genre.id}
                 to={`/discover/${genre.mediaType}/genre/${genre.id}`}
-                className="flex-shrink-0 group"
+                className="flex-shrink-0 group/card"
               >
                 <div
                   className={`w-[180px] sm:w-[200px] h-[100px] sm:h-[110px] rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center relative overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-xl`}
                 >
+                  {bdPath && (
+                    <>
+                      <img
+                        src={backdropUrl(bdPath, 'w780')}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover/card:opacity-100 transition-opacity duration-[400ms] ease-in-out"
+                      />
+                      <div
+                        className="absolute inset-0 opacity-0 group-hover/card:opacity-100 transition-opacity duration-[400ms] ease-in-out pointer-events-none"
+                        style={{ background: `linear-gradient(135deg, ${GENRE_OVERLAY_COLORS[genre.id] || DEFAULT_OVERLAY})` }}
+                      />
+                    </>
+                  )}
                   <div className="absolute inset-0 bg-black/10" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
 
-                  <span className="relative text-white font-bold text-base sm:text-lg text-center px-4 drop-shadow-lg">
+                  <span className="relative z-10 text-white font-bold text-base sm:text-lg text-center px-4 drop-shadow-lg">
                     {t(genre.nameKey)}
                   </span>
                 </div>
