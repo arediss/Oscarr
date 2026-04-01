@@ -57,6 +57,7 @@ export interface TmdbMovie {
   credits?: { cast: TmdbCast[]; crew: TmdbCrew[] };
   external_ids?: { imdb_id: string; tvdb_id: number };
   videos?: { results: TmdbVideo[] };
+  keywords?: { keywords: { id: number; name: string }[] };
 }
 
 export interface TmdbTv {
@@ -81,6 +82,7 @@ export interface TmdbTv {
   credits?: { cast: TmdbCast[]; crew: TmdbCrew[] };
   external_ids?: { imdb_id: string; tvdb_id: number };
   videos?: { results: TmdbVideo[] };
+  keywords?: { results: { id: number; name: string }[] };
 }
 
 const ANIME_COUNTRIES = ['JP', 'KR', 'CN', 'TW'];
@@ -95,6 +97,13 @@ export function isAnime(tv: TmdbTv): boolean {
     || (tv.original_language ? ['ja', 'ko', 'zh'].includes(tv.original_language) : false);
 
   return isAnimation && isAsianOrigin;
+}
+
+/** Extract keywords array from movie or TV details (different TMDB response shapes) */
+export function extractKeywords(details: TmdbMovie | TmdbTv): { id: number; name: string }[] {
+  const movie = details as TmdbMovie;
+  const tv = details as TmdbTv;
+  return movie.keywords?.keywords ?? tv.keywords?.results ?? [];
 }
 
 export interface TmdbSeason {
@@ -200,7 +209,7 @@ export async function getMovieDetails(movieId: number, lang?: string): Promise<T
   const l = normalizeLang(lang);
   return cachedRequest(`movie:${movieId}:${l}`, async () => {
     const { data } = await getTmdbApi(l).get(`/movie/${movieId}`, {
-      params: { append_to_response: 'credits,external_ids,videos' },
+      params: { append_to_response: 'credits,external_ids,videos,keywords' },
     });
     return data;
   }, 24);
@@ -210,7 +219,7 @@ export async function getTvDetails(tvId: number, lang?: string): Promise<TmdbTv>
   const l = normalizeLang(lang);
   return cachedRequest(`tv:${tvId}:${l}`, async () => {
     const { data } = await getTmdbApi(l).get(`/tv/${tvId}`, {
-      params: { append_to_response: 'credits,external_ids,videos' },
+      params: { append_to_response: 'credits,external_ids,videos,keywords' },
     });
     return data;
   }, 24);
