@@ -253,3 +253,25 @@ export async function discoverByGenre(mediaType: 'movie' | 'tv', genreId: number
     return data;
   }, 12);
 }
+
+const GENRE_IDS = [28, 12, 16, 35, 80, 99, 18, 10751, 14, 36, 27, 10402, 9648, 10749, 878, 53, 10752, 37];
+
+export async function getGenreBackdrops(): Promise<Record<number, string | null>> {
+  return cachedRequest('genre-backdrops', async () => {
+    const map: Record<number, string | null> = {};
+    const used = new Set<string>();
+    for (const id of GENRE_IDS) {
+      try {
+        const { data } = await getTmdbApi().get('/discover/movie', {
+          params: { with_genres: id, sort_by: 'popularity.desc', page: 1 },
+        });
+        const hit = data.results?.find((m: { backdrop_path: string | null }) => m.backdrop_path && !used.has(m.backdrop_path));
+        map[id] = hit?.backdrop_path ?? null;
+        if (hit?.backdrop_path) used.add(hit.backdrop_path);
+      } catch {
+        map[id] = null;
+      }
+    }
+    return map;
+  }, 24);
+}
