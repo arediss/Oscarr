@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Tag, X } from 'lucide-react';
+import { Search, Tag, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '@/lib/api';
 
 interface Keyword {
@@ -12,11 +12,13 @@ interface Keyword {
 }
 
 const TAG_OPTIONS = ['nsfw', 'anime'] as const;
+const PAGE_SIZE = 50;
 
 export function KeywordsTab() {
   const { t } = useTranslation();
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,6 +27,9 @@ export function KeywordsTab() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // Reset to page 0 when search changes
+  useEffect(() => setPage(0), [search]);
 
   async function updateTag(tmdbId: number, tag: string | null) {
     try {
@@ -45,6 +50,9 @@ export function KeywordsTab() {
     if (!a.tag && b.tag) return 1;
     return b.mediaCount - a.mediaCount;
   });
+
+  const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
+  const paginated = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   if (loading) {
     return (
@@ -90,7 +98,7 @@ export function KeywordsTab() {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((kw) => (
+            {paginated.map((kw) => (
               <tr key={kw.tmdbId} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
                 <td className="px-4 py-2.5 text-ndp-text">{kw.name}</td>
                 <td className="px-4 py-2.5 text-ndp-text-muted text-right">{kw.mediaCount}</td>
@@ -128,9 +136,33 @@ export function KeywordsTab() {
         </table>
       </div>
 
-      <p className="text-xs text-ndp-text-dim mt-3">
-        {filtered.length} / {keywords.length} keywords
-      </p>
+      {/* Pagination */}
+      <div className="flex items-center justify-between mt-3">
+        <p className="text-xs text-ndp-text-dim">
+          {filtered.length} / {keywords.length} keywords
+        </p>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="p-1.5 rounded-lg text-ndp-text-muted hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-xs text-ndp-text-muted">
+              {page + 1} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="p-1.5 rounded-lg text-ndp-text-muted hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
