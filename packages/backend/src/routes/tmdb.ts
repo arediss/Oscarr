@@ -13,8 +13,41 @@ import {
   discoverByGenre,
   getCollection,
   getGenreBackdrops,
+  extractKeywords,
 } from '../services/tmdb.js';
+import { trackKeywordsFromDetails } from '../services/keywordSync.js';
+import { prisma } from '../utils/prisma.js';
 import { parseId, parsePage } from '../utils/params.js';
+
+/** For a list of TMDB results, fetch details in parallel to track keywords, then return NSFW IDs */
+async function trackAndFlagNsfw(
+  results: { id: number; media_type?: string; title?: string; name?: string }[],
+  defaultMediaType: 'movie' | 'tv',
+  lang: string,
+): Promise<number[]> {
+  // Get NSFW keyword IDs
+  const nsfwKeywords = await prisma.keyword.findMany({ where: { tag: 'nsfw' }, select: { tmdbId: true } });
+  if (nsfwKeywords.length === 0) return [];
+  const nsfwKwSet = new Set(nsfwKeywords.map((k) => k.tmdbId));
+
+  // Fetch details in parallel for keyword tracking (cached after first call)
+  const nsfwIds: number[] = [];
+  await Promise.allSettled(
+    results.slice(0, 20).map(async (item) => {
+      const mt = item.media_type === 'tv' || item.name ? 'tv' : item.media_type === 'movie' || item.title ? 'movie' : defaultMediaType;
+      const details = mt === 'movie'
+        ? await getMovieDetails(item.id, lang)
+        : await getTvDetails(item.id, lang);
+      await trackKeywordsFromDetails(item.id, mt, details).catch(() => {});
+      const kws = extractKeywords(details);
+      if (kws.some((k) => nsfwKwSet.has(k.id))) {
+        nsfwIds.push(item.id);
+      }
+    }),
+  );
+
+  return nsfwIds;
+}
 
 function getLang(request: FastifyRequest): string {
   return (request.headers['accept-language'] || '').split(',')[0]?.split('-')[0] || 'en';
@@ -103,7 +136,9 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const movieId = parseId(id);
     if (!movieId) return reply.status(400).send({ error: 'Invalid ID' });
-    return getMovieDetails(movieId, getLang(request));
+    const details = await getMovieDetails(movieId, getLang(request));
+    trackKeywordsFromDetails(movieId, 'movie', details).catch(() => {});
+    return details;
   });
 
   app.get('/tv/:id', {
@@ -113,7 +148,9 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const tvId = parseId(id);
     if (!tvId) return reply.status(400).send({ error: 'Invalid ID' });
-    return getTvDetails(tvId, getLang(request));
+    const details = await getTvDetails(tvId, getLang(request));
+    trackKeywordsFromDetails(tvId, 'tv', details).catch(() => {});
+    return details;
   });
 
   app.get('/movie/:id/recommendations', {
@@ -123,7 +160,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const movieId = parseId(id);
     if (!movieId) return reply.status(400).send({ error: 'Invalid ID' });
-    return getMovieRecommendations(movieId, getLang(request));
+    const lang = getLang(request);
+    const data = await getMovieRecommendations(movieId, lang);
+    const nsfwIds = await trackAndFlagNsfw(data.results || [], 'movie', lang);
+    return { ...data, nsfwTmdbIds: nsfwIds };
   });
 
   app.get('/tv/:id/recommendations', {
@@ -133,7 +173,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const tvId = parseId(id);
     if (!tvId) return reply.status(400).send({ error: 'Invalid ID' });
-    return getTvRecommendations(tvId, getLang(request));
+    const lang = getLang(request);
+    const data = await getTvRecommendations(tvId, lang);
+    const nsfwIds = await trackAndFlagNsfw(data.results || [], 'tv', lang);
+    return { ...data, nsfwTmdbIds: nsfwIds };
   });
 
   app.get('/collection/:id', {

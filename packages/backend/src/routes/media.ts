@@ -357,4 +357,34 @@ export async function mediaRoutes(app: FastifyInstance) {
       return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
     }
   });
+
+  // Get NSFW data: media TMDB IDs + NSFW keyword IDs (for client-side matching on TMDB details)
+  app.get('/nsfw-ids', async () => {
+    const nsfwKeywords = await prisma.keyword.findMany({
+      where: { tag: 'nsfw' },
+      select: { tmdbId: true },
+    });
+
+    if (nsfwKeywords.length === 0) return { mediaIds: [], keywordIds: [] };
+
+    const nsfwKeywordIds = new Set(nsfwKeywords.map((k) => k.tmdbId));
+
+    const allMedia = await prisma.media.findMany({
+      where: { keywordIds: { not: null } },
+      select: { tmdbId: true, keywordIds: true },
+    });
+
+    const mediaIds: number[] = [];
+    for (const m of allMedia) {
+      const ids: number[] = JSON.parse(m.keywordIds!);
+      if (ids.some((id) => nsfwKeywordIds.has(id))) {
+        mediaIds.push(m.tmdbId);
+      }
+    }
+
+    return {
+      mediaIds,
+      keywordIds: nsfwKeywords.map((k) => k.tmdbId),
+    };
+  });
 }

@@ -69,6 +69,7 @@ export interface TmdbMedia {
   credits?: { cast: TmdbCast[]; crew: TmdbCrew[] };
   external_ids?: { imdb_id: string; tvdb_id: number };
   videos?: { results: TmdbVideo[] };
+  keywords?: { keywords?: { id: number; name: string }[]; results?: { id: number; name: string }[] };
 }
 
 export interface TmdbSeason {
