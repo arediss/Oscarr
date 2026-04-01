@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { QualityTab } from './QualityTab';
 import { PathsTab } from './PathsTab';
+import { KeywordsTab } from './KeywordsTab';
 
 const SUB_TABS = [
   { id: 'quality', labelKey: 'admin.tab.quality' },
   { id: 'paths', labelKey: 'admin.tab.paths' },
+  { id: 'keywords', labelKey: 'admin.tab.keywords' },
 ] as const;
 
 type SubTab = typeof SUB_TABS[number]['id'];
@@ -39,6 +41,7 @@ export function MediaConfigTab() {
       <div className="animate-fade-in" key={activeSubTab}>
         {activeSubTab === 'quality' && <QualityTab />}
         {activeSubTab === 'paths' && <PathsTab />}
+        {activeSubTab === 'keywords' && <KeywordsTab />}
       </div>
     </div>
   );
