@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { logEvent } from '../services/notifications.js';
+import { logEvent } from '../utils/logEvent.js';
 import { runFullSync } from '../services/sync.js';
 import { initScheduler } from '../services/scheduler.js';
 import { isInstalled, markInstalled } from '../utils/install.js';
