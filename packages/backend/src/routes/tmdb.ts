@@ -12,6 +12,7 @@ import {
   getTvRecommendations,
   discoverByGenre,
   getCollection,
+  getGenreBackdrops,
 } from '../services/tmdb.js';
 import { parseId, parsePage } from '../utils/params.js';
 
@@ -167,5 +168,9 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const gid = parseId(genreId);
     if (!gid) return reply.status(400).send({ error: 'Invalid genreId' });
     return discoverByGenre(mediaType, gid, parsePage(page), getLang(request));
+  });
+
+  app.get('/genre-backdrops', async () => {
+    return getGenreBackdrops();
   });
 }
