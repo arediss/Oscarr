@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { logEvent } from '../services/notifications.js';
+import { logEvent } from '../utils/logEvent.js';
 import { sendUserNotification } from '../services/userNotifications.js';
 
 export async function supportRoutes(app: FastifyInstance) {

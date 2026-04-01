@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { prisma } from '../../utils/prisma.js';
 import { getPlexUser, createPlexPin, checkPlexPin, getSharedServerUsers } from '../../services/plex.js';
-import { logEvent } from '../../services/notifications.js';
+import { logEvent } from '../../utils/logEvent.js';
 import type { Provider, AuthProvider, AuthHelpers } from '../types.js';
 
 const PLEX_CLIENT_ID = 'oscarr-client';

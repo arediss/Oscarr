@@ -6,7 +6,8 @@ import { getServiceById } from '../utils/services.js';
 import { syncRadarr, syncSonarr, runFullSync, syncAvailabilityDates } from '../services/sync.js';
 import { getAuthProvider, getServiceDefinition, getServiceSchemas } from '../providers/index.js';
 import { syncRequestsFromTags } from '../services/requestSync.js';
-import { testDiscord, testTelegram, testEmail, sendNotification, logEvent } from '../services/notifications.js';
+import { notificationRegistry } from '../notifications/index.js';
+import { logEvent } from '../utils/logEvent.js';
 import { triggerJob, updateJobSchedule } from '../services/scheduler.js';
 import { invalidateRoleCache, getAllPermissions } from '../middleware/rbac.js';
 import nodeSchedule from 'node-cron';
@@ -67,12 +68,6 @@ export async function adminRoutes(app: FastifyInstance) {
           defaultTvFolder: { type: 'string', description: 'Default root folder for TV shows' },
           defaultAnimeFolder: { type: 'string', description: 'Default root folder for anime' },
           plexMachineId: { type: 'string', description: 'Plex server machine identifier' },
-          discordWebhookUrl: { type: 'string', description: 'Discord webhook URL for notifications' },
-          telegramBotToken: { type: 'string', description: 'Telegram bot token for notifications' },
-          telegramChatId: { type: 'string', description: 'Telegram chat ID for notifications' },
-          resendApiKey: { type: 'string', description: 'Resend API key for email notifications' },
-          resendFromEmail: { type: 'string', description: 'Sender email address for Resend' },
-          resendToEmail: { type: 'string', description: 'Recipient email address for Resend' },
           notificationMatrix: { type: 'string', description: 'JSON matrix mapping event types to notification channels' },
           autoApproveRequests: { type: 'boolean', description: 'Automatically approve all requests' },
           registrationEnabled: { type: 'boolean', description: 'Allow new account registration' },
@@ -92,12 +87,6 @@ export async function adminRoutes(app: FastifyInstance) {
       defaultTvFolder?: string;
       defaultAnimeFolder?: string;
       plexMachineId?: string;
-      discordWebhookUrl?: string;
-      telegramBotToken?: string;
-      telegramChatId?: string;
-      resendApiKey?: string;
-      resendFromEmail?: string;
-      resendToEmail?: string;
       notificationMatrix?: string;
       autoApproveRequests?: boolean;
       registrationEnabled?: boolean;
@@ -116,12 +105,6 @@ export async function adminRoutes(app: FastifyInstance) {
         defaultTvFolder: body.defaultTvFolder ?? undefined,
         defaultAnimeFolder: body.defaultAnimeFolder ?? undefined,
         plexMachineId: body.plexMachineId ?? undefined,
-        discordWebhookUrl: body.discordWebhookUrl ?? undefined,
-        telegramBotToken: body.telegramBotToken ?? undefined,
-        telegramChatId: body.telegramChatId ?? undefined,
-        resendApiKey: body.resendApiKey ?? undefined,
-        resendFromEmail: body.resendFromEmail ?? undefined,
-        resendToEmail: body.resendToEmail ?? undefined,
         notificationMatrix: body.notificationMatrix ?? undefined,
         autoApproveRequests: body.autoApproveRequests ?? undefined,
         registrationEnabled: body.registrationEnabled ?? undefined,
@@ -138,12 +121,6 @@ export async function adminRoutes(app: FastifyInstance) {
         defaultTvFolder: body.defaultTvFolder,
         defaultAnimeFolder: body.defaultAnimeFolder,
         plexMachineId: body.plexMachineId,
-        discordWebhookUrl: body.discordWebhookUrl,
-        telegramBotToken: body.telegramBotToken,
-        telegramChatId: body.telegramChatId,
-        resendApiKey: body.resendApiKey,
-        resendFromEmail: body.resendFromEmail,
-        resendToEmail: body.resendToEmail,
         notificationMatrix: body.notificationMatrix,
         autoApproveRequests: body.autoApproveRequests,
         registrationEnabled: body.registrationEnabled,
@@ -379,7 +356,7 @@ export async function adminRoutes(app: FastifyInstance) {
       create: { id: 1, incidentBanner: banner || null, updatedAt: new Date() },
     });
     if (banner) {
-      sendNotification('incident_banner', { title: 'Incident', message: banner }).catch(err => console.error('[Notification] Failed:', err));
+      notificationRegistry.send('incident_banner', { title: 'Incident', message: banner }).catch(err => console.error('[Notification] Failed:', err));
     }
     return { ok: true };
   });
@@ -765,75 +742,72 @@ export async function adminRoutes(app: FastifyInstance) {
     return { radarr: radarrResult, sonarr: sonarrResult };
   });
 
-  // === NOTIFICATION TESTS ===
-
-  app.post('/notifications/test/discord', {
+  // === NOTIFICATION TEST (dynamic) ===
+  app.post<{ Params: { providerId: string } }>('/notifications/test/:providerId', {
     schema: {
+      params: {
+        type: 'object',
+        required: ['providerId'],
+        properties: { providerId: { type: 'string' } },
+      },
       body: {
         type: 'object',
-        required: ['webhookUrl'],
-        properties: {
-          webhookUrl: { type: 'string', description: 'Discord webhook URL to test' },
-        },
+        additionalProperties: { type: 'string' },
       },
     },
   }, async (request, reply) => {
-
-    const { webhookUrl } = request.body as { webhookUrl: string };
-    if (!webhookUrl) return reply.status(400).send({ error: 'URL webhook requise' });
+    const { providerId } = request.params;
+    const settings = request.body as Record<string, string>;
     try {
-      await testDiscord(webhookUrl);
+      await notificationRegistry.testProvider(providerId, settings);
       return { ok: true };
     } catch (err) {
-      return reply.status(502).send({ error: 'Échec de l\'envoi Discord' });
+      return reply.status(502).send({ error: `Test failed for ${providerId}` });
     }
   });
 
-  app.post('/notifications/test/telegram', {
-    schema: {
-      body: {
-        type: 'object',
-        required: ['botToken', 'chatId'],
-        properties: {
-          botToken: { type: 'string', description: 'Telegram bot token to test' },
-          chatId: { type: 'string', description: 'Telegram chat ID to test' },
-        },
-      },
-    },
-  }, async (request, reply) => {
-
-    const { botToken, chatId } = request.body as { botToken: string; chatId: string };
-    if (!botToken || !chatId) return reply.status(400).send({ error: 'Bot token et chat ID requis' });
-    try {
-      await testTelegram(botToken, chatId);
-      return { ok: true };
-    } catch (err) {
-      return reply.status(502).send({ error: 'Échec de l\'envoi Telegram' });
-    }
+  // Get registry metadata (providers + event types) for the frontend
+  app.get('/notifications/meta', async () => {
+    return notificationRegistry.toJSON();
   });
 
-  app.post('/notifications/test/email', {
+  // Get all provider configs from DB
+  app.get('/notifications/providers', async () => {
+    return prisma.notificationProviderConfig.findMany();
+  });
+
+  // Save a provider's config
+  app.put<{ Params: { providerId: string } }>('/notifications/providers/:providerId', {
     schema: {
+      params: {
+        type: 'object',
+        required: ['providerId'],
+        properties: { providerId: { type: 'string' } },
+      },
       body: {
         type: 'object',
-        required: ['apiKey', 'from', 'to'],
         properties: {
-          apiKey: { type: 'string', description: 'Resend API key to test' },
-          from: { type: 'string', description: 'Sender email address' },
-          to: { type: 'string', description: 'Recipient email address' },
+          enabled: { type: 'boolean' },
+          settings: { type: 'object', additionalProperties: { type: 'string' } },
         },
       },
     },
-  }, async (request, reply) => {
+  }, async (request) => {
+    const { providerId } = request.params;
+    const { enabled, settings } = request.body as { enabled?: boolean; settings?: Record<string, string> };
 
-    const { apiKey, from, to } = request.body as { apiKey: string; from: string; to: string };
-    if (!apiKey || !from || !to) return reply.status(400).send({ error: 'API key, from et to requis' });
-    try {
-      await testEmail(apiKey, from, to);
-      return { ok: true };
-    } catch (err) {
-      return reply.status(502).send({ error: 'Échec de l\'envoi email' });
-    }
+    return prisma.notificationProviderConfig.upsert({
+      where: { providerId },
+      update: {
+        ...(enabled !== undefined && { enabled }),
+        ...(settings && { settings: JSON.stringify(settings) }),
+      },
+      create: {
+        providerId,
+        enabled: enabled ?? false,
+        settings: settings ? JSON.stringify(settings) : '{}',
+      },
+    });
   });
 
   // === QUALITY OPTIONS ===

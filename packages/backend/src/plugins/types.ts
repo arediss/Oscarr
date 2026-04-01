@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
-import type { NotificationData } from '../services/notifications.js';
+import type { NotificationRegistry } from '../notifications/registry.js';
+import type { NotificationPayload } from '../notifications/types.js';
 
 // ─── Plugin Manifest (manifest.json) ────────────────────────────────
 
@@ -49,8 +50,9 @@ export interface PluginContext {
   log: FastifyBaseLogger;
   getSetting(key: string): Promise<unknown>;
   setSetting(key: string, value: unknown): Promise<void>;
-  sendNotification(type: string, data: NotificationData): Promise<void>;
+  sendNotification(type: string, data: NotificationPayload): Promise<void>;
   sendUserNotification(userId: number, payload: { type: string; title: string; message: string; metadata?: Record<string, unknown> }): Promise<void>;
+  notificationRegistry: NotificationRegistry;
 }
 
 // ─── Plugin Registration (what register() returns) ──────────────────
@@ -67,6 +69,7 @@ export interface PluginRegistration {
   registerRoutes?(app: FastifyInstance, ctx: PluginContext): Promise<void>;
   registerJobs?(ctx: PluginContext): Record<string, () => Promise<unknown>>;
   registerGuards?(ctx: PluginContext): Record<string, (userId: number) => Promise<PluginGuardResult | null>>;
+  registerNotificationProviders?(registry: NotificationRegistry): void;
   onInstall?(ctx: PluginContext): Promise<void>;
 }
 

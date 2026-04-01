@@ -1,7 +1,8 @@
 import { join } from 'path';
 import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { sendNotification, type NotificationData } from '../services/notifications.js';
+import { notificationRegistry } from '../notifications/index.js';
+import type { NotificationPayload } from '../notifications/types.js';
 import { sendUserNotification } from '../services/userNotifications.js';
 import { discoverPlugins } from './loader.js';
 import type {
@@ -45,6 +46,12 @@ export class PluginEngine {
         if (state.settings === '{}' && registration.onInstall) {
           await registration.onInstall(ctx);
           console.log(`[PluginEngine] Ran onInstall for "${manifest.id}"`);
+        }
+
+        // Register notification providers from plugin
+        if (registration.registerNotificationProviders) {
+          registration.registerNotificationProviders(notificationRegistry);
+          console.log(`[PluginEngine] Registered notification providers for "${manifest.id}"`);
         }
 
         this.plugins.set(manifest.id, {
@@ -251,12 +258,13 @@ export class PluginEngine {
           data: { settings: JSON.stringify(settings) },
         });
       },
-      async sendNotification(type: string, data: NotificationData) {
-        await sendNotification(type as Parameters<typeof sendNotification>[0], data);
+      async sendNotification(type: string, data: NotificationPayload) {
+        await notificationRegistry.send(type, data);
       },
       async sendUserNotification(userId: number, payload: { type: string; title: string; message: string; metadata?: Record<string, unknown> }) {
         await sendUserNotification(userId, payload);
       },
+      notificationRegistry: notificationRegistry,
     };
   }
 }
