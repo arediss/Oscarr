@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { getRadarrAsync } from '../services/radarr.js';
 import { getSonarrAsync } from '../services/sonarr.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
+import { isMatureRating } from '../services/tmdb.js';
 
 export async function mediaRoutes(app: FastifyInstance) {
   app.get('/', {
@@ -356,5 +357,38 @@ export async function mediaRoutes(app: FastifyInstance) {
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
     }
+  });
+
+  // Get TMDB IDs of all NSFW media (mature rating OR keyword tagged nsfw)
+  app.get('/nsfw-ids', async () => {
+    const nsfwIds = new Set<number>();
+
+    // 1. Media with mature content ratings
+    const ratedMedia = await prisma.media.findMany({
+      where: { contentRating: { not: null } },
+      select: { tmdbId: true, contentRating: true },
+    });
+    for (const m of ratedMedia) {
+      if (isMatureRating(m.contentRating)) nsfwIds.add(m.tmdbId);
+    }
+
+    // 2. Media with keywords tagged "nsfw" by admin
+    const nsfwKeywords = await prisma.keyword.findMany({
+      where: { tag: 'nsfw' },
+      select: { tmdbId: true },
+    });
+    if (nsfwKeywords.length > 0) {
+      const nsfwKwSet = new Set(nsfwKeywords.map((k) => k.tmdbId));
+      const mediaWithKeywords = await prisma.media.findMany({
+        where: { keywordIds: { not: null } },
+        select: { tmdbId: true, keywordIds: true },
+      });
+      for (const m of mediaWithKeywords) {
+        const ids: number[] = JSON.parse(m.keywordIds!);
+        if (ids.some((id) => nsfwKwSet.has(id))) nsfwIds.add(m.tmdbId);
+      }
+    }
+
+    return [...nsfwIds];
   });
 }

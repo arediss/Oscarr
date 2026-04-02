@@ -65,6 +65,8 @@ model Media {
   releaseDate         String?
   voteAverage         Float?
   genres              String?   // JSON string array
+  keywordIds          String?   // JSON array of TMDB keyword IDs, e.g. "[210024,818]"
+  contentRating       String?   // Content rating from TMDB (e.g. "TV-MA", "18", "R")
   status              String    @default("unknown") // "unknown" | "pending" | "processing" | "available" | "deleted"
   radarrId            Int?
   sonarrId            Int?
@@ -277,4 +279,13 @@ model UserNotification {
 
   @@index([userId, read])
   @@index([createdAt])
+}
+
+model Keyword {
+  id        Int      @id @default(autoincrement())
+  tmdbId    Int      @unique
+  name      String
+  tag       String?  // "nsfw", "anime", or any custom tag
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
