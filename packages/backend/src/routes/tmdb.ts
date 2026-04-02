@@ -34,7 +34,7 @@ async function trackAndFlagNsfw(
   const nsfwIds: number[] = [];
   await Promise.allSettled(
     results.slice(0, 20).map(async (item) => {
-      const mt = item.name ? 'tv' : item.title ? 'movie' : defaultMediaType;
+      const mt = item.media_type || (item.name ? 'tv' : item.title ? 'movie' : defaultMediaType);
       const details = mt === 'movie'
         ? await getMovieDetails(item.id, lang)
         : await getTvDetails(item.id, lang);

@@ -90,6 +90,8 @@ export default function MediaDetailPage({ type }: Props) {
     setSelectedSeasons([]);
     setSelectedQuality(null);
     setActiveQualityOptionIds([]);
+    setRevealed(false);
+    setShowNsfwModal(false);
 
     async function fetchData() {
       try {
@@ -796,7 +798,7 @@ export default function MediaDetailPage({ type }: Props) {
               <h3 className="text-lg font-semibold text-ndp-text">{t('nsfw.modal.title')}</h3>
             </div>
             <p className="text-sm text-ndp-text-muted mb-6">
-              {t('nsfw.modal.description', { rating: dbMedia?.contentRating || '18+' })}
+              {t('nsfw.modal.description', { rating: dbMedia?.contentRating || '' })}
             </p>
             <div className="flex flex-col gap-2">
               <button

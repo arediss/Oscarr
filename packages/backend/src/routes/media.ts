@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { getRadarrAsync } from '../services/radarr.js';
 import { getSonarrAsync } from '../services/sonarr.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
+import { isMatureRating } from '../services/tmdb.js';
 
 export async function mediaRoutes(app: FastifyInstance) {
   app.get('/', {
@@ -360,15 +361,16 @@ export async function mediaRoutes(app: FastifyInstance) {
 
   // Get TMDB IDs of all NSFW media (mature rating OR keyword tagged nsfw)
   app.get('/nsfw-ids', async () => {
-    const MATURE = ['NC-17', 'TV-MA', 'X', '18', '18+', 'VM18'];
     const nsfwIds = new Set<number>();
 
     // 1. Media with mature content ratings
-    const matureMedia = await prisma.media.findMany({
-      where: { contentRating: { in: MATURE } },
-      select: { tmdbId: true },
+    const ratedMedia = await prisma.media.findMany({
+      where: { contentRating: { not: null } },
+      select: { tmdbId: true, contentRating: true },
     });
-    for (const m of matureMedia) nsfwIds.add(m.tmdbId);
+    for (const m of ratedMedia) {
+      if (isMatureRating(m.contentRating)) nsfwIds.add(m.tmdbId);
+    }
 
     // 2. Media with keywords tagged "nsfw" by admin
     const nsfwKeywords = await prisma.keyword.findMany({

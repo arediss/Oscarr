@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, Tag, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '@/lib/api';
@@ -35,8 +35,6 @@ function TagCell({ keyword, allTags, onUpdate }: { keyword: Keyword; allTags: st
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [input, setInput] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
   const suggestions = input.trim()
     ? allTags.filter((t) => t.toLowerCase().includes(input.toLowerCase()) && t !== keyword.tag)
     : allTags.filter((t) => t !== keyword.tag);
@@ -80,7 +78,6 @@ function TagCell({ keyword, allTags, onUpdate }: { keyword: Keyword; allTags: st
     return (
       <div className="relative">
         <input
-          ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
