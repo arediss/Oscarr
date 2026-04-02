@@ -1,12 +1,11 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Star, CheckCircle, Clock, Film, Tv, Search, CalendarClock, Plus, Loader2, EyeOff } from 'lucide-react';
+import { Star, CheckCircle, Clock, Film, Tv, Search, CalendarClock, Plus, Loader2 } from 'lucide-react';
 import { posterUrl } from '@/lib/api';
 import api from '@/lib/api';
 import type { TmdbMedia } from '@/types';
 import { clsx } from 'clsx';
-import { useNsfwFilter } from '@/hooks/useNsfwFilter';
 
 interface MediaCardProps {
   media: TmdbMedia;
@@ -21,19 +20,17 @@ function getMediaType(media: TmdbMedia): string {
 
 export default function MediaCard({ media, className, availability, index = 0 }: MediaCardProps) {
   const { t } = useTranslation();
-  const { isNsfw } = useNsfwFilter();
   const [loaded, setLoaded] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [requested, setRequested] = useState(false);
-  const [revealed, setRevealed] = useState(false);
-  const delay = Math.min(index * 50, 400);
+  const delay = Math.min(index * 50, 400); // 50ms stagger, max 400ms
   const title = media.title || media.name || 'Sans titre';
   const year = (media.release_date || media.first_air_date || '').slice(0, 4);
   const type = media.media_type || (media.title ? 'movie' : 'tv');
   const link = `/${type}/${media.id}`;
-  const nsfw = isNsfw(media.id) && !revealed;
 
   const statusBadge = getAvailabilityBadge(availability, type, t);
+
   const canRequest = !availability || (availability.status === 'unknown' && !availability.requestStatus);
 
   const handleRequest = async (e: React.MouseEvent) => {
@@ -44,14 +41,8 @@ export default function MediaCard({ media, className, availability, index = 0 }:
     try {
       await api.post('/requests', { tmdbId: media.id, mediaType: type });
       setRequested(true);
-    } catch {}
+    } catch { /* already requested or error */ }
     finally { setRequesting(false); }
-  };
-
-  const handleReveal = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setRevealed(true);
   };
 
   return (
@@ -63,16 +54,12 @@ export default function MediaCard({ media, className, availability, index = 0 }:
       )}
     >
       {/* Poster */}
-      <div className="aspect-[2/3] bg-ndp-surface-light relative">
+      <div className="aspect-[2/3] bg-ndp-surface-light">
         {media.poster_path ? (
           <img
             src={posterUrl(media.poster_path, 'w342')}
             alt={title}
-            className={clsx(
-              'w-full h-full object-cover transition-all duration-500 ease-out',
-              loaded ? 'opacity-100' : 'opacity-0',
-              nsfw && 'blur-xl scale-110',
-            )}
+            className={clsx('w-full h-full object-cover transition-opacity duration-500 ease-out', loaded ? 'opacity-100' : 'opacity-0')}
             style={{ transitionDelay: loaded ? '0ms' : `${delay}ms` }}
             loading="lazy"
             onLoad={() => setLoaded(true)}
@@ -81,16 +68,6 @@ export default function MediaCard({ media, className, availability, index = 0 }:
           <div className="w-full h-full flex items-center justify-center text-ndp-text-dim">
             <Film className="w-10 h-10" />
           </div>
-        )}
-        {nsfw && (
-          <button
-            onClick={handleReveal}
-            className="absolute inset-0 flex items-center justify-center cursor-pointer group/nsfw"
-          >
-            <div className="p-2 rounded-full bg-black/30 backdrop-blur-sm shadow-lg shadow-black/30 group-hover/nsfw:bg-black/50 transition-colors">
-              <EyeOff className="w-5 h-5 text-white/80 group-hover/nsfw:text-white transition-colors" />
-            </div>
-          </button>
         )}
       </div>
 
@@ -125,6 +102,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
             <CheckCircle className="w-4 h-4 text-white" />
           </div>
         )}
+
       </div>
 
       {/* Top-left: media type badge (hidden on hover) */}
@@ -192,6 +170,7 @@ function getAvailabilityBadge(availability?: { status: string; requestStatus?: s
     };
   }
 
+  // Only TV shows can be "partially available"
   if (availability.status === 'processing' && mediaType === 'tv') {
     return {
       label: t?.('status.partial') ?? 'Partial',

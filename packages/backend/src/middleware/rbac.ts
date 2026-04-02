@@ -54,7 +54,6 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'GET:/api/media/recent':               { permission: AUTH },
   'POST:/api/media/batch-status':        { permission: AUTH },
   'GET:/api/media/episodes':             { permission: AUTH },
-  'GET:/api/media/nsfw-ids':             { permission: AUTH },
 
   // ── Services status (any user) ──
   'GET:/api/services/radarr/status':     { permission: AUTH },
