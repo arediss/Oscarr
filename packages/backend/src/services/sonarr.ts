@@ -218,6 +218,7 @@ export interface SonarrEpisode {
   episodeFile?: {
     quality: { quality: { name: string } };
     size: number;
+    languages?: { id: number; name: string }[];
   } | null;
 }
 
