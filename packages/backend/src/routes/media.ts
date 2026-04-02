@@ -4,6 +4,7 @@ import { getRadarrAsync } from '../services/radarr.js';
 import { getSonarrAsync } from '../services/sonarr.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 import { isMatureRating } from '../services/tmdb.js';
+import { normalizeLanguages } from '../utils/languages.js';
 
 export async function mediaRoutes(app: FastifyInstance) {
   app.get('/', {
@@ -190,12 +191,6 @@ export async function mediaRoutes(app: FastifyInstance) {
                     subtitleLanguages = withMediaInfo.mediaInfo.subtitles.split(' / ').map((s) => s.trim()).filter(Boolean);
                   }
                 }
-                if (!audioLanguages) {
-                  const withLangs = files.find((f) => f.languages?.length);
-                  if (withLangs?.languages) {
-                    audioLanguages = withLangs.languages.map((l) => l.name);
-                  }
-                }
               } catch { /* non-critical */ }
             }
           }
@@ -209,8 +204,8 @@ export async function mediaRoutes(app: FastifyInstance) {
       if (liveAvailable) result.status = 'available';
       if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
       if (liveAvailable) result.inLibrary = true;
-      if (audioLanguages) result.audioLanguages = audioLanguages;
-      if (subtitleLanguages) result.subtitleLanguages = subtitleLanguages;
+      if (audioLanguages) result.audioLanguages = normalizeLanguages(audioLanguages);
+      if (subtitleLanguages) result.subtitleLanguages = normalizeLanguages(subtitleLanguages);
       return result;
     }
 
@@ -241,8 +236,8 @@ export async function mediaRoutes(app: FastifyInstance) {
     if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
     if (liveAvailable) result.inLibrary = true;
     if (activeQualityOptionIds.length > 0) result.activeQualityOptionIds = activeQualityOptionIds;
-    if (audioLanguages) result.audioLanguages = audioLanguages;
-    if (subtitleLanguages) result.subtitleLanguages = subtitleLanguages;
+    if (audioLanguages) result.audioLanguages = normalizeLanguages(audioLanguages);
+    if (subtitleLanguages) result.subtitleLanguages = normalizeLanguages(subtitleLanguages);
     return result;
   });
 
