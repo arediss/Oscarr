@@ -14,17 +14,23 @@ import {
   getCollection,
   getGenreBackdrops,
   extractContentRating,
+  extractKeywords,
   isMatureRating,
 } from '../services/tmdb.js';
 import { trackKeywordsFromDetails } from '../services/keywordSync.js';
+import { prisma } from '../utils/prisma.js';
 import { parseId, parsePage } from '../utils/params.js';
 
-/** For a list of TMDB results, fetch details in parallel (cached), track data, return mature IDs */
-async function trackAndFlagMature(
+/** For a list of TMDB results, fetch details in parallel (cached), track data, return NSFW IDs */
+async function trackAndFlagNsfw(
   results: { id: number; media_type?: string; title?: string; name?: string }[],
   defaultMediaType: 'movie' | 'tv',
   lang: string,
 ): Promise<number[]> {
+  // Load NSFW keyword IDs for checking
+  const nsfwKeywords = await prisma.keyword.findMany({ where: { tag: 'nsfw' }, select: { tmdbId: true } });
+  const nsfwKwSet = new Set(nsfwKeywords.map((k) => k.tmdbId));
+
   const nsfwIds: number[] = [];
   await Promise.allSettled(
     results.slice(0, 20).map(async (item) => {
@@ -33,8 +39,17 @@ async function trackAndFlagMature(
         ? await getMovieDetails(item.id, lang)
         : await getTvDetails(item.id, lang);
       await trackKeywordsFromDetails(item.id, mt, details).catch(() => {});
-      const rating = extractContentRating(details);
-      if (isMatureRating(rating)) nsfwIds.push(item.id);
+
+      // Check rating
+      if (isMatureRating(extractContentRating(details))) {
+        nsfwIds.push(item.id);
+        return;
+      }
+      // Check keywords
+      const kws = extractKeywords(details);
+      if (nsfwKwSet.size > 0 && kws.some((k) => nsfwKwSet.has(k.id))) {
+        nsfwIds.push(item.id);
+      }
     }),
   );
   return nsfwIds;
@@ -153,7 +168,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     if (!movieId) return reply.status(400).send({ error: 'Invalid ID' });
     const lang = getLang(request);
     const data = await getMovieRecommendations(movieId, lang);
-    const nsfwTmdbIds = await trackAndFlagMature(data.results || [], 'movie', lang);
+    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang);
     return { ...data, nsfwTmdbIds };
   });
 
@@ -166,7 +181,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     if (!tvId) return reply.status(400).send({ error: 'Invalid ID' });
     const lang = getLang(request);
     const data = await getTvRecommendations(tvId, lang);
-    const nsfwTmdbIds = await trackAndFlagMature(data.results || [], 'tv', lang);
+    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'tv', lang);
     return { ...data, nsfwTmdbIds };
   });
 
