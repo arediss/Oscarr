@@ -58,6 +58,7 @@ export interface TmdbMovie {
   external_ids?: { imdb_id: string; tvdb_id: number };
   videos?: { results: TmdbVideo[] };
   keywords?: { keywords: { id: number; name: string }[] };
+  release_dates?: { results: { iso_3166_1: string; release_dates: { certification: string; type: number }[] }[] };
 }
 
 export interface TmdbTv {
@@ -83,6 +84,7 @@ export interface TmdbTv {
   external_ids?: { imdb_id: string; tvdb_id: number };
   videos?: { results: TmdbVideo[] };
   keywords?: { results: { id: number; name: string }[] };
+  content_ratings?: { results: { iso_3166_1: string; rating: string }[] };
 }
 
 const ANIME_COUNTRIES = ['JP', 'KR', 'CN', 'TW'];
@@ -104,6 +106,56 @@ export function extractKeywords(details: TmdbMovie | TmdbTv): { id: number; name
   const movie = details as TmdbMovie;
   const tv = details as TmdbTv;
   return movie.keywords?.keywords ?? tv.keywords?.results ?? [];
+}
+
+/** Ratings considered mature/NSFW */
+const MATURE_RATINGS = new Set([
+  // US
+  'NC-17', 'TV-MA', 'X', 'NR',
+  // FR / Europe
+  '18', '18+', 'VM18',
+  // Brazil
+  '18',
+  // Russia
+  '18+',
+]);
+
+/** Priority list of countries to check for content rating */
+const RATING_COUNTRIES = ['US', 'FR', 'DE', 'BR', 'RU', 'IT'];
+
+/** Extract the most relevant content rating from movie or TV details */
+export function extractContentRating(details: TmdbMovie | TmdbTv): string | null {
+  const movie = details as TmdbMovie;
+  const tv = details as TmdbTv;
+
+  // TV: content_ratings
+  if (tv.content_ratings?.results?.length) {
+    for (const country of RATING_COUNTRIES) {
+      const match = tv.content_ratings.results.find((r) => r.iso_3166_1 === country);
+      if (match?.rating) return match.rating;
+    }
+    // Fallback to any rating
+    return tv.content_ratings.results[0]?.rating ?? null;
+  }
+
+  // Movie: release_dates (certifications)
+  if (movie.release_dates?.results?.length) {
+    for (const country of RATING_COUNTRIES) {
+      const countryData = movie.release_dates.results.find((r) => r.iso_3166_1 === country);
+      if (countryData) {
+        const cert = countryData.release_dates.find((rd) => rd.certification)?.certification;
+        if (cert) return cert;
+      }
+    }
+  }
+
+  return null;
+}
+
+/** Check if a content rating is considered mature/NSFW */
+export function isMatureRating(rating: string | null): boolean {
+  if (!rating) return false;
+  return MATURE_RATINGS.has(rating);
 }
 
 export interface TmdbSeason {
@@ -209,7 +261,7 @@ export async function getMovieDetails(movieId: number, lang?: string): Promise<T
   const l = normalizeLang(lang);
   return cachedRequest(`movie:${movieId}:${l}`, async () => {
     const { data } = await getTmdbApi(l).get(`/movie/${movieId}`, {
-      params: { append_to_response: 'credits,external_ids,videos,keywords' },
+      params: { append_to_response: 'credits,external_ids,videos,keywords,release_dates' },
     });
     return data;
   }, 24);
@@ -219,7 +271,7 @@ export async function getTvDetails(tvId: number, lang?: string): Promise<TmdbTv>
   const l = normalizeLang(lang);
   return cachedRequest(`tv:${tvId}:${l}`, async () => {
     const { data } = await getTmdbApi(l).get(`/tv/${tvId}`, {
-      params: { append_to_response: 'credits,external_ids,videos,keywords' },
+      params: { append_to_response: 'credits,external_ids,videos,keywords,content_ratings' },
     });
     return data;
   }, 24);

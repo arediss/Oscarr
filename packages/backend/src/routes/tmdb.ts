@@ -13,9 +13,32 @@ import {
   discoverByGenre,
   getCollection,
   getGenreBackdrops,
+  extractContentRating,
+  isMatureRating,
 } from '../services/tmdb.js';
 import { trackKeywordsFromDetails } from '../services/keywordSync.js';
 import { parseId, parsePage } from '../utils/params.js';
+
+/** For a list of TMDB results, fetch details in parallel (cached), track data, return mature IDs */
+async function trackAndFlagMature(
+  results: { id: number; media_type?: string; title?: string; name?: string }[],
+  defaultMediaType: 'movie' | 'tv',
+  lang: string,
+): Promise<number[]> {
+  const nsfwIds: number[] = [];
+  await Promise.allSettled(
+    results.slice(0, 20).map(async (item) => {
+      const mt = item.name ? 'tv' : item.title ? 'movie' : defaultMediaType;
+      const details = mt === 'movie'
+        ? await getMovieDetails(item.id, lang)
+        : await getTvDetails(item.id, lang);
+      await trackKeywordsFromDetails(item.id, mt, details).catch(() => {});
+      const rating = extractContentRating(details);
+      if (isMatureRating(rating)) nsfwIds.push(item.id);
+    }),
+  );
+  return nsfwIds;
+}
 
 function getLang(request: FastifyRequest): string {
   return (request.headers['accept-language'] || '').split(',')[0]?.split('-')[0] || 'en';
@@ -128,7 +151,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const movieId = parseId(id);
     if (!movieId) return reply.status(400).send({ error: 'Invalid ID' });
-    return getMovieRecommendations(movieId, getLang(request));
+    const lang = getLang(request);
+    const data = await getMovieRecommendations(movieId, lang);
+    const nsfwTmdbIds = await trackAndFlagMature(data.results || [], 'movie', lang);
+    return { ...data, nsfwTmdbIds };
   });
 
   app.get('/tv/:id/recommendations', {
@@ -138,7 +164,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const tvId = parseId(id);
     if (!tvId) return reply.status(400).send({ error: 'Invalid ID' });
-    return getTvRecommendations(tvId, getLang(request));
+    const lang = getLang(request);
+    const data = await getTvRecommendations(tvId, lang);
+    const nsfwTmdbIds = await trackAndFlagMature(data.results || [], 'tv', lang);
+    return { ...data, nsfwTmdbIds };
   });
 
   app.get('/collection/:id', {
