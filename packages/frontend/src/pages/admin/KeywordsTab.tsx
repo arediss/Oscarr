@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, Tag, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '@/lib/api';
@@ -11,8 +11,112 @@ interface Keyword {
   mediaCount: number;
 }
 
-const TAG_OPTIONS = ['nsfw', 'anime'] as const;
 const PAGE_SIZE = 50;
+
+// Tag colors — nsfw gets red, others cycle through these
+const TAG_COLORS: Record<string, string> = {
+  nsfw: 'bg-red-500/20 text-red-400 ring-red-500/30',
+};
+const DEFAULT_TAG_COLORS = [
+  'bg-violet-500/20 text-violet-400 ring-violet-500/30',
+  'bg-emerald-500/20 text-emerald-400 ring-emerald-500/30',
+  'bg-amber-500/20 text-amber-400 ring-amber-500/30',
+  'bg-cyan-500/20 text-cyan-400 ring-cyan-500/30',
+  'bg-pink-500/20 text-pink-400 ring-pink-500/30',
+  'bg-blue-500/20 text-blue-400 ring-blue-500/30',
+];
+
+function getTagColor(tag: string, index: number): string {
+  return TAG_COLORS[tag] || DEFAULT_TAG_COLORS[index % DEFAULT_TAG_COLORS.length];
+}
+
+/** Inline autocomplete tag input for a single keyword row */
+function TagCell({ keyword, allTags, onUpdate }: { keyword: Keyword; allTags: string[]; onUpdate: (tmdbId: number, tag: string | null) => void }) {
+  const { t } = useTranslation();
+  const [editing, setEditing] = useState(false);
+  const [input, setInput] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const suggestions = input.trim()
+    ? allTags.filter((t) => t.toLowerCase().includes(input.toLowerCase()) && t !== keyword.tag)
+    : allTags.filter((t) => t !== keyword.tag);
+
+  function handleSelect(tag: string) {
+    onUpdate(keyword.tmdbId, tag);
+    setEditing(false);
+    setInput('');
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && input.trim()) {
+      e.preventDefault();
+      handleSelect(input.trim().toLowerCase());
+    }
+    if (e.key === 'Escape') {
+      setEditing(false);
+      setInput('');
+    }
+  }
+
+  if (keyword.tag && !editing) {
+    const tagIndex = allTags.indexOf(keyword.tag);
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ring-1 ${getTagColor(keyword.tag, tagIndex)}`}>
+          {keyword.tag}
+        </span>
+        <button
+          onClick={() => onUpdate(keyword.tmdbId, null)}
+          className="p-1 rounded-lg text-ndp-text-dim hover:text-ndp-text hover:bg-white/10 transition-colors"
+          title={t('admin.keywords.tag.clear')}
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  if (editing) {
+    return (
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => setTimeout(() => { setEditing(false); setInput(''); }, 150)}
+          placeholder={t('admin.keywords.tag.placeholder')}
+          autoFocus
+          className="w-full px-2.5 py-1 bg-ndp-surface rounded-lg text-xs text-ndp-text border border-ndp-accent/30 focus:outline-none"
+        />
+        {suggestions.length > 0 && (
+          <div className="absolute top-full left-0 right-0 mt-1 bg-ndp-surface border border-white/10 rounded-lg shadow-xl z-10 max-h-32 overflow-y-auto">
+            {suggestions.map((tag, i) => (
+              <button
+                key={tag}
+                onMouseDown={(e) => { e.preventDefault(); handleSelect(tag); }}
+                className="w-full text-left px-2.5 py-1.5 text-xs text-ndp-text hover:bg-white/5 transition-colors flex items-center gap-2"
+              >
+                <span className={`w-2 h-2 rounded-full ring-1 ${getTagColor(tag, i)}`} />
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="px-2.5 py-1 rounded-lg text-xs text-ndp-text-dim bg-white/5 hover:bg-white/10 transition-colors"
+    >
+      + {t('admin.keywords.tag')}
+    </button>
+  );
+}
 
 export function KeywordsTab() {
   const { t } = useTranslation();
@@ -28,8 +132,10 @@ export function KeywordsTab() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Reset to page 0 when search changes
   useEffect(() => setPage(0), [search]);
+
+  // Derive available tags from current keywords
+  const allTags = [...new Set(keywords.map((k) => k.tag).filter((t): t is string => !!t))].sort();
 
   async function updateTag(tmdbId: number, tag: string | null) {
     try {
@@ -44,7 +150,6 @@ export function KeywordsTab() {
     k.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Sort: tagged first, then by media count desc
   const sorted = [...filtered].sort((a, b) => {
     if (a.tag && !b.tag) return -1;
     if (!a.tag && b.tag) return 1;
@@ -75,6 +180,20 @@ export function KeywordsTab() {
     <div>
       <p className="text-sm text-ndp-text-muted mb-4">{t('admin.keywords.description')}</p>
 
+      {/* Active tags summary */}
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {allTags.map((tag, i) => {
+            const count = keywords.filter((k) => k.tag === tag).length;
+            return (
+              <span key={tag} className={`px-2.5 py-1 rounded-lg text-xs font-medium ring-1 ${getTagColor(tag, i)}`}>
+                {tag} ({count})
+              </span>
+            );
+          })}
+        </div>
+      )}
+
       {/* Search */}
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ndp-text-dim" />
@@ -103,32 +222,7 @@ export function KeywordsTab() {
                 <td className="px-4 py-2.5 text-ndp-text">{kw.name}</td>
                 <td className="px-4 py-2.5 text-ndp-text-muted text-right">{kw.mediaCount}</td>
                 <td className="px-4 py-2.5">
-                  <div className="flex items-center gap-1.5">
-                    {TAG_OPTIONS.map((tag) => (
-                      <button
-                        key={tag}
-                        onClick={() => updateTag(kw.tmdbId, kw.tag === tag ? null : tag)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                          kw.tag === tag
-                            ? tag === 'nsfw'
-                              ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/30'
-                              : 'bg-violet-500/20 text-violet-400 ring-1 ring-violet-500/30'
-                            : 'bg-white/5 text-ndp-text-dim hover:bg-white/10'
-                        }`}
-                      >
-                        {t(`admin.keywords.tag.${tag}`)}
-                      </button>
-                    ))}
-                    {kw.tag && (
-                      <button
-                        onClick={() => updateTag(kw.tmdbId, null)}
-                        className="p-1 rounded-lg text-ndp-text-dim hover:text-ndp-text hover:bg-white/10 transition-colors"
-                        title={t('admin.keywords.tag.clear')}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+                  <TagCell keyword={kw} allTags={allTags} onUpdate={updateTag} />
                 </td>
               </tr>
             ))}
