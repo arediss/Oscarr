@@ -21,7 +21,10 @@ export interface RadarrMovie {
   physicalRelease?: string;
   inCinemas?: string;
   releaseDate?: string;
-  movieFile?: { dateAdded: string };
+  movieFile?: {
+    dateAdded: string;
+    languages?: { id: number; name: string }[];
+  };
 }
 
 export interface RadarrQueueItem {

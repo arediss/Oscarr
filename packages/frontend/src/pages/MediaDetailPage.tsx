@@ -50,6 +50,7 @@ export default function MediaDetailPage({ type }: Props) {
   const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string; position: number }[]>([]);
   const [selectedQuality, setSelectedQuality] = useState<number | null>(null);
   const [activeQualityOptionIds, setActiveQualityOptionIds] = useState<number[]>([]);
+  const [audioLanguages, setAudioLanguages] = useState<string[]>([]);
 
   const handleScroll = useCallback(() => {
     const scrollY = window.scrollY;
@@ -70,6 +71,7 @@ export default function MediaDetailPage({ type }: Props) {
     if (data.inLibrary) setInLibrary(true);
     if (data.status === 'available' && !data.id) setInLibrary(true);
     if (data.activeQualityOptionIds) setActiveQualityOptionIds(data.activeQualityOptionIds as number[]);
+    if (data.audioLanguages) setAudioLanguages(data.audioLanguages as string[]);
     // Update global status cache so list pages reflect the latest state on back navigation
     if (data.status && id) {
       const tmdbId = parseInt(id, 10);
@@ -90,6 +92,7 @@ export default function MediaDetailPage({ type }: Props) {
     setSelectedSeasons([]);
     setSelectedQuality(null);
     setActiveQualityOptionIds([]);
+    setAudioLanguages([]);
     setRevealed(false);
     setShowNsfwModal(false);
 
@@ -511,6 +514,20 @@ export default function MediaDetailPage({ type }: Props) {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* Audio languages */}
+            {audioLanguages.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('media.audio_languages')}</h3>
+                <div className="flex flex-wrap gap-2">
+                  {audioLanguages.map((lang) => (
+                    <span key={lang} className="px-3 py-1.5 bg-white/5 rounded-xl text-sm font-medium text-ndp-text border border-white/5">
+                      {lang}
+                    </span>
+                  ))}
                 </div>
               </div>
             )}

@@ -131,12 +131,18 @@ export async function mediaRoutes(app: FastifyInstance) {
     // Live check against Radarr/Sonarr
     let sonarrSeasonStats: { seasonNumber: number; episodeFileCount: number; episodeCount: number; totalEpisodeCount: number }[] | null = null;
     let liveAvailable = false;
+    let audioLanguages: string[] | null = null;
 
     try {
       if (mediaType === 'movie') {
         const radarr = await getRadarrAsync();
         const radarrMovie = await radarr.getMovieByTmdbId(tmdbIdNum);
-        if (radarrMovie?.hasFile) liveAvailable = true;
+        if (radarrMovie?.hasFile) {
+          liveAvailable = true;
+          if (radarrMovie.movieFile?.languages?.length) {
+            audioLanguages = radarrMovie.movieFile.languages.map((l) => l.name);
+          }
+        }
       } else if (mediaType === 'tv') {
         // Try to find in Sonarr by tvdbId (from DB) or by looking up tvdbId via TMDB
         let tvdbId = media?.tvdbId;
@@ -163,6 +169,17 @@ export async function mediaRoutes(app: FastifyInstance) {
                 episodeCount: s.statistics?.episodeCount ?? 0,
                 totalEpisodeCount: s.statistics?.totalEpisodeCount ?? 0,
               }));
+
+            // Extract audio languages from first available episode file
+            if (stats?.episodeFileCount && stats.episodeFileCount > 0) {
+              try {
+                const episodes = await sonarr.getEpisodes(sonarrSeries.id);
+                const withFile = episodes.find((ep) => ep.episodeFile?.languages?.length);
+                if (withFile?.episodeFile?.languages) {
+                  audioLanguages = withFile.episodeFile.languages.map((l) => l.name);
+                }
+              } catch { /* non-critical */ }
+            }
           }
         }
       }
@@ -174,6 +191,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       if (liveAvailable) result.status = 'available';
       if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
       if (liveAvailable) result.inLibrary = true;
+      if (audioLanguages) result.audioLanguages = audioLanguages;
       return result;
     }
 
@@ -204,6 +222,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
     if (liveAvailable) result.inLibrary = true;
     if (activeQualityOptionIds.length > 0) result.activeQualityOptionIds = activeQualityOptionIds;
+    if (audioLanguages) result.audioLanguages = audioLanguages;
     return result;
   });
 
@@ -353,6 +372,7 @@ export async function mediaRoutes(app: FastifyInstance) {
         monitored: ep.monitored,
         quality: ep.episodeFile?.quality?.quality?.name || null,
         size: ep.episodeFile?.size || null,
+        languages: ep.episodeFile?.languages?.map((l) => l.name) || null,
       }));
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
