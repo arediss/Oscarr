@@ -181,13 +181,16 @@ export async function mediaRoutes(app: FastifyInstance) {
             if (stats?.episodeFileCount && stats.episodeFileCount > 0) {
               try {
                 const files = await sonarr.getEpisodeFiles(sonarrSeries.id);
-                const withMediaInfo = files.find((f) => f.mediaInfo?.audioLanguages);
-                if (withMediaInfo?.mediaInfo?.audioLanguages) {
-                  audioLanguages = withMediaInfo.mediaInfo.audioLanguages.split(' / ').map((s) => s.trim()).filter(Boolean);
-                  if (withMediaInfo.mediaInfo.subtitleLanguages) {
-                    subtitleLanguages = withMediaInfo.mediaInfo.subtitleLanguages.split(' / ').map((s) => s.trim()).filter(Boolean);
+                const withMediaInfo = files.find((f) => f.mediaInfo && (f.mediaInfo.audioLanguages || f.mediaInfo.subtitles));
+                if (withMediaInfo?.mediaInfo) {
+                  if (withMediaInfo.mediaInfo.audioLanguages) {
+                    audioLanguages = withMediaInfo.mediaInfo.audioLanguages.split(' / ').map((s) => s.trim()).filter(Boolean);
                   }
-                } else {
+                  if (withMediaInfo.mediaInfo.subtitles) {
+                    subtitleLanguages = withMediaInfo.mediaInfo.subtitles.split(' / ').map((s) => s.trim()).filter(Boolean);
+                  }
+                }
+                if (!audioLanguages) {
                   const withLangs = files.find((f) => f.languages?.length);
                   if (withLangs?.languages) {
                     audioLanguages = withLangs.languages.map((l) => l.name);
