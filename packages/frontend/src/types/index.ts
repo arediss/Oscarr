@@ -119,6 +119,7 @@ export interface Media {
   status: string;
   radarrId: number | null;
   sonarrId: number | null;
+  contentRating: string | null;
   requests?: MediaRequest[];
   seasons?: Season[];
 }
