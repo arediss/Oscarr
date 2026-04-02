@@ -235,8 +235,8 @@ export interface SonarrEpisodeFile {
   quality: { quality: { name: string } };
   size: number;
   mediaInfo?: {
-    audioLanguages?: string;  // e.g. "Japanese / English"
-    subtitleLanguages?: string; // e.g. "French / English"
+    audioLanguages?: string;  // e.g. "Japanese / English" or "jpn"
+    subtitles?: string;       // e.g. "French / English" or "fre"
   };
 }
 
