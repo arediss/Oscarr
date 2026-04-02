@@ -110,15 +110,12 @@ export function extractKeywords(details: TmdbMovie | TmdbTv): { id: number; name
 
 /** Ratings considered mature/NSFW */
 const MATURE_RATINGS = new Set([
-  // US
-  'NC-17', 'TV-MA', 'X', 'NR',
-  // FR / Europe
-  '18', '18+', 'VM18',
-  // Brazil
-  '18',
-  // Russia
-  '18+',
+  'NC-17', 'TV-MA', 'X',       // US
+  '18', '18+', 'VM18',         // FR, DE, BR, RU, IT
 ]);
+
+/** Non-informative ratings to skip when extracting */
+const SKIP_RATINGS = new Set(['NR', 'Not Rated', '']);
 
 /** Priority list of countries to check for content rating */
 const RATING_COUNTRIES = ['US', 'FR', 'DE', 'BR', 'RU', 'IT'];
@@ -132,10 +129,11 @@ export function extractContentRating(details: TmdbMovie | TmdbTv): string | null
   if (tv.content_ratings?.results?.length) {
     for (const country of RATING_COUNTRIES) {
       const match = tv.content_ratings.results.find((r) => r.iso_3166_1 === country);
-      if (match?.rating) return match.rating;
+      if (match?.rating && !SKIP_RATINGS.has(match.rating)) return match.rating;
     }
-    // Fallback to any rating
-    return tv.content_ratings.results[0]?.rating ?? null;
+    // Fallback to first non-skipped rating
+    const fallback = tv.content_ratings.results.find((r) => r.rating && !SKIP_RATINGS.has(r.rating));
+    return fallback?.rating ?? null;
   }
 
   // Movie: release_dates (certifications)
@@ -143,7 +141,7 @@ export function extractContentRating(details: TmdbMovie | TmdbTv): string | null
     for (const country of RATING_COUNTRIES) {
       const countryData = movie.release_dates.results.find((r) => r.iso_3166_1 === country);
       if (countryData) {
-        const cert = countryData.release_dates.find((rd) => rd.certification)?.certification;
+        const cert = countryData.release_dates.find((rd) => rd.certification && !SKIP_RATINGS.has(rd.certification))?.certification;
         if (cert) return cert;
       }
     }
