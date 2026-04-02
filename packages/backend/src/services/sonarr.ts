@@ -234,6 +234,10 @@ export interface SonarrEpisodeFile {
   languages?: { id: number; name: string }[];
   quality: { quality: { name: string } };
   size: number;
+  mediaInfo?: {
+    audioLanguages?: string;  // e.g. "Japanese / English"
+    subtitleLanguages?: string; // e.g. "French / English"
+  };
 }
 
 export interface SonarrHistoryRecord {

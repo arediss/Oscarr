@@ -24,6 +24,10 @@ export interface RadarrMovie {
   movieFile?: {
     dateAdded: string;
     languages?: { id: number; name: string }[];
+    mediaInfo?: {
+      audioLanguages?: string;  // e.g. "English / French"
+      subtitles?: string;       // e.g. "French / English"
+    };
   };
 }
 

@@ -139,7 +139,10 @@ export async function mediaRoutes(app: FastifyInstance) {
         const radarrMovie = await radarr.getMovieByTmdbId(tmdbIdNum);
         if (radarrMovie?.hasFile) {
           liveAvailable = true;
-          if (radarrMovie.movieFile?.languages?.length) {
+          const mi = radarrMovie.movieFile?.mediaInfo;
+          if (mi?.audioLanguages) {
+            audioLanguages = mi.audioLanguages.split(' / ').map((s) => s.trim()).filter(Boolean);
+          } else if (radarrMovie.movieFile?.languages?.length) {
             audioLanguages = radarrMovie.movieFile.languages.map((l) => l.name);
           }
         }
@@ -170,13 +173,18 @@ export async function mediaRoutes(app: FastifyInstance) {
                 totalEpisodeCount: s.statistics?.totalEpisodeCount ?? 0,
               }));
 
-            // Extract audio languages from episode files
+            // Extract audio languages from episode files (prefer mediaInfo over profile languages)
             if (stats?.episodeFileCount && stats.episodeFileCount > 0) {
               try {
                 const files = await sonarr.getEpisodeFiles(sonarrSeries.id);
-                const withLangs = files.find((f) => f.languages?.length);
-                if (withLangs?.languages) {
-                  audioLanguages = withLangs.languages.map((l) => l.name);
+                const withMediaInfo = files.find((f) => f.mediaInfo?.audioLanguages);
+                if (withMediaInfo?.mediaInfo?.audioLanguages) {
+                  audioLanguages = withMediaInfo.mediaInfo.audioLanguages.split(' / ').map((s) => s.trim()).filter(Boolean);
+                } else {
+                  const withLangs = files.find((f) => f.languages?.length);
+                  if (withLangs?.languages) {
+                    audioLanguages = withLangs.languages.map((l) => l.name);
+                  }
                 }
               } catch { /* non-critical */ }
             }
