@@ -132,6 +132,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     let sonarrSeasonStats: { seasonNumber: number; episodeFileCount: number; episodeCount: number; totalEpisodeCount: number }[] | null = null;
     let liveAvailable = false;
     let audioLanguages: string[] | null = null;
+    let subtitleLanguages: string[] | null = null;
 
     try {
       if (mediaType === 'movie') {
@@ -144,6 +145,9 @@ export async function mediaRoutes(app: FastifyInstance) {
             audioLanguages = mi.audioLanguages.split(' / ').map((s) => s.trim()).filter(Boolean);
           } else if (radarrMovie.movieFile?.languages?.length) {
             audioLanguages = radarrMovie.movieFile.languages.map((l) => l.name);
+          }
+          if (mi?.subtitles) {
+            subtitleLanguages = mi.subtitles.split(' / ').map((s) => s.trim()).filter(Boolean);
           }
         }
       } else if (mediaType === 'tv') {
@@ -180,6 +184,9 @@ export async function mediaRoutes(app: FastifyInstance) {
                 const withMediaInfo = files.find((f) => f.mediaInfo?.audioLanguages);
                 if (withMediaInfo?.mediaInfo?.audioLanguages) {
                   audioLanguages = withMediaInfo.mediaInfo.audioLanguages.split(' / ').map((s) => s.trim()).filter(Boolean);
+                  if (withMediaInfo.mediaInfo.subtitleLanguages) {
+                    subtitleLanguages = withMediaInfo.mediaInfo.subtitleLanguages.split(' / ').map((s) => s.trim()).filter(Boolean);
+                  }
                 } else {
                   const withLangs = files.find((f) => f.languages?.length);
                   if (withLangs?.languages) {
@@ -200,6 +207,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
       if (liveAvailable) result.inLibrary = true;
       if (audioLanguages) result.audioLanguages = audioLanguages;
+      if (subtitleLanguages) result.subtitleLanguages = subtitleLanguages;
       return result;
     }
 
@@ -231,6 +239,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     if (liveAvailable) result.inLibrary = true;
     if (activeQualityOptionIds.length > 0) result.activeQualityOptionIds = activeQualityOptionIds;
     if (audioLanguages) result.audioLanguages = audioLanguages;
+    if (subtitleLanguages) result.subtitleLanguages = subtitleLanguages;
     return result;
   });
 

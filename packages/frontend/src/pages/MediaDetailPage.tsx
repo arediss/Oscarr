@@ -51,6 +51,7 @@ export default function MediaDetailPage({ type }: Props) {
   const [selectedQuality, setSelectedQuality] = useState<number | null>(null);
   const [activeQualityOptionIds, setActiveQualityOptionIds] = useState<number[]>([]);
   const [audioLanguages, setAudioLanguages] = useState<string[]>([]);
+  const [subtitleLanguages, setSubtitleLanguages] = useState<string[]>([]);
 
   const handleScroll = useCallback(() => {
     const scrollY = window.scrollY;
@@ -72,6 +73,7 @@ export default function MediaDetailPage({ type }: Props) {
     if (data.status === 'available' && !data.id) setInLibrary(true);
     if (data.activeQualityOptionIds) setActiveQualityOptionIds(data.activeQualityOptionIds as number[]);
     if (data.audioLanguages) setAudioLanguages(data.audioLanguages as string[]);
+    if (data.subtitleLanguages) setSubtitleLanguages(data.subtitleLanguages as string[]);
     // Update global status cache so list pages reflect the latest state on back navigation
     if (data.status && id) {
       const tmdbId = parseInt(id, 10);
@@ -93,6 +95,7 @@ export default function MediaDetailPage({ type }: Props) {
     setSelectedQuality(null);
     setActiveQualityOptionIds([]);
     setAudioLanguages([]);
+    setSubtitleLanguages([]);
     setRevealed(false);
     setShowNsfwModal(false);
 
@@ -518,17 +521,33 @@ export default function MediaDetailPage({ type }: Props) {
               </div>
             )}
 
-            {/* Audio languages */}
-            {audioLanguages.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('media.audio_languages')}</h3>
-                <div className="flex flex-wrap gap-2">
-                  {audioLanguages.map((lang) => (
-                    <span key={lang} className="px-3 py-1.5 bg-white/5 rounded-xl text-sm font-medium text-ndp-text border border-white/5">
-                      {lang}
-                    </span>
-                  ))}
-                </div>
+            {/* Audio & subtitle languages */}
+            {(audioLanguages.length > 0 || subtitleLanguages.length > 0) && (
+              <div className="mt-6 flex flex-wrap gap-6">
+                {audioLanguages.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('media.audio_languages')}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {audioLanguages.map((lang) => (
+                        <span key={lang} className="px-3 py-1.5 bg-white/5 rounded-xl text-sm font-medium text-ndp-text border border-white/5">
+                          {lang}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {subtitleLanguages.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('media.subtitle_languages')}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {subtitleLanguages.map((lang) => (
+                        <span key={lang} className="px-3 py-1.5 bg-white/5 rounded-xl text-sm font-medium text-ndp-text-muted border border-white/5">
+                          {lang}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
