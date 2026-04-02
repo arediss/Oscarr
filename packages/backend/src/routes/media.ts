@@ -170,13 +170,13 @@ export async function mediaRoutes(app: FastifyInstance) {
                 totalEpisodeCount: s.statistics?.totalEpisodeCount ?? 0,
               }));
 
-            // Extract audio languages from first available episode file
+            // Extract audio languages from episode files
             if (stats?.episodeFileCount && stats.episodeFileCount > 0) {
               try {
-                const episodes = await sonarr.getEpisodes(sonarrSeries.id);
-                const withFile = episodes.find((ep) => ep.episodeFile?.languages?.length);
-                if (withFile?.episodeFile?.languages) {
-                  audioLanguages = withFile.episodeFile.languages.map((l) => l.name);
+                const files = await sonarr.getEpisodeFiles(sonarrSeries.id);
+                const withLangs = files.find((f) => f.languages?.length);
+                if (withLangs?.languages) {
+                  audioLanguages = withLangs.languages.map((l) => l.name);
                 }
               } catch { /* non-critical */ }
             }

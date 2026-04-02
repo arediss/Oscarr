@@ -171,6 +171,11 @@ class SonarrService {
     return data;
   }
 
+  async getEpisodeFiles(seriesId: number): Promise<SonarrEpisodeFile[]> {
+    const { data } = await this.api.get('/episodefile', { params: { seriesId } });
+    return data;
+  }
+
   async searchMissingEpisodes(seriesId: number): Promise<void> {
     await this.api.post('/command', { name: 'MissingEpisodeSearch', seriesId });
   }
@@ -220,6 +225,15 @@ export interface SonarrEpisode {
     size: number;
     languages?: { id: number; name: string }[];
   } | null;
+}
+
+export interface SonarrEpisodeFile {
+  id: number;
+  seriesId: number;
+  seasonNumber: number;
+  languages?: { id: number; name: string }[];
+  quality: { quality: { name: string } };
+  size: number;
 }
 
 export interface SonarrHistoryRecord {
