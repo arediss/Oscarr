@@ -19,7 +19,6 @@ import CategoryPage from '@/pages/CategoryPage';
 import CalendarPage from '@/pages/CalendarPage';
 import { PluginPage } from '@/plugins/PluginPage';
 import api from '@/lib/api';
-import { NsfwFilterContext, useNsfwFilterProvider } from '@/hooks/useNsfwFilter';
 
 function InstallGuard({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<'checking' | 'installed' | 'not-installed'>('checking');
@@ -40,14 +39,9 @@ function InstallGuard({ children }: { children: React.ReactNode }) {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const nsfwFilter = useNsfwFilterProvider();
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  return (
-    <NsfwFilterContext.Provider value={nsfwFilter}>
-      {children}
-    </NsfwFilterContext.Provider>
-  );
+  return <>{children}</>;
 }
 
 function RequireAccess({ children }: { children: React.ReactNode }) {
