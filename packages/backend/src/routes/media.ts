@@ -358,4 +358,15 @@ export async function mediaRoutes(app: FastifyInstance) {
     }
   });
 
+  // Get TMDB IDs of all media with mature content ratings
+  app.get('/nsfw-ids', async () => {
+    const MATURE = ['NC-17', 'TV-MA', 'X', '18', '18+', 'VM18'];
+    const matureMedia = await prisma.media.findMany({
+      where: {
+        contentRating: { in: MATURE },
+      },
+      select: { tmdbId: true },
+    });
+    return matureMedia.map((m) => m.tmdbId);
+  });
 }

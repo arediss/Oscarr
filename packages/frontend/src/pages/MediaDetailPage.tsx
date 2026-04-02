@@ -13,11 +13,14 @@ import {
   Film,
   Play,
   X,
+  EyeOff,
+  ShieldAlert,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useNsfwFilter } from '@/hooks/useNsfwFilter';
 import MediaRow from '@/components/MediaRow';
 import { PluginSlot } from '@/plugins/PluginSlot';
 import { useDownloadForMedia, useOnDownloadComplete } from '@/hooks/useDownloads';
@@ -32,6 +35,9 @@ export default function MediaDetailPage({ type }: Props) {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { isNsfw, addNsfwIds, disableBlur } = useNsfwFilter();
+  const [revealed, setRevealed] = useState(false);
+  const [showNsfwModal, setShowNsfwModal] = useState(false);
   const [media, setMedia] = useState<TmdbMedia | null>(null);
   const [dbMedia, setDbMedia] = useState<Media | null>(null);
   const [sonarrSeasons, setSonarrSeasons] = useState<{ seasonNumber: number; episodeFileCount: number; episodeCount: number; totalEpisodeCount: number }[]>([]);
@@ -93,6 +99,7 @@ export default function MediaDetailPage({ type }: Props) {
         ]);
         setMedia(detailRes.data);
         setRecommendations(recoRes.data.results?.map((r: TmdbMedia) => ({ ...r, media_type: type })) || []);
+        if (recoRes.data.nsfwTmdbIds?.length) addNsfwIds(recoRes.data.nsfwTmdbIds);
 
         // Check DB + live Radarr/Sonarr status
         try {
@@ -243,6 +250,8 @@ export default function MediaDetailPage({ type }: Props) {
     );
   }
 
+  const nsfw = !revealed && isNsfw(media.id);
+
   const title = media.title || media.name || '';
   const year = (media.release_date || media.first_air_date || '').slice(0, 4);
   const genres = media.genres?.map((g) => g.name).join(', ');
@@ -255,7 +264,7 @@ export default function MediaDetailPage({ type }: Props) {
       {/* Fixed backdrop */}
       <div className="fixed inset-0 h-screen z-0">
         {media.backdrop_path ? (
-          <img src={backdropUrl(media.backdrop_path)} alt="" className="w-full h-full object-cover" />
+          <img src={backdropUrl(media.backdrop_path)} alt="" className={clsx('w-full h-full object-cover', nsfw && 'blur-3xl scale-110')} />
         ) : (
           <div className="w-full h-full bg-ndp-surface" />
         )}
@@ -280,12 +289,22 @@ export default function MediaDetailPage({ type }: Props) {
         <div className="flex flex-col md:flex-row gap-8">
           {/* Poster */}
           <div className="flex-shrink-0 w-48 sm:w-56 mx-auto md:mx-0">
-            <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-white/10">
+            <div className="aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-white/10 relative">
               <img
                 src={posterUrl(media.poster_path)}
                 alt={title}
-                className="w-full h-full object-cover"
+                className={clsx('w-full h-full object-cover', nsfw && 'blur-xl scale-110')}
               />
+              {nsfw && (
+                <button
+                  onClick={() => setShowNsfwModal(true)}
+                  className="absolute inset-0 flex items-center justify-center cursor-pointer group/nsfw"
+                >
+                  <div className="p-3 rounded-full bg-black/30 backdrop-blur-sm shadow-lg shadow-black/30 group-hover/nsfw:bg-black/50 transition-colors">
+                    <EyeOff className="w-6 h-6 text-white/80 group-hover/nsfw:text-white transition-colors" />
+                  </div>
+                </button>
+              )}
             </div>
           </div>
 
@@ -625,7 +644,7 @@ export default function MediaDetailPage({ type }: Props) {
             {/* Hero header with backdrop */}
             <div className="relative flex-shrink-0">
               {media.backdrop_path && (
-                <img src={backdropUrl(media.backdrop_path, 'w780')} alt="" className="w-full h-36 object-cover" />
+                <img src={backdropUrl(media.backdrop_path, 'w780')} alt="" className={clsx('w-full h-36 object-cover', nsfw && 'blur-3xl scale-110')} />
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-ndp-bg via-ndp-bg/60 to-transparent" />
               {/* Close button — top right */}
@@ -761,6 +780,37 @@ export default function MediaDetailPage({ type }: Props) {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NSFW reveal modal */}
+      {showNsfwModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowNsfwModal(false)}>
+          <div className="bg-ndp-bg rounded-2xl w-full max-w-sm mx-4 shadow-2xl shadow-black/60 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-orange-500/10 rounded-xl">
+                <ShieldAlert className="w-5 h-5 text-orange-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-ndp-text">{t('nsfw.modal.title')}</h3>
+            </div>
+            <p className="text-sm text-ndp-text-muted mb-6">
+              {t('nsfw.modal.description', { rating: dbMedia?.contentRating || '18+' })}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => { setRevealed(true); setShowNsfwModal(false); }}
+                className="w-full px-4 py-2.5 bg-white/5 hover:bg-white/10 text-ndp-text text-sm font-medium rounded-xl transition-colors"
+              >
+                {t('nsfw.modal.show_once')}
+              </button>
+              <button
+                onClick={() => { disableBlur(); setShowNsfwModal(false); }}
+                className="w-full px-4 py-2.5 bg-orange-600/10 hover:bg-orange-600/20 text-orange-400 text-sm font-medium rounded-xl transition-colors"
+              >
+                {t('nsfw.modal.show_always')}
+              </button>
             </div>
           </div>
         </div>
