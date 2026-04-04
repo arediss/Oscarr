@@ -2,7 +2,8 @@ import axios from 'axios';
 import { getCached, setCache } from '../utils/cache.js';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
-const TMDB_API_KEY = process.env.TMDB_API_KEY;
+const TMDB_DEFAULT_KEY = 'db55323b8d3e4154498498a75642b381';
+const TMDB_API_KEY = process.env.TMDB_API_KEY || TMDB_DEFAULT_KEY;
 
 const SUPPORTED_LANGS = ['en', 'fr'];
 const DEFAULT_LANG = 'en';
