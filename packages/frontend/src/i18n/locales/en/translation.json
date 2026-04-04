@@ -345,6 +345,8 @@
   "admin.paths.enable": "Enable",
   "admin.paths.disable": "Disable",
   "admin.paths.duplicate": "Duplicate",
+  "admin.paths.confirm_delete_title": "Delete this rule?",
+  "admin.paths.confirm_delete_desc": "This action cannot be undone. The routing rule will be permanently deleted.",
 
   "admin.notifications.event.request_new": "New request",
   "admin.notifications.event.request_approved": "Request approved",

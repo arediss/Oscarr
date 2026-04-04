@@ -1147,6 +1147,35 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get('/services/:id/rootfolders', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', description: 'Service ID' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const serviceId = parseId(id);
+    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    const svc = await getServiceById(serviceId);
+    if (!svc) return reply.status(404).send({ error: 'Service introuvable ou désactivé' });
+    try {
+      if (svc.type === 'radarr') {
+        const radarr = createRadarrFromConfig(svc.config);
+        return await radarr.getRootFolders();
+      }
+      if (svc.type === 'sonarr') {
+        const sonarr = createSonarrFromConfig(svc.config);
+        return await sonarr.getRootFolders();
+      }
+      return reply.status(400).send({ error: 'Ce type de service ne supporte pas les dossiers racine' });
+    } catch {
+      return reply.status(502).send({ error: 'Impossible de contacter le service' });
+    }
+  });
+
   // === RBAC: ROLES MANAGEMENT ===
 
   // List all roles
