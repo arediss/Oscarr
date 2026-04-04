@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import { AlertTriangle, X as XIcon, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
-import { ApiProfiler } from './ApiProfiler';
 import { useAuth } from '@/context/AuthContext';
 import {
   Home,
@@ -421,7 +420,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       >
         {children}
       </main>
-      {isAdmin && <ApiProfiler />}
     </div>
   );
 }
