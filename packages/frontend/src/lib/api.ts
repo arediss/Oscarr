@@ -68,6 +68,59 @@ api.interceptors.response.use(
   }
 );
 
+// Debug profiler — tracks API call timings
+export interface ApiTrace {
+  method: string;
+  url: string;
+  startedAt: number;
+  duration: number;
+  status: number;
+}
+
+const _traces: ApiTrace[] = [];
+let _pageLoadTime = Date.now();
+
+export function resetTraces() { _traces.length = 0; _pageLoadTime = Date.now(); }
+export function getTraces(): ApiTrace[] { return _traces; }
+export function getPageLoadTime(): number { return _pageLoadTime; }
+
+api.interceptors.request.use((config) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+(config as any)._startTime = Date.now();
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const start = (response.config as any)._startTime as number;
+    if (start) {
+      _traces.push({
+        method: (response.config.method || 'get').toUpperCase(),
+        url: response.config.url || '',
+        startedAt: start - _pageLoadTime,
+        duration: Date.now() - start,
+        status: response.status,
+      });
+    }
+    return response;
+  },
+  (error) => {
+    const config = error.config;
+    const start = config?._startTime as number;
+    if (start) {
+      _traces.push({
+        method: (config.method || 'get').toUpperCase(),
+        url: config.url || '',
+        startedAt: start - _pageLoadTime,
+        duration: Date.now() - start,
+        status: error.response?.status || 0,
+      });
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;
 
 // TMDB image helpers
