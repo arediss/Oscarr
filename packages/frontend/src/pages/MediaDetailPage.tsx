@@ -108,17 +108,17 @@ export default function MediaDetailPage({ type }: Props) {
         setMedia(detailRes.data);
         setRecommendations(recoRes.data.results?.map((r: TmdbMedia) => ({ ...r, media_type: type })) || []);
         if (recoRes.data.nsfwTmdbIds?.length) addNsfwIds(recoRes.data.nsfwTmdbIds);
-
-        // Check DB + live Radarr/Sonarr status
-        try {
-          const { data } = await api.get(`/media/tmdb/${id}/${type}`);
-          applyDbData(data);
-        } catch { /* not in DB yet */ }
       } catch (err) {
         console.error('Failed to fetch media details:', err);
       } finally {
         setLoading(false);
       }
+
+      // Check DB + live Radarr/Sonarr status (non-blocking, page is already visible)
+      try {
+        const { data } = await api.get(`/media/tmdb/${id}/${type}`);
+        applyDbData(data);
+      } catch { /* not in DB yet */ }
     }
     fetchData();
   }, [id, type, applyDbData]);
