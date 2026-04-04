@@ -341,6 +341,10 @@
   "admin.paths.select_tag": "Select a tag",
   "admin.paths.service": "Instance",
   "admin.paths.select_service": "Default",
+  "admin.paths.disabled": "disabled",
+  "admin.paths.enable": "Enable",
+  "admin.paths.disable": "Disable",
+  "admin.paths.duplicate": "Duplicate",
 
   "admin.notifications.event.request_new": "New request",
   "admin.notifications.event.request_approved": "Request approved",

@@ -199,6 +199,7 @@ model FolderRule {
   folderPath    String    // Target root folder path
   seriesType    String?   // Sonarr series type override: "anime" | "standard" | "daily"
   serviceId     Int?      // Target service for this rule
+  enabled       Boolean   @default(true)
   createdAt     DateTime  @default(now())
 
   service       Service?  @relation(fields: [serviceId], references: [id], onDelete: SetNull)
