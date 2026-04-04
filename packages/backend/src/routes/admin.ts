@@ -470,6 +470,73 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
+  // Reorder folder rules
+  app.put('/folder-rules/reorder', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['ids'],
+        properties: {
+          ids: { type: 'array', items: { type: 'number' }, description: 'Rule IDs in desired order' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { ids } = request.body as { ids: number[] };
+    await Promise.all(ids.map((id, i) => prisma.folderRule.update({ where: { id }, data: { priority: i } })));
+    return reply.send({ ok: true });
+  });
+
+  // Toggle folder rule enabled/disabled
+  app.patch('/folder-rules/:id/toggle', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const ruleId = parseId(id);
+    if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
+    const rule = await prisma.folderRule.findUnique({ where: { id: ruleId } });
+    if (!rule) return reply.status(404).send({ error: 'Règle introuvable' });
+    const updated = await prisma.folderRule.update({ where: { id: ruleId }, data: { enabled: !rule.enabled } });
+    return reply.send(updated);
+  });
+
+  // Duplicate a folder rule
+  app.post('/folder-rules/:id/duplicate', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const ruleId = parseId(id);
+    if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
+    const rule = await prisma.folderRule.findUnique({ where: { id: ruleId } });
+    if (!rule) return reply.status(404).send({ error: 'Règle introuvable' });
+    const count = await prisma.folderRule.count();
+    const copy = await prisma.folderRule.create({
+      data: {
+        name: `${rule.name} (2)`,
+        priority: count,
+        mediaType: rule.mediaType,
+        conditions: rule.conditions,
+        folderPath: rule.folderPath,
+        seriesType: rule.seriesType,
+        serviceId: rule.serviceId,
+        enabled: false,
+      },
+    });
+    return reply.status(201).send(copy);
+  });
+
   // === USER MANAGEMENT ===
 
   // Import users from a provider (e.g. Plex shared users, Jellyfin users)
@@ -1075,6 +1142,35 @@ export async function adminRoutes(app: FastifyInstance) {
         return await sonarr.getQualityProfiles();
       }
       return reply.status(400).send({ error: 'Ce type de service ne supporte pas les profils qualité' });
+    } catch {
+      return reply.status(502).send({ error: 'Impossible de contacter le service' });
+    }
+  });
+
+  app.get('/services/:id/rootfolders', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', description: 'Service ID' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const serviceId = parseId(id);
+    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    const svc = await getServiceById(serviceId);
+    if (!svc) return reply.status(404).send({ error: 'Service introuvable ou désactivé' });
+    try {
+      if (svc.type === 'radarr') {
+        const radarr = createRadarrFromConfig(svc.config);
+        return await radarr.getRootFolders();
+      }
+      if (svc.type === 'sonarr') {
+        const sonarr = createSonarrFromConfig(svc.config);
+        return await sonarr.getRootFolders();
+      }
+      return reply.status(400).send({ error: 'Ce type de service ne supporte pas les dossiers racine' });
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter le service' });
     }

@@ -216,7 +216,7 @@ export async function requestRoutes(app: FastifyInstance) {
     if (shouldAutoApprove) {
       const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { displayName: true, email: true } });
       const tagName = dbUser?.displayName || dbUser?.email || `user-${user.id}`;
-      await sendToService(media, validMediaType, tagName, validSeasons, qualityOptionId);
+      await sendToService(media, validMediaType, tagName, user.id, validSeasons, qualityOptionId);
     }
 
     // Notify
@@ -260,7 +260,7 @@ export async function requestRoutes(app: FastifyInstance) {
 
     const seasons = mediaRequest.seasons ? JSON.parse(mediaRequest.seasons) : undefined;
     const tagName = mediaRequest.user.displayName || mediaRequest.user.email || `user-${mediaRequest.user.id}`;
-    await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, seasons, mediaRequest.qualityOptionId ?? undefined);
+    await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, mediaRequest.userId, seasons, mediaRequest.qualityOptionId ?? undefined);
 
     const updated = await prisma.mediaRequest.update({
       where: { id: requestId },
@@ -493,7 +493,7 @@ export async function requestRoutes(app: FastifyInstance) {
       if (user.role === 'admin') {
         const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { displayName: true, email: true } });
         const tagName = dbUser?.displayName || dbUser?.email || `user-${user.id}`;
-        await sendToService(media, 'movie', tagName);
+        await sendToService(media, 'movie', tagName, user.id);
       }
 
       requested++;
@@ -512,6 +512,7 @@ async function sendToService(
   media: { tmdbId: number; tvdbId: number | null; title: string },
   mediaType: string,
   username: string,
+  userId: number | null = null,
   seasons?: number[],
   qualityOptionId?: number,
 ) {
@@ -525,7 +526,7 @@ async function sendToService(
       : await getTvDetails(media.tmdbId);
 
     // Match folder rules
-    const ruleMatch = await matchFolderRule(mediaType as 'movie' | 'tv', tmdbData);
+    const ruleMatch = await matchFolderRule(mediaType as 'movie' | 'tv', tmdbData, userId);
     const defaultFolder = mediaType === 'movie' ? settings?.defaultMovieFolder : settings?.defaultTvFolder;
 
     // Resolve service + quality profile via quality mapping
