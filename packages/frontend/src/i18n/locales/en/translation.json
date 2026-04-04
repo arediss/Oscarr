@@ -186,6 +186,8 @@
   "media.no_episodes": "No episodes found",
   "media.available_short": "available",
   "media.quality": "Quality",
+  "media.audio_languages": "Audio",
+  "media.subtitle_languages": "Subtitles",
   "media.seasons": "Seasons",
   "media.seasons_to_request": "Seasons to request",
   "media.all_seasons": "All seasons",

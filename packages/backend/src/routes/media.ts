@@ -4,6 +4,7 @@ import { getRadarrAsync } from '../services/radarr.js';
 import { getSonarrAsync } from '../services/sonarr.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 import { isMatureRating } from '../services/tmdb.js';
+import { normalizeLanguages } from '../utils/languages.js';
 
 export async function mediaRoutes(app: FastifyInstance) {
   app.get('/', {
@@ -131,12 +132,25 @@ export async function mediaRoutes(app: FastifyInstance) {
     // Live check against Radarr/Sonarr
     let sonarrSeasonStats: { seasonNumber: number; episodeFileCount: number; episodeCount: number; totalEpisodeCount: number }[] | null = null;
     let liveAvailable = false;
+    let audioLanguages: string[] | null = null;
+    let subtitleLanguages: string[] | null = null;
 
     try {
       if (mediaType === 'movie') {
         const radarr = await getRadarrAsync();
         const radarrMovie = await radarr.getMovieByTmdbId(tmdbIdNum);
-        if (radarrMovie?.hasFile) liveAvailable = true;
+        if (radarrMovie?.hasFile) {
+          liveAvailable = true;
+          const mi = radarrMovie.movieFile?.mediaInfo;
+          if (mi?.audioLanguages) {
+            audioLanguages = mi.audioLanguages.split(' / ').map((s) => s.trim()).filter(Boolean);
+          } else if (radarrMovie.movieFile?.languages?.length) {
+            audioLanguages = radarrMovie.movieFile.languages.map((l) => l.name);
+          }
+          if (mi?.subtitles) {
+            subtitleLanguages = mi.subtitles.split(' / ').map((s) => s.trim()).filter(Boolean);
+          }
+        }
       } else if (mediaType === 'tv') {
         // Try to find in Sonarr by tvdbId (from DB) or by looking up tvdbId via TMDB
         let tvdbId = media?.tvdbId;
@@ -163,6 +177,34 @@ export async function mediaRoutes(app: FastifyInstance) {
                 episodeCount: s.statistics?.episodeCount ?? 0,
                 totalEpisodeCount: s.statistics?.totalEpisodeCount ?? 0,
               }));
+
+            // Aggregate audio + subtitle languages across all episode files
+            if (stats?.episodeFileCount && stats.episodeFileCount > 0) {
+              try {
+                const files = await sonarr.getEpisodeFiles(sonarrSeries.id);
+                const audioSet = new Set<string>();
+                const subSet = new Set<string>();
+                for (const f of files) {
+                  if (f.mediaInfo?.audioLanguages) {
+                    for (const l of f.mediaInfo.audioLanguages.split(' / ')) {
+                      const t = l.trim();
+                      if (t) audioSet.add(t);
+                    }
+                  }
+                  if (f.mediaInfo?.subtitles) {
+                    for (const l of f.mediaInfo.subtitles.split(' / ')) {
+                      const t = l.trim();
+                      if (t) subSet.add(t);
+                    }
+                  }
+                }
+                if (audioSet.size > 0) audioLanguages = [...audioSet];
+                if (subSet.size > 0) subtitleLanguages = [...subSet];
+              } catch (err) {
+                const status = (err as { response?: { status?: number } })?.response?.status;
+                console.warn(`[Media] Failed to fetch episode files for series ${sonarrSeries.id} (HTTP ${status || 'unknown'}), skipping language data`);
+              }
+            }
           }
         }
       }
@@ -174,6 +216,8 @@ export async function mediaRoutes(app: FastifyInstance) {
       if (liveAvailable) result.status = 'available';
       if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
       if (liveAvailable) result.inLibrary = true;
+      if (audioLanguages) result.audioLanguages = normalizeLanguages(audioLanguages);
+      if (subtitleLanguages) result.subtitleLanguages = normalizeLanguages(subtitleLanguages);
       return result;
     }
 
@@ -204,6 +248,8 @@ export async function mediaRoutes(app: FastifyInstance) {
     if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
     if (liveAvailable) result.inLibrary = true;
     if (activeQualityOptionIds.length > 0) result.activeQualityOptionIds = activeQualityOptionIds;
+    if (audioLanguages) result.audioLanguages = normalizeLanguages(audioLanguages);
+    if (subtitleLanguages) result.subtitleLanguages = normalizeLanguages(subtitleLanguages);
     return result;
   });
 
