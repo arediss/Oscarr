@@ -29,8 +29,7 @@ const CONDITION_FIELDS = ['genre', 'language', 'country', 'user', 'role', 'tag']
 export function RoutingRulesTab() {
   const { t } = useTranslation();
   const [rules, setRules] = useState<FolderRule[]>([]);
-  const [radarrFolders, setRadarrFolders] = useState<RootFolder[]>([]);
-  const [sonarrFolders, setSonarrFolders] = useState<RootFolder[]>([]);
+  const [labeledFolders, setLabeledFolders] = useState<{ path: string; label: string; serviceId: number | null }[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [tags, setTags] = useState<string[]>([]);
@@ -39,6 +38,8 @@ export function RoutingRulesTab() {
   const [defaultMovieFolder, setDefaultMovieFolder] = useState('');
   const [defaultTvFolder, setDefaultTvFolder] = useState('');
   const [loading, setLoading] = useState(true);
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   // Rule form (create + edit)
   const [showForm, setShowForm] = useState(false);
@@ -53,10 +54,8 @@ export function RoutingRulesTab() {
   useEffect(() => {
     async function load() {
       try {
-        const [settingsRes, rFolders, sFolders, rulesRes, usersRes, rolesRes, keywordsRes, servicesRes] = await Promise.all([
+        const [settingsRes, rulesRes, usersRes, rolesRes, keywordsRes, servicesRes] = await Promise.all([
           api.get('/admin/settings'),
-          api.get('/admin/radarr/rootfolders').catch(() => ({ data: [] })),
-          api.get('/admin/sonarr/rootfolders').catch(() => ({ data: [] })),
           api.get('/admin/folder-rules').catch(() => ({ data: [] })),
           api.get('/admin/users').catch(() => ({ data: [] })),
           api.get('/admin/roles').catch(() => ({ data: [] })),
@@ -66,19 +65,30 @@ export function RoutingRulesTab() {
         setDefaultAnimeFolder(settingsRes.data.defaultAnimeFolder || '');
         setDefaultMovieFolder(settingsRes.data.defaultMovieFolder || '');
         setDefaultTvFolder(settingsRes.data.defaultTvFolder || '');
-        setRadarrFolders(rFolders.data);
-        setSonarrFolders(sFolders.data);
         setRules(rulesRes.data);
         setUsers(usersRes.data);
         setRoles(rolesRes.data);
-        // Extract unique tags from keywords
         const uniqueTags = [...new Set(
           (keywordsRes.data as { tag: string | null }[])
             .map(k => k.tag)
             .filter((t): t is string => !!t)
         )];
         setTags(uniqueTags);
-        setServices(servicesRes.data.filter((s: ServiceOption) => s.type === 'radarr' || s.type === 'sonarr'));
+        const arrServices: ServiceOption[] = servicesRes.data.filter((s: ServiceOption) => s.type === 'radarr' || s.type === 'sonarr');
+        setServices(arrServices);
+
+        // Fetch rootfolders from each Radarr/Sonarr service instance
+        const folders: { path: string; label: string; serviceId: number | null }[] = [];
+        const folderResults = await Promise.all(
+          arrServices.map(s => api.get(`/admin/services/${s.id}/rootfolders`).catch(() => ({ data: [] })))
+        );
+        arrServices.forEach((svc, i) => {
+          const url = svc.config?.url || '';
+          for (const f of (folderResults[i].data as RootFolder[])) {
+            folders.push({ path: f.path, label: `${f.path} — ${svc.name}${url ? ` (${url})` : ''}`, serviceId: svc.id });
+          }
+        });
+        setLabeledFolders(folders);
       } catch (err) { console.error(err); }
       finally { setLoading(false); }
     }
@@ -128,6 +138,7 @@ export function RoutingRulesTab() {
   const deleteRule = async (id: number) => {
     try { await api.delete(`/admin/folder-rules/${id}`); setRules(prev => prev.filter(r => r.id !== id)); }
     catch (err) { console.error(err); }
+    finally { setConfirmDeleteId(null); }
   };
 
   const toggleRule = async (id: number) => {
@@ -150,20 +161,6 @@ export function RoutingRulesTab() {
     setNewConditions(c);
   };
 
-  // Label folders with their service instance name + URL, and carry serviceId
-  const labeledFolders: { path: string; label: string; serviceId: number | null }[] = [];
-  const radarrService = services.find(s => s.type === 'radarr');
-  const sonarrService = services.find(s => s.type === 'sonarr');
-  for (const f of radarrFolders) {
-    const url = radarrService?.config?.url || '';
-    labeledFolders.push({ path: f.path, label: `${f.path} — ${radarrService?.name || 'Radarr'}${url ? ` (${url})` : ''}`, serviceId: radarrService?.id ?? null });
-  }
-  for (const f of sonarrFolders) {
-    if (!labeledFolders.some(lf => lf.path === f.path)) {
-      const url = sonarrService?.config?.url || '';
-      labeledFolders.push({ path: f.path, label: `${f.path} — ${sonarrService?.name || 'Sonarr'}${url ? ` (${url})` : ''}`, serviceId: sonarrService?.id ?? null });
-    }
-  }
 
   // Drag and drop reorder
   const dragItem = useRef<number | null>(null);
@@ -248,7 +245,7 @@ export function RoutingRulesTab() {
                   <button onClick={() => duplicateRule(rule.id)} className="p-1.5 text-ndp-text-dim hover:text-ndp-accent hover:bg-ndp-accent/10 rounded-lg transition-colors" title={t('admin.paths.duplicate')}>
                     <Copy className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => deleteRule(rule.id)} className="p-1.5 text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 rounded-lg transition-colors" title={t('common.delete')}>
+                  <button onClick={() => setConfirmDeleteId(rule.id)} className="p-1.5 text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 rounded-lg transition-colors" title={t('common.delete')}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -320,6 +317,20 @@ export function RoutingRulesTab() {
           <div className="flex gap-2 pt-2">
             <button onClick={saveRule} disabled={!newName || newConditions.some(c => !c.value)} className="btn-primary text-sm">{editingId ? t('common.save') : t('admin.paths.create_rule')}</button>
             <button onClick={resetForm} className="btn-secondary text-sm">{t('common.cancel')}</button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {confirmDeleteId !== null && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in" onClick={() => setConfirmDeleteId(null)}>
+          <div className="bg-ndp-bg-card border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-ndp-text">{t('admin.paths.confirm_delete_title')}</h3>
+            <p className="text-sm text-ndp-text-muted">{t('admin.paths.confirm_delete_desc')}</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmDeleteId(null)} className="btn-secondary text-sm">{t('common.cancel')}</button>
+              <button onClick={() => deleteRule(confirmDeleteId)} className="px-4 py-2 bg-ndp-danger/10 text-ndp-danger hover:bg-ndp-danger/20 rounded-xl text-sm font-medium transition-colors">{t('common.delete')}</button>
+            </div>
           </div>
         </div>
       )}

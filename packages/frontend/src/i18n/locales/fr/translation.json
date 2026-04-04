@@ -345,6 +345,8 @@
   "admin.paths.enable": "Activer",
   "admin.paths.disable": "Désactiver",
   "admin.paths.duplicate": "Dupliquer",
+  "admin.paths.confirm_delete_title": "Supprimer cette règle ?",
+  "admin.paths.confirm_delete_desc": "Cette action est irréversible. La règle de routage sera définitivement supprimée.",
 
   "admin.notifications.event.request_new": "Nouvelle demande",
   "admin.notifications.event.request_approved": "Demande approuvée",
