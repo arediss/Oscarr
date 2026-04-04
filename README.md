@@ -26,6 +26,16 @@
   <img src="docs/preview.jpg" alt="Oscarr Preview" width="900" />
 </p>
 
+<p align="center">
+  <a href="#why-oscarr">Why Oscarr?</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#tech-stack">Tech Stack</a> &middot;
+  <a href="#quick-start-with-docker">Docker</a> &middot;
+  <a href="#manual-setup">Manual Setup</a> &middot;
+  <a href="#plugins">Plugins</a> &middot;
+  <a href="#contributing">Contributing</a>
+</p>
+
 ---
 
 ## Why Oscarr?
@@ -56,13 +66,14 @@ Here's what makes Oscarr different:
 - Request media with quality and season selection
 - Track request status in real time
 - **Upcoming releases calendar** — See what's coming out and when, right from the app
+- **Audio & subtitle language badges** — See available audio tracks and subtitles at a glance on any media
 - **Complete the collection** — Own 3 out of 5 movies in a saga? One click to request the missing ones
 - Support ticket system to contact admins
 - Multi-language support (English & French)
 
 **For admins**
 - Multi-instance Radarr & Sonarr management
-- Intelligent folder routing with condition-based rules (genre, language, country)
+- Intelligent folder routing with condition-based rules (genre, language, country, user, role, keyword tag)
 - Quality profile mappings per service
 - User management with Plex server access verification
 - Notification matrix (Discord, Telegram, Email) per event type
@@ -95,21 +106,37 @@ Here's what makes Oscarr different:
 
 ## Quick Start with Docker
 
-The easiest way to run Oscarr:
+### Docker Run
 
 ```bash
-git clone https://github.com/arediss/Oscarr.git
-cd Oscarr
+docker run -d \
+  --name oscarr \
+  --network host \
+  -e JWT_SECRET=your_random_secret_key \
+  -v oscarr-data:/data \
+  ghcr.io/arediss/oscarr:latest
 ```
 
-Create a `.env` file:
+### Docker Compose
 
-```env
-TMDB_API_KEY=your_tmdb_api_key
-JWT_SECRET=your_random_secret_key
+Create a `docker-compose.yml`:
+
+```yaml
+services:
+  oscarr:
+    image: ghcr.io/arediss/oscarr:latest
+    container_name: oscarr
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - oscarr-data:/data
+    environment:
+      - JWT_SECRET=your_random_secret_key
+      # - TMDB_API_KEY=your_own_key  # Optional: override the built-in TMDB key
+
+volumes:
+  oscarr-data:
 ```
-
-Start:
 
 ```bash
 docker compose up -d
@@ -117,7 +144,11 @@ docker compose up -d
 
 Open `http://localhost:3456` and follow the setup wizard.
 
-> Data is persisted in a Docker volume. Plugins can be added in `packages/plugins/`.
+> **Notes:**
+> - `network_mode: host` is recommended so Oscarr can reach your Radarr/Sonarr/Plex instances on the local network.
+> - Data (SQLite database, install config) is persisted in the `oscarr-data` volume.
+> - A built-in TMDB API key is included — no signup needed. You can override it with `TMDB_API_KEY` if you prefer your own.
+> - To use plugins, mount a plugins directory: `-v ./plugins:/app/packages/plugins`
 
 ---
 
@@ -128,7 +159,7 @@ Open `http://localhost:3456` and follow the setup wizard.
 - Node.js 20+
 - npm 9+
 - A Plex server
-- A TMDB API key ([get one here](https://www.themoviedb.org/settings/api))
+- A TMDB API key (optional — a built-in key is provided, [get your own here](https://www.themoviedb.org/settings/api))
 
 ### Installation
 
@@ -143,9 +174,9 @@ npm install
 Create a `.env` file at the root:
 
 ```env
-TMDB_API_KEY=your_tmdb_api_key
 JWT_SECRET=your_random_secret_key
 DATABASE_URL=file:./dev.db
+# TMDB_API_KEY=your_own_key  # Optional: a built-in key is provided by default
 PORT=3456
 FRONTEND_URL=http://localhost:5173
 ```
@@ -230,15 +261,19 @@ Plugins can:
 
 ## Vision
 
-Oscarr is a passion project with a clear direction:
+> *One app to rule them all.*
 
-- **Radarr & Sonarr first** — They manage your library, they should be the source of truth. Oscarr embraces that philosophy instead of trying to be its own media database.
-- **Modular** — Use only what you need. Every feature is toggleable, every integration is optional.
-- **Extensible** — The plugin system means the community can build on top of Oscarr without waiting for core changes.
-- **User-friendly** — A beautiful, fast interface that non-technical users actually enjoy using. No config files to edit, no terminal commands to run.
-- **Community-driven** — Open source, actively maintained, and built with contributions in mind.
+Oscarr's ambition goes beyond media requests. The core is designed to be a **unified dashboard for your entire homelab media stack** — and plugins are how it gets there.
 
-The long-term goal is to support more media servers beyond Plex (Emby, Jellyfin), more download clients, and a richer plugin ecosystem — while keeping the core lean and focused.
+The core handles what every setup needs: authentication, user management, notifications, routing rules, and a beautiful interface. Everything else — Radarr, Sonarr, Plex, download clients, media servers — connects through **providers and plugins**. Today, Radarr and Sonarr are built-in. Tomorrow, the community can build plugins for anything: Lidarr for music, Readarr for books, Bazarr for subtitles, monitoring dashboards, storage analytics, or entirely custom workflows.
+
+This is the guiding philosophy:
+
+- **The core stays lean** — Authentication, UI shell, plugin engine, notification system. No hardcoded integrations that don't belong in every setup.
+- **Plugins do the heavy lifting** — Each service integration is a self-contained plugin that registers its own routes, pages, jobs, and settings. Want to add Jellyfin support? Build a plugin, not a fork.
+- **Modular by default** — Every feature is toggleable. Every integration is optional. You compose the app that fits your stack.
+- **User-friendly always** — A fast, polished interface that non-technical users actually enjoy using. No config files, no terminal commands.
+- **Community-driven** — Open source, actively maintained, and designed for contributions. Build a plugin, share it, help shape the ecosystem.
 
 ---
 
