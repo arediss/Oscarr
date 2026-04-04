@@ -266,7 +266,7 @@ export function RoutingRulesTab() {
             </div>
             <div>
               <label className="text-xs text-ndp-text-dim block mb-1">{t('common.type')}</label>
-              <select value={newMediaType} onChange={(e) => setNewMediaType(e.target.value)} className="input text-sm w-full">
+              <select value={newMediaType} onChange={(e) => { setNewMediaType(e.target.value); setNewFolder(''); setNewServiceId(''); }} className="input text-sm w-full">
                 <option value="tv">{t('common.series')}</option><option value="movie">{t('common.movie')}</option>
               </select>
             </div>
@@ -282,7 +282,13 @@ export function RoutingRulesTab() {
             <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.paths.target_folder')}</label>
             <select value={newFolder} onChange={(e) => handleFolderChange(e.target.value)} className="input text-sm w-full">
               <option value="">{t('common.choose')}</option>
-              {labeledFolders.map(f => <option key={f.path} value={f.path}>{f.label}</option>)}
+              {labeledFolders
+                .filter(f => {
+                  if (!f.serviceId) return true;
+                  const svc = services.find(s => s.id === f.serviceId);
+                  return svc ? (newMediaType === 'movie' ? svc.type === 'radarr' : svc.type === 'sonarr') : true;
+                })
+                .map(f => <option key={f.path} value={f.path}>{f.label}</option>)}
             </select>
           </div>
 
