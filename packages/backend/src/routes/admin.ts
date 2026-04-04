@@ -470,6 +470,23 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
+  // Reorder folder rules
+  app.put('/folder-rules/reorder', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['ids'],
+        properties: {
+          ids: { type: 'array', items: { type: 'number' }, description: 'Rule IDs in desired order' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { ids } = request.body as { ids: number[] };
+    await Promise.all(ids.map((id, i) => prisma.folderRule.update({ where: { id }, data: { priority: i } })));
+    return reply.send({ ok: true });
+  });
+
   // Toggle folder rule enabled/disabled
   app.patch('/folder-rules/:id/toggle', {
     schema: {
@@ -507,7 +524,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const count = await prisma.folderRule.count();
     const copy = await prisma.folderRule.create({
       data: {
-        name: `${rule.name} (copie)`,
+        name: `${rule.name} (2)`,
         priority: count,
         mediaType: rule.mediaType,
         conditions: rule.conditions,
