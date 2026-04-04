@@ -9,7 +9,7 @@ const LANG_MAP: Record<string, string> = {
   nor: 'Norwegian', dan: 'Danish', fin: 'Finnish', hun: 'Hungarian',
   cze: 'Czech', ces: 'Czech', rum: 'Romanian', ron: 'Romanian',
   gre: 'Greek', ell: 'Greek', heb: 'Hebrew', tha: 'Thai',
-  vie: 'Vietnamese', ind: 'Indonesian', mal: 'Malay', und: 'Unknown',
+  vie: 'Vietnamese', ind: 'Indonesian', mal: 'Malayalam', msa: 'Malay', may: 'Malay', und: 'Unknown',
   // ISO 639-1 (2-letter)
   en: 'English', fr: 'Français', ja: 'Japanese', de: 'Deutsch',
   es: 'Español', it: 'Italiano', pt: 'Português', ru: 'Russian',
