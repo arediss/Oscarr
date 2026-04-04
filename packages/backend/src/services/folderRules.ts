@@ -34,7 +34,7 @@ async function buildContext(
 
   // Resolve user role
   let userRole: string | null = null;
-  if (userId) {
+  if (userId !== null) {
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
     userRole = user?.role ?? null;
   }
@@ -48,7 +48,9 @@ async function buildContext(
       select: { keywordIds: true },
     });
     if (media?.keywordIds) {
-      const ids: number[] = JSON.parse(media.keywordIds);
+      let ids: number[] = [];
+      try { ids = JSON.parse(media.keywordIds); if (!Array.isArray(ids)) ids = []; }
+      catch { console.warn(`[FolderRules] Malformed keywordIds for tmdbId=${tmdbId}: ${media.keywordIds}`); }
       if (ids.length > 0) {
         const keywords = await prisma.keyword.findMany({
           where: { tmdbId: { in: ids }, tag: { not: null } },
@@ -61,7 +63,13 @@ async function buildContext(
     }
   }
 
-  return { mediaType, genres, originCountry, originalLanguage, userId, userRole, keywordTags };
+  return {
+    mediaType, genres,
+    originCountry: originCountry.map(c => c.toLowerCase()),
+    originalLanguage,
+    userId, userRole,
+    keywordTags: keywordTags.map(t => t.toLowerCase()),
+  };
 }
 
 function evaluateCondition(condition: RuleCondition, ctx: MediaContext): boolean {
@@ -82,7 +90,7 @@ function evaluateCondition(condition: RuleCondition, ctx: MediaContext): boolean
 
     case 'country':
       if (condition.operator === 'contains' || condition.operator === 'in') {
-        return values.some(v => ctx.originCountry.map(c => c.toLowerCase()).includes(v));
+        return values.some(v => ctx.originCountry.includes(v));
       }
       return false;
 
@@ -100,7 +108,7 @@ function evaluateCondition(condition: RuleCondition, ctx: MediaContext): boolean
 
     case 'tag':
       if (condition.operator === 'contains') {
-        return values.some(v => ctx.keywordTags.map(t => t.toLowerCase()).includes(v));
+        return values.some(v => ctx.keywordTags.includes(v));
       }
       return false;
 
@@ -127,7 +135,9 @@ export async function matchFolderRule(
   const ctx = await buildContext(mediaType, tmdbData, userId);
 
   for (const rule of rules) {
-    const conditions: RuleCondition[] = JSON.parse(rule.conditions);
+    let conditions: RuleCondition[];
+    try { conditions = JSON.parse(rule.conditions); }
+    catch { console.warn(`[FolderRules] Malformed conditions in rule id=${rule.id} "${rule.name}", skipping`); continue; }
 
     // All conditions must match (AND logic)
     const allMatch = conditions.length > 0 && conditions.every(c => evaluateCondition(c, ctx));

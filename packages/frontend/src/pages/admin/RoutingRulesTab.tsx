@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, XCircle, Pencil, Copy, Power } from 'lucide-react';
+import { Plus, Trash2, XCircle, Pencil, Copy, Power, GripVertical } from 'lucide-react';
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import type { RootFolder } from '@/types';
@@ -165,7 +165,25 @@ export function RoutingRulesTab() {
     }
   }
 
-  const selectedFolderService = labeledFolders.find(f => f.path === newFolder);
+  // Drag and drop reorder
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
+
+  const handleDragStart = (index: number) => { dragItem.current = index; };
+  const handleDragEnter = (index: number) => { dragOverItem.current = index; };
+  const handleDragEnd = async () => {
+    if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) return;
+    const reordered = [...rules];
+    const [dragged] = reordered.splice(dragItem.current, 1);
+    reordered.splice(dragOverItem.current, 0, dragged);
+    setRules(reordered);
+    dragItem.current = null;
+    dragOverItem.current = null;
+    try {
+      await api.put('/admin/folder-rules/reorder', { ids: reordered.map(r => r.id) });
+    } catch (err) { console.error(err); }
+  };
+
 
   const handleFolderChange = (path: string) => {
     setNewFolder(path);
@@ -187,13 +205,22 @@ export function RoutingRulesTab() {
 
       <div className="space-y-3">
         {/* Rules */}
-        {rules.map((rule) => {
+        {rules.map((rule, index) => {
           let conds: RuleCondition[];
           try { conds = JSON.parse(rule.conditions); } catch { conds = []; }
           const service = services.find(s => s.id === rule.serviceId);
           return (
-            <div key={rule.id} className={`card transition-opacity ${!rule.enabled ? 'opacity-40' : ''}`}>
-              <div className="flex items-center gap-4 p-4">
+            <div key={rule.id} className={`flex items-center gap-3 transition-opacity ${!rule.enabled ? 'opacity-40' : ''}`}>
+              <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-ndp-text-muted">{index + 1}</div>
+              <div className="card flex-1 cursor-grab active:cursor-grabbing"
+                draggable
+                onDragStart={() => handleDragStart(index)}
+                onDragEnter={() => handleDragEnter(index)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => e.preventDefault()}
+              >
+              <div className="flex items-center gap-3 p-4">
+                <GripVertical className="w-4 h-4 text-ndp-text-dim flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-ndp-text">{rule.name}</span>
@@ -225,6 +252,7 @@ export function RoutingRulesTab() {
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
+              </div>
               </div>
             </div>
           );
