@@ -124,7 +124,7 @@ export async function matchFolderRule(
 ): Promise<RuleMatch | null> {
   const rules = await prisma.folderRule.findMany({
     where: {
-      mediaType: { in: [mediaType, 'all'] },
+      mediaType,
       enabled: true,
     },
     orderBy: { priority: 'asc' },
