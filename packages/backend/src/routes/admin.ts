@@ -470,6 +470,56 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
+  // Toggle folder rule enabled/disabled
+  app.patch('/folder-rules/:id/toggle', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const ruleId = parseId(id);
+    if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
+    const rule = await prisma.folderRule.findUnique({ where: { id: ruleId } });
+    if (!rule) return reply.status(404).send({ error: 'Règle introuvable' });
+    const updated = await prisma.folderRule.update({ where: { id: ruleId }, data: { enabled: !rule.enabled } });
+    return reply.send(updated);
+  });
+
+  // Duplicate a folder rule
+  app.post('/folder-rules/:id/duplicate', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const ruleId = parseId(id);
+    if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
+    const rule = await prisma.folderRule.findUnique({ where: { id: ruleId } });
+    if (!rule) return reply.status(404).send({ error: 'Règle introuvable' });
+    const count = await prisma.folderRule.count();
+    const copy = await prisma.folderRule.create({
+      data: {
+        name: `${rule.name} (copie)`,
+        priority: count,
+        mediaType: rule.mediaType,
+        conditions: rule.conditions,
+        folderPath: rule.folderPath,
+        seriesType: rule.seriesType,
+        serviceId: rule.serviceId,
+        enabled: false,
+      },
+    });
+    return reply.status(201).send(copy);
+  });
+
   // === USER MANAGEMENT ===
 
   // Import users from a provider (e.g. Plex shared users, Jellyfin users)

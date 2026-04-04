@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, XCircle } from 'lucide-react';
+import { Plus, Trash2, XCircle, Pencil, Copy, Power } from 'lucide-react';
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import type { RootFolder } from '@/types';
@@ -8,17 +8,21 @@ import type { RootFolder } from '@/types';
 interface FolderRule {
   id: number; name: string; priority: number; mediaType: string;
   conditions: string; folderPath: string; seriesType: string | null; serviceId: number | null;
+  enabled: boolean;
 }
 interface RuleCondition { field: string; operator: string; value: string; }
 interface UserOption { id: number; displayName: string | null; email: string; }
 interface RoleOption { id: number; name: string; }
-interface ServiceOption { id: number; name: string; type: string; }
+interface ServiceOption { id: number; name: string; type: string; config?: { url?: string }; }
 
-const GENRE_KEYS = [
-  'action','adventure','animation','comedy','crime','documentary','drama',
-  'family','fantasy','history','horror','music','mystery',
-  'romance','science_fiction','thriller','war','western',
-];
+// Key → TMDB English name (used as stored value for matching)
+const GENRES: Record<string, string> = {
+  action: 'Action', adventure: 'Adventure', animation: 'Animation',
+  comedy: 'Comedy', crime: 'Crime', documentary: 'Documentary',
+  drama: 'Drama', family: 'Family', fantasy: 'Fantasy', history: 'History',
+  horror: 'Horror', music: 'Music', mystery: 'Mystery', romance: 'Romance',
+  science_fiction: 'Science Fiction', thriller: 'Thriller', war: 'War', western: 'Western',
+};
 
 const CONDITION_FIELDS = ['genre', 'language', 'country', 'user', 'role', 'tag'] as const;
 
@@ -36,8 +40,9 @@ export function RoutingRulesTab() {
   const [defaultTvFolder, setDefaultTvFolder] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // New rule form
-  const [showNewRule, setShowNewRule] = useState(false);
+  // Rule form (create + edit)
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [newName, setNewName] = useState('');
   const [newMediaType, setNewMediaType] = useState('tv');
   const [newFolder, setNewFolder] = useState('');
@@ -80,18 +85,43 @@ export function RoutingRulesTab() {
     load();
   }, []);
 
-  const addRule = async () => {
-    if (!newName || !newFolder || newConditions.some(c => !c.value)) return;
+  const resetForm = () => {
+    setShowForm(false); setEditingId(null);
+    setNewName(''); setNewFolder(''); setNewSeriesType(''); setNewServiceId('');
+    setNewMediaType('tv');
+    setNewConditions([{ field: 'genre', operator: 'contains', value: '' }]);
+  };
+
+  const startEdit = (rule: FolderRule) => {
+    let conds: RuleCondition[];
+    try { conds = JSON.parse(rule.conditions); } catch { conds = []; }
+    setEditingId(rule.id);
+    setNewName(rule.name);
+    setNewMediaType(rule.mediaType);
+    setNewFolder(rule.folderPath);
+    setNewSeriesType(rule.seriesType || '');
+    setNewServiceId(rule.serviceId?.toString() || '');
+    setNewConditions(conds.length > 0 ? conds : [{ field: 'genre', operator: 'contains', value: '' }]);
+    setShowForm(true);
+  };
+
+  const saveRule = async () => {
+    if (!newName || newConditions.some(c => !c.value)) return;
+    const payload = {
+      name: newName, mediaType: newMediaType, folderPath: newFolder,
+      seriesType: newSeriesType || null,
+      serviceId: newServiceId ? parseInt(newServiceId) : null,
+      conditions: newConditions,
+    };
     try {
-      const { data } = await api.post('/admin/folder-rules', {
-        name: newName, mediaType: newMediaType, folderPath: newFolder,
-        seriesType: newSeriesType || null, priority: rules.length,
-        serviceId: newServiceId ? parseInt(newServiceId) : null,
-        conditions: newConditions,
-      });
-      setRules(prev => [...prev, data]);
-      setShowNewRule(false); setNewName(''); setNewFolder(''); setNewSeriesType(''); setNewServiceId('');
-      setNewConditions([{ field: 'genre', operator: 'contains', value: '' }]);
+      if (editingId) {
+        const { data } = await api.put(`/admin/folder-rules/${editingId}`, payload);
+        setRules(prev => prev.map(r => r.id === editingId ? data : r));
+      } else {
+        const { data } = await api.post('/admin/folder-rules', { ...payload, priority: rules.length });
+        setRules(prev => [...prev, data]);
+      }
+      resetForm();
     } catch (err) { console.error(err); }
   };
 
@@ -100,24 +130,48 @@ export function RoutingRulesTab() {
     catch (err) { console.error(err); }
   };
 
+  const toggleRule = async (id: number) => {
+    try {
+      const { data } = await api.patch(`/admin/folder-rules/${id}/toggle`);
+      setRules(prev => prev.map(r => r.id === id ? data : r));
+    } catch (err) { console.error(err); }
+  };
+
+  const duplicateRule = async (id: number) => {
+    try {
+      const { data } = await api.post(`/admin/folder-rules/${id}/duplicate`);
+      setRules(prev => [...prev, data]);
+    } catch (err) { console.error(err); }
+  };
+
   const updateConditionField = (index: number, field: string) => {
     const c = [...newConditions];
     c[index] = { field, operator: getDefaultOperator(field), value: '' };
     setNewConditions(c);
   };
 
-  // Label folders with their service instance name
-  const labeledFolders: { path: string; label: string }[] = [];
+  // Label folders with their service instance name + URL, and carry serviceId
+  const labeledFolders: { path: string; label: string; serviceId: number | null }[] = [];
   const radarrService = services.find(s => s.type === 'radarr');
   const sonarrService = services.find(s => s.type === 'sonarr');
   for (const f of radarrFolders) {
-    labeledFolders.push({ path: f.path, label: `${f.path} (${radarrService?.name || 'Radarr'})` });
+    const url = radarrService?.config?.url || '';
+    labeledFolders.push({ path: f.path, label: `${f.path} — ${radarrService?.name || 'Radarr'}${url ? ` (${url})` : ''}`, serviceId: radarrService?.id ?? null });
   }
   for (const f of sonarrFolders) {
     if (!labeledFolders.some(lf => lf.path === f.path)) {
-      labeledFolders.push({ path: f.path, label: `${f.path} (${sonarrService?.name || 'Sonarr'})` });
+      const url = sonarrService?.config?.url || '';
+      labeledFolders.push({ path: f.path, label: `${f.path} — ${sonarrService?.name || 'Sonarr'}${url ? ` (${url})` : ''}`, serviceId: sonarrService?.id ?? null });
     }
   }
+
+  const selectedFolderService = labeledFolders.find(f => f.path === newFolder);
+
+  const handleFolderChange = (path: string) => {
+    setNewFolder(path);
+    const folder = labeledFolders.find(f => f.path === path);
+    setNewServiceId(folder?.serviceId?.toString() || '');
+  };
 
   if (loading) return <Spinner />;
 
@@ -125,7 +179,7 @@ export function RoutingRulesTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-ndp-text">{t('admin.paths.routing_rules')} ({rules.length})</h2>
-        <button onClick={() => setShowNewRule(!showNewRule)} className="btn-primary text-sm flex items-center gap-2 px-4 py-2">
+        <button onClick={() => { resetForm(); setShowForm(true); }} className="btn-primary text-sm flex items-center gap-2 px-4 py-2">
           <Plus className="w-4 h-4" /> {t('admin.paths.new_rule')}
         </button>
       </div>
@@ -138,14 +192,15 @@ export function RoutingRulesTab() {
           try { conds = JSON.parse(rule.conditions); } catch { conds = []; }
           const service = services.find(s => s.id === rule.serviceId);
           return (
-            <div key={rule.id} className="card">
+            <div key={rule.id} className={`card transition-opacity ${!rule.enabled ? 'opacity-40' : ''}`}>
               <div className="flex items-center gap-4 p-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-ndp-text">{rule.name}</span>
                     <span className="text-[10px] bg-ndp-accent/10 text-ndp-accent px-1.5 py-0.5 rounded">{rule.mediaType === 'movie' ? t('common.movie') : rule.mediaType === 'tv' ? t('common.series') : t('common.all')}</span>
                     {rule.seriesType && <span className="text-[10px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded">{rule.seriesType}</span>}
-                    {service && <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded">{service.name}</span>}
+                    {service && <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded">{service.name}{service.config?.url ? ` · ${service.config.url}` : ''}</span>}
+                    {!rule.enabled && <span className="text-[10px] bg-ndp-text-dim/10 text-ndp-text-dim px-1.5 py-0.5 rounded">{t('admin.paths.disabled')}</span>}
                   </div>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {conds.map((c, i) => (
@@ -156,9 +211,20 @@ export function RoutingRulesTab() {
                     <span className="text-xs text-ndp-text-dim">→ {rule.folderPath || (rule.seriesType === 'anime' ? defaultAnimeFolder : rule.mediaType === 'tv' ? defaultTvFolder : defaultMovieFolder) || <span className="italic">{t('admin.paths.defaults_title')}</span>}</span>
                   </div>
                 </div>
-                <button onClick={() => deleteRule(rule.id)} className="p-1.5 text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 rounded-lg transition-colors flex-shrink-0">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button onClick={() => toggleRule(rule.id)} className={`p-1.5 rounded-lg transition-colors ${rule.enabled ? 'text-ndp-success hover:bg-ndp-success/10' : 'text-ndp-text-dim hover:bg-white/5'}`} title={rule.enabled ? t('admin.paths.disable') : t('admin.paths.enable')}>
+                    <Power className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => startEdit(rule)} className="p-1.5 text-ndp-text-dim hover:text-ndp-accent hover:bg-ndp-accent/10 rounded-lg transition-colors" title={t('common.edit')}>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => duplicateRule(rule.id)} className="p-1.5 text-ndp-text-dim hover:text-ndp-accent hover:bg-ndp-accent/10 rounded-lg transition-colors" title={t('admin.paths.duplicate')}>
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => deleteRule(rule.id)} className="p-1.5 text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 rounded-lg transition-colors" title={t('common.delete')}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -166,7 +232,7 @@ export function RoutingRulesTab() {
       </div>
 
       {/* New rule form */}
-      {showNewRule && (
+      {showForm && (
         <div className="card p-5 mt-4 border border-ndp-accent/20 space-y-4 animate-fade-in">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
@@ -187,21 +253,12 @@ export function RoutingRulesTab() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.paths.target_folder')}</label>
-              <select value={newFolder} onChange={(e) => setNewFolder(e.target.value)} className="input text-sm w-full">
-                <option value="">{t('common.choose')}</option>
-                {labeledFolders.map(f => <option key={f.path} value={f.path}>{f.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.paths.service')}</label>
-              <select value={newServiceId} onChange={(e) => setNewServiceId(e.target.value)} className="input text-sm w-full">
-                <option value="">{t('admin.paths.select_service')}</option>
-                {services.map(s => <option key={s.id} value={s.id}>{s.name} ({s.type})</option>)}
-              </select>
-            </div>
+          <div>
+            <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.paths.target_folder')}</label>
+            <select value={newFolder} onChange={(e) => handleFolderChange(e.target.value)} className="input text-sm w-full">
+              <option value="">{t('common.choose')}</option>
+              {labeledFolders.map(f => <option key={f.path} value={f.path}>{f.label}</option>)}
+            </select>
           </div>
 
           {/* Conditions */}
@@ -233,8 +290,8 @@ export function RoutingRulesTab() {
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button onClick={addRule} disabled={!newName || !newFolder || newConditions.some(c => !c.value)} className="btn-primary text-sm">{t('admin.paths.create_rule')}</button>
-            <button onClick={() => setShowNewRule(false)} className="btn-secondary text-sm">{t('common.cancel')}</button>
+            <button onClick={saveRule} disabled={!newName || newConditions.some(c => !c.value)} className="btn-primary text-sm">{editingId ? t('common.save') : t('admin.paths.create_rule')}</button>
+            <button onClick={resetForm} className="btn-secondary text-sm">{t('common.cancel')}</button>
           </div>
         </div>
       )}
@@ -251,7 +308,7 @@ export function RoutingRulesTab() {
         return (
           <select value={cond.value} onChange={(e) => setValue(e.target.value)} className="input text-sm py-1.5 flex-1">
             <option value="">{t('common.choose')}</option>
-            {GENRE_KEYS.map(g => <option key={g} value={t(`genre.${g}`)}>{t(`genre.${g}`)}</option>)}
+            {Object.entries(GENRES).map(([key, tmdbName]) => <option key={key} value={tmdbName}>{t(`genre.${key}`)}</option>)}
           </select>
         );
       case 'user':
