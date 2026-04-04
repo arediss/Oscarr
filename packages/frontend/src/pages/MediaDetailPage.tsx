@@ -541,7 +541,7 @@ export default function MediaDetailPage({ type }: Props) {
                     <h3 className="text-sm font-semibold text-ndp-text-muted uppercase tracking-wider mb-3">{t('media.subtitle_languages')}</h3>
                     <div className="flex flex-wrap gap-2">
                       {subtitleLanguages.map((lang) => (
-                        <span key={lang} className="px-3 py-1.5 bg-white/5 rounded-xl text-sm font-medium text-ndp-text-muted border border-white/5">
+                        <span key={lang} className="px-3 py-1.5 bg-white/5 rounded-xl text-sm font-medium text-ndp-text border border-white/5">
                           {lang}
                         </span>
                       ))}

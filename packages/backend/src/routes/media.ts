@@ -178,20 +178,32 @@ export async function mediaRoutes(app: FastifyInstance) {
                 totalEpisodeCount: s.statistics?.totalEpisodeCount ?? 0,
               }));
 
-            // Extract audio languages from episode files (prefer mediaInfo over profile languages)
+            // Aggregate audio + subtitle languages across all episode files
             if (stats?.episodeFileCount && stats.episodeFileCount > 0) {
               try {
                 const files = await sonarr.getEpisodeFiles(sonarrSeries.id);
-                const withMediaInfo = files.find((f) => f.mediaInfo && (f.mediaInfo.audioLanguages || f.mediaInfo.subtitles));
-                if (withMediaInfo?.mediaInfo) {
-                  if (withMediaInfo.mediaInfo.audioLanguages) {
-                    audioLanguages = withMediaInfo.mediaInfo.audioLanguages.split(' / ').map((s) => s.trim()).filter(Boolean);
+                const audioSet = new Set<string>();
+                const subSet = new Set<string>();
+                for (const f of files) {
+                  if (f.mediaInfo?.audioLanguages) {
+                    for (const l of f.mediaInfo.audioLanguages.split(' / ')) {
+                      const t = l.trim();
+                      if (t) audioSet.add(t);
+                    }
                   }
-                  if (withMediaInfo.mediaInfo.subtitles) {
-                    subtitleLanguages = withMediaInfo.mediaInfo.subtitles.split(' / ').map((s) => s.trim()).filter(Boolean);
+                  if (f.mediaInfo?.subtitles) {
+                    for (const l of f.mediaInfo.subtitles.split(' / ')) {
+                      const t = l.trim();
+                      if (t) subSet.add(t);
+                    }
                   }
                 }
-              } catch { /* non-critical */ }
+                if (audioSet.size > 0) audioLanguages = [...audioSet];
+                if (subSet.size > 0) subtitleLanguages = [...subSet];
+              } catch (err) {
+                const status = (err as { response?: { status?: number } })?.response?.status;
+                console.warn(`[Media] Failed to fetch episode files for series ${sonarrSeries.id} (HTTP ${status || 'unknown'}), skipping language data`);
+              }
             }
           }
         }
@@ -387,7 +399,6 @@ export async function mediaRoutes(app: FastifyInstance) {
         monitored: ep.monitored,
         quality: ep.episodeFile?.quality?.quality?.name || null,
         size: ep.episodeFile?.size || null,
-        languages: ep.episodeFile?.languages?.map((l) => l.name) || null,
       }));
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
