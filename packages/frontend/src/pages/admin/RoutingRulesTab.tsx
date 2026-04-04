@@ -267,7 +267,7 @@ export function RoutingRulesTab() {
             <div>
               <label className="text-xs text-ndp-text-dim block mb-1">{t('common.type')}</label>
               <select value={newMediaType} onChange={(e) => setNewMediaType(e.target.value)} className="input text-sm w-full">
-                <option value="tv">{t('common.series')}</option><option value="movie">{t('common.movie')}</option><option value="all">{t('common.all')}</option>
+                <option value="tv">{t('common.series')}</option><option value="movie">{t('common.movie')}</option>
               </select>
             </div>
             <div>
