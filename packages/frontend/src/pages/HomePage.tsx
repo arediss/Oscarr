@@ -77,20 +77,22 @@ export default function HomePage() {
   }, []);
 
   // Auto-rotate hero with crossfade
+  const advanceHero = useCallback(() => {
+    setHeroIndex((prev) => {
+      prevHeroRef.current = prev;
+      return (prev + 1) % Math.min(trending.length, 5);
+    });
+    setHeroVisible(true);
+  }, [trending.length]);
+
   useEffect(() => {
     if (trending.length === 0) return;
     const interval = setInterval(() => {
       setHeroVisible(false);
-      setTimeout(() => {
-        setHeroIndex((prev) => {
-          prevHeroRef.current = prev;
-          return (prev + 1) % Math.min(trending.length, 5);
-        });
-        setHeroVisible(true);
-      }, 500);
+      setTimeout(advanceHero, 500);
     }, 8000);
     return () => clearInterval(interval);
-  }, [trending]);
+  }, [trending, advanceHero]);
 
   const changeHero = (i: number) => {
     if (i === heroIndex) return;

@@ -26,6 +26,26 @@ const GENRES: Record<string, string> = {
 
 const CONDITION_FIELDS = ['genre', 'language', 'country', 'user', 'role', 'tag'] as const;
 
+async function fetchRootFolders(arrServices: ServiceOption[]) {
+  const folders: { path: string; label: string; serviceId: number | null }[] = [];
+  const failed: string[] = [];
+  const folderResults = await Promise.all(
+    arrServices.map(s => api.get(`/admin/services/${s.id}/rootfolders`).catch(() => ({ data: [], _failed: true })))
+  );
+  arrServices.forEach((svc, i) => {
+    const res = folderResults[i] as { data: RootFolder[]; _failed?: boolean };
+    if (res._failed || res.data.length === 0) {
+      failed.push(svc.name);
+      return;
+    }
+    const url = svc.config?.url || '';
+    for (const f of res.data) {
+      folders.push({ path: f.path, label: `${f.path} — ${svc.name}${url ? ` (${url})` : ''}`, serviceId: svc.id });
+    }
+  });
+  return { folders, failed };
+}
+
 export function RoutingRulesTab() {
   const { t } = useTranslation();
   const [rules, setRules] = useState<FolderRule[]>([]);
@@ -78,23 +98,7 @@ export function RoutingRulesTab() {
         const arrServices: ServiceOption[] = servicesRes.data.filter((s: ServiceOption) => s.type === 'radarr' || s.type === 'sonarr');
         setServices(arrServices);
 
-        // Fetch rootfolders from each Radarr/Sonarr service instance
-        const folders: { path: string; label: string; serviceId: number | null }[] = [];
-        const failed: string[] = [];
-        const folderResults = await Promise.all(
-          arrServices.map(s => api.get(`/admin/services/${s.id}/rootfolders`).catch(() => ({ data: [], _failed: true })))
-        );
-        arrServices.forEach((svc, i) => {
-          const res = folderResults[i] as { data: RootFolder[]; _failed?: boolean };
-          if (res._failed || res.data.length === 0) {
-            failed.push(svc.name);
-            return;
-          }
-          const url = svc.config?.url || '';
-          for (const f of res.data) {
-            folders.push({ path: f.path, label: `${f.path} — ${svc.name}${url ? ` (${url})` : ''}`, serviceId: svc.id });
-          }
-        });
+        const { folders, failed } = await fetchRootFolders(arrServices);
         setLabeledFolders(folders);
         setUnreachableServices(failed);
       } catch (err) { console.error(err); }
@@ -195,6 +199,25 @@ export function RoutingRulesTab() {
     const folder = labeledFolders.find(f => f.path === path);
     setNewServiceId(folder?.serviceId?.toString() || '');
   };
+
+  const renderConditionRow = (cond: RuleCondition, i: number) => (
+    <div key={i} className="flex items-center gap-2">
+      <select value={cond.field} onChange={(e) => updateConditionField(i, e.target.value)} className="input text-sm py-1.5 w-36">
+        {CONDITION_FIELDS.map(f => (
+          <option key={f} value={f}>{t(`admin.paths.${f}`)}</option>
+        ))}
+      </select>
+      <select value={cond.operator} onChange={(e) => { const c = [...newConditions]; c[i].operator = e.target.value; setNewConditions(c); }} className="input text-sm py-1.5 w-32">
+        {getOperatorsForField(cond.field).map(op => (
+          <option key={op} value={op}>{t(`admin.paths.${op}`)}</option>
+        ))}
+      </select>
+      {renderValueInput(cond, i)}
+      {newConditions.length > 1 && (
+        <button onClick={() => setNewConditions(prev => prev.filter((_, j) => j !== i))} className="text-ndp-text-dim hover:text-ndp-danger"><XCircle className="w-4 h-4" /></button>
+      )}
+    </div>
+  );
 
   if (loading) return <Spinner />;
 
@@ -313,24 +336,7 @@ export function RoutingRulesTab() {
           <div>
             <label className="text-xs text-ndp-text-dim block mb-2">{t('admin.paths.conditions_help')}</label>
             <div className="space-y-2">
-              {newConditions.map((cond, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <select value={cond.field} onChange={(e) => updateConditionField(i, e.target.value)} className="input text-sm py-1.5 w-36">
-                    {CONDITION_FIELDS.map(f => (
-                      <option key={f} value={f}>{t(`admin.paths.${f}`)}</option>
-                    ))}
-                  </select>
-                  <select value={cond.operator} onChange={(e) => { const c = [...newConditions]; c[i].operator = e.target.value; setNewConditions(c); }} className="input text-sm py-1.5 w-32">
-                    {getOperatorsForField(cond.field).map(op => (
-                      <option key={op} value={op}>{t(`admin.paths.${op}`)}</option>
-                    ))}
-                  </select>
-                  {renderValueInput(cond, i)}
-                  {newConditions.length > 1 && (
-                    <button onClick={() => setNewConditions(prev => prev.filter((_, j) => j !== i))} className="text-ndp-text-dim hover:text-ndp-danger"><XCircle className="w-4 h-4" /></button>
-                  )}
-                </div>
-              ))}
+              {newConditions.map((cond, i) => renderConditionRow(cond, i))}
             </div>
             <button onClick={() => setNewConditions(prev => [...prev, { field: 'genre', operator: 'contains', value: '' }])} className="text-xs text-ndp-accent hover:text-ndp-accent-hover mt-2 flex items-center gap-1">
               <Plus className="w-3 h-3" /> {t('admin.paths.add_condition')}

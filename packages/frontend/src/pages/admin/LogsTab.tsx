@@ -79,7 +79,7 @@ export function LogsTab() {
     error: 'bg-ndp-danger/10 text-ndp-danger',
   };
 
-  const uniqueLabels = [...new Set(logs.map((l) => l.label))].sort();
+  const uniqueLabels = [...new Set(logs.map((l) => l.label))].sort((a, b) => a.localeCompare(b));
 
   return (
     <AdminTabLayout
