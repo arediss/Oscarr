@@ -19,16 +19,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
       const { data } = await api.get('/auth/me');
       setUser(data);
     } catch {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
       setUser(null);
     } finally {
       setLoading(false);
@@ -39,9 +32,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, [fetchUser]);
 
-  const login = (token: string, userData: User) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
+  const login = (_token: string, userData: User) => {
+    // Token is now stored exclusively in httpOnly cookie by the backend
     setUser(userData);
   };
 
@@ -49,8 +41,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.post('/auth/logout');
     } catch { /* ignore */ }
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
     setUser(null);
   };
 

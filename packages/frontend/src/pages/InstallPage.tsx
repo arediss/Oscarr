@@ -74,7 +74,7 @@ export default function InstallPage() {
       const { data } = await api.post('/auth/register', {
         email: adminEmail, password: adminPassword, displayName: adminDisplayName,
       });
-      login(data.token, data.user);
+      login('', data.user);
       setStep(2);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
