@@ -26,6 +26,18 @@ interface ServiceType {
   enabled: boolean;
 }
 
+function MappingBadge({ mapping, serviceName, onDelete }: { mapping: QualityMappingType; serviceName: string; onDelete: (id: number) => void }) {
+  return (
+    <div className="flex items-center gap-1 bg-ndp-success/10 px-2.5 py-1 rounded-lg">
+      <span className="text-[10px] text-ndp-text-dim mr-1">{serviceName}</span>
+      <span className="text-ndp-success text-xs font-medium">{mapping.qualityProfileName}</span>
+      <button onClick={() => onDelete(mapping.id)} className="text-ndp-success/40 hover:text-ndp-danger transition-colors ml-0.5">
+        <XCircle className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
 function ServicePicker({ services, onSelect }: { services: ServiceType[]; onSelect: (serviceId: number) => void }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -203,13 +215,7 @@ export function QualityTab() {
                 {services.map((svc) => {
                   const mappings = opt.mappings.filter(m => m.service.id === svc.id);
                   return mappings.map((mapping) => (
-                    <div key={mapping.id} className="flex items-center gap-1 bg-ndp-success/10 px-2.5 py-1 rounded-lg">
-                      <span className="text-[10px] text-ndp-text-dim mr-1">{svc.name}</span>
-                      <span className="text-ndp-success text-xs font-medium">{mapping.qualityProfileName}</span>
-                      <button onClick={() => deleteMapping(mapping.id)} className="text-ndp-success/40 hover:text-ndp-danger transition-colors ml-0.5">
-                        <XCircle className="w-3 h-3" />
-                      </button>
-                    </div>
+                    <MappingBadge key={mapping.id} mapping={mapping} serviceName={svc.name} onDelete={deleteMapping} />
                   ));
                 })}
                 {services.length > 0 && (

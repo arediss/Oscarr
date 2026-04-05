@@ -130,6 +130,51 @@ export default function InstallPage() {
     }
   };
 
+  const autoDetectMachineId = async (serviceId: string, token: string) => {
+    const svc = services.find(s => s.id === serviceId);
+    if (!svc?.config.url) return;
+    try {
+      const res = await fetch(`${svc.config.url}/identity`, {
+        headers: { 'X-Plex-Token': token, Accept: 'application/json' },
+      });
+      const json = await res.json();
+      const mid = json.MediaContainer?.machineIdentifier;
+      if (mid) {
+        setServices(prev => prev.map(s => s.id === serviceId
+          ? { ...s, config: { ...s.config, machineId: mid } }
+          : s
+        ));
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handlePlexTokenReceived = async (serviceId: string, token: string) => {
+    clearInterval(pollRef.current!);
+    pollRef.current = null;
+    setPlexPolling(null);
+    setServices(prev => prev.map(s => s.id === serviceId
+      ? { ...s, config: { ...s.config, token }, testStatus: 'idle' as const }
+      : s
+    ));
+    await autoDetectMachineId(serviceId, token);
+  };
+
+  const handlePollAttempt = async (serviceId: string, pinId: string, attempts: number) => {
+    if (attempts >= 120) {
+      clearInterval(pollRef.current!);
+      pollRef.current = null;
+      setPlexPolling(null);
+      setError(t('login.expired'));
+      return;
+    }
+    try {
+      const { data: checkData } = await api.post('/setup/plex-check', { pinId });
+      if (checkData.token) {
+        await handlePlexTokenReceived(serviceId, checkData.token);
+      }
+    } catch { /* keep polling */ }
+  };
+
   const startPlexOAuth = (serviceId: string) => {
     setPlexPolling(serviceId);
     setError('');
@@ -139,45 +184,9 @@ export default function InstallPage() {
 
       let attempts = 0;
       if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
+      pollRef.current = setInterval(() => {
         attempts++;
-        if (attempts >= 120) {
-          clearInterval(pollRef.current!);
-          pollRef.current = null;
-          setPlexPolling(null);
-          setError(t('login.expired'));
-          return;
-        }
-        try {
-          const { data: checkData } = await api.post('/setup/plex-check', { pinId: pin.id });
-          if (checkData.token) {
-            clearInterval(pollRef.current!);
-            pollRef.current = null;
-            setPlexPolling(null);
-            // Fill the token field
-            setServices(prev => prev.map(s => s.id === serviceId
-              ? { ...s, config: { ...s.config, token: checkData.token }, testStatus: 'idle' as const }
-              : s
-            ));
-            // Try to auto-detect machineId
-            const svc = services.find(s => s.id === serviceId);
-            if (svc?.config.url) {
-              try {
-                const res = await fetch(`${svc.config.url}/identity`, {
-                  headers: { 'X-Plex-Token': checkData.token, Accept: 'application/json' },
-                });
-                const json = await res.json();
-                const mid = json.MediaContainer?.machineIdentifier;
-                if (mid) {
-                  setServices(prev => prev.map(s => s.id === serviceId
-                    ? { ...s, config: { ...s.config, machineId: mid } }
-                    : s
-                  ));
-                }
-              } catch { /* ignore */ }
-            }
-          }
-        } catch { /* keep polling */ }
+        handlePollAttempt(serviceId, pin.id, attempts);
       }, 1000);
     }).catch(() => {
       setPlexPolling(null);

@@ -188,7 +188,7 @@ export function getAllPermissions(): { key: string; description: string; source:
   corePerms.add('admin.*');
 
   const result: { key: string; description: string; source: 'core' | 'plugin' }[] = [];
-  for (const p of [...corePerms].sort()) {
+  for (const p of [...corePerms].sort((a, b) => a.localeCompare(b))) {
     result.push({ key: p, description: PERMISSION_DESCRIPTIONS[p] || p, source: 'core' });
   }
   for (const p of [...pluginPermissions].sort((a, b) => a.key.localeCompare(b.key))) {
