@@ -112,6 +112,7 @@
   "register.displayname": "Display name",
   "register.password_confirm": "Confirm password",
   "register.submit": "Create account",
+  "register.confirm_password": "Confirm password",
   "register.password_mismatch": "Passwords don't match",
 
   "provider.plex.machine_id": "Machine ID",
