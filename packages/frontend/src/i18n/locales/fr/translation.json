@@ -413,6 +413,8 @@
 
   "admin.general.oscarr": "Oscarr",
   "admin.general.site_name": "Nom du site",
+  "admin.general.instance_languages": "Langue de l'instance",
+  "admin.general.instance_languages_desc": "La langue principale de cette instance. Affecte les métadonnées TMDB et le classement du contenu.",
   "admin.general.site_name_desc": "Affiché dans l'onglet du navigateur et sur la page de connexion",
   "admin.general.current_version": "Version actuelle :",
   "admin.general.update_available": "v{{version}} disponible",

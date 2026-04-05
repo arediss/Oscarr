@@ -5,18 +5,45 @@ const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_DEFAULT_KEY = 'db55323b8d3e4154498498a75642b381';
 const TMDB_API_KEY = process.env.TMDB_API_KEY || TMDB_DEFAULT_KEY;
 
-const SUPPORTED_LANGS = ['en', 'fr'];
+import { prisma } from '../utils/prisma.js';
+
 const DEFAULT_LANG = 'en';
 
-function normalizeLang(lang?: string): string {
-  if (!lang) return DEFAULT_LANG;
-  const short = lang.split('-')[0].toLowerCase();
-  return SUPPORTED_LANGS.includes(short) ? short : DEFAULT_LANG;
+/** Get instance languages from AppSettings, cached for 5 min */
+let _cachedLangs: string[] | null = null;
+let _cachedAt = 0;
+export async function getInstanceLanguages(): Promise<string[]> {
+  if (_cachedLangs && Date.now() - _cachedAt < 300_000) return _cachedLangs;
+  const settings = await prisma.appSettings.findUnique({ where: { id: 1 }, select: { instanceLanguages: true } });
+  const parsed: string[] = settings?.instanceLanguages ? JSON.parse(settings.instanceLanguages) : ['en'];
+  _cachedLangs = parsed.includes('en') ? parsed : [...parsed, 'en'];
+  _cachedAt = Date.now();
+  return _cachedLangs!;
 }
 
+function normalizeLang(lang?: string): string {
+  const supported = _cachedLangs || ['en'];
+  if (!lang) return supported[0] || DEFAULT_LANG;
+  const short = lang.split('-')[0].toLowerCase();
+  return supported.includes(short) ? short : supported[0] || DEFAULT_LANG;
+}
+
+const LANG_TO_LOCALE: Record<string, string> = {
+  en: 'en-US', fr: 'fr-FR', de: 'de-DE', es: 'es-ES', it: 'it-IT',
+  pt: 'pt-BR', ru: 'ru-RU', ja: 'ja-JP', ko: 'ko-KR', zh: 'zh-CN',
+  nl: 'nl-NL', sv: 'sv-SE', da: 'da-DK', no: 'nb-NO', fi: 'fi-FI',
+  pl: 'pl-PL', tr: 'tr-TR', ar: 'ar-SA', hi: 'hi-IN', th: 'th-TH',
+};
+
+const LANG_TO_COUNTRY: Record<string, string> = {
+  en: 'US', fr: 'FR', de: 'DE', es: 'ES', it: 'IT', pt: 'BR',
+  ru: 'RU', ja: 'JP', ko: 'KR', zh: 'CN', nl: 'NL', sv: 'SE',
+  da: 'DK', no: 'NO', fi: 'FI', pl: 'PL', tr: 'TR', ar: 'SA',
+  hi: 'IN', th: 'TH',
+};
+
 function toTmdbLocale(lang: string): string {
-  const map: Record<string, string> = { en: 'en-US', fr: 'fr-FR' };
-  return map[lang] || 'en-US';
+  return LANG_TO_LOCALE[lang] || 'en-US';
 }
 
 function getTmdbApi(lang = DEFAULT_LANG) {
@@ -118,8 +145,14 @@ const MATURE_RATINGS = new Set([
 /** Non-informative ratings to skip when extracting */
 const SKIP_RATINGS = new Set(['NR', 'Not Rated', '']);
 
-/** Priority list of countries to check for content rating */
-const RATING_COUNTRIES = ['US', 'FR', 'DE', 'BR', 'RU', 'IT'];
+/** Build country priority list: instance languages first, then fallback */
+function getRatingCountries(): string[] {
+  const langs = _cachedLangs || ['en'];
+  const instanceCountries = langs.map(l => LANG_TO_COUNTRY[l]).filter(Boolean);
+  const fallback = ['US', 'FR', 'DE', 'BR', 'RU', 'IT'];
+  // Instance countries first, then remaining fallbacks (deduplicated)
+  return [...new Set([...instanceCountries, ...fallback])];
+}
 
 /** Extract the most relevant content rating from movie or TV details */
 export function extractContentRating(details: TmdbMovie | TmdbTv): string | null {
@@ -127,8 +160,9 @@ export function extractContentRating(details: TmdbMovie | TmdbTv): string | null
   const tv = details as TmdbTv;
 
   // TV: content_ratings
+  const ratingCountries = getRatingCountries();
   if (tv.content_ratings?.results?.length) {
-    for (const country of RATING_COUNTRIES) {
+    for (const country of ratingCountries) {
       const match = tv.content_ratings.results.find((r) => r.iso_3166_1 === country);
       if (match?.rating && !SKIP_RATINGS.has(match.rating)) return match.rating;
     }
@@ -139,7 +173,7 @@ export function extractContentRating(details: TmdbMovie | TmdbTv): string | null
 
   // Movie: release_dates (certifications)
   if (movie.release_dates?.results?.length) {
-    for (const country of RATING_COUNTRIES) {
+    for (const country of ratingCountries) {
       const countryData = movie.release_dates.results.find((r) => r.iso_3166_1 === country);
       if (countryData) {
         const cert = countryData.release_dates.find((rd) => rd.certification && !SKIP_RATINGS.has(rd.certification))?.certification;
