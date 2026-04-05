@@ -2,8 +2,8 @@ import axios from 'axios';
 import { getCached, setCache } from '../utils/cache.js';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
-const TMDB_DEFAULT_KEY = 'db55323b8d3e4154498498a75642b381';
-const TMDB_API_KEY = process.env.TMDB_API_KEY || TMDB_DEFAULT_KEY;
+const TMDB_DEFAULT_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJkODg0ZWJlNzE0NTU4NWI0ZDZkYTAzNDVlM2NjMDcyMiIsIm5iZiI6MTU0NzI5NzAxOS41MjgsInN1YiI6IjVjMzllMGZiYzNhMzY4MDg0ZjQ2YTE1YyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.0HM5S5_3ufPtWrzU_zt7ZNEFKinftqAq1n9Nk3y0eOw';
+const TMDB_TOKEN = process.env.TMDB_API_TOKEN || TMDB_DEFAULT_TOKEN;
 
 import { prisma } from '../utils/prisma.js';
 
@@ -49,8 +49,10 @@ function toTmdbLocale(lang: string): string {
 function getTmdbApi(lang = DEFAULT_LANG) {
   return axios.create({
     baseURL: TMDB_BASE,
+    headers: {
+      Authorization: `Bearer ${TMDB_TOKEN}`,
+    },
     params: {
-      api_key: TMDB_API_KEY,
       language: toTmdbLocale(lang),
     },
   });
