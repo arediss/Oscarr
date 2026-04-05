@@ -132,7 +132,7 @@ services:
       - oscarr-data:/data
     environment:
       - JWT_SECRET=your_random_secret_key
-      # - TMDB_API_KEY=your_own_key  # Optional: override the built-in TMDB key
+      # - TMDB_API_TOKEN=your_own_key  # Optional: override the built-in TMDB key
 
 volumes:
   oscarr-data:
@@ -147,7 +147,7 @@ Open `http://localhost:3456` and follow the setup wizard.
 > **Notes:**
 > - `network_mode: host` is recommended so Oscarr can reach your Radarr/Sonarr/Plex instances on the local network.
 > - Data (SQLite database, install config) is persisted in the `oscarr-data` volume.
-> - A built-in TMDB API key is included — no signup needed. You can override it with `TMDB_API_KEY` if you prefer your own.
+> - A built-in TMDB read access token is included — no signup needed. You can override it with `TMDB_API_TOKEN` if you prefer your own.
 > - To use plugins, mount a plugins directory: `-v ./plugins:/app/packages/plugins`
 
 ---
@@ -176,7 +176,7 @@ Create a `.env` file at the root:
 ```env
 JWT_SECRET=your_random_secret_key
 DATABASE_URL=file:./dev.db
-# TMDB_API_KEY=your_own_key  # Optional: a built-in key is provided by default
+# TMDB_API_TOKEN=your_own_key  # Optional: a built-in read access token is provided by default
 PORT=3456
 FRONTEND_URL=http://localhost:5173
 ```
