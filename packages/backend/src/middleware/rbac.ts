@@ -1,6 +1,23 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 
+// ── Fresh role lookup (cached 30s per user) ─────────────────────────────────
+const _roleCache = new Map<number, { role: string; at: number }>();
+const ROLE_CACHE_TTL = 30_000;
+
+async function getFreshUserRole(userId: number, jwtRole: string): Promise<string> {
+  const cached = _roleCache.get(userId);
+  if (cached && Date.now() - cached.at < ROLE_CACHE_TTL) return cached.role;
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    const role = user?.role ?? jwtRole;
+    _roleCache.set(userId, { role, at: Date.now() });
+    return role;
+  } catch {
+    return jwtRole; // fallback to JWT role on DB error
+  }
+}
+
 // ── Special permission markers ───────────────────────────────────────────────
 export const PUBLIC = '$public';
 export const AUTH = '$authenticated';
@@ -294,14 +311,15 @@ export function rbacPlugin(app: FastifyInstance): void {
     // Any authenticated user is enough
     if (rule.permission === AUTH) return;
 
-    // Check role-based permission
-    const user = request.user as { id: number; role: string };
+    // Check role-based permission — fetch fresh role from DB (cached 30s)
+    const jwtUser = request.user as { id: number; role: string };
+    const freshRole = await getFreshUserRole(jwtUser.id, jwtUser.role);
 
     // "View as role" simulation — admin only, never applies to admin routes
     const viewAsRole = request.headers['x-view-as-role'] as string | undefined;
-    const effectiveRole = (viewAsRole && user.role === 'admin' && !rule.permission.startsWith('admin'))
+    const effectiveRole = (viewAsRole && freshRole === 'admin' && !rule.permission.startsWith('admin'))
       ? viewAsRole
-      : user.role;
+      : freshRole;
 
     if (!hasPermission(effectiveRole, rule.permission)) {
       return reply.status(403).send({ error: 'Forbidden' });

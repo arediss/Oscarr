@@ -16,7 +16,7 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
 
       const token = app.jwt.sign(
         { id: user.id, email: user.email, role: user.role },
-        { expiresIn: '30d' }
+        { expiresIn: '24h' }
       );
 
       return reply
@@ -25,7 +25,7 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
-          maxAge: 30 * 24 * 60 * 60,
+          maxAge: 24 * 60 * 60,
         })
         .send({
           user: {
@@ -36,7 +36,6 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
             role: user.role,
             providers: user.providers.map((p) => ({ provider: p.provider, username: p.providerUsername, email: p.providerEmail })),
           },
-          token,
         });
     },
 
@@ -111,6 +110,13 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
 }
 
 export async function authRoutes(app: FastifyInstance) {
+  // Rate limit auth endpoints: 10 requests per minute per IP
+  const authRateLimit = {
+    config: {
+      rateLimit: { max: 10, timeWindow: '1 minute' },
+    },
+  };
+
   const helpers = buildHelpers(app);
 
   // GET /providers — list available auth providers for the login page
@@ -119,6 +125,7 @@ export async function authRoutes(app: FastifyInstance) {
   // ─── Email/Password (built-in) ────────────────────────────────────
 
   app.post('/register', {
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     schema: {
       body: {
         type: 'object' as const,
@@ -167,6 +174,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post('/login', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     schema: {
       body: {
         type: 'object' as const,

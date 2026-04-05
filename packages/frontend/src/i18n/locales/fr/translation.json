@@ -112,6 +112,7 @@
   "register.displayname": "Nom d'affichage",
   "register.password_confirm": "Confirmer le mot de passe",
   "register.submit": "Créer le compte",
+  "register.confirm_password": "Confirmer le mot de passe",
   "register.password_mismatch": "Les mots de passe ne correspondent pas",
 
   "provider.plex.machine_id": "Machine ID",
@@ -300,6 +301,7 @@
   "admin.services.service_type": "Type de service",
   "admin.services.set_default": "Définir comme service par défaut",
   "admin.services.use_plex_token": "Utiliser mon token Plex",
+  "admin.services.plex_token_error": "Aucun token Plex trouvé. Connectez-vous avec Plex depuis la page de login pour lier votre compte.",
   "admin.services.auto_detect": "Détecter automatiquement",
   "admin.services.server_url": "URL du serveur",
   "admin.services.sender_email": "Email expéditeur",

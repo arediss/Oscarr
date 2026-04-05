@@ -6,12 +6,8 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Add token + language header
+// Add language header (auth is via httpOnly cookie, no Bearer token needed)
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
   config.headers['Accept-Language'] = i18n.language;
   // "View as role" simulation for admin testing
   const viewAsRole = sessionStorage.getItem('view-as-role');
@@ -49,18 +45,7 @@ function showErrorToast(message: string) {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Don't redirect to login for setup routes (handled by InstallPage)
-      const url = error.config?.url || '';
-      const isSetupRoute = url.startsWith('/setup/') || url === '/setup';
-      if (!isSetupRoute) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
-      }
-    }
+    // 401 handling is done by AuthContext + InstallGuard, not here
     if (error.response?.status === 403) {
       showErrorToast(i18n.t('common.forbidden', 'Access denied'));
     }
