@@ -206,6 +206,7 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [fetchingPlexToken, setFetchingPlexToken] = useState(false);
   const [detectingMachineId, setDetectingMachineId] = useState(false);
+  const [modalError, setModalError] = useState('');
 
   const schema = SERVICE_SCHEMAS[type];
 
@@ -218,8 +219,10 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
     try {
       const { data } = await api.get('/admin/plex-token');
       if (data.token) handleConfigChange('token', data.token);
-    } catch { /* empty */ }
-    finally { setFetchingPlexToken(false); }
+    } catch {
+      setModalError(t('admin.services.plex_token_error'));
+      setTimeout(() => setModalError(''), 5000);
+    } finally { setFetchingPlexToken(false); }
   };
 
   const detectMachineId = async () => {
@@ -295,15 +298,18 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
               </div>
               {/* Plex helpers */}
               {type === 'plex' && field.key === 'token' && (
-                <button
-                  type="button"
-                  onClick={fetchPlexToken}
-                  disabled={fetchingPlexToken}
-                  className="mt-1.5 text-xs text-ndp-accent hover:text-ndp-accent-hover flex items-center gap-1 transition-colors"
-                >
-                  {fetchingPlexToken ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plug className="w-3 h-3" />}
-                  {t('admin.services.use_plex_token')}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={fetchPlexToken}
+                    disabled={fetchingPlexToken}
+                    className="mt-1.5 text-xs text-ndp-accent hover:text-ndp-accent-hover flex items-center gap-1 transition-colors"
+                  >
+                    {fetchingPlexToken ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plug className="w-3 h-3" />}
+                    {t('admin.services.use_plex_token')}
+                  </button>
+                  {modalError && <p className="text-xs text-ndp-danger mt-1">{modalError}</p>}
+                </>
               )}
               {type === 'plex' && field.key === 'machineId' && (
                 <button
