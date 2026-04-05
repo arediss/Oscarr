@@ -68,6 +68,7 @@ api.interceptors.response.use(
   }
 );
 
+
 export default api;
 
 // TMDB image helpers

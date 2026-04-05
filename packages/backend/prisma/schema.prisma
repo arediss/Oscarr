@@ -74,6 +74,8 @@ model Media {
   availableAt         DateTime? // Set when status transitions to "available"
   lastMissingSearchAt DateTime? // Last time a missing episode search was triggered
   lastEpisodeInfo     String?   // JSON: latest episode added (e.g. {"season":2,"episode":5,"title":"..."})
+  audioLanguages      String?   // JSON array of normalized audio languages, cached when available
+  subtitleLanguages   String?   // JSON array of normalized subtitle languages, cached when available
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

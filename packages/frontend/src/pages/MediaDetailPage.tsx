@@ -102,25 +102,25 @@ export default function MediaDetailPage({ type }: Props) {
     setJustRequested(false);
 
     async function fetchData() {
+      // Load details first — show the page ASAP
       try {
-        const [detailRes, recoRes] = await Promise.all([
-          api.get(`/tmdb/${type}/${id}`),
-          api.get(`/tmdb/${type}/${id}/recommendations`),
-        ]);
-        setMedia(detailRes.data);
-        setRecommendations(recoRes.data.results?.map((r: TmdbMedia) => ({ ...r, media_type: type })) || []);
-        if (recoRes.data.nsfwTmdbIds?.length) addNsfwIds(recoRes.data.nsfwTmdbIds);
+        const { data } = await api.get(`/tmdb/${type}/${id}`);
+        setMedia(data);
       } catch (err) {
         console.error('Failed to fetch media details:', err);
       } finally {
         setLoading(false);
       }
 
-      // Check DB + live Radarr/Sonarr status (non-blocking, page is already visible)
-      try {
-        const { data } = await api.get(`/media/tmdb/${id}/${type}`);
+      // Load recommendations + DB status in background (non-blocking)
+      api.get(`/tmdb/${type}/${id}/recommendations`).then(({ data }) => {
+        setRecommendations(data.results?.map((r: TmdbMedia) => ({ ...r, media_type: type })) || []);
+        if (data.nsfwTmdbIds?.length) addNsfwIds(data.nsfwTmdbIds);
+      }).catch(() => {});
+
+      api.get(`/media/tmdb/${id}/${type}`).then(({ data }) => {
         applyDbData(data);
-      } catch { /* not in DB yet */ }
+      }).catch(() => {});
     }
     fetchData();
   }, [id, type, applyDbData]);
