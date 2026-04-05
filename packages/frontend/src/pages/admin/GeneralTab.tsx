@@ -8,6 +8,27 @@ import { useFeatures } from '@/context/FeaturesContext';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 
+const AVAILABLE_LANGUAGES = [
+  { code: 'fr', label: 'Français' },
+  { code: 'en', label: 'English' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'es', label: 'Español' },
+  { code: 'it', label: 'Italiano' },
+  { code: 'pt', label: 'Português' },
+  { code: 'nl', label: 'Nederlands' },
+  { code: 'ja', label: '日本語' },
+  { code: 'ko', label: '한국어' },
+  { code: 'zh', label: '中文' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'ar', label: 'العربية' },
+  { code: 'pl', label: 'Polski' },
+  { code: 'tr', label: 'Türkçe' },
+  { code: 'sv', label: 'Svenska' },
+  { code: 'da', label: 'Dansk' },
+  { code: 'no', label: 'Norsk' },
+  { code: 'fi', label: 'Suomi' },
+];
+
 export function GeneralTab() {
   const { t } = useTranslation();
   const { refreshFeatures } = useFeatures();
@@ -20,6 +41,7 @@ export function GeneralTab() {
   const [calendarEnabled, setCalendarEnabled] = useState(true);
   const [missingSearchCooldownMin, setMissingSearchCooldownMin] = useState(60);
   const [siteName, setSiteName] = useState('Oscarr');
+  const [instanceLanguage, setInstanceLanguage] = useState('en');
   const [bannerText, setBannerText] = useState('');
   const [loading, setLoading] = useState(true);
   const [versionInfo, setVersionInfo] = useState<{ current: string; latest?: string; updateAvailable?: boolean; releaseUrl?: string } | null>(null);
@@ -34,6 +56,7 @@ export function GeneralTab() {
         setCalendarEnabled(data.calendarEnabled ?? true);
         setMissingSearchCooldownMin(data.missingSearchCooldownMin ?? 60);
         setSiteName(data.siteName ?? 'Oscarr');
+        setInstanceLanguage(data.instanceLanguages?.[0] ?? 'en');
       }),
       api.get('/app/banner').then(({ data }) => setBannerText(data.banner || '')),
       api.get('/app/version').then(({ data }) => setVersionInfo(data)),
@@ -52,6 +75,7 @@ export function GeneralTab() {
           calendarEnabled,
           missingSearchCooldownMin,
           siteName: siteName.trim() || 'Oscarr',
+          instanceLanguages: [instanceLanguage],
         }),
         api.put('/admin/banner', { banner: bannerText.trim() || null }),
       ]);
@@ -121,6 +145,21 @@ export function GeneralTab() {
             placeholder="Oscarr"
             className="input w-full text-sm"
           />
+        </div>
+        <div className="card p-4">
+          <div className="mb-2">
+            <span className="text-sm font-medium text-ndp-text">{t('admin.general.instance_languages')}</span>
+            <span className="text-xs text-ndp-text-dim ml-2">{t('admin.general.instance_languages_desc')}</span>
+          </div>
+          <select
+            value={instanceLanguage}
+            onChange={(e) => setInstanceLanguage(e.target.value)}
+            className="input text-sm w-full"
+          >
+            {AVAILABLE_LANGUAGES.map(({ code, label }) => (
+              <option key={code} value={code}>{label}</option>
+            ))}
+          </select>
         </div>
         <div className="card p-4">
           <div className="mb-2">

@@ -143,12 +143,12 @@ export async function mediaRoutes(app: FastifyInstance) {
           liveAvailable = true;
           const mi = radarrMovie.movieFile?.mediaInfo;
           if (mi?.audioLanguages) {
-            audioLanguages = mi.audioLanguages.split(' / ').map((s) => s.trim()).filter(Boolean);
+            audioLanguages = mi.audioLanguages.split('/').map((s) => s.trim()).filter(Boolean);
           } else if (radarrMovie.movieFile?.languages?.length) {
             audioLanguages = radarrMovie.movieFile.languages.map((l) => l.name);
           }
           if (mi?.subtitles) {
-            subtitleLanguages = mi.subtitles.split(' / ').map((s) => s.trim()).filter(Boolean);
+            subtitleLanguages = mi.subtitles.split('/').map((s) => s.trim()).filter(Boolean);
           }
         }
       } else if (mediaType === 'tv') {
@@ -188,7 +188,7 @@ export async function mediaRoutes(app: FastifyInstance) {
                 for (const f of files) {
                   if (f.mediaInfo?.audioLanguages) {
                     const seen = new Set<string>();
-                    for (const l of f.mediaInfo.audioLanguages.split(' / ')) {
+                    for (const l of f.mediaInfo.audioLanguages.split('/')) {
                       const t = l.trim();
                       if (t && !seen.has(t)) { seen.add(t); audioCounts.set(t, (audioCounts.get(t) || 0) + 1); }
                     }
