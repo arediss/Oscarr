@@ -112,6 +112,7 @@
   "register.displayname": "Nom d'affichage",
   "register.password_confirm": "Confirmer le mot de passe",
   "register.submit": "Créer le compte",
+  "register.confirm_password": "Confirmer le mot de passe",
   "register.password_mismatch": "Les mots de passe ne correspondent pas",
 
   "provider.plex.machine_id": "Machine ID",
