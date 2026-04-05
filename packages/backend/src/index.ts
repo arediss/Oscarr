@@ -6,6 +6,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import cookie from '@fastify/cookie';
+import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
@@ -47,6 +48,7 @@ async function start() {
   });
 
   await app.register(cookie);
+  await app.register(rateLimit, { global: false });
 
   // Register RBAC middleware (central access control for all routes)
   rbacPlugin(app);
