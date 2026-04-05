@@ -179,27 +179,33 @@ export async function mediaRoutes(app: FastifyInstance) {
               }));
 
             // Aggregate audio + subtitle languages across all episode files
+            // Only keep languages that appear in >50% of files to filter outlier multi-sub releases
             if (stats?.episodeFileCount && stats.episodeFileCount > 0) {
               try {
                 const files = await sonarr.getEpisodeFiles(sonarrSeries.id);
-                const audioSet = new Set<string>();
-                const subSet = new Set<string>();
+                const audioCounts = new Map<string, number>();
+                const subCounts = new Map<string, number>();
                 for (const f of files) {
                   if (f.mediaInfo?.audioLanguages) {
+                    const seen = new Set<string>();
                     for (const l of f.mediaInfo.audioLanguages.split(' / ')) {
                       const t = l.trim();
-                      if (t) audioSet.add(t);
+                      if (t && !seen.has(t)) { seen.add(t); audioCounts.set(t, (audioCounts.get(t) || 0) + 1); }
                     }
                   }
                   if (f.mediaInfo?.subtitles) {
-                    for (const l of f.mediaInfo.subtitles.split(' / ')) {
+                    const seen = new Set<string>();
+                    for (const l of f.mediaInfo.subtitles.split('/')) {
                       const t = l.trim();
-                      if (t) subSet.add(t);
+                      if (t && !seen.has(t)) { seen.add(t); subCounts.set(t, (subCounts.get(t) || 0) + 1); }
                     }
                   }
                 }
-                if (audioSet.size > 0) audioLanguages = [...audioSet];
-                if (subSet.size > 0) subtitleLanguages = [...subSet];
+                const threshold = Math.max(1, Math.floor(files.length * 0.5));
+                const filteredAudio = [...audioCounts.entries()].filter(([, c]) => c >= threshold).map(([l]) => l);
+                const filteredSubs = [...subCounts.entries()].filter(([, c]) => c >= threshold).map(([l]) => l);
+                if (filteredAudio.length > 0) audioLanguages = filteredAudio;
+                if (filteredSubs.length > 0) subtitleLanguages = filteredSubs;
               } catch (err) {
                 const status = (err as { response?: { status?: number } })?.response?.status;
                 console.warn(`[Media] Failed to fetch episode files for series ${sonarrSeries.id} (HTTP ${status || 'unknown'}), skipping language data`);
