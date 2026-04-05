@@ -250,7 +250,7 @@ export async function mediaRoutes(app: FastifyInstance) {
 
     // Update DB if newly available
     if (liveAvailable && media.status !== 'available') {
-      await prisma.media.update({ where: { id: media.id }, data: { status: 'available' } });
+      await prisma.media.update({ where: { id: media.id }, data: { status: 'available', ...(!media.availableAt ? { availableAt: new Date() } : {}) } });
       await prisma.mediaRequest.updateMany({
         where: { mediaId: media.id, status: { in: ['approved', 'processing'] } },
         data: { status: 'available' },

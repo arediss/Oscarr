@@ -171,6 +171,7 @@ async function processSingleMovie(movie: RadarrMovie): Promise<'added' | 'update
       title: existing.title || movie.title,
       ...(posterPath && !existing.posterPath ? { posterPath } : {}),
       ...(backdropPath && !existing.backdropPath ? { backdropPath } : {}),
+      ...(becameAvailable && !existing.availableAt ? { availableAt: new Date() } : {}),
     },
   });
   return 'updated';
@@ -290,7 +291,7 @@ async function createSeasons(mediaId: number, seasons: SonarrSeason[]): Promise<
 
 async function updateExistingShow(
   show: SonarrSeries,
-  existing: { id: number; title: string; status: string; tmdbId: number; posterPath: string | null; backdropPath: string | null },
+  existing: { id: number; title: string; status: string; tmdbId: number; posterPath: string | null; backdropPath: string | null; availableAt: Date | null },
   tmdbId: number | null,
   imagePaths: ImagePaths,
 ): Promise<void> {
@@ -307,6 +308,7 @@ async function updateExistingShow(
     );
   }
 
+  const becameAvailable = status === 'available' && existing.status !== 'available';
   await prisma.media.update({
     where: { id: existing.id },
     data: {
@@ -318,6 +320,7 @@ async function updateExistingShow(
       title: existing.title || show.title,
       ...(posterPath && !existing.posterPath ? { posterPath } : {}),
       ...(backdropPath && !existing.backdropPath ? { backdropPath } : {}),
+      ...(becameAvailable && !existing.availableAt ? { availableAt: new Date() } : {}),
     },
   });
 
