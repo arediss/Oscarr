@@ -46,7 +46,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', { email, password });
-      login(data.token, data.user);
+      login('', data.user);
       navigate('/', { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -66,7 +66,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/register', { email, password, displayName });
-      login(data.token, data.user);
+      login('', data.user);
       navigate('/', { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -100,11 +100,11 @@ export default function LoginPage() {
           }
           try {
             const { data: callbackData } = await api.post('/auth/plex/callback', { pinId: pin.id });
-            if (callbackData.token) {
+            if (callbackData.user) {
               clearInterval(pollIntervalRef.current!);
               pollIntervalRef.current = null;
               authWindow?.close();
-              login(callbackData.token, callbackData.user);
+              login('', callbackData.user);
               navigate('/', { replace: true });
             }
           } catch { /* keep polling */ }

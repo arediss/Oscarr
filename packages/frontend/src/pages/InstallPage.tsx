@@ -34,6 +34,7 @@ export default function InstallPage() {
   // Step 1: Admin account
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [adminConfirmPassword, setAdminConfirmPassword] = useState('');
   const [adminDisplayName, setAdminDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -70,11 +71,16 @@ export default function InstallPage() {
     e.preventDefault();
     setSaving(true);
     setError('');
+    if (adminPassword !== adminConfirmPassword) {
+      setError(t('register.password_mismatch'));
+      setSaving(false);
+      return;
+    }
     try {
       const { data } = await api.post('/auth/register', {
         email: adminEmail, password: adminPassword, displayName: adminDisplayName,
       });
-      login(data.token, data.user);
+      login('', data.user);
       setStep(2);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -362,6 +368,7 @@ export default function InstallPage() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <input type="password" value={adminConfirmPassword} onChange={(e) => setAdminConfirmPassword(e.target.value)} placeholder={t('register.confirm_password')} required minLength={8} className="input w-full" />
               <button type="submit" disabled={saving} className="btn-primary w-full flex items-center justify-center gap-2 text-sm">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                 {t('install.create_admin')}

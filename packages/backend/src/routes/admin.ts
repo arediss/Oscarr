@@ -8,6 +8,7 @@ import { getAuthProvider, getServiceDefinition, getServiceSchemas } from '../pro
 import { syncRequestsFromTags } from '../services/requestSync.js';
 import { notificationRegistry } from '../notifications/index.js';
 import { logEvent } from '../utils/logEvent.js';
+import { invalidateLanguageCache } from '../services/tmdb.js';
 import { triggerJob, updateJobSchedule } from '../services/scheduler.js';
 import { invalidateRoleCache, getAllPermissions } from '../middleware/rbac.js';
 import nodeSchedule from 'node-cron';
@@ -139,6 +140,13 @@ export async function adminRoutes(app: FastifyInstance) {
         updatedAt: new Date(),
       },
     });
+
+    // If instance language changed, clear all caches to force re-fetch in new language
+    if (body.instanceLanguages) {
+      invalidateLanguageCache();
+      await prisma.tmdbCache.deleteMany();
+      logEvent('info', 'Settings', 'Cache TMDB vidé suite au changement de langue');
+    }
 
     logEvent('info', 'Settings', 'Paramètres mis à jour');
     return settings;

@@ -10,9 +10,12 @@
     "dev:backend": "npm run dev --workspace=packages/backend",
     "dev:frontend": "npm run dev --workspace=packages/frontend",
     "build": "npm run build --workspace=packages/backend && npm run build --workspace=packages/frontend",
+    "db:migrate": "npm run db:migrate --workspace=packages/backend",
     "db:push": "npm run db:push --workspace=packages/backend",
     "db:generate": "npm run db:generate --workspace=packages/backend",
-    "db:studio": "npm run db:studio --workspace=packages/backend"
+    "db:studio": "npm run db:studio --workspace=packages/backend",
+    "db:seed": "npm run db:seed --workspace=packages/backend",
+    "db:fresh": "rm -f packages/backend/data/oscarr.db packages/backend/data/install.json && npm run db:migrate && npm run db:generate"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

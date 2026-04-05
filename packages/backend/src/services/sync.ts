@@ -171,6 +171,7 @@ async function processSingleMovie(movie: RadarrMovie): Promise<'added' | 'update
       title: existing.title || movie.title,
       ...(posterPath && !existing.posterPath ? { posterPath } : {}),
       ...(backdropPath && !existing.backdropPath ? { backdropPath } : {}),
+      ...(becameAvailable && !existing.availableAt ? { availableAt: new Date() } : {}),
     },
   });
   return 'updated';
@@ -192,9 +193,22 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
     const radarr = await getRadarrAsync();
     const movies = await radarr.getMovies();
 
-    const filtered = since
-      ? movies.filter((m) => new Date(m.added) > since)
-      : movies;
+    // Incremental: process newly added movies + movies that have a file but aren't marked available in DB
+    let filtered = movies;
+    if (since) {
+      const newlyAdded = movies.filter((m) => new Date(m.added) > since);
+      const withFile = movies.filter((m) => m.hasFile);
+      const withFileTmdbIds = new Set(withFile.map((m) => m.tmdbId));
+      const notAvailableInDb = await prisma.media.findMany({
+        where: { mediaType: 'movie', tmdbId: { in: [...withFileTmdbIds] }, status: { not: 'available' } },
+        select: { tmdbId: true },
+      });
+      const needsUpdate = new Set(notAvailableInDb.map((m) => m.tmdbId));
+      const toUpdate = withFile.filter((m) => needsUpdate.has(m.tmdbId));
+      const combined = new Map<number, typeof movies[0]>();
+      for (const m of [...newlyAdded, ...toUpdate]) combined.set(m.tmdbId, m);
+      filtered = [...combined.values()];
+    }
 
     console.log(`[Sync] Radarr: ${filtered.length} movies to process (${since ? 'incremental since ' + since.toISOString() : 'full scan'})`);
 
@@ -290,7 +304,7 @@ async function createSeasons(mediaId: number, seasons: SonarrSeason[]): Promise<
 
 async function updateExistingShow(
   show: SonarrSeries,
-  existing: { id: number; title: string; status: string; tmdbId: number; posterPath: string | null; backdropPath: string | null },
+  existing: { id: number; title: string; status: string; tmdbId: number; posterPath: string | null; backdropPath: string | null; availableAt: Date | null },
   tmdbId: number | null,
   imagePaths: ImagePaths,
 ): Promise<void> {
@@ -307,6 +321,7 @@ async function updateExistingShow(
     );
   }
 
+  const becameAvailable = status === 'available' && existing.status !== 'available';
   await prisma.media.update({
     where: { id: existing.id },
     data: {
@@ -318,6 +333,7 @@ async function updateExistingShow(
       title: existing.title || show.title,
       ...(posterPath && !existing.posterPath ? { posterPath } : {}),
       ...(backdropPath && !existing.backdropPath ? { backdropPath } : {}),
+      ...(becameAvailable && !existing.availableAt ? { availableAt: new Date() } : {}),
     },
   });
 
@@ -394,12 +410,27 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
     const sonarr = await getSonarrAsync();
     const series = await sonarr.getSeries();
 
-    const filtered = since
-      ? series.filter((s) => {
-          const addedDate = (s as unknown as { added?: string }).added;
-          return addedDate ? new Date(addedDate) > since : false;
-        })
-      : series;
+    // Incremental: process newly added series + series that are complete but not marked available in DB
+    let filtered = series;
+    if (since) {
+      const newlyAdded = series.filter((s) => {
+        const addedDate = (s as unknown as { added?: string }).added;
+        return addedDate ? new Date(addedDate) > since : false;
+      });
+      const complete = series.filter((s) => s.statistics?.percentOfEpisodes >= 100 || (s.statistics?.episodeFileCount ?? 0) > 0);
+      const completeTvdbIds = complete.map((s) => s.tvdbId).filter(Boolean);
+      const notAvailableInDb = completeTvdbIds.length > 0
+        ? await prisma.media.findMany({
+            where: { mediaType: 'tv', tvdbId: { in: completeTvdbIds }, status: { notIn: ['available', 'processing'] } },
+            select: { tvdbId: true },
+          })
+        : [];
+      const needsUpdate = new Set(notAvailableInDb.map((m) => m.tvdbId));
+      const toUpdate = complete.filter((s) => needsUpdate.has(s.tvdbId));
+      const combined = new Map<number, typeof series[0]>();
+      for (const s of [...newlyAdded, ...toUpdate]) combined.set(s.id, s);
+      filtered = [...combined.values()];
+    }
 
     console.log(`[Sync] Sonarr: ${filtered.length} series to process (${since ? 'incremental since ' + since.toISOString() : 'full scan'})`);
 
