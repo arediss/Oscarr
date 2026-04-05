@@ -149,9 +149,18 @@ const plexAuth: AuthProvider = {
   async importUsers(adminUserId) {
     const token = await getPlexToken(adminUserId);
     if (!token) throw new Error('NO_TOKEN');
+    // Check AppSettings first, then fallback to Plex service config
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-    if (!settings?.plexMachineId) throw new Error('NO_MACHINE_ID');
-    return importPlexUsers(token, settings.plexMachineId);
+    let machineId = settings?.plexMachineId;
+    if (!machineId) {
+      const plexService = await prisma.service.findFirst({ where: { type: 'plex', enabled: true } });
+      if (plexService) {
+        const cfg = JSON.parse(plexService.config) as Record<string, string>;
+        machineId = cfg.machineId || null;
+      }
+    }
+    if (!machineId) throw new Error('NO_MACHINE_ID');
+    return importPlexUsers(token, machineId);
   },
 };
 
