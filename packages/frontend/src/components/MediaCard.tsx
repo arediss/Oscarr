@@ -53,7 +53,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
     <Link
       to={link}
       className={clsx(
-        'group relative flex-shrink-0 rounded-xl overflow-hidden transition-all duration-300 hover:scale-105 hover:z-10 hover:shadow-2xl hover:shadow-black/50',
+        'group relative flex-shrink-0 rounded-xl overflow-hidden will-change-transform transition-[transform,box-shadow] duration-300 hover:scale-105 hover:z-10 hover:shadow-2xl hover:shadow-black/50',
         className
       )}
     >
@@ -64,7 +64,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
             src={posterUrl(media.poster_path, 'w342')}
             alt={title}
             className={clsx(
-              'w-full h-full object-cover transition-all duration-500 ease-out',
+              'w-full h-full object-cover transition-opacity duration-500 ease-out',
               loaded ? 'opacity-100' : 'opacity-0',
               nsfw && 'blur-xl scale-110',
             )}
@@ -82,7 +82,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRevealed(true); }}
             className="absolute inset-0 flex items-center justify-center cursor-pointer group/nsfw"
           >
-            <div className="p-2 rounded-full bg-black/30 backdrop-blur-sm shadow-lg shadow-black/30 group-hover/nsfw:bg-black/50 transition-colors">
+            <div className="p-2 rounded-full bg-black/50 shadow-lg shadow-black/30 group-hover/nsfw:bg-black/70 transition-colors">
               <EyeOff className="w-5 h-5 text-white/80 group-hover/nsfw:text-white transition-colors" />
             </div>
           </button>
@@ -124,7 +124,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
       </div>
 
       {/* Top-left: media type badge (hidden on hover) */}
-      <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm rounded-md p-1 transition-opacity duration-300 group-hover:opacity-0">
+      <div className="absolute top-2 left-2 bg-black/75 rounded-md p-1 transition-opacity duration-300 group-hover:opacity-0">
         {type === 'movie' ? (
           <Film className="w-3 h-3 text-white/80" />
         ) : (
@@ -134,7 +134,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
 
       {/* Top-right: rating (hidden on hover) */}
       {media.vote_average > 0 && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded-md transition-opacity duration-300 group-hover:opacity-0">
+        <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/75 px-1.5 py-0.5 rounded-md transition-opacity duration-300 group-hover:opacity-0">
           <Star className="w-3 h-3 fill-ndp-gold text-ndp-gold" />
           <span className="text-xs font-medium text-white">{media.vote_average.toFixed(1)}</span>
         </div>
@@ -142,7 +142,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
 
       {/* Bottom-left: latest episode badge for TV */}
       {media.lastEpisodeInfo && type === 'tv' && (
-        <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-black/60 text-white backdrop-blur-sm transition-opacity duration-300 group-hover:opacity-0">
+        <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-black/75 text-white transition-opacity duration-300 group-hover:opacity-0">
           S{String(media.lastEpisodeInfo.season).padStart(2, '0')}E{String(media.lastEpisodeInfo.episode).padStart(2, '0')}
         </div>
       )}
@@ -150,7 +150,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
       {/* Bottom-right: availability status (hidden on hover) */}
       {statusBadge && (
         <div className={clsx(
-          'absolute bottom-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold backdrop-blur-sm transition-opacity duration-300 group-hover:opacity-0',
+          'absolute bottom-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold transition-opacity duration-300 group-hover:opacity-0',
           statusBadge.bgClass
         )}>
           <statusBadge.icon className="w-3 h-3" />

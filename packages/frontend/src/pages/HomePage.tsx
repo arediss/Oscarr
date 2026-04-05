@@ -21,14 +21,14 @@ export default function HomePage() {
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroVisible, setHeroVisible] = useState(true);
   const prevHeroRef = useRef(0);
-  const [scrollOpacity, setScrollOpacity] = useState(0);
+  const scrollFadeRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = useCallback(() => {
     const scrollY = window.scrollY;
     const fadeStart = 100;
     const fadeEnd = 500;
     const opacity = Math.min(1, Math.max(0, (scrollY - fadeStart) / (fadeEnd - fadeStart)));
-    setScrollOpacity(opacity);
+    if (scrollFadeRef.current) scrollFadeRef.current.style.opacity = String(opacity);
   }, []);
 
   useEffect(() => {
@@ -130,8 +130,9 @@ export default function HomePage() {
         )}
         {/* Scroll-driven fade to bg color */}
         <div
+          ref={scrollFadeRef}
           className="absolute inset-0 bg-ndp-bg transition-none"
-          style={{ opacity: scrollOpacity }}
+          style={{ opacity: 0 }}
         />
       </div>
 
