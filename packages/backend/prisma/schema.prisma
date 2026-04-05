@@ -159,6 +159,7 @@ model AppSettings {
   siteName              String    @default("Oscarr")
   registrationEnabled   Boolean   @default(true)
   missingSearchCooldownMin Int   @default(60) // Minutes before allowing another missing search
+  instanceLanguages     String    @default("[\"en\"]") // JSON array of ISO 639-1 codes, e.g. ["fr","en"]
   updatedAt             DateTime  @updatedAt
 }
 
