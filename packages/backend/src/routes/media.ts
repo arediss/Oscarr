@@ -129,6 +129,10 @@ export async function mediaRoutes(app: FastifyInstance) {
       },
     });
 
+    // Use cached languages from DB if available
+    let cachedAudio: string[] | null = media?.audioLanguages ? JSON.parse(media.audioLanguages) : null;
+    let cachedSubs: string[] | null = media?.subtitleLanguages ? JSON.parse(media.subtitleLanguages) : null;
+
     // Live check against Radarr/Sonarr
     let sonarrSeasonStats: { seasonNumber: number; episodeFileCount: number; episodeCount: number; totalEpisodeCount: number }[] | null = null;
     let liveAvailable = false;
@@ -141,14 +145,16 @@ export async function mediaRoutes(app: FastifyInstance) {
         const radarrMovie = await radarr.getMovieByTmdbId(tmdbIdNum);
         if (radarrMovie?.hasFile) {
           liveAvailable = true;
-          const mi = radarrMovie.movieFile?.mediaInfo;
-          if (mi?.audioLanguages) {
-            audioLanguages = mi.audioLanguages.split('/').map((s) => s.trim()).filter(Boolean);
-          } else if (radarrMovie.movieFile?.languages?.length) {
-            audioLanguages = radarrMovie.movieFile.languages.map((l) => l.name);
-          }
-          if (mi?.subtitles) {
-            subtitleLanguages = mi.subtitles.split('/').map((s) => s.trim()).filter(Boolean);
+          if (!cachedAudio) {
+            const mi = radarrMovie.movieFile?.mediaInfo;
+            if (mi?.audioLanguages) {
+              audioLanguages = mi.audioLanguages.split('/').map((s) => s.trim()).filter(Boolean);
+            } else if (radarrMovie.movieFile?.languages?.length) {
+              audioLanguages = radarrMovie.movieFile.languages.map((l) => l.name);
+            }
+            if (mi?.subtitles) {
+              subtitleLanguages = mi.subtitles.split('/').map((s) => s.trim()).filter(Boolean);
+            }
           }
         }
       } else if (mediaType === 'tv') {
@@ -179,8 +185,9 @@ export async function mediaRoutes(app: FastifyInstance) {
               }));
 
             // Aggregate audio + subtitle languages across all episode files
+            // Skip if we already have cached languages for this media
             // Only keep languages that appear in >50% of files to filter outlier multi-sub releases
-            if (stats?.episodeFileCount && stats.episodeFileCount > 0) {
+            if (stats?.episodeFileCount && stats.episodeFileCount > 0 && !cachedAudio) {
               try {
                 const files = await sonarr.getEpisodeFiles(sonarrSeries.id);
                 const audioCounts = new Map<string, number>();
@@ -227,6 +234,20 @@ export async function mediaRoutes(app: FastifyInstance) {
       return result;
     }
 
+    // Normalize live languages for caching
+    const normalizedAudio = audioLanguages ? normalizeLanguages(audioLanguages) : null;
+    const normalizedSubs = subtitleLanguages ? normalizeLanguages(subtitleLanguages) : null;
+
+    // Cache languages in DB when we have fresh data and media exists
+    if (media && (normalizedAudio || normalizedSubs) && !cachedAudio) {
+      const langUpdate: Record<string, string> = {};
+      if (normalizedAudio) langUpdate.audioLanguages = JSON.stringify(normalizedAudio);
+      if (normalizedSubs) langUpdate.subtitleLanguages = JSON.stringify(normalizedSubs);
+      await prisma.media.update({ where: { id: media.id }, data: langUpdate });
+      cachedAudio = normalizedAudio;
+      cachedSubs = normalizedSubs;
+    }
+
     // Update DB if newly available
     if (liveAvailable && media.status !== 'available') {
       await prisma.media.update({ where: { id: media.id }, data: { status: 'available' } });
@@ -254,8 +275,11 @@ export async function mediaRoutes(app: FastifyInstance) {
     if (sonarrSeasonStats) result.sonarrSeasons = sonarrSeasonStats;
     if (liveAvailable) result.inLibrary = true;
     if (activeQualityOptionIds.length > 0) result.activeQualityOptionIds = activeQualityOptionIds;
-    if (audioLanguages) result.audioLanguages = normalizeLanguages(audioLanguages);
-    if (subtitleLanguages) result.subtitleLanguages = normalizeLanguages(subtitleLanguages);
+    // Use cached languages (from DB) or freshly computed ones
+    const finalAudio = cachedAudio || (audioLanguages ? normalizeLanguages(audioLanguages) : null);
+    const finalSubs = cachedSubs || (subtitleLanguages ? normalizeLanguages(subtitleLanguages) : null);
+    if (finalAudio) result.audioLanguages = finalAudio;
+    if (finalSubs) result.subtitleLanguages = finalSubs;
     return result;
   });
 
