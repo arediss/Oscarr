@@ -132,7 +132,7 @@ export function KeywordsTab() {
   useEffect(() => setPage(0), [search]);
 
   // Derive available tags from current keywords
-  const allTags = [...new Set(keywords.map((k) => k.tag).filter((t): t is string => !!t))].sort();
+  const allTags = [...new Set(keywords.map((k) => k.tag).filter((t): t is string => !!t))].sort((a, b) => a.localeCompare(b));
 
   async function updateTag(tmdbId: number, tag: string | null) {
     try {
