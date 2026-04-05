@@ -75,12 +75,13 @@ export default function MediaDetailPage({ type }: Props) {
     if (data.activeQualityOptionIds) setActiveQualityOptionIds(data.activeQualityOptionIds as number[]);
     if (data.audioLanguages) setAudioLanguages(data.audioLanguages as string[]);
     if (data.subtitleLanguages) setSubtitleLanguages(data.subtitleLanguages as string[]);
+    if (data.nsfw && id) addNsfwIds([parseInt(id, 10)]);
     // Update global status cache so list pages reflect the latest state on back navigation
     if (data.status && id) {
       const tmdbId = parseInt(id, 10);
       if (tmdbId) updateMediaStatusCache(tmdbId, type, data.status as string);
     }
-  }, [id, type]);
+  }, [id, type, addNsfwIds]);
 
   useEffect(() => {
     api.get('/app/quality-options').then(({ data }) => setQualityOptions(data)).catch(() => {});

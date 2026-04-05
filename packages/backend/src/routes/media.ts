@@ -280,6 +280,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     const finalSubs = cachedSubs || (subtitleLanguages ? normalizeLanguages(subtitleLanguages) : null);
     if (finalAudio) result.audioLanguages = finalAudio;
     if (finalSubs) result.subtitleLanguages = finalSubs;
+    if (media.contentRating && isMatureRating(media.contentRating)) result.nsfw = true;
     return result;
   });
 
