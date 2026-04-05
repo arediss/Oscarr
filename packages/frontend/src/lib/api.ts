@@ -45,16 +45,7 @@ function showErrorToast(message: string) {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Don't redirect to login for setup routes (handled by InstallPage)
-      const url = error.config?.url || '';
-      const isSetupRoute = url.startsWith('/setup/') || url === '/setup';
-      if (!isSetupRoute) {
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
-      }
-    }
+    // 401 handling is done by AuthContext + InstallGuard, not here
     if (error.response?.status === 403) {
       showErrorToast(i18n.t('common.forbidden', 'Access denied'));
     }
