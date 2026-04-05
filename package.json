@@ -12,7 +12,8 @@
     "build": "npm run build --workspace=packages/backend && npm run build --workspace=packages/frontend",
     "db:push": "npm run db:push --workspace=packages/backend",
     "db:generate": "npm run db:generate --workspace=packages/backend",
-    "db:studio": "npm run db:studio --workspace=packages/backend"
+    "db:studio": "npm run db:studio --workspace=packages/backend",
+    "db:seed": "npm run db:seed --workspace=packages/backend"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
