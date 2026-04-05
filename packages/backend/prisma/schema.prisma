@@ -83,6 +83,7 @@ model Media {
   seasons             Season[]
 
   @@unique([tmdbId, mediaType])
+  @@index([tvdbId])
 }
 
 model Season {
@@ -197,7 +198,7 @@ model FolderRule {
   id            Int       @id @default(autoincrement())
   name          String    // Display name (e.g. "Animes", "Documentaires Film")
   priority      Int       @default(0) // Lower = evaluated first
-  mediaType     String    // "movie" | "tv" | "all"
+  mediaType     String    // "movie" | "tv"
   conditions    String    // JSON array: [{ field, operator, value }]
   folderPath    String    // Target root folder path
   seriesType    String?   // Sonarr series type override: "anime" | "standard" | "daily"
