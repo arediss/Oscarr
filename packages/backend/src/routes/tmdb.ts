@@ -41,7 +41,7 @@ async function trackAndFlagNsfw(
       await trackKeywordsFromDetails(item.id, mt, details).catch(() => {});
 
       // Check rating
-      if (isMatureRating(extractContentRating(details))) {
+      if (isMatureRating(await extractContentRating(details))) {
         nsfwIds.push(item.id);
         return;
       }
