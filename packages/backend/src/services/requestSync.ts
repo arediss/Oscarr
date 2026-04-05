@@ -4,9 +4,7 @@ import { getSonarrAsync } from './sonarr.js';
 import { getServiceConfig } from '../utils/services.js';
 
 export async function cleanupOrphanedRequests(): Promise<{ deleted: number }> {
-  const result = await prisma.$executeRawUnsafe(
-    `DELETE FROM MediaRequest WHERE userId NOT IN (SELECT id FROM User) OR mediaId NOT IN (SELECT id FROM Media)`
-  );
+  const result = await prisma.$executeRaw`DELETE FROM MediaRequest WHERE userId NOT IN (SELECT id FROM User) OR mediaId NOT IN (SELECT id FROM Media)`;
   return { deleted: result };
 }
 
