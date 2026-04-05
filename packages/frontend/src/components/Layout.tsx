@@ -161,8 +161,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       <nav
         className={clsx(
-          'fixed left-0 right-0 z-50 transition-all duration-300',
-          scrolled ? 'glass border-none' : 'bg-transparent',
+          'fixed left-0 right-0 z-50 transition-[background-color,backdrop-filter] duration-300',
+          scrolled ? 'bg-ndp-surface/80 backdrop-blur-xl' : 'bg-transparent',
         )}
         style={{ top: `${topOffset * 4}px` }}
       >
