@@ -45,6 +45,7 @@ export default function MediaDetailPage({ type }: Props) {
   const [recommendations, setRecommendations] = useState<TmdbMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
+  const [justRequested, setJustRequested] = useState(false);
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
   const [scrollOpacity, setScrollOpacity] = useState(0);
   const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string; position: number }[]>([]);
@@ -98,6 +99,7 @@ export default function MediaDetailPage({ type }: Props) {
     setSubtitleLanguages([]);
     setRevealed(false);
     setShowNsfwModal(false);
+    setJustRequested(false);
 
     async function fetchData() {
       try {
@@ -137,6 +139,7 @@ export default function MediaDetailPage({ type }: Props) {
         body.qualityOptionId = selectedQuality;
       }
       await api.post('/requests', body);
+      setJustRequested(true);
       invalidateMediaStatus(media.id, type);
       const { data } = await api.get(`/media/tmdb/${id}/${type}`);
       applyDbData(data);
@@ -224,7 +227,7 @@ export default function MediaDetailPage({ type }: Props) {
   const isSearching = dbMedia?.status === 'searching';
   const isDownloading = !!download;
   const activeRequests = dbMedia?.requests?.filter(
-    (r) => ['pending', 'approved', 'processing', 'available'].includes(r.status)
+    (r) => ['pending', 'approved', 'processing'].includes(r.status)
   ) || [];
   const takenQualityIds = new Set<number>([
     ...activeRequests.map(r => r.qualityOptionId).filter(Boolean) as number[],
@@ -447,7 +450,7 @@ export default function MediaDetailPage({ type }: Props) {
               ) : userHasRequest && !canRequestNewQuality && !isPartiallyAvailable ? (
                 <button disabled className="btn-success flex items-center gap-2 cursor-default">
                   <Check className="w-4 h-4" />
-                  {t('status.already_requested')}
+                  {justRequested ? t('status.request_sent') : t('status.already_requested')}
                 </button>
               ) : isPartiallyAvailable ? (
                 searchMissingState === 'searching' ? (
@@ -894,16 +897,23 @@ function CollectionSection({ collection }: { collection: { id: number; name: str
   };
 
   const availableCount = parts.filter((p) => statuses[`movie:${p.id}`]?.status === 'available').length;
+  const handledCount = parts.filter((p) => {
+    const s = statuses[`movie:${p.id}`];
+    return s?.status === 'available' || (s?.requestStatus && ['pending', 'approved', 'processing'].includes(s.requestStatus));
+  }).length;
   const totalCount = parts.length;
+  const allHandled = totalCount > 0 && handledCount === totalCount;
   const allAvailable = totalCount > 0 && availableCount === totalCount;
-  const someAvailable = availableCount > 0 && availableCount < totalCount;
+  const someHandled = handledCount > 0 && handledCount < totalCount;
 
   const buttonLabel = result
     ? t('media.requested_count', { requested: result.requested, skipped: result.skipped })
     : allAvailable
     ? t('media.collection_complete')
-    : someAvailable
-    ? t('media.complete_collection', { count: totalCount - availableCount })
+    : allHandled
+    ? t('media.collection_in_progress')
+    : someHandled
+    ? t('media.complete_collection', { count: totalCount - handledCount })
     : t('media.request_collection');
 
   return (
@@ -912,15 +922,15 @@ function CollectionSection({ collection }: { collection: { id: number; name: str
         <div className="flex items-center gap-3 min-w-0">
           <h3 className="text-lg font-bold text-ndp-text truncate">{collection.name}</h3>
           {!loading && (
-            <span className="text-xs text-ndp-text-dim flex-shrink-0">{availableCount}/{totalCount}</span>
+            <span className="text-xs text-ndp-text-dim flex-shrink-0">{handledCount}/{totalCount}</span>
           )}
         </div>
         {!allAvailable && (
-          <button onClick={requestAll} disabled={requesting || !!result || allAvailable}
+          <button onClick={requestAll} disabled={requesting || !!result || allHandled}
             className={clsx('text-sm flex items-center gap-2 flex-shrink-0',
-              result ? 'btn-success cursor-default' : someAvailable ? 'btn-secondary' : 'btn-primary'
+              allHandled ? 'btn-secondary opacity-60 cursor-default' : result ? 'btn-success cursor-default' : someHandled ? 'btn-secondary' : 'btn-primary'
             )}>
-            {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : result ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : result ? <Check className="w-4 h-4" /> : allHandled ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             {buttonLabel}
           </button>
         )}
@@ -935,11 +945,12 @@ function CollectionSection({ collection }: { collection: { id: number; name: str
           {parts.map((movie) => {
             const status = statuses[`movie:${movie.id}`];
             const isAvail = status?.status === 'available';
+            const isRequested = !isAvail && status?.requestStatus && ['pending', 'approved', 'processing'].includes(status.requestStatus);
             return (
               <Link key={movie.id} to={`/movie/${movie.id}`} className="flex-shrink-0 w-[120px] group">
                 <div className="aspect-[2/3] rounded-xl overflow-hidden bg-ndp-surface-light mb-1.5 relative">
                   {movie.poster_path ? (
-                    <img src={posterUrl(movie.poster_path, 'w185')} alt="" className={clsx('w-full h-full object-cover group-hover:scale-105 transition-transform', !isAvail && status && 'opacity-50')} />
+                    <img src={posterUrl(movie.poster_path, 'w185')} alt="" className={clsx('w-full h-full object-cover group-hover:scale-105 transition-transform', !isAvail && !isRequested && status && 'opacity-50')} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center"><Film className="w-6 h-6 text-ndp-text-dim" /></div>
                   )}
@@ -948,7 +959,12 @@ function CollectionSection({ collection }: { collection: { id: number; name: str
                       <Check className="w-3 h-3 text-white" />
                     </div>
                   )}
-                  {status && !isAvail && status.status !== 'unknown' && (
+                  {isRequested && (
+                    <div className="absolute top-1.5 right-1.5 bg-ndp-accent/80 rounded-full p-0.5">
+                      <Loader2 className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                  {status && !isAvail && !isRequested && status.status !== 'unknown' && (
                     <div className="absolute top-1.5 right-1.5 bg-ndp-warning/80 rounded-full p-0.5">
                       <Plus className="w-3 h-3 text-white" />
                     </div>

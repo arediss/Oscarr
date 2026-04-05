@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, XCircle, Pencil, Copy, Power, GripVertical } from 'lucide-react';
+import { Plus, Trash2, XCircle, Pencil, Copy, Power, GripVertical, AlertTriangle } from 'lucide-react';
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import type { RootFolder } from '@/types';
@@ -38,6 +38,7 @@ export function RoutingRulesTab() {
   const [defaultMovieFolder, setDefaultMovieFolder] = useState('');
   const [defaultTvFolder, setDefaultTvFolder] = useState('');
   const [loading, setLoading] = useState(true);
+  const [unreachableServices, setUnreachableServices] = useState<string[]>([]);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
@@ -79,16 +80,23 @@ export function RoutingRulesTab() {
 
         // Fetch rootfolders from each Radarr/Sonarr service instance
         const folders: { path: string; label: string; serviceId: number | null }[] = [];
+        const failed: string[] = [];
         const folderResults = await Promise.all(
-          arrServices.map(s => api.get(`/admin/services/${s.id}/rootfolders`).catch(() => ({ data: [] })))
+          arrServices.map(s => api.get(`/admin/services/${s.id}/rootfolders`).catch(() => ({ data: [], _failed: true })))
         );
         arrServices.forEach((svc, i) => {
+          const res = folderResults[i] as { data: RootFolder[]; _failed?: boolean };
+          if (res._failed || res.data.length === 0) {
+            failed.push(svc.name);
+            return;
+          }
           const url = svc.config?.url || '';
-          for (const f of (folderResults[i].data as RootFolder[])) {
+          for (const f of res.data) {
             folders.push({ path: f.path, label: `${f.path} — ${svc.name}${url ? ` (${url})` : ''}`, serviceId: svc.id });
           }
         });
         setLabeledFolders(folders);
+        setUnreachableServices(failed);
       } catch (err) { console.error(err); }
       finally { setLoading(false); }
     }
@@ -199,6 +207,15 @@ export function RoutingRulesTab() {
         </button>
       </div>
       <p className="text-xs text-ndp-text-dim mb-4">{t('admin.paths.rules_help')}</p>
+
+      {unreachableServices.length > 0 && (
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-ndp-warning/10 border border-ndp-warning/20 mb-4">
+          <AlertTriangle className="w-4 h-4 text-ndp-warning flex-shrink-0" />
+          <p className="text-sm text-ndp-warning">
+            {t('admin.paths.services_unreachable', { services: unreachableServices.join(', ') })}
+          </p>
+        </div>
+      )}
 
       <div className="space-y-3">
         {/* Rules */}

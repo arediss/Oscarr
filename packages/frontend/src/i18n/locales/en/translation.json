@@ -60,6 +60,7 @@
   "status.searching_long": "Searching...",
   "status.partially_available": "Partially available",
   "status.already_requested": "Already requested",
+  "status.request_sent": "Request sent!",
   "status.downloading_long": "Downloading...",
   "status.connected": "Connected",
   "status.connection_failed": "Connection failed",
@@ -197,6 +198,7 @@
   "media.season_one": "{{count}} season",
   "media.season_other": "{{count}} seasons",
   "media.collection_complete": "Collection complete",
+  "media.collection_in_progress": "Collection in progress...",
   "media.complete_collection": "Complete collection ({{count}} missing)",
   "media.request_collection": "Request entire collection",
   "media.requested_count": "{{requested}} requested, {{skipped}} skipped",
@@ -347,6 +349,7 @@
   "admin.paths.duplicate": "Duplicate",
   "admin.paths.confirm_delete_title": "Delete this rule?",
   "admin.paths.confirm_delete_desc": "This action cannot be undone. The routing rule will be permanently deleted.",
+  "admin.paths.services_unreachable": "Unable to reach: {{services}}. Check your configuration in the Services tab.",
 
   "admin.notifications.event.request_new": "New request",
   "admin.notifications.event.request_approved": "Request approved",
