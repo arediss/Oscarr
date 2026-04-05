@@ -53,7 +53,7 @@ export async function syncMissingKeywords(): Promise<{ synced: number; errors: n
           : await getTvDetails(media.tmdbId);
 
         const keywords = extractKeywords(details);
-        const contentRating = extractContentRating(details);
+        const contentRating = await extractContentRating(details);
         await upsertKeywordsAndRating(media.id, keywords, contentRating);
         synced++;
       } catch (err) {
@@ -85,7 +85,7 @@ export async function trackKeywordsFromDetails(
   details: TmdbMovie | TmdbTv,
 ): Promise<void> {
   const keywords = extractKeywords(details);
-  const contentRating = extractContentRating(details);
+  const contentRating = await extractContentRating(details);
 
   for (const kw of keywords) {
     await prisma.keyword.upsert({

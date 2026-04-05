@@ -155,7 +155,9 @@ function getRatingCountries(): string[] {
 }
 
 /** Extract the most relevant content rating from movie or TV details */
-export function extractContentRating(details: TmdbMovie | TmdbTv): string | null {
+export async function extractContentRating(details: TmdbMovie | TmdbTv): Promise<string | null> {
+  // Ensure instance languages are loaded before determining country priority
+  await getInstanceLanguages();
   const movie = details as TmdbMovie;
   const tv = details as TmdbTv;
 
