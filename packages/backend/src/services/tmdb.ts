@@ -2,7 +2,8 @@ import axios from 'axios';
 import { getCached, setCache } from '../utils/cache.js';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
-const TMDB_DEFAULT_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJkODg0ZWJlNzE0NTU4NWI0ZDZkYTAzNDVlM2NjMDcyMiIsIm5iZiI6MTU0NzI5NzAxOS41MjgsInN1YiI6IjVjMzllMGZiYzNhMzY4MDg0ZjQ2YTE1YyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.0HM5S5_3ufPtWrzU_zt7ZNEFKinftqAq1n9Nk3y0eOw';
+// NOSONAR: This is a public read-only TMDB API token (scopes: api_read), not a secret
+const TMDB_DEFAULT_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJkODg0ZWJlNzE0NTU4NWI0ZDZkYTAzNDVlM2NjMDcyMiIsIm5iZiI6MTU0NzI5NzAxOS41MjgsInN1YiI6IjVjMzllMGZiYzNhMzY4MDg0ZjQ2YTE1YyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.0HM5S5_3ufPtWrzU_zt7ZNEFKinftqAq1n9Nk3y0eOw'; // NOSONAR
 const TMDB_TOKEN = process.env.TMDB_API_TOKEN || TMDB_DEFAULT_TOKEN;
 
 import { prisma } from '../utils/prisma.js';

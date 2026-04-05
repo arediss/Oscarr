@@ -188,6 +188,50 @@ export function NotificationsTab() {
     }
   };
 
+  const renderProviderModal = () => {
+    const provider = providers.find(p => p.id === editingProvider);
+    if (!provider) return null;
+    return createPortal(
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onMouseDown={() => setEditingProvider(null)}>
+        <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
+          <h3 className="text-lg font-bold text-ndp-text mb-4">{t(provider.nameKey)}</h3>
+          <div className="space-y-4">
+            {provider.settingsSchema.map((field) => (
+              <div key={field.key}>
+                <label className="text-xs text-ndp-text-dim block mb-1">{t(field.labelKey)}</label>
+                <div className="relative">
+                  <input
+                    type={field.type === 'password' && !showSecrets[field.key] ? 'password' : 'text'}
+                    value={editSettings[field.key] || ''}
+                    onChange={(e) => setEditSettings(prev => ({ ...prev, [field.key]: e.target.value }))}
+                    placeholder={field.placeholder}
+                    className="input w-full text-sm pr-10"
+                  />
+                  {field.type === 'password' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSecrets(prev => ({ ...prev, [field.key]: !prev[field.key] }))}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text"
+                    >
+                      {showSecrets[field.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-3 mt-6">
+            <button onClick={() => setEditingProvider(null)} className="btn-secondary text-sm flex-1">{t('common.cancel')}</button>
+            <button onClick={saveProviderConfig} className="btn-primary text-sm flex-1 flex items-center justify-center gap-2">
+              <Save className="w-4 h-4" /> {t('common.save')}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+
   if (loading) return <Spinner />;
 
   return (
@@ -290,49 +334,7 @@ export function NotificationsTab() {
       </div>
 
       {/* Provider config modal */}
-      {editingProvider && (() => {
-        const provider = providers.find(p => p.id === editingProvider);
-        if (!provider) return null;
-        return createPortal(
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onMouseDown={() => setEditingProvider(null)}>
-            <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-ndp-text mb-4">{t(provider.nameKey)}</h3>
-              <div className="space-y-4">
-                {provider.settingsSchema.map((field) => (
-                  <div key={field.key}>
-                    <label className="text-xs text-ndp-text-dim block mb-1">{t(field.labelKey)}</label>
-                    <div className="relative">
-                      <input
-                        type={field.type === 'password' && !showSecrets[field.key] ? 'password' : 'text'}
-                        value={editSettings[field.key] || ''}
-                        onChange={(e) => setEditSettings(prev => ({ ...prev, [field.key]: e.target.value }))}
-                        placeholder={field.placeholder}
-                        className="input w-full text-sm pr-10"
-                      />
-                      {field.type === 'password' && (
-                        <button
-                          type="button"
-                          onClick={() => setShowSecrets(prev => ({ ...prev, [field.key]: !prev[field.key] }))}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text"
-                        >
-                          {showSecrets[field.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button onClick={() => setEditingProvider(null)} className="btn-secondary text-sm flex-1">{t('common.cancel')}</button>
-                <button onClick={saveProviderConfig} className="btn-primary text-sm flex-1 flex items-center justify-center gap-2">
-                  <Save className="w-4 h-4" /> {t('common.save')}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        );
-      })()}
+      {editingProvider && renderProviderModal()}
     </AdminTabLayout>
   );
 }
