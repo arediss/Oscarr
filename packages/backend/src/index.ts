@@ -50,6 +50,10 @@ async function start() {
   await app.register(cookie);
   await app.register(rateLimit, { global: false });
 
+  // Hydrate instance language cache before any route handles requests
+  const { getInstanceLanguages } = await import('./services/tmdb.js');
+  await getInstanceLanguages();
+
   // Register RBAC middleware (central access control for all routes)
   rbacPlugin(app);
 

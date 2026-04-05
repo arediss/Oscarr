@@ -13,6 +13,13 @@ const DEFAULT_LANG = 'en';
 /** Get instance languages from AppSettings, cached for 5 min */
 let _cachedLangs: string[] | null = null;
 let _cachedAt = 0;
+
+/** Invalidate the in-memory language cache (call after language settings change) */
+export function invalidateLanguageCache(): void {
+  _cachedLangs = null;
+  _cachedAt = 0;
+}
+
 export async function getInstanceLanguages(): Promise<string[]> {
   if (_cachedLangs && Date.now() - _cachedAt < 300_000) return _cachedLangs;
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 }, select: { instanceLanguages: true } });
