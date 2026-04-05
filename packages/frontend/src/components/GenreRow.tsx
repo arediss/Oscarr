@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -83,7 +83,7 @@ export const ALL_GENRES: GenreItem[] = [
   { id: 37, nameKey: 'genre.western', mediaType: 'movie' },
 ];
 
-export default function GenreRow() {
+function GenreRow() {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [backdrops, setBackdrops] = useState<Record<number, string | null>>({});
@@ -94,12 +94,6 @@ export default function GenreRow() {
       .then(({ data }) => {
         if (cancelled) return;
         setBackdrops(data);
-        for (const path of Object.values(data)) {
-          if (path) {
-            const img = new Image();
-            img.src = backdropUrl(path, 'w780');
-          }
-        }
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -115,7 +109,7 @@ export default function GenreRow() {
   };
 
   return (
-    <section className="relative group/row">
+    <section className="relative group/row" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 160px' }}>
       <h2 className="text-xl font-bold text-ndp-text mb-4 px-4 sm:px-8">{t('genre.title')}</h2>
 
       <div className="relative">
@@ -147,7 +141,7 @@ export default function GenreRow() {
                 className="flex-shrink-0 group/card"
               >
                 <div
-                  className={`w-[180px] sm:w-[200px] h-[100px] sm:h-[110px] rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center relative overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-xl`}
+                  className={`w-[180px] sm:w-[200px] h-[100px] sm:h-[110px] rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center relative overflow-hidden will-change-transform transition-[transform,box-shadow] duration-300 hover:scale-105 hover:shadow-xl`}
                 >
                   {bdPath && (
                     <>
@@ -177,3 +171,5 @@ export default function GenreRow() {
     </section>
   );
 }
+
+export default memo(GenreRow);
