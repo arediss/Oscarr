@@ -55,7 +55,10 @@ export async function adminRoutes(app: FastifyInstance) {
         data: { id: 1, updatedAt: new Date() },
       });
     }
-    return settings;
+    return {
+      ...settings,
+      instanceLanguages: JSON.parse(settings.instanceLanguages),
+    };
   });
 
   app.put('/settings', {
@@ -76,6 +79,7 @@ export async function adminRoutes(app: FastifyInstance) {
           supportEnabled: { type: 'boolean', description: 'Enable the support/ticket system' },
           calendarEnabled: { type: 'boolean', description: 'Enable the calendar feature' },
           siteName: { type: 'string', description: 'Custom site name' },
+          instanceLanguages: { type: 'array', items: { type: 'string' }, description: 'Instance languages (ISO 639-1 codes)' },
         },
       },
     },
@@ -95,6 +99,7 @@ export async function adminRoutes(app: FastifyInstance) {
       supportEnabled?: boolean;
       calendarEnabled?: boolean;
       siteName?: string;
+      instanceLanguages?: string[];
     };
 
     const settings = await prisma.appSettings.upsert({
@@ -113,6 +118,7 @@ export async function adminRoutes(app: FastifyInstance) {
         supportEnabled: body.supportEnabled ?? undefined,
         calendarEnabled: body.calendarEnabled ?? undefined,
         siteName: body.siteName ?? undefined,
+        instanceLanguages: body.instanceLanguages ? JSON.stringify(body.instanceLanguages) : undefined,
       },
       create: {
         id: 1,
@@ -129,6 +135,7 @@ export async function adminRoutes(app: FastifyInstance) {
         supportEnabled: body.supportEnabled,
         calendarEnabled: body.calendarEnabled,
         siteName: body.siteName,
+        instanceLanguages: body.instanceLanguages ? JSON.stringify(body.instanceLanguages) : undefined,
         updatedAt: new Date(),
       },
     });
