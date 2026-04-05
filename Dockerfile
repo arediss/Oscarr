@@ -47,14 +47,16 @@ COPY --from=builder /app/packages/frontend/dist packages/frontend/dist
 # Copy root package.json (needed for version check)
 COPY package.json .
 
-# Create data directory for SQLite
-RUN mkdir -p /data
+# Create non-root user and data directory
+RUN addgroup -S oscarr && adduser -S oscarr -G oscarr && mkdir -p /data && chown oscarr:oscarr /data
 
 ENV NODE_ENV=production
 ENV DATABASE_URL=file:///data/oscarr.db
 ENV PORT=3456
 
 EXPOSE 3456
+
+USER oscarr
 
 # Apply pending migrations + start
 CMD npx prisma migrate deploy --schema=packages/backend/prisma/schema.prisma && \
