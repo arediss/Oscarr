@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, memo } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import MediaCard, { MediaCardSkeleton } from './MediaCard';
@@ -18,7 +18,7 @@ const SIZE_CLASSES = {
   large: 'w-[180px] sm:w-[210px] lg:w-[240px]',
 };
 
-export default function MediaRow({ title, media, loading, href, size = 'default' }: MediaRowProps) {
+function MediaRow({ title, media, loading, href, size = 'default' }: MediaRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const statuses = useMediaStatus(media);
 
@@ -32,7 +32,7 @@ export default function MediaRow({ title, media, loading, href, size = 'default'
   };
 
   return (
-    <section className="relative group/row">
+    <section className="relative group/row" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 300px' }}>
       <div className="flex items-center gap-2 mb-4 px-4 sm:px-8">
         <h2 className="text-xl font-bold text-ndp-text">{title}</h2>
         {href && (
@@ -86,3 +86,5 @@ export default function MediaRow({ title, media, loading, href, size = 'default'
     </section>
   );
 }
+
+export default memo(MediaRow);
