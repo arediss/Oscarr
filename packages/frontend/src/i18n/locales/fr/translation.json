@@ -60,6 +60,7 @@
   "status.searching_long": "Recherche en cours",
   "status.partially_available": "Partiellement disponible",
   "status.already_requested": "Déjà demandé",
+  "status.request_sent": "Demande envoyée !",
   "status.downloading_long": "Téléchargement en cours",
   "status.connected": "Connecté",
   "status.connection_failed": "Connexion échouée",
@@ -197,6 +198,7 @@
   "media.season_one": "{{count}} saison",
   "media.season_other": "{{count}} saisons",
   "media.collection_complete": "Collection complète",
+  "media.collection_in_progress": "Collection en cours...",
   "media.complete_collection": "Compléter la collection ({{count}} manquants)",
   "media.request_collection": "Demander toute la collection",
   "media.requested_count": "{{requested}} demandés, {{skipped}} ignorés",
@@ -347,6 +349,7 @@
   "admin.paths.duplicate": "Dupliquer",
   "admin.paths.confirm_delete_title": "Supprimer cette règle ?",
   "admin.paths.confirm_delete_desc": "Cette action est irréversible. La règle de routage sera définitivement supprimée.",
+  "admin.paths.services_unreachable": "Impossible de joindre : {{services}}. Vérifiez la configuration dans l'onglet Services.",
 
   "admin.notifications.event.request_new": "Nouvelle demande",
   "admin.notifications.event.request_approved": "Demande approuvée",
