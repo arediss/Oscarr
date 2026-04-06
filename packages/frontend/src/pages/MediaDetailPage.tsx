@@ -22,9 +22,11 @@ import { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useNsfwFilter } from '@/hooks/useNsfwFilter';
 import MediaRow from '@/components/MediaRow';
+import CollectionSection from '@/components/CollectionSection';
 import { PluginSlot } from '@/plugins/PluginSlot';
-import { useDownloadForMedia, useOnDownloadComplete } from '@/hooks/useDownloads';
-import { invalidateMediaStatus, updateMediaStatusCache } from '@/hooks/useMediaStatus';
+import { useMediaDetailData } from '@/hooks/useMediaDetailData';
+import { useMediaRequestActions } from '@/hooks/useMediaRequestActions';
+import { useEpisodeModal } from '@/hooks/useEpisodeModal';
 import type { TmdbMedia, Media } from '@/types';
 import { ACTIVE_REQUEST_STATUSES } from '@/utils/requestStatus';
 
@@ -36,24 +38,10 @@ export default function MediaDetailPage({ type }: Props) {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const { isNsfw, addNsfwIds, disableBlur } = useNsfwFilter();
+  const { isNsfw, disableBlur } = useNsfwFilter();
   const [revealed, setRevealed] = useState(false);
   const [showNsfwModal, setShowNsfwModal] = useState(false);
-  const [media, setMedia] = useState<TmdbMedia | null>(null);
-  const [dbMedia, setDbMedia] = useState<Media | null>(null);
-  const [sonarrSeasons, setSonarrSeasons] = useState<{ seasonNumber: number; episodeFileCount: number; episodeCount: number; totalEpisodeCount: number }[]>([]);
-  const [inLibrary, setInLibrary] = useState(false);
-  const [recommendations, setRecommendations] = useState<TmdbMedia[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [requesting, setRequesting] = useState(false);
-  const [justRequested, setJustRequested] = useState(false);
-  const [selectedSeasons, setSelectedSeasons] = useState<number[]>([]);
   const [scrollOpacity, setScrollOpacity] = useState(0);
-  const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string; position: number }[]>([]);
-  const [selectedQuality, setSelectedQuality] = useState<number | null>(null);
-  const [activeQualityOptionIds, setActiveQualityOptionIds] = useState<number[]>([]);
-  const [audioLanguages, setAudioLanguages] = useState<string[]>([]);
-  const [subtitleLanguages, setSubtitleLanguages] = useState<string[]>([]);
 
   const handleScroll = useCallback(() => {
     const scrollY = window.scrollY;
@@ -68,180 +56,39 @@ export default function MediaDetailPage({ type }: Props) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
 
-  const applyDbData = useCallback((data: Record<string, unknown>) => {
-    if (data.id) setDbMedia(data as unknown as Media);
-    if (data.sonarrSeasons) setSonarrSeasons(data.sonarrSeasons as typeof sonarrSeasons);
-    if (data.inLibrary) setInLibrary(true);
-    if (data.status === 'available' && !data.id) setInLibrary(true);
-    if (data.activeQualityOptionIds) setActiveQualityOptionIds(data.activeQualityOptionIds as number[]);
-    if (data.audioLanguages) setAudioLanguages(data.audioLanguages as string[]);
-    if (data.subtitleLanguages) setSubtitleLanguages(data.subtitleLanguages as string[]);
-    if (data.nsfw && id) addNsfwIds([parseInt(id, 10)]);
-    // Update global status cache so list pages reflect the latest state on back navigation
-    if (data.status && id) {
-      const tmdbId = parseInt(id, 10);
-      if (tmdbId) updateMediaStatusCache(tmdbId, type, data.status as string);
-    }
-  }, [id, type, addNsfwIds]);
+  const {
+    media, dbMedia, sonarrSeasons, inLibrary, recommendations,
+    loading, qualityOptions, activeQualityOptionIds,
+    audioLanguages, subtitleLanguages, download, refreshDbData,
+  } = useMediaDetailData(id, type);
 
-  useEffect(() => {
-    api.get('/app/quality-options').then(({ data }) => setQualityOptions(data)).catch(() => {});
-  }, []);
+  const {
+    requesting, justRequested, requestError,
+    selectedSeasons, setSelectedSeasons,
+    selectedQuality, setSelectedQuality,
+    searchMissingState, searchMissingError,
+    handleRequest, handleSearchMissing,
+    resetOnNavigation,
+  } = useMediaRequestActions(media, id, type, refreshDbData);
 
+  const {
+    episodeModalOpen, openEpisodeModal, closeEpisodeModal,
+    episodeCache, expandedSeason, loadingSeason, toggleSeason,
+  } = useEpisodeModal(media?.id);
+
+  // Reset local UI state on navigation
   useEffect(() => {
-    setLoading(true);
-    setMedia(null);
-    // Keep dbMedia until fresh data arrives (prevents button flash)
-    setSonarrSeasons([]);
-    setInLibrary(false);
-    setSelectedSeasons([]);
-    setSelectedQuality(null);
-    setActiveQualityOptionIds([]);
-    setAudioLanguages([]);
-    setSubtitleLanguages([]);
     setRevealed(false);
     setShowNsfwModal(false);
-    setJustRequested(false);
+    resetOnNavigation();
+  }, [id, type]);
 
-    async function fetchData() {
-      // 1. DB + live check first (fast with timeout) — resolves button state immediately
-      try {
-        const { data } = await api.get(`/media/tmdb/${id}/${type}`);
-        applyDbData(data);
-        if (!data.id) setDbMedia(null);
-      } catch {
-        setDbMedia(null);
-      }
-
-      // 2. TMDB details (may be cached 24h on backend)
-      try {
-        const { data } = await api.get(`/tmdb/${type}/${id}`);
-        setMedia(data);
-      } catch (err) {
-        console.error('Failed to fetch media details:', err);
-      } finally {
-        setLoading(false);
-      }
-
-      // 3. Recommendations (non-blocking)
-      api.get(`/tmdb/${type}/${id}/recommendations`).then(({ data }) => {
-        setRecommendations(data.results?.map((r: TmdbMedia) => ({ ...r, media_type: type })) || []);
-        if (data.nsfwTmdbIds?.length) addNsfwIds(data.nsfwTmdbIds);
-      }).catch(() => {});
-    }
-    fetchData();
-  }, [id, type, applyDbData]);
-
-  const [requestError, setRequestError] = useState('');
-
-  const handleRequest = async () => {
-    if (!media) return;
-    setRequesting(true);
-    try {
-      const body: Record<string, unknown> = { tmdbId: media.id, mediaType: type };
-      if (type === 'tv' && selectedSeasons.length > 0) {
-        body.seasons = selectedSeasons;
-      }
-      if (selectedQuality) {
-        body.qualityOptionId = selectedQuality;
-      }
-      const { data: reqData } = await api.post('/requests', body);
-      if (reqData.sendError) {
-        setRequestError(t('status.request_send_failed', 'Request created but could not be sent to the service. It will be retried automatically.'));
-        setTimeout(() => setRequestError(''), 8000);
-      } else {
-        setJustRequested(true);
-      }
-      invalidateMediaStatus(media.id, type);
-      const { data } = await api.get(`/media/tmdb/${id}/${type}`);
-      applyDbData(data);
-    } catch (err: unknown) {
-      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      const message = apiError || (err instanceof Error ? err.message : t('common.error'));
-      setRequestError(message);
-      setTimeout(() => setRequestError(''), 5000);
-    } finally {
-      setRequesting(false);
-    }
-  };
-
-  const [searchMissingState, setSearchMissingState] = useState<'idle' | 'searching' | 'error'>('idle');
-  const [searchMissingError, setSearchMissingError] = useState('');
-
-  const handleSearchMissing = async () => {
-    if (!media) return;
-    setRequesting(true);
-    setSearchMissingError('');
-    try {
-      await api.post('/requests/search-missing', { tmdbId: media.id, mediaType: type });
-      setSearchMissingState('searching');
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setSearchMissingError(msg || t('common.error'));
-      setSearchMissingState('error');
-      setTimeout(() => { setSearchMissingState('idle'); setSearchMissingError(''); }, 5000);
-    } finally {
-      setRequesting(false);
-    }
-  };
-
-  // Episode modal — lazy load per season
-  interface EpisodeInfo { episodeNumber: number; title: string; airDateUtc: string | null; hasFile: boolean; monitored: boolean; quality: string | null; size: number | null }
-  const [episodeModalOpen, setEpisodeModalOpen] = useState(false);
-  const [episodeCache, setEpisodeCache] = useState<Record<number, EpisodeInfo[]>>({});
-  const [loadingSeason, setLoadingSeason] = useState<number | null>(null);
-  const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
-
-  const openEpisodeModal = () => {
-    setEpisodeModalOpen(true);
-    setExpandedSeason(null);
-    setEpisodeCache({});
-  };
-
-  const toggleSeason = async (seasonNumber: number) => {
-    if (expandedSeason === seasonNumber) {
-      setExpandedSeason(null);
-      return;
-    }
-    setExpandedSeason(seasonNumber);
-    if (episodeCache[seasonNumber]) return; // Already loaded
-    if (!media) return;
-    setLoadingSeason(seasonNumber);
-    try {
-      const { data } = await api.get(`/media/episodes?tmdbId=${media.id}&seasonNumber=${seasonNumber}`);
-      setEpisodeCache(prev => ({ ...prev, [seasonNumber]: data }));
-    } catch {
-      setEpisodeCache(prev => ({ ...prev, [seasonNumber]: [] }));
-    } finally {
-      setLoadingSeason(null);
-    }
-  };
-
-  useEffect(() => {
-    if (episodeModalOpen) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
-    }
-  }, [episodeModalOpen]);
-
-  const download = useDownloadForMedia(media?.id, type);
-
-  // Auto-refresh when download completes (disappears from queue)
-  useOnDownloadComplete(media?.id, () => {
-    if (!id || !media) return;
-    invalidateMediaStatus(media.id, type);
-    api.get(`/media/tmdb/${id}/${type}`).then(({ data }) => applyDbData(data)).catch(() => {});
-  });
-
-  // Ignore stale dbMedia from a previous page during navigation
-  const currentDbMedia = dbMedia && String(dbMedia.tmdbId) === id ? dbMedia : null;
-
-  const isAvailable = currentDbMedia?.status === 'available' || inLibrary;
-  const isPartiallyAvailable = !isAvailable && currentDbMedia?.status === 'processing' && type === 'tv';
-  const isUpcoming = currentDbMedia?.status === 'upcoming';
-  const isSearching = currentDbMedia?.status === 'searching';
+  const isAvailable = dbMedia?.status === 'available' || inLibrary;
+  const isPartiallyAvailable = !isAvailable && dbMedia?.status === 'processing' && type === 'tv';
+  const isUpcoming = dbMedia?.status === 'upcoming';
+  const isSearching = dbMedia?.status === 'searching';
   const isDownloading = !!download;
-  const activeRequests = currentDbMedia?.requests?.filter(
+  const activeRequests = dbMedia?.requests?.filter(
     (r) => (ACTIVE_REQUEST_STATUSES as readonly string[]).includes(r.status)
   ) || [];
   const takenQualityIds = new Set<number>([
@@ -685,7 +532,7 @@ export default function MediaDetailPage({ type }: Props) {
 
       {/* Episode details modal */}
       {episodeModalOpen && media && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in" onClick={() => setEpisodeModalOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in" onClick={closeEpisodeModal}>
           <div className="bg-ndp-bg rounded-2xl w-full max-w-2xl max-h-[85vh] mx-4 shadow-2xl shadow-black/60 overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             {/* Hero header with backdrop */}
             <div className="relative flex-shrink-0">
@@ -693,8 +540,8 @@ export default function MediaDetailPage({ type }: Props) {
                 <img src={backdropUrl(media.backdrop_path, 'w780')} alt="" className={clsx('w-full h-36 object-cover', nsfw && 'blur-3xl scale-110')} />
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-ndp-bg via-ndp-bg/60 to-transparent" />
-              {/* Close button — top right */}
-              <button onClick={() => setEpisodeModalOpen(false)} className="absolute top-3 right-3 p-2 text-white/60 hover:text-white rounded-xl hover:bg-black/20 backdrop-blur-sm transition-colors">
+              {/* Close button -- top right */}
+              <button onClick={closeEpisodeModal} className="absolute top-3 right-3 p-2 text-white/60 hover:text-white rounded-xl hover:bg-black/20 backdrop-blur-sm transition-colors">
                 <X className="w-5 h-5" />
               </button>
               {/* Title + availability */}
@@ -722,7 +569,7 @@ export default function MediaDetailPage({ type }: Props) {
               </div>
             </div>
 
-            {/* Seasons — collapsible, lazy loaded */}
+            {/* Seasons -- collapsible, lazy loaded */}
             <div className="overflow-y-auto flex-1">
               {(media.seasons || []).filter(s => s.season_number > 0).map((season) => {
                 const sonarrSeason = sonarrSeasons.find(ss => ss.seasonNumber === season.season_number);
@@ -865,122 +712,3 @@ export default function MediaDetailPage({ type }: Props) {
   );
 }
 
-function CollectionSection({ collection }: { collection: { id: number; name: string; poster_path: string | null } }) {
-  const { t } = useTranslation();
-  const [parts, setParts] = useState<TmdbMedia[]>([]);
-  const [statuses, setStatuses] = useState<Record<string, { status: string; requestStatus?: string }>>({});
-  const [loading, setLoading] = useState(true);
-  const [requesting, setRequesting] = useState(false);
-  const [result, setResult] = useState<{ requested: number; skipped: number; total: number } | null>(null);
-
-  useEffect(() => {
-    api.get(`/tmdb/collection/${collection.id}`)
-      .then(async ({ data }) => {
-        const movies = data.parts?.map((p: TmdbMedia) => ({ ...p, media_type: 'movie' })) || [];
-        setParts(movies);
-        // Batch check availability
-        if (movies.length > 0) {
-          try {
-            const { data: statusData } = await api.post('/media/batch-status', {
-              ids: movies.map((m: TmdbMedia) => ({ tmdbId: m.id, mediaType: 'movie' })),
-            });
-            setStatuses(statusData);
-          } catch { /* ignore */ }
-        }
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [collection.id]);
-
-  const requestAll = async () => {
-    setRequesting(true);
-    try {
-      const { data } = await api.post('/requests/collection', { collectionId: collection.id });
-      setResult(data);
-    } catch (err) { console.error(err); }
-    finally { setRequesting(false); }
-  };
-
-  const availableCount = parts.filter((p) => statuses[`movie:${p.id}`]?.status === 'available').length;
-  const handledCount = parts.filter((p) => {
-    const s = statuses[`movie:${p.id}`];
-    return s?.status === 'available' || (s?.requestStatus && (ACTIVE_REQUEST_STATUSES as readonly string[]).includes(s.requestStatus));
-  }).length;
-  const totalCount = parts.length;
-  const allHandled = totalCount > 0 && handledCount === totalCount;
-  const allAvailable = totalCount > 0 && availableCount === totalCount;
-  const someHandled = handledCount > 0 && handledCount < totalCount;
-
-  const buttonLabel = result
-    ? t('media.requested_count', { requested: result.requested, skipped: result.skipped })
-    : allAvailable
-    ? t('media.collection_complete')
-    : allHandled
-    ? t('media.collection_in_progress')
-    : someHandled
-    ? t('media.complete_collection', { count: totalCount - handledCount })
-    : t('media.request_collection');
-
-  return (
-    <div className="mt-12">
-      <div className="flex items-center justify-between mb-4 gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <h3 className="text-lg font-bold text-ndp-text truncate">{collection.name}</h3>
-          {!loading && (
-            <span className="text-xs text-ndp-text-dim flex-shrink-0">{handledCount}/{totalCount}</span>
-          )}
-        </div>
-        {!allAvailable && (
-          <button onClick={requestAll} disabled={requesting || !!result || allHandled}
-            className={clsx('text-sm flex items-center gap-2 flex-shrink-0',
-              allHandled ? 'btn-secondary opacity-60 cursor-default' : result ? 'btn-success cursor-default' : someHandled ? 'btn-secondary' : 'btn-primary'
-            )}>
-            {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : result ? <Check className="w-4 h-4" /> : allHandled ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            {buttonLabel}
-          </button>
-        )}
-        {allAvailable && (
-          <span className="btn-success cursor-default text-sm flex items-center gap-2 flex-shrink-0">
-            <Check className="w-4 h-4" /> {t('media.collection_complete')}
-          </span>
-        )}
-      </div>
-      {!loading && parts.length > 0 && (
-        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
-          {parts.map((movie) => {
-            const status = statuses[`movie:${movie.id}`];
-            const isAvail = status?.status === 'available';
-            const isRequested = !isAvail && status?.requestStatus && ['pending', 'approved', 'processing'].includes(status.requestStatus);
-            return (
-              <Link key={movie.id} to={`/movie/${movie.id}`} className="flex-shrink-0 w-[120px] group">
-                <div className="aspect-[2/3] rounded-xl overflow-hidden bg-ndp-surface-light mb-1.5 relative">
-                  {movie.poster_path ? (
-                    <img src={posterUrl(movie.poster_path, 'w185')} alt="" className={clsx('w-full h-full object-cover group-hover:scale-105 transition-transform', !isAvail && !isRequested && status && 'opacity-50')} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center"><Film className="w-6 h-6 text-ndp-text-dim" /></div>
-                  )}
-                  {isAvail && (
-                    <div className="absolute top-1.5 right-1.5 bg-ndp-success/80 rounded-full p-0.5">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                  {isRequested && (
-                    <div className="absolute top-1.5 right-1.5 bg-ndp-accent/80 rounded-full p-0.5">
-                      <Loader2 className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                  {status && !isAvail && !isRequested && status.status !== 'unknown' && (
-                    <div className="absolute top-1.5 right-1.5 bg-ndp-warning/80 rounded-full p-0.5">
-                      <Plus className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-ndp-text-muted truncate">{movie.title}</p>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}

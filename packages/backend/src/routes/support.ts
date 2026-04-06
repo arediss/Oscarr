@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { logEvent } from '../utils/logEvent.js';
-import { sendUserNotification } from '../services/userNotifications.js';
+import { safeUserNotify } from '../utils/safeNotify.js';
 
 export async function supportRoutes(app: FastifyInstance) {
   // List tickets (user sees own, admin sees all)
@@ -150,12 +150,12 @@ export async function supportRoutes(app: FastifyInstance) {
 
     // Notify ticket owner when an admin replies
     if (user.role === 'admin' && ticket.userId !== user.id) {
-      sendUserNotification(ticket.userId, {
+      safeUserNotify(ticket.userId, {
         type: 'support_reply',
         title: `Réponse sur votre ticket #${ticketId}`,
         message: content.trim().slice(0, 200),
         metadata: { ticketId },
-      }).catch(err => console.error('[UserNotification] Failed:', err));
+      });
     }
 
     return reply.status(201).send(message);

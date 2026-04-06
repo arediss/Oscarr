@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../utils/prisma.js';
-import { notificationRegistry } from '../../notifications/index.js';
 import { logEvent } from '../../utils/logEvent.js';
+import { safeNotify } from '../../utils/safeNotify.js';
 import { invalidateLanguageCache } from '../../services/tmdb.js';
 
 export async function settingsRoutes(app: FastifyInstance) {
@@ -163,7 +163,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       create: { id: 1, incidentBanner: banner || null, updatedAt: new Date() },
     });
     if (banner) {
-      notificationRegistry.send('incident_banner', { title: 'Incident', message: banner }).catch(err => console.error('[Notification] Failed:', err));
+      safeNotify('incident_banner', { title: 'Incident', message: banner });
     }
     return { ok: true };
   });
