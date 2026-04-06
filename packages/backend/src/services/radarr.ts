@@ -49,6 +49,7 @@ class RadarrService {
     this.api = axios.create({
       baseURL: `${url}/api/v3`,
       params: { apikey: apiKey },
+      timeout: 5000,
     });
   }
 

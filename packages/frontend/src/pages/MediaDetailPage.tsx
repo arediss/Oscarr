@@ -26,6 +26,7 @@ import { PluginSlot } from '@/plugins/PluginSlot';
 import { useDownloadForMedia, useOnDownloadComplete } from '@/hooks/useDownloads';
 import { invalidateMediaStatus, updateMediaStatusCache } from '@/hooks/useMediaStatus';
 import type { TmdbMedia, Media } from '@/types';
+import { ACTIVE_REQUEST_STATUSES } from '@/utils/requestStatus';
 
 interface Props {
   type: 'movie' | 'tv';
@@ -90,7 +91,7 @@ export default function MediaDetailPage({ type }: Props) {
   useEffect(() => {
     setLoading(true);
     setMedia(null);
-    setDbMedia(null);
+    // Keep dbMedia until fresh data arrives (prevents button flash)
     setSonarrSeasons([]);
     setInLibrary(false);
     setSelectedSeasons([]);
@@ -103,7 +104,16 @@ export default function MediaDetailPage({ type }: Props) {
     setJustRequested(false);
 
     async function fetchData() {
-      // Load details first — show the page ASAP
+      // 1. DB + live check first (fast with timeout) — resolves button state immediately
+      try {
+        const { data } = await api.get(`/media/tmdb/${id}/${type}`);
+        applyDbData(data);
+        if (!data.id) setDbMedia(null);
+      } catch {
+        setDbMedia(null);
+      }
+
+      // 2. TMDB details (may be cached 24h on backend)
       try {
         const { data } = await api.get(`/tmdb/${type}/${id}`);
         setMedia(data);
@@ -113,14 +123,10 @@ export default function MediaDetailPage({ type }: Props) {
         setLoading(false);
       }
 
-      // Load recommendations + DB status in background (non-blocking)
+      // 3. Recommendations (non-blocking)
       api.get(`/tmdb/${type}/${id}/recommendations`).then(({ data }) => {
         setRecommendations(data.results?.map((r: TmdbMedia) => ({ ...r, media_type: type })) || []);
         if (data.nsfwTmdbIds?.length) addNsfwIds(data.nsfwTmdbIds);
-      }).catch(() => {});
-
-      api.get(`/media/tmdb/${id}/${type}`).then(({ data }) => {
-        applyDbData(data);
       }).catch(() => {});
     }
     fetchData();
@@ -139,8 +145,13 @@ export default function MediaDetailPage({ type }: Props) {
       if (selectedQuality) {
         body.qualityOptionId = selectedQuality;
       }
-      await api.post('/requests', body);
-      setJustRequested(true);
+      const { data: reqData } = await api.post('/requests', body);
+      if (reqData.sendError) {
+        setRequestError(t('status.request_send_failed', 'Request created but could not be sent to the service. It will be retried automatically.'));
+        setTimeout(() => setRequestError(''), 8000);
+      } else {
+        setJustRequested(true);
+      }
       invalidateMediaStatus(media.id, type);
       const { data } = await api.get(`/media/tmdb/${id}/${type}`);
       applyDbData(data);
@@ -222,13 +233,16 @@ export default function MediaDetailPage({ type }: Props) {
     api.get(`/media/tmdb/${id}/${type}`).then(({ data }) => applyDbData(data)).catch(() => {});
   });
 
-  const isAvailable = dbMedia?.status === 'available' || inLibrary;
-  const isPartiallyAvailable = !isAvailable && dbMedia?.status === 'processing' && type === 'tv';
-  const isUpcoming = dbMedia?.status === 'upcoming';
-  const isSearching = dbMedia?.status === 'searching';
+  // Ignore stale dbMedia from a previous page during navigation
+  const currentDbMedia = dbMedia && String(dbMedia.tmdbId) === id ? dbMedia : null;
+
+  const isAvailable = currentDbMedia?.status === 'available' || inLibrary;
+  const isPartiallyAvailable = !isAvailable && currentDbMedia?.status === 'processing' && type === 'tv';
+  const isUpcoming = currentDbMedia?.status === 'upcoming';
+  const isSearching = currentDbMedia?.status === 'searching';
   const isDownloading = !!download;
-  const activeRequests = dbMedia?.requests?.filter(
-    (r) => ['pending', 'approved', 'processing'].includes(r.status)
+  const activeRequests = currentDbMedia?.requests?.filter(
+    (r) => (ACTIVE_REQUEST_STATUSES as readonly string[]).includes(r.status)
   ) || [];
   const takenQualityIds = new Set<number>([
     ...activeRequests.map(r => r.qualityOptionId).filter(Boolean) as number[],
@@ -890,7 +904,7 @@ function CollectionSection({ collection }: { collection: { id: number; name: str
   const availableCount = parts.filter((p) => statuses[`movie:${p.id}`]?.status === 'available').length;
   const handledCount = parts.filter((p) => {
     const s = statuses[`movie:${p.id}`];
-    return s?.status === 'available' || (s?.requestStatus && ['pending', 'approved', 'processing'].includes(s.requestStatus));
+    return s?.status === 'available' || (s?.requestStatus && (ACTIVE_REQUEST_STATUSES as readonly string[]).includes(s.requestStatus));
   }).length;
   const totalCount = parts.length;
   const allHandled = totalCount > 0 && handledCount === totalCount;
