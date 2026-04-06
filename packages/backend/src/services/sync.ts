@@ -146,6 +146,7 @@ async function processSingleMovie(movie: RadarrMovie): Promise<'added' | 'update
         status,
         radarrId: movie.id,
         qualityProfileId: movie.qualityProfileId,
+        ...(status === 'available' ? { availableAt: new Date() } : {}),
       },
     });
     return 'added';
@@ -153,6 +154,8 @@ async function processSingleMovie(movie: RadarrMovie): Promise<'added' | 'update
 
   const becameAvailable = status === 'available' && existing.status !== 'available';
   if (becameAvailable) {
+    console.log(`[Sync] Movie "${movie.title}" (tmdb:${movie.tmdbId}) status: ${existing.status} → ${status}`);
+
     sendAvailabilityNotifications(
       existing.title || movie.title,
       'movie',
@@ -174,6 +177,15 @@ async function processSingleMovie(movie: RadarrMovie): Promise<'added' | 'update
       ...(becameAvailable && !existing.availableAt ? { availableAt: new Date() } : {}),
     },
   });
+
+  // Sync request statuses when media becomes available
+  if (becameAvailable) {
+    await prisma.mediaRequest.updateMany({
+      where: { mediaId: existing.id, status: { in: ['approved', 'processing'] } },
+      data: { status: 'available' },
+    });
+  }
+
   return 'updated';
 }
 
@@ -199,15 +211,20 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
       const newlyAdded = movies.filter((m) => new Date(m.added) > since);
       const withFile = movies.filter((m) => m.hasFile);
       const withFileTmdbIds = new Set(withFile.map((m) => m.tmdbId));
+      // Query non-available movies from DB first, then intersect with Radarr (avoids SQLite param limit with negation filter)
       const notAvailableInDb = await prisma.media.findMany({
-        where: { mediaType: 'movie', tmdbId: { in: [...withFileTmdbIds] }, status: { not: 'available' } },
-        select: { tmdbId: true },
+        where: { mediaType: 'movie', status: { in: ['unknown', 'pending', 'searching', 'processing', 'upcoming'] } },
+        select: { tmdbId: true, status: true },
       });
-      const needsUpdate = new Set(notAvailableInDb.map((m) => m.tmdbId));
+      const needsUpdate = new Set(notAvailableInDb.filter((m) => withFileTmdbIds.has(m.tmdbId)).map((m) => m.tmdbId));
       const toUpdate = withFile.filter((m) => needsUpdate.has(m.tmdbId));
       const combined = new Map<number, typeof movies[0]>();
       for (const m of [...newlyAdded, ...toUpdate]) combined.set(m.tmdbId, m);
       filtered = [...combined.values()];
+      if (needsUpdate.size > 0) {
+        const details = notAvailableInDb.filter((m) => needsUpdate.has(m.tmdbId));
+        console.log(`[Sync] Radarr incremental: ${newlyAdded.length} newly added, ${toUpdate.length} need status update (${details.map((m) => `tmdb:${m.tmdbId}[${m.status}]`).join(', ')})`);
+      }
     }
 
     console.log(`[Sync] Radarr: ${filtered.length} movies to process (${since ? 'incremental since ' + since.toISOString() : 'full scan'})`);
@@ -337,6 +354,14 @@ async function updateExistingShow(
     },
   });
 
+  // Sync request statuses when media becomes available
+  if (becameAvailable) {
+    await prisma.mediaRequest.updateMany({
+      where: { mediaId: existing.id, status: { in: ['approved', 'processing'] } },
+      data: { status: 'available' },
+    });
+  }
+
   await upsertSeasons(existing.id, show.seasons);
 }
 
@@ -360,6 +385,7 @@ async function createNewShow(
       status,
       sonarrId: show.id,
       qualityProfileId: show.qualityProfileId,
+      ...(status === 'available' ? { availableAt: new Date() } : {}),
     },
   });
 
@@ -418,14 +444,13 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
         return addedDate ? new Date(addedDate) > since : false;
       });
       const complete = series.filter((s) => s.statistics?.percentOfEpisodes >= 100 || (s.statistics?.episodeFileCount ?? 0) > 0);
-      const completeTvdbIds = complete.map((s) => s.tvdbId).filter(Boolean);
-      const notAvailableInDb = completeTvdbIds.length > 0
-        ? await prisma.media.findMany({
-            where: { mediaType: 'tv', tvdbId: { in: completeTvdbIds }, status: { notIn: ['available', 'processing'] } },
-            select: { tvdbId: true },
-          })
-        : [];
-      const needsUpdate = new Set(notAvailableInDb.map((m) => m.tvdbId));
+      const completeTvdbIds = new Set(complete.map((s) => s.tvdbId).filter(Boolean));
+      // Query non-available/non-processing shows from DB first, then intersect (avoids SQLite param limit with negation filter)
+      const notAvailableInDb = await prisma.media.findMany({
+        where: { mediaType: 'tv', status: { in: ['unknown', 'pending', 'searching'] } },
+        select: { tvdbId: true },
+      });
+      const needsUpdate = new Set(notAvailableInDb.filter((m) => m.tvdbId && completeTvdbIds.has(m.tvdbId)).map((m) => m.tvdbId));
       const toUpdate = complete.filter((s) => needsUpdate.has(s.tvdbId));
       const combined = new Map<number, typeof series[0]>();
       for (const s of [...newlyAdded, ...toUpdate]) combined.set(s.id, s);
