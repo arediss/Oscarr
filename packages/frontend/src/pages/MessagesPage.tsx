@@ -235,10 +235,7 @@ export default function MessagesPage() {
 
         {/* Conversation */}
         {activeTicket ? (
-          <div className={clsx(
-            'flex-1 flex flex-col card overflow-hidden min-h-0',
-            activeTicket ? 'flex' : 'hidden sm:flex'
-          )}>
+          <div className="flex-1 flex flex-col card overflow-hidden min-h-0">
             {/* Ticket header */}
             <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
               <div className="min-w-0">

@@ -110,13 +110,6 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
 }
 
 export async function authRoutes(app: FastifyInstance) {
-  // Rate limit auth endpoints: 10 requests per minute per IP
-  const authRateLimit = {
-    config: {
-      rateLimit: { max: 10, timeWindow: '1 minute' },
-    },
-  };
-
   const helpers = buildHelpers(app);
 
   // GET /providers — list available auth providers for the login page

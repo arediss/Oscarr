@@ -5,7 +5,6 @@ import { getSonarrAsync, createSonarrFromConfig } from '../services/sonarr.js';
 import { getServiceById } from '../utils/services.js';
 import { syncRadarr, syncSonarr, runFullSync, syncAvailabilityDates } from '../services/sync.js';
 import { getAuthProvider, getServiceDefinition, getServiceSchemas } from '../providers/index.js';
-import { syncRequestsFromTags } from '../services/requestSync.js';
 import { notificationRegistry } from '../notifications/index.js';
 import { logEvent } from '../utils/logEvent.js';
 import { invalidateLanguageCache } from '../services/tmdb.js';
