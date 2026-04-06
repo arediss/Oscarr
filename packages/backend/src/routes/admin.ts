@@ -581,8 +581,9 @@ export async function adminRoutes(app: FastifyInstance) {
       const msg = (err as Error).message;
       if (msg === 'NO_TOKEN') return reply.status(400).send({ error: `Aucun token ${providerId} trouvé. Configurez le service dans les paramètres.` });
       if (msg === 'NO_MACHINE_ID') return reply.status(400).send({ error: `Aucun serveur ${providerId} configuré.` });
-      console.error(`Failed to import ${providerId.replace(/[\r\n\t]/g, '')} users:`, err);
-      logEvent('error', 'User', `Import ${providerId.replace(/[\r\n\t]/g, '')} échoué : ${err}`);
+      const safeProviderId = providerId.replace(/[\r\n\t]/g, '');
+      console.error('Failed to import %s users:', safeProviderId, err);
+      logEvent('error', 'User', `Import ${safeProviderId} échoué : ${String(err)}`);
       return reply.status(502).send({ error: `Impossible de récupérer les utilisateurs ${providerId}` });
     }
   });

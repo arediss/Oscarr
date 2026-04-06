@@ -84,8 +84,8 @@ async function runJob(key: string) {
         lastResult: JSON.stringify({ error: String(err) }),
       },
     });
-    console.error(`[Scheduler] Job "${sanitize(key)}" failed:`, err);
-    logEvent('error', 'Job', `Job "${sanitize(key)}" échoué : ${err}`);
+    console.error('[Scheduler] Job "%s" failed:', sanitize(key), err);
+    logEvent('error', 'Job', `Job "${sanitize(key)}" échoué : ${String(err)}`);
     throw err;
   }
 }
@@ -99,7 +99,7 @@ function scheduleJob(key: string, cronExpression: string) {
   }
 
   if (!cron.validate(cronExpression)) {
-    console.error(`[Scheduler] Invalid cron expression for "${sanitize(key)}": ${sanitize(cronExpression)}`);
+    console.error('[Scheduler] Invalid cron expression for "%s": %s', sanitize(key), sanitize(cronExpression));
     return;
   }
 
@@ -107,7 +107,7 @@ function scheduleJob(key: string, cronExpression: string) {
     runJob(key).catch(() => {});
   });
   activeTasks.set(key, task);
-  console.log(`[Scheduler] Job "${sanitize(key)}" scheduled: ${sanitize(cronExpression)}`);
+  console.log('[Scheduler] Job "%s" scheduled: %s', sanitize(key), sanitize(cronExpression));
 }
 
 /** Check if a first full sync has been completed */
