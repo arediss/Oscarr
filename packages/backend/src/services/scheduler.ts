@@ -7,6 +7,11 @@ import { syncMissingKeywords } from './keywordSync.js';
 import type { PluginEngine } from '../plugins/engine.js';
 import { logEvent } from '../utils/logEvent.js';
 
+/** Strip control characters (newlines, tabs, etc.) to prevent log injection */
+function sanitize(input: string): string {
+  return input.replace(/[\r\n\t]/g, '');
+}
+
 // Map of job keys to their handler functions
 const JOB_HANDLERS: Record<string, () => Promise<unknown>> = {
   new_media_sync: async () => runNewMediaSync(),
@@ -58,8 +63,8 @@ async function runJob(key: string) {
         lastResult: JSON.stringify(result ?? null),
       },
     });
-    console.log(`[Scheduler] Job "${key}" completed in ${duration}ms`);
-    logEvent('info', 'Job', `Job "${key}" terminé en ${duration}ms`);
+    console.log(`[Scheduler] Job "${sanitize(key)}" completed in ${duration}ms`);
+    logEvent('info', 'Job', `Job "${sanitize(key)}" terminé en ${duration}ms`);
 
     // After the first successful full sync, start all cron schedules
     if (wasFirstSync && key === 'full_sync' && activeTasks.size === 0) {
@@ -79,8 +84,8 @@ async function runJob(key: string) {
         lastResult: JSON.stringify({ error: String(err) }),
       },
     });
-    console.error(`[Scheduler] Job "${key}" failed:`, err);
-    logEvent('error', 'Job', `Job "${key}" échoué : ${err}`);
+    console.error(`[Scheduler] Job "${sanitize(key)}" failed:`, err);
+    logEvent('error', 'Job', `Job "${sanitize(key)}" échoué : ${err}`);
     throw err;
   }
 }
@@ -94,7 +99,7 @@ function scheduleJob(key: string, cronExpression: string) {
   }
 
   if (!cron.validate(cronExpression)) {
-    console.error(`[Scheduler] Invalid cron expression for "${key}": ${cronExpression}`);
+    console.error(`[Scheduler] Invalid cron expression for "${sanitize(key)}": ${sanitize(cronExpression)}`);
     return;
   }
 
@@ -102,7 +107,7 @@ function scheduleJob(key: string, cronExpression: string) {
     runJob(key).catch(() => {});
   });
   activeTasks.set(key, task);
-  console.log(`[Scheduler] Job "${key}" scheduled: ${cronExpression}`);
+  console.log(`[Scheduler] Job "${sanitize(key)}" scheduled: ${sanitize(cronExpression)}`);
 }
 
 /** Check if a first full sync has been completed */

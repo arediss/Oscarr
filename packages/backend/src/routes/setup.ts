@@ -9,7 +9,7 @@ const SETUP_SECRET = process.env.SETUP_SECRET || '';
 if (!SETUP_SECRET) {
   console.error('[Setup] SETUP_SECRET is not set — setup routes will be unprotected!');
 } else if (SETUP_SECRET.length < 8) {
-  console.warn(`[Setup] SETUP_SECRET is too short (${SETUP_SECRET.length} chars) — minimum 8 characters recommended.`);
+  console.warn('[Setup] SETUP_SECRET is too short — minimum 8 characters recommended.');
 }
 
 async function requireNotInstalled(_request: FastifyRequest, reply: FastifyReply) {
