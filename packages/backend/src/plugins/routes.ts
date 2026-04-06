@@ -118,7 +118,7 @@ export async function pluginRoutes(app: FastifyInstance) {
   );
 
   // Serve plugin frontend files as ESM modules
-  app.get('/:id/frontend/*', async (request, reply) => {
+  app.get('/:id/frontend/*', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const filePath = (request.params as Record<string, string>)['*'];
     const plugin = pluginEngine.getPlugin(id);
