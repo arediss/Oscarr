@@ -10,8 +10,9 @@ import { sendUserNotification } from '../services/userNotifications.js';
 import { getServiceById, getAllServices } from '../utils/services.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 import { pluginEngine } from '../plugins/engine.js';
+import { REQUEST_STATUSES, ACTIVE_REQUEST_STATUSES, COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
 
-const VALID_STATUSES = ['pending', 'approved', 'declined', 'processing', 'available', 'failed'];
+const VALID_STATUSES: string[] = [...REQUEST_STATUSES];
 
 function validateRequestBody(body: { tmdbId: unknown; mediaType: unknown; seasons?: unknown }): {
   valid: true; tmdbId: number; mediaType: 'movie' | 'tv'; seasons: number[] | undefined;
@@ -89,7 +90,7 @@ async function requestCollectionMovie(
   const existingRequest = await prisma.mediaRequest.findFirst({
     where: {
       media: { tmdbId: movieTmdbId, mediaType: 'movie' },
-      status: { in: ['pending', 'approved', 'processing', 'available'] },
+      status: { in: [...ACTIVE_REQUEST_STATUSES, 'available'] },
     },
   });
   if (existingRequest) return false;
@@ -101,7 +102,7 @@ async function requestCollectionMovie(
 
   const media = dbMedia ?? await createMovieMedia(movieTmdbId);
 
-  await prisma.mediaRequest.create({
+  const req = await prisma.mediaRequest.create({
     data: {
       mediaId: media.id,
       userId: user.id,
@@ -113,7 +114,10 @@ async function requestCollectionMovie(
 
   if (user.role === 'admin') {
     const tagName = await getUserTagName(user.id);
-    await sendToService(media, 'movie', tagName, user.id);
+    const sent = await sendToService(media, 'movie', tagName, user.id);
+    if (!sent) {
+      await prisma.mediaRequest.update({ where: { id: req.id }, data: { status: 'failed' } });
+    }
   }
 
   return true;
@@ -168,7 +172,7 @@ export async function requestRoutes(app: FastifyInstance) {
     // Quick sync: update stale request statuses where media is already available
     await prisma.mediaRequest.updateMany({
       where: {
-        status: { in: ['approved', 'processing'] },
+        status: { in: [...COMPLETABLE_REQUEST_STATUSES] },
         media: { status: 'available' },
       },
       data: { status: 'available' },
@@ -262,7 +266,7 @@ export async function requestRoutes(app: FastifyInstance) {
       where: {
         mediaId: media.id,
         userId: user.id,
-        status: { in: ['pending', 'approved', 'processing'] },
+        status: { in: [...ACTIVE_REQUEST_STATUSES] },
       },
     });
     if (existing) {
@@ -290,20 +294,28 @@ export async function requestRoutes(app: FastifyInstance) {
       },
     });
 
+    let sendFailed = false;
     if (shouldAutoApprove) {
       const tagName = await getUserTagName(user.id);
-      await sendToService(media, validMediaType, tagName, user.id, validSeasons, qualityOptionId);
+      const sent = await sendToService(media, validMediaType, tagName, user.id, validSeasons, qualityOptionId);
+      if (!sent) {
+        await prisma.mediaRequest.update({ where: { id: mediaRequest.id }, data: { status: 'failed' } });
+        sendFailed = true;
+      }
     }
 
     // Notify
     const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { displayName: true } });
     const username = dbUser?.displayName || 'Utilisateur';
     notificationRegistry.send('request_new', { title: media.title, mediaType: validMediaType, username, posterPath: media.posterPath, tmdbId: media.tmdbId }).catch(err => console.error('[Notification] Failed:', err));
-    if (shouldAutoApprove) {
+    if (shouldAutoApprove && !sendFailed) {
       sendUserNotification(user.id, { type: 'request_approved', title: media.title, message: `Votre demande pour "${media.title}" a été approuvée automatiquement.`, metadata: { mediaId: media.id, tmdbId: media.tmdbId, mediaType: validMediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
     }
     logEvent('info', 'Request', `${username} a demandé "${media.title}"`);
 
+    if (sendFailed) {
+      return reply.status(202).send({ ...mediaRequest, status: 'failed', sendError: true });
+    }
     return reply.status(201).send(mediaRequest);
   });
 
@@ -337,20 +349,24 @@ export async function requestRoutes(app: FastifyInstance) {
 
     const seasons = mediaRequest.seasons ? JSON.parse(mediaRequest.seasons) : undefined;
     const tagName = mediaRequest.user.displayName || mediaRequest.user.email || `user-${mediaRequest.user.id}`;
-    await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, mediaRequest.userId, seasons, mediaRequest.qualityOptionId ?? undefined);
+    const sent = await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, mediaRequest.userId, seasons, mediaRequest.qualityOptionId ?? undefined);
 
     const updated = await prisma.mediaRequest.update({
       where: { id: requestId },
-      data: { status: 'approved', approvedById: user.id },
+      data: { status: sent ? 'approved' : 'failed', approvedById: user.id },
       include: {
         media: true,
         user: { select: { id: true, displayName: true, avatar: true } },
       },
     });
 
-    notificationRegistry.send('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
-    sendUserNotification(updated.user.id, { type: 'request_approved', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été approuvée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
-    logEvent('info', 'Request', `Demande "${updated.media.title}" approuvée`);
+    if (sent) {
+      notificationRegistry.send('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
+      sendUserNotification(updated.user.id, { type: 'request_approved', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été approuvée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
+      logEvent('info', 'Request', `Demande "${updated.media.title}" approuvée`);
+    } else {
+      logEvent('error', 'Request', `Demande "${updated.media.title}" approuvée mais l'envoi au service a échoué`);
+    }
 
     return reply.send(updated);
   });
@@ -649,16 +665,50 @@ async function sendToService(
   userId: number | null = null,
   seasons?: number[],
   qualityOptionId?: number,
-) {
+): Promise<boolean> {
   try {
     const ctx = await resolveServiceContext(mediaType as 'movie' | 'tv', media.tmdbId, userId, qualityOptionId);
 
     if (mediaType === 'movie') {
       await sendToRadarr(media, username, ctx);
-    } else if (mediaType === 'tv' && media.tvdbId) {
+    } else if (mediaType === 'tv') {
+      if (!media.tvdbId) {
+        console.error('Cannot send TV request — missing tvdbId for "%s"', media.title);
+        return false;
+      }
       await sendToSonarr({ ...media, tvdbId: media.tvdbId }, username, ctx, seasons);
     }
+    return true;
   } catch (err) {
-    console.error('Error sending to service:', err);
+    console.error('Failed to send %s "%s" to service:', mediaType, media.title, err);
+    logEvent('error', 'Request', `Échec d'envoi de "${media.title}" vers ${mediaType === 'movie' ? 'Radarr' : 'Sonarr'} : ${String(err)}`);
+    return false;
   }
+}
+
+/** Retry all failed requests — called by scheduler */
+export async function retryFailedRequests(): Promise<{ retried: number; succeeded: number }> {
+  const failed = await prisma.mediaRequest.findMany({
+    where: { status: 'failed' },
+    include: { media: true, user: { select: { id: true, displayName: true, email: true } } },
+  });
+
+  if (failed.length === 0) return { retried: 0, succeeded: 0 };
+
+  let succeeded = 0;
+  for (const req of failed) {
+    const tagName = req.user.displayName || req.user.email || `user-${req.userId}`;
+    const seasons = req.seasons ? JSON.parse(req.seasons) : undefined;
+    const sent = await sendToService(req.media, req.mediaType, tagName, req.userId, seasons, req.qualityOptionId ?? undefined);
+    if (sent) {
+      await prisma.mediaRequest.update({ where: { id: req.id }, data: { status: 'approved' } });
+      succeeded++;
+    }
+  }
+
+  if (succeeded > 0) {
+    logEvent('info', 'Request', `${succeeded}/${failed.length} demandes échouées réessayées avec succès`);
+  }
+
+  return { retried: failed.length, succeeded };
 }
