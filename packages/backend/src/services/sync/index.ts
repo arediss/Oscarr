@@ -39,3 +39,4 @@ export { syncRadarr } from './movieSync.js';
 export { syncSonarr } from './tvSync.js';
 export { syncAvailabilityDates } from './availabilitySync.js';
 export type { SyncResult } from './helpers.js';
+export { syncMissingKeywords, trackKeywordsFromDetails } from './keywordSync.js';
