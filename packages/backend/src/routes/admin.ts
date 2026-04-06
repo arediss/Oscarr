@@ -5,7 +5,6 @@ import { getSonarrAsync, createSonarrFromConfig } from '../services/sonarr.js';
 import { getServiceById } from '../utils/services.js';
 import { syncRadarr, syncSonarr, runFullSync, syncAvailabilityDates } from '../services/sync.js';
 import { getAuthProvider, getServiceDefinition, getServiceSchemas } from '../providers/index.js';
-import { syncRequestsFromTags } from '../services/requestSync.js';
 import { notificationRegistry } from '../notifications/index.js';
 import { logEvent } from '../utils/logEvent.js';
 import { invalidateLanguageCache } from '../services/tmdb.js';
@@ -582,8 +581,9 @@ export async function adminRoutes(app: FastifyInstance) {
       const msg = (err as Error).message;
       if (msg === 'NO_TOKEN') return reply.status(400).send({ error: `Aucun token ${providerId} trouvé. Configurez le service dans les paramètres.` });
       if (msg === 'NO_MACHINE_ID') return reply.status(400).send({ error: `Aucun serveur ${providerId} configuré.` });
-      console.error(`Failed to import ${providerId} users:`, err);
-      logEvent('error', 'User', `Import ${providerId} échoué : ${err}`);
+      const safeProviderId = providerId.replace(/[\r\n\t]/g, '');
+      console.error('Failed to import %s users:', safeProviderId, err);
+      logEvent('error', 'User', `Import ${safeProviderId} échoué : ${String(err)}`);
       return reply.status(502).send({ error: `Impossible de récupérer les utilisateurs ${providerId}` });
     }
   });

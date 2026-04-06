@@ -15,10 +15,6 @@ interface MediaCardProps {
   index?: number;
 }
 
-function getMediaType(media: TmdbMedia): string {
-  return media.media_type || (media.title ? 'movie' : 'tv');
-}
-
 export default function MediaCard({ media, className, availability, index = 0 }: MediaCardProps) {
   const { t } = useTranslation();
   const { isNsfw } = useNsfwFilter();

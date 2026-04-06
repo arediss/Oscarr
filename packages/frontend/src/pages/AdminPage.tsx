@@ -11,7 +11,6 @@ import {
   RefreshCw,
   ScrollText,
   Plug,
-  ArrowUpCircle,
   ExternalLink,
   CheckCircle,
   type LucideIcon,

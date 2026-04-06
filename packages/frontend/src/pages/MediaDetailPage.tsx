@@ -237,15 +237,6 @@ export default function MediaDetailPage({ type }: Props) {
   const userHasRequest = activeRequests.some(r => r.user?.id === user?.id);
   const canRequestNewQuality = selectedQuality != null && !takenQualityIds.has(selectedQuality);
 
-  const formatTimeLeft = (tl: string) => {
-    if (!tl) return '';
-    const m = tl.match(/(\d+):(\d+):(\d+)/);
-    if (!m) return tl;
-    const [, h, min] = m;
-    if (parseInt(h) > 0) return `~${parseInt(h)}h${min}min`;
-    return `~${parseInt(min)}min`;
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -600,7 +591,6 @@ export default function MediaDetailPage({ type }: Props) {
                       const totalCount = sonarrSeason?.totalEpisodeCount ?? season.episode_count;
                       const isFull = hasStats && fileCount >= totalCount && totalCount > 0;
                       const isPartial = hasStats && fileCount > 0 && fileCount < totalCount;
-                      const isEmpty = !hasStats || fileCount === 0;
                       const canSelect = !isFull && !userHasRequest;
 
                       return (
