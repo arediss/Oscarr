@@ -1,0 +1,318 @@
+import { prisma } from '../utils/prisma.js';
+import { getRadarrAsync, getRadarrForService } from './radarr.js';
+import { getSonarrAsync, getSonarrForService } from './sonarr.js';
+import { getMovieDetails, getTvDetails, getCollection } from './tmdb.js';
+import { matchFolderRule } from './folderRules.js';
+import { notificationRegistry } from '../notifications/index.js';
+import { logEvent } from '../utils/logEvent.js';
+import { sendUserNotification } from './userNotifications.js';
+import { getServiceById, getAllServices } from '../utils/services.js';
+import { VALID_MEDIA_TYPES } from '../utils/params.js';
+import { pluginEngine } from '../plugins/engine.js';
+import { ACTIVE_REQUEST_STATUSES, COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
+
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+
+export function validateRequestBody(body: { tmdbId: unknown; mediaType: unknown; seasons?: unknown }): {
+  valid: true; tmdbId: number; mediaType: 'movie' | 'tv'; seasons: number[] | undefined;
+} | { valid: false; error: string } {
+  const { tmdbId, mediaType, seasons } = body;
+  if (typeof tmdbId !== 'number' || !Number.isFinite(tmdbId) || tmdbId < 1) {
+    return { valid: false, error: 'tmdbId invalide' };
+  }
+  if (!VALID_MEDIA_TYPES.includes(mediaType as string)) {
+    return { valid: false, error: 'mediaType doit être "movie" ou "tv"' };
+  }
+  const validSeasons = Array.isArray(seasons) && seasons.every((s) => typeof s === 'number' && Number.isFinite(s))
+    ? (seasons as number[])
+    : undefined;
+  return { valid: true, tmdbId, mediaType: mediaType as 'movie' | 'tv', seasons: validSeasons };
+}
+
+// ---------------------------------------------------------------------------
+// Media helpers
+// ---------------------------------------------------------------------------
+
+export async function findOrCreateMedia(tmdbId: number, mediaType: 'movie' | 'tv') {
+  const existing = await prisma.media.findUnique({
+    where: { tmdbId_mediaType: { tmdbId, mediaType } },
+  });
+  if (existing) return existing;
+
+  const tmdbData = mediaType === 'movie'
+    ? await getMovieDetails(tmdbId)
+    : await getTvDetails(tmdbId);
+
+  const title = 'title' in tmdbData ? tmdbData.title : tmdbData.name;
+  const releaseDate = 'release_date' in tmdbData ? tmdbData.release_date : tmdbData.first_air_date;
+
+  const media = await prisma.media.create({
+    data: {
+      tmdbId,
+      tvdbId: tmdbData.external_ids?.tvdb_id ?? null,
+      mediaType,
+      title,
+      overview: tmdbData.overview || null,
+      posterPath: tmdbData.poster_path,
+      backdropPath: tmdbData.backdrop_path,
+      releaseDate: releaseDate || null,
+      voteAverage: tmdbData.vote_average,
+      genres: tmdbData.genres ? JSON.stringify(tmdbData.genres.map(g => g.name)) : null,
+    },
+  });
+
+  if (mediaType === 'tv' && 'seasons' in tmdbData && tmdbData.seasons) {
+    await prisma.season.createMany({
+      data: tmdbData.seasons
+        .filter(s => s.season_number > 0)
+        .map(s => ({
+          mediaId: media.id,
+          seasonNumber: s.season_number,
+          episodeCount: s.episode_count,
+        })),
+    });
+  }
+
+  return media;
+}
+
+export async function getUserTagName(userId: number): Promise<string> {
+  const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { displayName: true, email: true } });
+  return dbUser?.displayName || dbUser?.email || `user-${userId}`;
+}
+
+export async function runPluginGuard(userId: number): Promise<{ blocked: boolean; statusCode?: number; error?: string } | null> {
+  return pluginEngine.runGuards('request.create', userId);
+}
+
+// ---------------------------------------------------------------------------
+// Service dispatch
+// ---------------------------------------------------------------------------
+
+interface ServiceContext {
+  targetService: { id: number; config: Record<string, string> } | null;
+  targetProfileId: number | null;
+  defaultProfileId: number | null;
+  defaultFolder: string | null | undefined;
+  ruleMatch: Awaited<ReturnType<typeof matchFolderRule>>;
+}
+
+export async function resolveServiceContext(
+  mediaType: 'movie' | 'tv',
+  tmdbId: number,
+  userId: number | null,
+  qualityOptionId?: number,
+): Promise<ServiceContext> {
+  const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+  const defaultProfileId = settings?.defaultQualityProfile ?? null;
+
+  const tmdbData = mediaType === 'movie'
+    ? await getMovieDetails(tmdbId)
+    : await getTvDetails(tmdbId);
+
+  const ruleMatch = await matchFolderRule(mediaType, tmdbData, userId);
+  const defaultFolder = mediaType === 'movie' ? settings?.defaultMovieFolder : settings?.defaultTvFolder;
+
+  let targetServiceId: number | null = ruleMatch?.serviceId ?? null;
+  let targetProfileId: number | null = null;
+
+  if (qualityOptionId) {
+    const serviceType = mediaType === 'movie' ? 'radarr' : 'sonarr';
+    const mapping = await prisma.qualityMapping.findFirst({
+      where: {
+        qualityOptionId,
+        service: { type: serviceType, enabled: true },
+      },
+      include: { service: true },
+    });
+    if (mapping) {
+      targetServiceId = mapping.serviceId;
+      targetProfileId = mapping.qualityProfileId;
+    }
+  }
+
+  let targetService: { id: number; config: Record<string, string> } | null = null;
+  if (targetServiceId) {
+    targetService = await getServiceById(targetServiceId) as { id: number; config: Record<string, string> } | null;
+  }
+  if (!targetService) {
+    const services = await getAllServices(mediaType === 'movie' ? 'radarr' : 'sonarr');
+    if (services.length > 0) targetService = services[0];
+  }
+
+  return { targetService, targetProfileId, defaultProfileId, defaultFolder, ruleMatch };
+}
+
+async function sendToRadarr(
+  media: { tmdbId: number; title: string },
+  username: string,
+  ctx: ServiceContext,
+) {
+  const radarr = ctx.targetService
+    ? getRadarrForService(ctx.targetService.id, ctx.targetService.config)
+    : await getRadarrAsync();
+  const folderPath = ctx.ruleMatch?.folderPath || ctx.defaultFolder || (await radarr.getRootFolders())[0]?.path || '/movies';
+  const tagId = await radarr.getOrCreateTag(username);
+  const existing = await radarr.getMovieByTmdbId(media.tmdbId);
+  if (existing) {
+    await radarr.searchMovie(existing.id);
+    return;
+  }
+  const profileId = ctx.targetProfileId ?? ctx.defaultProfileId ?? (await radarr.getQualityProfiles())[0]?.id ?? 1;
+  await radarr.addMovie({
+    title: media.title,
+    tmdbId: media.tmdbId,
+    qualityProfileId: profileId,
+    rootFolderPath: folderPath,
+    tags: [tagId],
+    searchForMovie: true,
+  });
+}
+
+async function sendToSonarr(
+  media: { tmdbId: number; tvdbId: number; title: string },
+  username: string,
+  ctx: ServiceContext,
+  seasons?: number[],
+) {
+  const sonarr = ctx.targetService
+    ? getSonarrForService(ctx.targetService.id, ctx.targetService.config)
+    : await getSonarrAsync();
+  const folderPath = ctx.ruleMatch?.folderPath || ctx.defaultFolder || (await sonarr.getRootFolders())[0]?.path || '/tv';
+  const seriesType = (ctx.ruleMatch?.seriesType as 'anime' | 'standard' | 'daily') || 'standard';
+  const tagId = await sonarr.getOrCreateTag(username);
+  const existing = await sonarr.getSeriesByTvdbId(media.tvdbId);
+  if (existing) {
+    await sonarr.searchMissingEpisodes(existing.id);
+    return;
+  }
+  const profileId = ctx.targetProfileId ?? ctx.defaultProfileId ?? (await sonarr.getQualityProfiles())[0]?.id ?? 1;
+  await sonarr.addSeries({
+    title: media.title,
+    tvdbId: media.tvdbId,
+    qualityProfileId: profileId,
+    rootFolderPath: folderPath,
+    seriesType,
+    seasons: seasons ?? [],
+    tags: [tagId],
+    searchForMissingEpisodes: true,
+  });
+}
+
+export async function sendToService(
+  media: { tmdbId: number; tvdbId: number | null; title: string },
+  mediaType: string,
+  username: string,
+  userId: number | null = null,
+  seasons?: number[],
+  qualityOptionId?: number,
+): Promise<boolean> {
+  try {
+    const ctx = await resolveServiceContext(mediaType as 'movie' | 'tv', media.tmdbId, userId, qualityOptionId);
+
+    if (mediaType === 'movie') {
+      await sendToRadarr(media, username, ctx);
+    } else if (mediaType === 'tv') {
+      if (!media.tvdbId) {
+        console.error('Cannot send TV request — missing tvdbId for "%s"', media.title);
+        return false;
+      }
+      await sendToSonarr({ ...media, tvdbId: media.tvdbId }, username, ctx, seasons);
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to send %s "%s" to service:', mediaType, media.title, err);
+    logEvent('error', 'Request', `Échec d'envoi de "${media.title}" vers ${mediaType === 'movie' ? 'Radarr' : 'Sonarr'} : ${String(err)}`);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Collection requests
+// ---------------------------------------------------------------------------
+
+export async function requestCollectionMovie(
+  movieTmdbId: number,
+  user: { id: number; role: string },
+): Promise<boolean> {
+  const existingRequest = await prisma.mediaRequest.findFirst({
+    where: {
+      media: { tmdbId: movieTmdbId, mediaType: 'movie' },
+      status: { in: [...ACTIVE_REQUEST_STATUSES, 'available'] },
+    },
+  });
+  if (existingRequest) return false;
+
+  const dbMedia = await prisma.media.findUnique({
+    where: { tmdbId_mediaType: { tmdbId: movieTmdbId, mediaType: 'movie' } },
+  });
+  if (dbMedia?.status === 'available') return false;
+
+  const media = dbMedia ?? await findOrCreateMedia(movieTmdbId, 'movie');
+
+  const req = await prisma.mediaRequest.create({
+    data: {
+      mediaId: media.id,
+      userId: user.id,
+      mediaType: 'movie',
+      status: user.role === 'admin' ? 'approved' : 'pending',
+      approvedById: user.role === 'admin' ? user.id : null,
+    },
+  });
+
+  if (user.role === 'admin') {
+    const tagName = await getUserTagName(user.id);
+    const sent = await sendToService(media, 'movie', tagName, user.id);
+    if (!sent) {
+      await prisma.mediaRequest.update({ where: { id: req.id }, data: { status: 'failed' } });
+    }
+  }
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Status promotion (moved from GET /requests handler)
+// ---------------------------------------------------------------------------
+
+export async function promoteStaleStatuses(): Promise<void> {
+  await prisma.mediaRequest.updateMany({
+    where: {
+      status: { in: [...COMPLETABLE_REQUEST_STATUSES] },
+      media: { status: 'available' },
+    },
+    data: { status: 'available' },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Retry failed requests (called by scheduler)
+// ---------------------------------------------------------------------------
+
+export async function retryFailedRequests(): Promise<{ retried: number; succeeded: number }> {
+  const failed = await prisma.mediaRequest.findMany({
+    where: { status: 'failed' },
+    include: { media: true, user: { select: { id: true, displayName: true, email: true } } },
+  });
+
+  if (failed.length === 0) return { retried: 0, succeeded: 0 };
+
+  let succeeded = 0;
+  for (const req of failed) {
+    const tagName = req.user.displayName || req.user.email || `user-${req.userId}`;
+    const seasons = req.seasons ? JSON.parse(req.seasons) : undefined;
+    const sent = await sendToService(req.media, req.mediaType, tagName, req.userId, seasons, req.qualityOptionId ?? undefined);
+    if (sent) {
+      await prisma.mediaRequest.update({ where: { id: req.id }, data: { status: 'approved' } });
+      succeeded++;
+    }
+  }
+
+  if (succeeded > 0) {
+    logEvent('info', 'Request', `${succeeded}/${failed.length} demandes échouées réessayées avec succès`);
+  }
+
+  return { retried: failed.length, succeeded };
+}
