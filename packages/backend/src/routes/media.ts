@@ -226,11 +226,12 @@ export async function mediaRoutes(app: FastifyInstance) {
     }
 
     const LIVE_CHECK_TIMEOUT = 4000;
+    let timeoutHandle: ReturnType<typeof setTimeout>;
     const liveCheck = await Promise.race([
-      performLiveCheck(),
-      new Promise<LiveCheckResult>((resolve) =>
-        setTimeout(() => resolve({ liveAvailable: false, sonarrSeasonStats: null, audioLanguages: null, subtitleLanguages: null, timedOut: true }), LIVE_CHECK_TIMEOUT)
-      ),
+      performLiveCheck().finally(() => clearTimeout(timeoutHandle)),
+      new Promise<LiveCheckResult>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve({ liveAvailable: false, sonarrSeasonStats: null, audioLanguages: null, subtitleLanguages: null, timedOut: true }), LIVE_CHECK_TIMEOUT);
+      }),
     ]);
 
     const { liveAvailable, sonarrSeasonStats, audioLanguages, subtitleLanguages } = liveCheck;

@@ -360,9 +360,13 @@ export async function requestRoutes(app: FastifyInstance) {
       },
     });
 
-    notificationRegistry.send('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
-    sendUserNotification(updated.user.id, { type: 'request_approved', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été approuvée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
-    logEvent('info', 'Request', `Demande "${updated.media.title}" approuvée`);
+    if (sent) {
+      notificationRegistry.send('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath }).catch(err => console.error('[Notification] Failed:', err));
+      sendUserNotification(updated.user.id, { type: 'request_approved', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été approuvée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } }).catch(err => console.error('[UserNotification] Failed:', err));
+      logEvent('info', 'Request', `Demande "${updated.media.title}" approuvée`);
+    } else {
+      logEvent('error', 'Request', `Demande "${updated.media.title}" approuvée mais l'envoi au service a échoué`);
+    }
 
     return reply.send(updated);
   });
@@ -667,7 +671,11 @@ async function sendToService(
 
     if (mediaType === 'movie') {
       await sendToRadarr(media, username, ctx);
-    } else if (mediaType === 'tv' && media.tvdbId) {
+    } else if (mediaType === 'tv') {
+      if (!media.tvdbId) {
+        console.error('Cannot send TV request — missing tvdbId for "%s"', media.title);
+        return false;
+      }
       await sendToSonarr({ ...media, tvdbId: media.tvdbId }, username, ctx, seasons);
     }
     return true;
