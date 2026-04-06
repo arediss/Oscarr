@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { getRadarrAsync } from '../services/radarr.js';
 import { getSonarrAsync } from '../services/sonarr.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 import { isMatureRating } from '../services/tmdb.js';
 import { normalizeLanguages } from '../utils/languages.js';
+import { performLiveCheckWithTimeout, cacheLanguageData, promoteMediaToAvailable } from '../services/mediaService.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
 
 export async function mediaRoutes(app: FastifyInstance) {
@@ -135,105 +135,9 @@ export async function mediaRoutes(app: FastifyInstance) {
     const cachedSubs: string[] | null = media?.subtitleLanguages ? JSON.parse(media.subtitleLanguages) : null;
 
     // ── Phase 2: Live check Radarr/Sonarr (with timeout) ────────────
-    interface LiveCheckResult {
-      liveAvailable: boolean;
-      sonarrSeasonStats: { seasonNumber: number; episodeFileCount: number; episodeCount: number; totalEpisodeCount: number }[] | null;
-      audioLanguages: string[] | null;
-      subtitleLanguages: string[] | null;
-      timedOut?: boolean;
-    }
-
-    async function performLiveCheck(): Promise<LiveCheckResult> {
-      const result: LiveCheckResult = { liveAvailable: false, sonarrSeasonStats: null, audioLanguages: null, subtitleLanguages: null };
-      try {
-        if (mediaType === 'movie') {
-          const radarr = await getRadarrAsync();
-          const radarrMovie = await radarr.getMovieByTmdbId(tmdbIdNum!);
-          if (radarrMovie?.hasFile) {
-            result.liveAvailable = true;
-            if (!cachedAudio) {
-              const mi = radarrMovie.movieFile?.mediaInfo;
-              if (mi?.audioLanguages) {
-                result.audioLanguages = mi.audioLanguages.split('/').map((s) => s.trim()).filter(Boolean);
-              } else if (radarrMovie.movieFile?.languages?.length) {
-                result.audioLanguages = radarrMovie.movieFile.languages.map((l) => l.name);
-              }
-              if (mi?.subtitles) {
-                result.subtitleLanguages = mi.subtitles.split('/').map((s) => s.trim()).filter(Boolean);
-              }
-            }
-          }
-        } else if (mediaType === 'tv') {
-          let tvdbId: number | null = media?.tvdbId ?? null;
-          if (!tvdbId) {
-            const { getTvDetails } = await import('../services/tmdb.js');
-            const tmdbData = await getTvDetails(tmdbIdNum!);
-            tvdbId = tmdbData.external_ids?.tvdb_id ?? null;
-          }
-          if (tvdbId) {
-            const sonarr = await getSonarrAsync();
-            const sonarrSeries = await sonarr.getSeriesByTvdbId(tvdbId);
-            if (sonarrSeries) {
-              const stats = sonarrSeries.statistics;
-              if (stats?.percentOfEpisodes >= 100) {
-                result.liveAvailable = true;
-              }
-              result.sonarrSeasonStats = sonarrSeries.seasons
-                .filter((s) => s.seasonNumber > 0)
-                .map((s) => ({
-                  seasonNumber: s.seasonNumber,
-                  episodeFileCount: s.statistics?.episodeFileCount ?? 0,
-                  episodeCount: s.statistics?.episodeCount ?? 0,
-                  totalEpisodeCount: s.statistics?.totalEpisodeCount ?? 0,
-                }));
-
-              if (stats?.episodeFileCount && stats.episodeFileCount > 0 && !cachedAudio) {
-                try {
-                  const files = await sonarr.getEpisodeFiles(sonarrSeries.id);
-                  const audioCounts = new Map<string, number>();
-                  const subCounts = new Map<string, number>();
-                  for (const f of files) {
-                    if (f.mediaInfo?.audioLanguages) {
-                      const seen = new Set<string>();
-                      for (const l of f.mediaInfo.audioLanguages.split('/')) {
-                        const t = l.trim();
-                        if (t && !seen.has(t)) { seen.add(t); audioCounts.set(t, (audioCounts.get(t) || 0) + 1); }
-                      }
-                    }
-                    if (f.mediaInfo?.subtitles) {
-                      const seen = new Set<string>();
-                      for (const l of f.mediaInfo.subtitles.split('/')) {
-                        const t = l.trim();
-                        if (t && !seen.has(t)) { seen.add(t); subCounts.set(t, (subCounts.get(t) || 0) + 1); }
-                      }
-                    }
-                  }
-                  const threshold = Math.max(1, Math.floor(files.length * 0.5));
-                  const filteredAudio = [...audioCounts.entries()].filter(([, c]) => c >= threshold).map(([l]) => l);
-                  const filteredSubs = [...subCounts.entries()].filter(([, c]) => c >= threshold).map(([l]) => l);
-                  if (filteredAudio.length > 0) result.audioLanguages = filteredAudio;
-                  if (filteredSubs.length > 0) result.subtitleLanguages = filteredSubs;
-                } catch (err) {
-                  const status = (err as { response?: { status?: number } })?.response?.status;
-                  console.warn(`[Media] Failed to fetch episode files for series ${sonarrSeries.id} (HTTP ${status || 'unknown'}), skipping language data`);
-                }
-              }
-            }
-          }
-        }
-      } catch { /* Radarr/Sonarr unreachable, use DB state */ }
-      return result;
-    }
-
-    const LIVE_CHECK_TIMEOUT = 4000;
-    let timeoutHandle: ReturnType<typeof setTimeout>;
-    const liveCheck = await Promise.race([
-      performLiveCheck().finally(() => clearTimeout(timeoutHandle)),
-      new Promise<LiveCheckResult>((resolve) => {
-        timeoutHandle = setTimeout(() => resolve({ liveAvailable: false, sonarrSeasonStats: null, audioLanguages: null, subtitleLanguages: null, timedOut: true }), LIVE_CHECK_TIMEOUT);
-      }),
-    ]);
-
+    const liveCheck = await performLiveCheckWithTimeout(
+      mediaType, tmdbIdNum!, media?.tvdbId ?? null, !!cachedAudio,
+    );
     const { liveAvailable, sonarrSeasonStats, audioLanguages, subtitleLanguages } = liveCheck;
 
     // ── Phase 3: Assemble response ──────────────────────────────────
@@ -247,28 +151,18 @@ export async function mediaRoutes(app: FastifyInstance) {
       return result;
     }
 
-    // Only apply live check side-effects (caching, promotion) when we got a real response
+    // Apply live check side-effects only when we got a real response
     let finalAudio = cachedAudio;
     let finalSubs = cachedSubs;
     if (!liveCheck.timedOut) {
-      const normalizedAudio = audioLanguages ? normalizeLanguages(audioLanguages) : null;
-      const normalizedSubs = subtitleLanguages ? normalizeLanguages(subtitleLanguages) : null;
-
-      if ((normalizedAudio || normalizedSubs) && !cachedAudio) {
-        const langUpdate: Record<string, string> = {};
-        if (normalizedAudio) langUpdate.audioLanguages = JSON.stringify(normalizedAudio);
-        if (normalizedSubs) langUpdate.subtitleLanguages = JSON.stringify(normalizedSubs);
-        await prisma.media.update({ where: { id: media.id }, data: langUpdate });
+      if ((audioLanguages || subtitleLanguages) && !cachedAudio) {
+        await cacheLanguageData(media.id, audioLanguages, subtitleLanguages);
       }
-      finalAudio = normalizedAudio || cachedAudio;
-      finalSubs = normalizedSubs || cachedSubs;
+      finalAudio = (audioLanguages ? normalizeLanguages(audioLanguages) : null) || cachedAudio;
+      finalSubs = (subtitleLanguages ? normalizeLanguages(subtitleLanguages) : null) || cachedSubs;
 
       if (liveAvailable && media.status !== 'available') {
-        await prisma.media.update({ where: { id: media.id }, data: { status: 'available', ...(!media.availableAt ? { availableAt: new Date() } : {}) } });
-        await prisma.mediaRequest.updateMany({
-          where: { mediaId: media.id, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
-          data: { status: 'available' },
-        });
+        await promoteMediaToAvailable(media.id, !!media.availableAt);
         media.status = 'available';
         media.requests = media.requests.map((r) =>
           (COMPLETABLE_REQUEST_STATUSES as readonly string[]).includes(r.status) ? { ...r, status: 'available' } : r

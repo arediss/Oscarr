@@ -13,6 +13,7 @@ export interface SonarrSeries {
   path: string;
   qualityProfileId: number;
   seasonFolder: boolean;
+  added?: string;
   tags: number[];
   seasons: SonarrSeason[];
   images: { coverType: string; remoteUrl: string }[];

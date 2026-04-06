@@ -1,7 +1,7 @@
 import { prisma } from '../utils/prisma.js';
 import { getRadarrAsync, getRadarrForService } from './radarr.js';
 import { getSonarrAsync, getSonarrForService } from './sonarr.js';
-import { getMovieDetails, getTvDetails, getCollection } from './tmdb.js';
+import { getMovieDetails, getTvDetails } from './tmdb.js';
 import { matchFolderRule } from './folderRules.js';
 import { notificationRegistry } from '../notifications/index.js';
 import { logEvent } from '../utils/logEvent.js';
