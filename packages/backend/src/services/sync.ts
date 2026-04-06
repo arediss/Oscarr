@@ -5,6 +5,7 @@ import { notificationRegistry } from '../notifications/index.js';
 import { logEvent } from '../utils/logEvent.js';
 import { sendUserNotification } from './userNotifications.js';
 import { getServiceConfig } from '../utils/services.js';
+import { COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
 
 export interface SyncResult {
   added: number;
@@ -51,7 +52,7 @@ function extractImagePaths(
 
 async function notifyRequesters(mediaId: number, title: string, mediaType: string, tmdbId: number): Promise<void> {
   const requests = await prisma.mediaRequest.findMany({
-    where: { mediaId, status: { in: ['approved', 'processing'] } },
+    where: { mediaId, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
     select: { userId: true },
   });
   for (const req of requests) {
@@ -181,7 +182,7 @@ async function processSingleMovie(movie: RadarrMovie): Promise<'added' | 'update
   // Sync request statuses when media becomes available
   if (becameAvailable) {
     await prisma.mediaRequest.updateMany({
-      where: { mediaId: existing.id, status: { in: ['approved', 'processing'] } },
+      where: { mediaId: existing.id, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
       data: { status: 'available' },
     });
   }
@@ -357,7 +358,7 @@ async function updateExistingShow(
   // Sync request statuses when media becomes available
   if (becameAvailable) {
     await prisma.mediaRequest.updateMany({
-      where: { mediaId: existing.id, status: { in: ['approved', 'processing'] } },
+      where: { mediaId: existing.id, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
       data: { status: 'available' },
     });
   }
