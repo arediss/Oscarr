@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Loader2, Save, CheckCircle, AlertTriangle, ArrowUpCircle, ExternalLink, Key, Copy, RefreshCw, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, CheckCircle, AlertTriangle, ArrowUpCircle, ExternalLink, Key, Copy, RefreshCw, Trash2, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
 import { useFeatures } from '@/context/FeaturesContext';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
+import { FloatingSaveBar } from '@/components/FloatingSaveBar';
 
 const AVAILABLE_LANGUAGES = [
   { code: 'fr', label: 'Français' },
@@ -52,23 +53,62 @@ export function GeneralTab() {
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [apiKeyLoading, setApiKeyLoading] = useState(false);
 
+  const initialValues = useRef<Record<string, unknown>>({});
+
   useEffect(() => {
     Promise.all([
       api.get('/admin/api-key').then(({ data }) => { setApiKeyHasKey(data.hasKey); setApiKeyMasked(data.maskedKey); }),
       api.get('/admin/settings').then(({ data }) => {
-        setAutoApproveRequests(data.autoApproveRequests ?? false);
-        setRegistrationEnabled(data.registrationEnabled ?? true);
-        setRequestsEnabled(data.requestsEnabled ?? true);
-        setSupportEnabled(data.supportEnabled ?? true);
-        setCalendarEnabled(data.calendarEnabled ?? true);
-        setMissingSearchCooldownMin(data.missingSearchCooldownMin ?? 60);
-        setSiteName(data.siteName ?? 'Oscarr');
-        setInstanceLanguage(data.instanceLanguages?.[0] ?? 'en');
+        const vals = {
+          autoApproveRequests: data.autoApproveRequests ?? false,
+          registrationEnabled: data.registrationEnabled ?? true,
+          requestsEnabled: data.requestsEnabled ?? true,
+          supportEnabled: data.supportEnabled ?? true,
+          calendarEnabled: data.calendarEnabled ?? true,
+          missingSearchCooldownMin: data.missingSearchCooldownMin ?? 60,
+          siteName: data.siteName ?? 'Oscarr',
+          instanceLanguage: data.instanceLanguages?.[0] ?? 'en',
+        };
+        setAutoApproveRequests(vals.autoApproveRequests);
+        setRegistrationEnabled(vals.registrationEnabled);
+        setRequestsEnabled(vals.requestsEnabled);
+        setSupportEnabled(vals.supportEnabled);
+        setCalendarEnabled(vals.calendarEnabled);
+        setMissingSearchCooldownMin(vals.missingSearchCooldownMin);
+        setSiteName(vals.siteName);
+        setInstanceLanguage(vals.instanceLanguage);
+        initialValues.current = { ...vals };
+        return data;
       }),
-      api.get('/app/banner').then(({ data }) => setBannerText(data.banner || '')),
+      api.get('/app/banner').then(({ data }) => {
+        setBannerText(data.banner || '');
+        initialValues.current.bannerText = data.banner || '';
+      }),
       api.get('/app/version').then(({ data }) => setVersionInfo(data)),
     ]).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  const currentValues = useMemo(() => ({
+    autoApproveRequests, registrationEnabled, requestsEnabled, supportEnabled,
+    calendarEnabled, missingSearchCooldownMin, siteName, instanceLanguage, bannerText,
+  }), [autoApproveRequests, registrationEnabled, requestsEnabled, supportEnabled,
+    calendarEnabled, missingSearchCooldownMin, siteName, instanceLanguage, bannerText]);
+
+  const hasChanges = !loading && Object.keys(initialValues.current).length > 0 &&
+    Object.entries(currentValues).some(([k, v]) => initialValues.current[k] !== v);
+
+  const handleReset = () => {
+    const iv = initialValues.current;
+    setAutoApproveRequests(iv.autoApproveRequests as boolean);
+    setRegistrationEnabled(iv.registrationEnabled as boolean);
+    setRequestsEnabled(iv.requestsEnabled as boolean);
+    setSupportEnabled(iv.supportEnabled as boolean);
+    setCalendarEnabled(iv.calendarEnabled as boolean);
+    setMissingSearchCooldownMin(iv.missingSearchCooldownMin as number);
+    setSiteName(iv.siteName as string);
+    setInstanceLanguage(iv.instanceLanguage as string);
+    setBannerText(iv.bannerText as string);
+  };
 
   const handleSave = async () => {
     setSaving(true); setSaved(false);
@@ -87,6 +127,7 @@ export function GeneralTab() {
         api.put('/admin/banner', { banner: bannerText.trim() || null }),
       ]);
       await refreshFeatures();
+      initialValues.current = { ...currentValues };
       setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch (err) { console.error(err); } finally { setSaving(false); }
   };
@@ -102,15 +143,7 @@ export function GeneralTab() {
   ];
 
   return (
-    <AdminTabLayout
-      title={t('admin.tab.general')}
-      actions={
-        <button onClick={handleSave} disabled={saving} className={clsx('flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl transition-all', saved ? 'bg-ndp-success/10 text-ndp-success' : 'btn-primary')}>
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-          {saved ? t('common.saved') : t('common.save')}
-        </button>
-      }
-    >
+    <AdminTabLayout title={t('admin.tab.general')}>
 
       {/* Version */}
       {versionInfo && (
@@ -307,6 +340,8 @@ export function GeneralTab() {
           ))}
         </div>
       </div>
+
+      <FloatingSaveBar show={hasChanges} saving={saving} saved={saved} onSave={handleSave} onReset={handleReset} />
 
     </AdminTabLayout>
   );
