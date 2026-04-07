@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { Provider } from '../types.js';
+import { RadarrClient } from './client.js';
 
 export const radarrProvider: Provider = {
   service: {
@@ -18,5 +19,11 @@ export const radarrProvider: Provider = {
       });
       return { ok: true, version: data.version };
     },
+    createClient(config) {
+      return new RadarrClient(config.url || '', config.apiKey || '');
+    },
   },
 };
+
+export { RadarrClient } from './client.js';
+export type { RadarrMovie, RadarrQueueItem, RadarrHistoryRecord } from './types.js';

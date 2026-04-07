@@ -1,6 +1,7 @@
 import { prisma } from '../utils/prisma.js';
-import { getRadarrAsync, getRadarrForService } from './radarr.js';
-import { getSonarrAsync, getSonarrForService } from './sonarr.js';
+import { getArrClient, getArrClientForService, getServiceTypeForMedia } from '../providers/index.js';
+import { type RadarrClient } from '../providers/radarr/index.js';
+import { type SonarrClient } from '../providers/sonarr/index.js';
 import { getMovieDetails, getTvDetails } from './tmdb.js';
 import { matchFolderRule } from './folderRules.js';
 import { logEvent } from '../utils/logEvent.js';
@@ -117,7 +118,7 @@ export async function resolveServiceContext(
   let targetProfileId: number | null = null;
 
   if (qualityOptionId) {
-    const serviceType = mediaType === 'movie' ? 'radarr' : 'sonarr';
+    const serviceType = getServiceTypeForMedia(mediaType);
     const mapping = await prisma.qualityMapping.findFirst({
       where: {
         qualityOptionId,
@@ -136,7 +137,7 @@ export async function resolveServiceContext(
     targetService = await getServiceById(targetServiceId) as { id: number; config: Record<string, string> } | null;
   }
   if (!targetService) {
-    const services = await getAllServices(mediaType === 'movie' ? 'radarr' : 'sonarr');
+    const services = await getAllServices(getServiceTypeForMedia(mediaType));
     if (services.length > 0) targetService = services[0];
   }
 
@@ -148,9 +149,9 @@ async function sendToRadarr(
   username: string,
   ctx: ServiceContext,
 ) {
-  const radarr = ctx.targetService
-    ? getRadarrForService(ctx.targetService.id, ctx.targetService.config)
-    : await getRadarrAsync();
+  const radarr = (ctx.targetService
+    ? getArrClientForService(ctx.targetService.id, 'radarr', ctx.targetService.config)
+    : await getArrClient('radarr')) as RadarrClient;
   const folderPath = ctx.ruleMatch?.folderPath || ctx.defaultFolder || (await radarr.getRootFolders())[0]?.path || '/movies';
   const tagId = await radarr.getOrCreateTag(username);
   const existing = await radarr.getMovieByTmdbId(media.tmdbId);
@@ -175,9 +176,9 @@ async function sendToSonarr(
   ctx: ServiceContext,
   seasons?: number[],
 ) {
-  const sonarr = ctx.targetService
-    ? getSonarrForService(ctx.targetService.id, ctx.targetService.config)
-    : await getSonarrAsync();
+  const sonarr = (ctx.targetService
+    ? getArrClientForService(ctx.targetService.id, 'sonarr', ctx.targetService.config)
+    : await getArrClient('sonarr')) as SonarrClient;
   const folderPath = ctx.ruleMatch?.folderPath || ctx.defaultFolder || (await sonarr.getRootFolders())[0]?.path || '/tv';
   const seriesType = (ctx.ruleMatch?.seriesType as 'anime' | 'standard' | 'daily') || 'standard';
   const tagId = await sonarr.getOrCreateTag(username);
@@ -222,7 +223,7 @@ export async function sendToService(
     return true;
   } catch (err) {
     console.error('Failed to send %s "%s" to service:', mediaType, media.title, err);
-    logEvent('error', 'Request', `Échec d'envoi de "${media.title}" vers ${mediaType === 'movie' ? 'Radarr' : 'Sonarr'} : ${String(err)}`);
+    logEvent('error', 'Request', `Échec d'envoi de "${media.title}" vers ${getServiceTypeForMedia(mediaType)} : ${String(err)}`);
     return false;
   }
 }

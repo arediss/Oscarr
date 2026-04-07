@@ -1,6 +1,7 @@
 import { prisma } from '../../utils/prisma.js';
-import { getRadarrAsync } from '../radarr.js';
-import { getSonarrAsync } from '../sonarr.js';
+import { getArrClient } from '../../providers/index.js';
+import type { RadarrClient } from '../../providers/radarr/index.js';
+import type { SonarrClient } from '../../providers/sonarr/index.js';
 import { getServiceConfig } from '../../utils/services.js';
 
 interface HistoryDateMap {
@@ -79,7 +80,7 @@ export async function syncRadarrAvailability(since?: Date | null): Promise<numbe
   const radarrCfg = await getServiceConfig('radarr');
   if (!radarrCfg) throw new Error('No Radarr service');
 
-  const radarr = await getRadarrAsync();
+  const radarr = await getArrClient('radarr') as RadarrClient;
   const radarrHistory = await radarr.getHistory(since);
   const { dates } = buildRadarrDateMap(radarrHistory);
 
@@ -96,7 +97,7 @@ export async function syncSonarrAvailability(since?: Date | null): Promise<numbe
   const sonarrCfg = await getServiceConfig('sonarr');
   if (!sonarrCfg) throw new Error('No Sonarr service');
 
-  const sonarr = await getSonarrAsync();
+  const sonarr = await getArrClient('sonarr') as SonarrClient;
   const sonarrHistory = await sonarr.getHistory(since);
   const { entries } = buildSonarrDateMap(sonarrHistory);
 

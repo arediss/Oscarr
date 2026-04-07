@@ -1,9 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../utils/prisma.js';
-import { getRadarrAsync, createRadarrFromConfig } from '../../services/radarr.js';
-import { getSonarrAsync, createSonarrFromConfig } from '../../services/sonarr.js';
 import { getServiceById } from '../../utils/services.js';
-import { getAuthProvider, getServiceDefinition, getServiceSchemas } from '../../providers/index.js';
+import { getAuthProvider, getServiceDefinition, getServiceSchemas, getArrClient, createArrClient } from '../../providers/index.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { parseId } from '../../utils/params.js';
 
@@ -166,7 +164,7 @@ export async function servicesRoutes(app: FastifyInstance) {
   app.get('/radarr/profiles', async (request, reply) => {
 
     try {
-      const radarr = await getRadarrAsync();
+      const radarr = await getArrClient('radarr');
       const profiles = await radarr.getQualityProfiles();
       return profiles;
     } catch {
@@ -177,7 +175,7 @@ export async function servicesRoutes(app: FastifyInstance) {
   app.get('/radarr/rootfolders', async (request, reply) => {
 
     try {
-      const radarr = await getRadarrAsync();
+      const radarr = await getArrClient('radarr');
       const folders = await radarr.getRootFolders();
       return folders;
     } catch {
@@ -188,7 +186,7 @@ export async function servicesRoutes(app: FastifyInstance) {
   app.get('/sonarr/profiles', async (request, reply) => {
 
     try {
-      const sonarr = await getSonarrAsync();
+      const sonarr = await getArrClient('sonarr');
       const profiles = await sonarr.getQualityProfiles();
       return profiles;
     } catch {
@@ -199,7 +197,7 @@ export async function servicesRoutes(app: FastifyInstance) {
   app.get('/sonarr/rootfolders', async (request, reply) => {
 
     try {
-      const sonarr = await getSonarrAsync();
+      const sonarr = await getArrClient('sonarr');
       const folders = await sonarr.getRootFolders();
       return folders;
     } catch {
@@ -227,16 +225,12 @@ export async function servicesRoutes(app: FastifyInstance) {
     const svc = await getServiceById(serviceId);
     if (!svc) return reply.status(404).send({ error: 'Service introuvable ou d\u00e9sactiv\u00e9' });
     try {
-      if (svc.type === 'radarr') {
-        const radarr = createRadarrFromConfig(svc.config);
-        return await radarr.getQualityProfiles();
+      const client = createArrClient(svc.type, svc.config);
+      return await client.getQualityProfiles();
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('does not support client creation')) {
+        return reply.status(400).send({ error: 'Ce type de service ne supporte pas les profils qualit\u00e9' });
       }
-      if (svc.type === 'sonarr') {
-        const sonarr = createSonarrFromConfig(svc.config);
-        return await sonarr.getQualityProfiles();
-      }
-      return reply.status(400).send({ error: 'Ce type de service ne supporte pas les profils qualit\u00e9' });
-    } catch {
       return reply.status(502).send({ error: 'Impossible de contacter le service' });
     }
   });
@@ -256,16 +250,12 @@ export async function servicesRoutes(app: FastifyInstance) {
     const svc = await getServiceById(serviceId);
     if (!svc) return reply.status(404).send({ error: 'Service introuvable ou d\u00e9sactiv\u00e9' });
     try {
-      if (svc.type === 'radarr') {
-        const radarr = createRadarrFromConfig(svc.config);
-        return await radarr.getRootFolders();
+      const client = createArrClient(svc.type, svc.config);
+      return await client.getRootFolders();
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('does not support client creation')) {
+        return reply.status(400).send({ error: 'Ce type de service ne supporte pas les dossiers racine' });
       }
-      if (svc.type === 'sonarr') {
-        const sonarr = createSonarrFromConfig(svc.config);
-        return await sonarr.getRootFolders();
-      }
-      return reply.status(400).send({ error: 'Ce type de service ne supporte pas les dossiers racine' });
-    } catch {
       return reply.status(502).send({ error: 'Impossible de contacter le service' });
     }
   });

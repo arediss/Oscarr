@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { getRadarrAsync } from '../services/radarr.js';
-import { getSonarrAsync } from '../services/sonarr.js';
+import { getArrClient } from '../providers/index.js';
+import type { RadarrClient } from '../providers/radarr/index.js';
+import type { SonarrClient } from '../providers/sonarr/index.js';
 import { getCollection } from '../services/tmdb.js';
 import { logEvent } from '../utils/logEvent.js';
 import { safeNotify, safeUserNotify } from '../utils/safeNotify.js';
@@ -265,10 +266,10 @@ export async function requestRoutes(app: FastifyInstance) {
 
     try {
       if (mediaType === 'tv' && media.sonarrId) {
-        const sonarr = await getSonarrAsync();
+        const sonarr = await getArrClient('sonarr') as SonarrClient;
         await sonarr.searchMissingEpisodes(media.sonarrId);
       } else if (mediaType === 'movie' && media.radarrId) {
-        const radarr = await getRadarrAsync();
+        const radarr = await getArrClient('radarr') as RadarrClient;
         await radarr.searchMovie(media.radarrId);
       } else {
         return reply.status(400).send({ error: 'Ce média n\'est pas encore dans Sonarr/Radarr' });

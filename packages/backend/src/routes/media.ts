@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { getSonarrAsync } from '../services/sonarr.js';
+import { getArrClient } from '../providers/index.js';
+import type { SonarrClient } from '../providers/sonarr/index.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 import { isMatureRating } from '../services/tmdb.js';
 import { normalizeLanguages } from '../utils/languages.js';
@@ -325,7 +326,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     }
 
     try {
-      const sonarr = await getSonarrAsync();
+      const sonarr = await getArrClient('sonarr') as SonarrClient;
       const episodes = await sonarr.getEpisodes(media.sonarrId, seasonNum);
       return episodes.map((ep) => ({
         episodeNumber: ep.episodeNumber,

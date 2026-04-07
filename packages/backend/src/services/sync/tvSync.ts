@@ -1,5 +1,6 @@
 import { prisma } from '../../utils/prisma.js';
-import { getSonarrAsync, type SonarrSeries, type SonarrSeason } from '../sonarr.js';
+import { getArrClient } from '../../providers/index.js';
+import { type SonarrClient, type SonarrSeries, type SonarrSeason } from '../../providers/sonarr/index.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { getServiceConfig } from '../../utils/services.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '../../utils/requestStatus.js';
@@ -184,7 +185,7 @@ export async function syncSonarr(since?: Date | null): Promise<SyncResult> {
   }
 
   try {
-    const sonarr = await getSonarrAsync();
+    const sonarr = await getArrClient('sonarr') as SonarrClient;
     const series = await sonarr.getSeries();
 
     // Incremental: process newly added series + series that are complete but not marked available in DB

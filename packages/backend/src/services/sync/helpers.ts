@@ -1,8 +1,8 @@
 import { prisma } from '../../utils/prisma.js';
 import { safeNotify, safeUserNotify } from '../../utils/safeNotify.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '../../utils/requestStatus.js';
-import type { RadarrMovie } from '../radarr.js';
-import type { SonarrSeries } from '../sonarr.js';
+import type { RadarrMovie } from '../../providers/radarr/index.js';
+import type { SonarrSeries } from '../../providers/sonarr/index.js';
 
 export interface SyncResult {
   added: number;

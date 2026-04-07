@@ -1,5 +1,23 @@
 import type { FastifyInstance } from 'fastify';
 
+// ─── Arr Client Shared Types ────────────────────────────────────────
+
+export interface ArrTag { id: number; label: string }
+export interface ArrQualityProfile { id: number; name: string }
+export interface ArrRootFolder { id: number; path: string; freeSpace: number }
+
+export interface ArrClient {
+  getTags(): Promise<ArrTag[]>;
+  createTag(label: string): Promise<ArrTag>;
+  getOrCreateTag(username: string): Promise<number>;
+  getQualityProfiles(): Promise<ArrQualityProfile[]>;
+  getRootFolders(): Promise<ArrRootFolder[]>;
+  getSystemStatus(): Promise<{ version: string }>;
+  getQueue(): Promise<{ records: unknown[] }>;
+  getHistory(since?: Date | null): Promise<unknown[]>;
+  getCalendar(start: string, end: string): Promise<unknown[]>;
+}
+
 // ─── Service Definition ─────────────────────────────────────────────
 
 export interface ServiceField {
@@ -17,6 +35,7 @@ export interface ServiceDefinition {
   category: 'arr' | 'media-server' | 'download-client' | 'monitoring';
   fields: ServiceField[];
   test(config: Record<string, string>): Promise<{ ok: boolean; version?: string }>;
+  createClient?(config: Record<string, string>): ArrClient;
 }
 
 // ─── Auth Provider ──────────────────────────────────────────────────

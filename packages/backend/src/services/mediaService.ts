@@ -1,6 +1,7 @@
 import { prisma } from '../utils/prisma.js';
-import { getRadarrAsync } from './radarr.js';
-import { getSonarrAsync } from './sonarr.js';
+import { getArrClient } from '../providers/index.js';
+import type { RadarrClient } from '../providers/radarr/index.js';
+import type { SonarrClient } from '../providers/sonarr/index.js';
 import { normalizeLanguages } from '../utils/languages.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
 
@@ -31,7 +32,7 @@ export async function performLiveCheck(
   const result: LiveCheckResult = { liveAvailable: false, sonarrSeasonStats: null, audioLanguages: null, subtitleLanguages: null };
   try {
     if (mediaType === 'movie') {
-      const radarr = await getRadarrAsync();
+      const radarr = await getArrClient('radarr') as RadarrClient;
       const radarrMovie = await radarr.getMovieByTmdbId(tmdbId);
       if (radarrMovie?.hasFile) {
         result.liveAvailable = true;
@@ -55,7 +56,7 @@ export async function performLiveCheck(
         resolvedTvdbId = tmdbData.external_ids?.tvdb_id ?? null;
       }
       if (resolvedTvdbId) {
-        const sonarr = await getSonarrAsync();
+        const sonarr = await getArrClient('sonarr') as SonarrClient;
         const sonarrSeries = await sonarr.getSeriesByTvdbId(resolvedTvdbId);
         if (sonarrSeries) {
           const stats = sonarrSeries.statistics;

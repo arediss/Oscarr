@@ -1,48 +1,8 @@
 import axios, { type AxiosInstance } from 'axios';
-import { getServiceConfig } from '../utils/services.js';
+import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder } from '../types.js';
+import type { RadarrMovie, RadarrQueueItem, RadarrHistoryRecord } from './types.js';
 
-export interface RadarrMovie {
-  id: number;
-  title: string;
-  tmdbId: number;
-  imdbId: string;
-  titleSlug: string;
-  monitored: boolean;
-  hasFile: boolean;
-  isAvailable: boolean;
-  status: string;
-  sizeOnDisk: number;
-  path: string;
-  qualityProfileId: number;
-  added: string;
-  tags: number[];
-  images: { coverType: string; remoteUrl: string }[];
-  digitalRelease?: string;
-  physicalRelease?: string;
-  inCinemas?: string;
-  releaseDate?: string;
-  movieFile?: {
-    dateAdded: string;
-    languages?: { id: number; name: string }[];
-    mediaInfo?: {
-      audioLanguages?: string;  // e.g. "English / French"
-      subtitles?: string;       // e.g. "French / English"
-    };
-  };
-}
-
-export interface RadarrQueueItem {
-  movieId: number;
-  title: string;
-  status: string;
-  size: number;
-  sizeleft: number;
-  timeleft: string;
-  estimatedCompletionTime: string;
-  downloadClient: string;
-}
-
-class RadarrService {
+export class RadarrClient implements ArrClient {
   private api: AxiosInstance;
 
   constructor(url: string, apiKey: string) {
@@ -95,12 +55,12 @@ class RadarrService {
     return data;
   }
 
-  async getTags(): Promise<{ id: number; label: string }[]> {
+  async getTags(): Promise<ArrTag[]> {
     const { data } = await this.api.get('/tag');
     return data;
   }
 
-  async createTag(label: string): Promise<{ id: number; label: string }> {
+  async createTag(label: string): Promise<ArrTag> {
     const { data } = await this.api.post('/tag', { label });
     return data;
   }
@@ -126,12 +86,12 @@ class RadarrService {
     return data;
   }
 
-  async getQualityProfiles(): Promise<{ id: number; name: string }[]> {
+  async getQualityProfiles(): Promise<ArrQualityProfile[]> {
     const { data } = await this.api.get('/qualityprofile');
     return data;
   }
 
-  async getRootFolders(): Promise<{ id: number; path: string; freeSpace: number }[]> {
+  async getRootFolders(): Promise<ArrRootFolder[]> {
     const { data } = await this.api.get('/rootfolder');
     return data;
   }
@@ -166,43 +126,4 @@ class RadarrService {
     const { data } = await this.api.get('/system/status');
     return data;
   }
-}
-
-export interface RadarrHistoryRecord {
-  movieId: number;
-  date: string;
-  eventType: string;
-}
-
-const _serviceCache = new Map<number, { instance: RadarrService; configKey: string }>();
-
-/** Create a RadarrService from a service config object */
-export function createRadarrFromConfig(config: Record<string, string>): RadarrService {
-  return new RadarrService(config.url || '', config.apiKey || '');
-}
-
-/** Get a cached RadarrService for a specific service ID */
-export function getRadarrForService(serviceId: number, config: Record<string, string>): RadarrService {
-  const configKey = `${config.url}|${config.apiKey}`;
-  const cached = _serviceCache.get(serviceId);
-  if (cached && cached.configKey === configKey) return cached.instance;
-  const instance = createRadarrFromConfig(config);
-  _serviceCache.set(serviceId, { instance, configKey });
-  return instance;
-}
-
-let _radarr: RadarrService | null = null;
-let _radarrConfigKey: string | null = null;
-
-export async function getRadarrAsync(): Promise<RadarrService> {
-  const config = await getServiceConfig('radarr');
-  if (!config?.url || !config?.apiKey) {
-    throw new Error('No Radarr service configured');
-  }
-  const configKey = `${config.url}|${config.apiKey}`;
-  if (!_radarr || _radarrConfigKey !== configKey) {
-    _radarr = new RadarrService(config.url, config.apiKey);
-    _radarrConfigKey = configKey;
-  }
-  return _radarr;
 }

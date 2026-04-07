@@ -1,5 +1,6 @@
 import { prisma } from '../../utils/prisma.js';
-import { getRadarrAsync, type RadarrMovie } from '../radarr.js';
+import { getArrClient } from '../../providers/index.js';
+import { type RadarrClient, type RadarrMovie } from '../../providers/radarr/index.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { getServiceConfig } from '../../utils/services.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '../../utils/requestStatus.js';
@@ -86,7 +87,7 @@ export async function syncRadarr(since?: Date | null): Promise<SyncResult> {
   }
 
   try {
-    const radarr = await getRadarrAsync();
+    const radarr = await getArrClient('radarr') as RadarrClient;
     const movies = await radarr.getMovies();
 
     // Incremental: process newly added movies + movies that have a file but aren't marked available in DB

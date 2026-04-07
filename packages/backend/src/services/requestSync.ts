@@ -1,6 +1,7 @@
 import { prisma } from '../utils/prisma.js';
-import { getRadarrAsync } from './radarr.js';
-import { getSonarrAsync } from './sonarr.js';
+import { getArrClient } from '../providers/index.js';
+import type { RadarrClient } from '../providers/radarr/index.js';
+import type { SonarrClient } from '../providers/sonarr/index.js';
 import { getServiceConfig } from '../utils/services.js';
 import { chunk } from '../utils/batch.js';
 
@@ -52,7 +53,7 @@ async function syncRadarrRequests(usernameMap: Map<string, number>): Promise<Syn
   }
 
   try {
-    const radarr = await getRadarrAsync();
+    const radarr = await getArrClient('radarr') as RadarrClient;
     const [tags, movies] = await Promise.all([
       radarr.getTags(),
       radarr.getMovies(),
@@ -143,7 +144,7 @@ async function syncSonarrRequests(usernameMap: Map<string, number>): Promise<Syn
   }
 
   try {
-    const sonarr = await getSonarrAsync();
+    const sonarr = await getArrClient('sonarr') as SonarrClient;
     const [tags, series] = await Promise.all([
       sonarr.getTags(),
       sonarr.getSeries(),
