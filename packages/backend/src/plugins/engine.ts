@@ -4,6 +4,7 @@ import { prisma } from '../utils/prisma.js';
 import { notificationRegistry } from '../notifications/index.js';
 import type { NotificationPayload } from '../notifications/types.js';
 import { sendUserNotification } from '../services/userNotifications.js';
+import { getArrClient } from '../providers/index.js';
 import { discoverPlugins } from './loader.js';
 import type {
   LoadedPlugin,
@@ -265,6 +266,7 @@ export class PluginEngine {
         await sendUserNotification(userId, payload);
       },
       notificationRegistry: notificationRegistry,
+      getArrClient: (serviceType: string) => getArrClient(serviceType),
     };
   }
 }
