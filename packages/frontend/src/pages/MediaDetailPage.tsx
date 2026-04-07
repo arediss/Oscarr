@@ -266,17 +266,20 @@ export default function MediaDetailPage({ type }: Props) {
                   {t('media.request')}
                 </button>
               ) : isDownloading ? (
-                <div className="flex items-center gap-3">
-                  <button disabled className="btn-secondary flex items-center gap-2 cursor-default">
+                <button disabled className="relative overflow-hidden rounded-xl px-5 py-2.5 text-sm font-medium text-white cursor-default min-w-[180px]">
+                  <div
+                    className="absolute inset-0 bg-ndp-accent/80 transition-all duration-1000 ease-out"
+                    style={{ width: `${download.progress}%` }}
+                  />
+                  <div className="absolute inset-0 bg-white/5" />
+                  <div className="relative flex items-center justify-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('status.downloading_long')}
-                  </button>
-                  <div className="flex-1 min-w-[120px] max-w-[200px]">
-                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{ width: `${download.progress}%` }} />
-                    </div>
+                    <span>{Math.round(download.progress)}%</span>
+                    {download.timeLeft && download.timeLeft !== '00:00:00' && (
+                      <span className="text-xs opacity-70">— {download.timeLeft.replace(/^0+:?/, '')}</span>
+                    )}
                   </div>
-                </div>
+                </button>
               ) : isUpcoming ? (
                 <button disabled className="btn-secondary flex items-center gap-2 cursor-default opacity-60">
                   <Clock className="w-4 h-4" />
