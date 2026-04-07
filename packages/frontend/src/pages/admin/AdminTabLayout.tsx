@@ -16,7 +16,7 @@ export function AdminTabLayout({ title, count, actions, children }: AdminTabLayo
         </h2>
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
-      <div className="animate-fade-in">
+      <div className="animate-fade-in pb-20">
         {children}
       </div>
     </div>
