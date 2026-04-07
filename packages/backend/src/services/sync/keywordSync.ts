@@ -1,6 +1,6 @@
-import { prisma } from '../utils/prisma.js';
-import { getMovieDetails, getTvDetails, extractKeywords, extractContentRating, type TmdbMovie, type TmdbTv } from './tmdb.js';
-import { logEvent } from '../utils/logEvent.js';
+import { prisma } from '../../utils/prisma.js';
+import { getMovieDetails, getTvDetails, extractKeywords, extractContentRating, type TmdbMovie, type TmdbTv } from '../tmdb.js';
+import { logEvent } from '../../utils/logEvent.js';
 
 const BATCH_SIZE = 20;
 const BATCH_DELAY_MS = 1000;

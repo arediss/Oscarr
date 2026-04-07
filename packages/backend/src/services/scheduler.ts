@@ -2,9 +2,9 @@ import cron, { type ScheduledTask } from 'node-cron';
 import { prisma } from '../utils/prisma.js';
 import { runFullSync, runNewMediaSync } from './sync.js';
 import { syncRequestsFromTags, cleanupOrphanedRequests } from './requestSync.js';
-import { retryFailedRequests } from '../routes/requests.js';
+import { retryFailedRequests } from './requestService.js';
 import { getGenreBackdrops } from './tmdb.js';
-import { syncMissingKeywords } from './keywordSync.js';
+import { syncMissingKeywords } from './sync/keywordSync.js';
 import type { PluginEngine } from '../plugins/engine.js';
 import { logEvent } from '../utils/logEvent.js';
 

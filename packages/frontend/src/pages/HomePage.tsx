@@ -8,6 +8,7 @@ import MediaRow from '@/components/MediaRow';
 import { PluginSlot } from '@/plugins/PluginSlot';
 import GenreRow from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
+import { dbMediaToTmdbShape } from '@/utils/mediaMapper';
 
 export default function HomePage() {
   const { t } = useTranslation();
@@ -48,20 +49,7 @@ export default function HomePage() {
           api.get('/tmdb/tv/trending-anime'),
         ]);
         // Map DB media to TmdbMedia shape for MediaRow
-        setRecentlyAdded(recentRes.data.map((m: { tmdbId: number; mediaType: string; title: string; posterPath: string | null; backdropPath: string | null; releaseDate: string | null; voteAverage: number | null; lastEpisodeInfo?: { season: number; episode: number; title: string } | null }) => ({
-          id: m.tmdbId > 0 ? m.tmdbId : 0,
-          title: m.mediaType === 'movie' ? m.title : undefined,
-          name: m.mediaType === 'tv' ? m.title : undefined,
-          poster_path: m.posterPath,
-          backdrop_path: m.backdropPath,
-          release_date: m.mediaType === 'movie' ? m.releaseDate : undefined,
-          first_air_date: m.mediaType === 'tv' ? m.releaseDate : undefined,
-          vote_average: m.voteAverage ?? 0,
-          vote_count: 0,
-          overview: '',
-          media_type: m.mediaType,
-          lastEpisodeInfo: m.lastEpisodeInfo,
-        })));
+        setRecentlyAdded(recentRes.data.map(dbMediaToTmdbShape));
         setTrending(trendingRes.data.results);
         setPopularMovies(moviesRes.data.results);
         setPopularTv(tvRes.data.results);

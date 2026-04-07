@@ -1,71 +1,227 @@
 # Providers
 
-Providers are the core extension point for adding external services to Oscarr. Each provider is a self-contained module that defines how Oscarr connects to, tests, and authenticates with an external service.
+Providers are the core extension point for adding external services to Oscarr. Each provider is a self-contained module that defines how Oscarr connects to, tests, and interacts with an external service.
 
 ## Architecture
 
 ```
 packages/backend/src/providers/
-  types.ts                # Provider, ServiceDefinition, AuthProvider interfaces
-  index.ts                # Central registry — all providers are registered here
-  radarr/index.ts         # Service only (no auth)
-  sonarr/index.ts         # Service only (no auth)
-  plex/index.ts           # Service + Auth (OAuth, link, import)
-  qbittorrent/index.ts    # Service only
-  tautulli/index.ts       # Service only
+  types.ts                  # All interfaces: Provider, ServiceDefinition, ArrClient, AuthProvider
+  index.ts                  # Central registry + ArrClient factory (getArrClient, createArrClient)
+  radarr/
+    index.ts                # Provider definition + createClient + re-exports
+    client.ts               # RadarrClient implements ArrClient
+    types.ts                # RadarrMovie, RadarrQueueItem, RadarrHistoryRecord
+  sonarr/
+    index.ts                # Same structure
+    client.ts               # SonarrClient implements ArrClient
+    types.ts                # SonarrSeries, SonarrSeason, etc.
+  plex/index.ts             # Service + Auth (OAuth, link, import)
+  qbittorrent/index.ts      # Service only
+  tautulli/index.ts         # Service only
 ```
+
+## Provider types
+
+### Service-only providers
+
+Providers like qBittorrent and Tautulli only need a `ServiceDefinition`: metadata, config fields, and a test function. These appear in the admin Services tab and can be tested/configured.
+
+### Service + Auth providers
+
+Providers like Plex add an `AuthProvider` for OAuth login, account linking, and user import. See [Auth Providers](./auth-providers.md).
+
+### Arr providers (media management)
+
+Providers with `category: 'arr'` (Radarr, Sonarr, future Lidarr/Readarr) implement the full `ArrClient` interface. This enables:
+- **Sync** — import media libraries into Oscarr's DB
+- **Requests** — send media requests to the service
+- **Live check** — verify availability in real-time
+- **Admin** — fetch quality profiles, root folders
+
+The business logic (sync, requests, media service) works exclusively through the `ArrClient` interface — it never knows which specific provider it's talking to.
 
 ## The Provider interface
 
-Every provider exports a `Provider` object:
-
 ```typescript
 interface Provider {
-  service: ServiceDefinition;   // Required — service config, fields, test
-  auth?: AuthProvider;          // Optional — OAuth login, account linking, user import
+  service: ServiceDefinition;   // Required — config, fields, test, optional createClient
+  auth?: AuthProvider;          // Optional — OAuth, account linking, user import
 }
 ```
 
-A provider can be **service-only** (Radarr, Sonarr, qBittorrent) or **service + auth** (Plex, Jellyfin, Discord).
+## ArrClient interface
 
-## Creating a new provider
+The `ArrClient` is the abstraction that all *arr providers implement. Business code never imports provider-specific types.
 
-### Step 1: Create the provider file
+```typescript
+interface ArrClient {
+  // ─── Metadata ─────────────────────────────────────────────────────
+  readonly mediaType: 'movie' | 'tv';
+  readonly serviceType: string;           // 'radarr', 'sonarr', etc.
+  readonly dbIdField: 'radarrId' | 'sonarrId';
+  readonly defaultRootFolder: string;     // '/movies', '/tv', etc.
 
-Create `packages/backend/src/providers/<name>/index.ts`:
+  // ─── Tag management ───────────────────────────────────────────────
+  getTags(): Promise<ArrTag[]>;
+  createTag(label: string): Promise<ArrTag>;
+  getOrCreateTag(username: string): Promise<number>;
 
+  // ─── Configuration ────────────────────────────────────────────────
+  getQualityProfiles(): Promise<ArrQualityProfile[]>;
+  getRootFolders(): Promise<ArrRootFolder[]>;
+  getSystemStatus(): Promise<{ version: string }>;
+
+  // ─── Queue / History / Calendar ───────────────────────────────────
+  getQueue(): Promise<{ records: unknown[] }>;
+  getHistory(since?: Date | null): Promise<unknown[]>;
+  getCalendar(start: string, end: string): Promise<unknown[]>;
+  getHistoryEntries(since?: Date | null): Promise<ArrHistoryEntry[]>;
+
+  // ─── Sync ─────────────────────────────────────────────────────────
+  getAllMedia(): Promise<ArrMediaItem[]>;
+
+  // ─── Live availability check ──────────────────────────────────────
+  checkAvailability(externalId: number): Promise<ArrAvailabilityResult>;
+
+  // ─── Request dispatch ─────────────────────────────────────────────
+  findByExternalId(externalId: number): Promise<{ id: number } | null>;
+  addMedia(options: ArrAddMediaOptions): Promise<void>;
+  searchMedia(serviceMediaId: number): Promise<void>;
+
+  // ─── Episodes (TV only, optional) ─────────────────────────────────
+  getEpisodesNormalized?(serviceMediaId: number, seasonNumber?: number): Promise<ArrEpisode[]>;
+}
+```
+
+## Registry API
+
+The provider registry in `providers/index.ts` provides factory functions:
+
+```typescript
+// Get the default cached client for a service type
+const radarr = await getArrClient('radarr');
+
+// Get a cached client for a specific service ID + config
+const radarr4k = getArrClientForService(serviceId, 'radarr', config);
+
+// Create a fresh (uncached) client
+const client = createArrClient('radarr', config);
+
+// Map media type to service type
+const serviceType = getServiceTypeForMedia('movie'); // 'radarr'
+```
+
+## Creating a new *arr provider
+
+### Step 1: Create the provider directory
+
+```
+packages/backend/src/providers/lidarr/
+  types.ts
+  client.ts
+  index.ts
+```
+
+### Step 2: Define provider-specific types
+
+`providers/lidarr/types.ts`:
+```typescript
+export interface LidarrAlbum {
+  id: number;
+  title: string;
+  artistId: number;
+  musicBrainzId: string;
+  monitored: boolean;
+  hasFile: boolean;
+  // ... other Lidarr-specific fields
+}
+```
+
+### Step 3: Implement the client
+
+`providers/lidarr/client.ts`:
+```typescript
+import axios, { type AxiosInstance } from 'axios';
+import type { ArrClient, ArrMediaItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrTag, ArrQualityProfile, ArrRootFolder } from '../types.js';
+import { extractImageFromArr } from '../types.js';
+import type { LidarrAlbum } from './types.js';
+
+export class LidarrClient implements ArrClient {
+  private api: AxiosInstance;
+
+  readonly mediaType = 'music' as const;  // New media type
+  readonly serviceType = 'lidarr';
+  readonly dbIdField = 'lidarrId' as const;
+  readonly defaultRootFolder = '/music';
+
+  constructor(url: string, apiKey: string) {
+    this.api = axios.create({
+      baseURL: `${url}/api/v1`,
+      params: { apikey: apiKey },
+      timeout: 5000,
+    });
+  }
+
+  // Implement all ArrClient methods...
+  async getAllMedia(): Promise<ArrMediaItem[]> { /* ... */ }
+  async checkAvailability(musicBrainzId: number): Promise<ArrAvailabilityResult> { /* ... */ }
+  async findByExternalId(id: number): Promise<{ id: number } | null> { /* ... */ }
+  async addMedia(options: ArrAddMediaOptions): Promise<void> { /* ... */ }
+  async searchMedia(albumId: number): Promise<void> { /* ... */ }
+  async getHistoryEntries(since?: Date | null): Promise<ArrHistoryEntry[]> { /* ... */ }
+  async getTags(): Promise<ArrTag[]> { /* ... */ }
+  async createTag(label: string): Promise<ArrTag> { /* ... */ }
+  async getOrCreateTag(username: string): Promise<number> { /* ... */ }
+  async getQualityProfiles(): Promise<ArrQualityProfile[]> { /* ... */ }
+  async getRootFolders(): Promise<ArrRootFolder[]> { /* ... */ }
+  async getSystemStatus(): Promise<{ version: string }> { /* ... */ }
+  async getQueue(): Promise<{ records: unknown[] }> { /* ... */ }
+  async getHistory(since?: Date | null): Promise<unknown[]> { /* ... */ }
+  async getCalendar(start: string, end: string): Promise<unknown[]> { /* ... */ }
+}
+```
+
+### Step 4: Create the provider definition
+
+`providers/lidarr/index.ts`:
 ```typescript
 import axios from 'axios';
 import type { Provider } from '../types.js';
+import { LidarrClient } from './client.js';
 
-export const jellyfinProvider: Provider = {
+export const lidarrProvider: Provider = {
   service: {
-    id: 'jellyfin',
-    label: 'Jellyfin',
-    icon: 'https://raw.githubusercontent.com/jellyfin/jellyfin-ux/master/branding/SVG/icon-transparent.svg',
-    category: 'media-server',
+    id: 'lidarr',
+    label: 'Lidarr',
+    icon: 'https://raw.githubusercontent.com/Lidarr/Lidarr/develop/Logo/128.png',
+    category: 'arr',
     fields: [
-      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:8096' },
+      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:8686' },
       { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
     ],
     async test(config) {
-      const { data } = await axios.get(`${config.url}/System/Info`, {
-        headers: { Authorization: `MediaBrowser Token="${config.apiKey}"` },
+      const { data } = await axios.get(`${config.url}/api/v1/system/status`, {
+        params: { apikey: config.apiKey },
         timeout: 5000,
       });
-      return { ok: true, version: data.Version };
+      return { ok: true, version: data.version };
+    },
+    createClient(config) {
+      return new LidarrClient(config.url || '', config.apiKey || '');
     },
   },
-  // auth: jellyfinAuth,  // Add if this provider supports OAuth
 };
+
+export { LidarrClient } from './client.js';
+export type { LidarrAlbum } from './types.js';
 ```
 
-### Step 2: Register the provider
+### Step 5: Register the provider
 
-In `packages/backend/src/providers/index.ts`, import and add to the `ALL_PROVIDERS` array:
-
+In `providers/index.ts`:
 ```typescript
-import { jellyfinProvider } from './jellyfin/index.js';
+import { lidarrProvider } from './lidarr/index.js';
 
 const ALL_PROVIDERS: Provider[] = [
   radarrProvider,
@@ -73,30 +229,46 @@ const ALL_PROVIDERS: Provider[] = [
   plexProvider,
   qbittorrentProvider,
   tautulliProvider,
-  jellyfinProvider,  // Add here
+  lidarrProvider,  // Add here
 ];
 ```
 
-That's it. The provider will automatically:
-- Appear in the setup wizard and admin Services tab
-- Have its form fields generated dynamically from `fields`
-- Support connection testing via its `test()` function
-- Be available via `GET /admin/service-schemas` and `GET /setup/service-schemas`
+And add the media type mapping:
+```typescript
+const MEDIA_TYPE_TO_SERVICE: Record<string, string> = {
+  movie: 'radarr',
+  tv: 'sonarr',
+  music: 'lidarr',  // Add here
+};
+```
 
-### Step 3 (optional): Add auth support
+### What works automatically
 
-If your provider supports user authentication (OAuth), add an `auth` field. See [Auth Providers](./auth-providers.md) for details.
+After these 5 steps, with zero changes in routes or business logic:
+- Admin Services tab shows Lidarr with config form
+- Connection test works
+- Quality profiles and root folders are fetchable
+- Sync pipeline processes Lidarr media generically
+- Request dispatch sends to Lidarr via the interface
+- Live availability check works
+
+### What needs additional work
+
+- **Prisma schema**: add `lidarrId Int?` to the `Media` model + migration
+- **Frontend**: add Lidarr-specific UI if needed (e.g. album artwork instead of poster)
+- **Metadata provider**: if Lidarr uses MusicBrainz instead of TMDB, a new metadata provider is needed (see #91)
 
 ## ServiceDefinition reference
 
 ```typescript
 interface ServiceDefinition {
-  id: string;           // Unique ID stored in DB (e.g. 'radarr', 'plex')
-  label: string;        // Display name (e.g. 'Radarr', 'Plex')
-  icon: string;         // URL to the provider's icon (external URL, not local file)
+  id: string;
+  label: string;
+  icon: string;
   category: 'arr' | 'media-server' | 'download-client' | 'monitoring';
   fields: ServiceField[];
   test(config: Record<string, string>): Promise<{ ok: boolean; version?: string }>;
+  createClient?(config: Record<string, string>): ArrClient;  // Required for 'arr' category
 }
 ```
 
@@ -105,10 +277,10 @@ interface ServiceDefinition {
 ```typescript
 interface ServiceField {
   key: string;          // Config key stored in DB (e.g. 'url', 'apiKey')
-  labelKey: string;     // i18n key for the field label (e.g. 'common.url')
+  labelKey: string;     // i18n key for the field label
   type: 'text' | 'password';
-  placeholder?: string; // Placeholder text (not translated)
-  helper?: string;      // Optional UI helper (e.g. 'plex-oauth', 'plex-detect-machine-id')
+  placeholder?: string;
+  helper?: string;      // Optional UI helper (e.g. 'plex-oauth')
 }
 ```
 
@@ -121,67 +293,7 @@ interface ServiceField {
 | `download-client` | Download clients | qBittorrent, Transmission, SABnzbd |
 | `monitoring` | Monitoring & analytics | Tautulli, Overseerr |
 
-### Field labels (i18n)
-
-Field labels use i18n keys that the frontend translates. Common keys already available:
-
-| Key | EN | FR |
-|-----|----|----|
-| `common.url` | URL | URL |
-| `common.api_key` | API Key | Clé API |
-| `common.token` | Token | Token |
-| `common.username` | Username | Nom d'utilisateur |
-| `common.password` | Password | Mot de passe |
-
-For provider-specific labels, add keys prefixed with `provider.<id>.*` in both translation files.
-
-### Field helpers
-
-Helpers trigger special UI behavior on a field. Currently supported:
-
-| Helper | Description |
-|--------|-------------|
-| `plex-oauth` | Shows an "OAuth" button that launches the Plex PIN flow and fills the field with the token |
-| `plex-detect-machine-id` | Shows a detect button that auto-fills the Machine ID from the Plex server |
-
-To add a new helper, handle it in `InstallPage.tsx` and `ServiceModal` in `AdminPage.tsx`.
-
-### The test() function
-
-Each provider must implement `test(config)` which receives the config values as a flat `Record<string, string>` and returns:
-
-```typescript
-{ ok: true, version?: string }  // Success — version is shown in the UI
-// OR throws an error             // Failure — caught by the API
-```
-
-The test function is called by:
-- `POST /setup/test-service` during installation
-- `POST /admin/services/:id/test` in the admin panel
-
-### Icon URLs
-
-Icons should be **external URLs** (not local files) pointing to the provider's official icon. Examples:
-- GitHub raw URLs: `https://raw.githubusercontent.com/Radarr/Radarr/develop/Logo/128.png`
-- Official CDN: `https://www.plex.tv/wp-content/uploads/2018/01/pmp-icon.png`
-- Wikimedia: `https://upload.wikimedia.org/wikipedia/commons/...`
-
-## API endpoints
-
-| Endpoint | Auth | Description |
-|----------|------|-------------|
-| `GET /setup/service-schemas` | Setup secret | Service schemas for the wizard |
-| `GET /admin/service-schemas` | Admin | Service schemas for the admin panel |
-| `POST /setup/test-service` | Setup secret | Test a service during setup |
-| `POST /admin/services/:id/test` | Admin | Test an existing service |
-| `POST /setup/service` | Setup secret | Create a service during setup |
-| `POST /admin/services` | Admin | Create a new service |
-| `PUT /admin/services/:id` | Admin | Update a service |
-| `DELETE /admin/services/:id` | Admin | Delete a service |
-
 ## Database: Service table
-
-Services are stored in the `Service` model with config as a JSON blob:
 
 ```prisma
 model Service {
@@ -196,98 +308,13 @@ model Service {
 
 Multiple instances of the same provider type are supported (e.g. "Radarr HD" + "Radarr 4K").
 
-## Complete example: Jellyfin provider with auth
+## API endpoints
 
-```typescript
-import axios from 'axios';
-import { prisma } from '../../utils/prisma.js';
-import { logEvent } from '../../services/notifications.js';
-import type { Provider, AuthProvider, AuthHelpers } from '../types.js';
-
-const jellyfinAuth: AuthProvider = {
-  config: { id: 'jellyfin', label: 'Jellyfin', type: 'oauth' },
-
-  async registerRoutes(app, helpers) {
-    app.post('/jellyfin/login', async (request, reply) => {
-      const { serverUrl, username, password } = request.body as {
-        serverUrl: string; username: string; password: string;
-      };
-
-      // Authenticate with Jellyfin
-      const { data } = await axios.post(
-        `${serverUrl}/Users/AuthenticateByName`,
-        { Username: username, Pw: password },
-        { headers: { 'X-Emby-Authorization': 'MediaBrowser Client="Oscarr", Version="1.0"' } }
-      );
-
-      const result = await helpers.findOrCreateUser({
-        provider: 'jellyfin',
-        providerId: data.User.Id,
-        providerToken: data.AccessToken,
-        providerUsername: data.User.Name,
-        email: `${data.User.Name}@jellyfin.local`,
-        displayName: data.User.Name,
-        avatar: `${serverUrl}/Users/${data.User.Id}/Images/Primary`,
-      });
-
-      return helpers.signAndSend(reply, result.id);
-    });
-  },
-
-  async importUsers(adminUserId) {
-    const service = await prisma.service.findFirst({
-      where: { type: 'jellyfin', enabled: true },
-    });
-    if (!service) throw new Error('NO_TOKEN');
-    const config = JSON.parse(service.config);
-
-    const { data: users } = await axios.get(`${config.url}/Users`, {
-      headers: { Authorization: `MediaBrowser Token="${config.apiKey}"` },
-    });
-
-    let imported = 0, skipped = 0;
-    for (const user of users) {
-      const existing = await prisma.userProvider.findUnique({
-        where: { provider_providerId: { provider: 'jellyfin', providerId: user.Id } },
-      });
-      if (existing) { skipped++; continue; }
-
-      await prisma.user.create({
-        data: {
-          email: `${user.Name}@jellyfin.local`,
-          displayName: user.Name,
-          role: 'user',
-          providers: {
-            create: { provider: 'jellyfin', providerId: user.Id, providerUsername: user.Name },
-          },
-        },
-      });
-      imported++;
-    }
-
-    logEvent('info', 'User', `Import Jellyfin: ${imported} imported, ${skipped} skipped`);
-    return { imported, skipped, total: users.length };
-  },
-};
-
-export const jellyfinProvider: Provider = {
-  service: {
-    id: 'jellyfin',
-    label: 'Jellyfin',
-    icon: 'https://raw.githubusercontent.com/jellyfin/jellyfin-ux/master/branding/SVG/icon-transparent.svg',
-    category: 'media-server',
-    fields: [
-      { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:8096' },
-      { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
-    ],
-    async test(config) {
-      const { data } = await axios.get(`${config.url}/System/Info`, {
-        headers: { Authorization: `MediaBrowser Token="${config.apiKey}"` },
-        timeout: 5000,
-      });
-      return { ok: true, version: data.Version };
-    },
-  },
-  auth: jellyfinAuth,
-};
-```
+| Endpoint | Auth | Description |
+|----------|------|-------------|
+| `GET /setup/service-schemas` | Setup secret | Service schemas for the wizard |
+| `GET /admin/service-schemas` | Admin | Service schemas for the admin panel |
+| `POST /setup/test-service` | Setup secret | Test a service during setup |
+| `POST /admin/services/:id/test` | Admin | Test an existing service |
+| `GET /admin/services/:id/profiles` | Admin | Quality profiles (generic, uses ArrClient) |
+| `GET /admin/services/:id/rootfolders` | Admin | Root folders (generic, uses ArrClient) |
