@@ -30,7 +30,7 @@ const STATUS_CONFIG: Record<string, { labelKey: string; icon: typeof Clock; colo
   pending: { labelKey: 'pending', icon: Clock, color: 'text-ndp-warning', bg: 'bg-ndp-warning' },
   approved: { labelKey: 'approved', icon: CheckCircle, color: 'text-ndp-accent', bg: 'bg-ndp-accent' },
   declined: { labelKey: 'declined', icon: XCircle, color: 'text-ndp-danger', bg: 'bg-ndp-danger' },
-  processing: { labelKey: 'processing', icon: Loader2, color: 'text-blue-400', bg: 'bg-blue-500' },
+  processing: { labelKey: 'processing', icon: Loader2, color: 'text-blue-400', bg: 'bg-ndp-accent' },
   available: { labelKey: 'available', icon: CheckCircle, color: 'text-ndp-success', bg: 'bg-ndp-success' },
   searching: { labelKey: 'searching', icon: Search, color: 'text-ndp-accent', bg: 'bg-ndp-accent' },
   upcoming: { labelKey: 'upcoming', icon: CalendarClock, color: 'text-purple-400', bg: 'bg-purple-500' },
@@ -131,7 +131,7 @@ export default function RequestsPage() {
           <StatCard label={t('status.pending')} value={stats.pending} icon={Hourglass} color="text-ndp-warning" bg="bg-ndp-warning/5" active={filter === 'pending'} onClick={() => setFilter(filter === 'pending' ? '' : 'pending')} />
           <StatCard label={t('requests.approved_plural')} value={stats.approved} icon={ThumbsUp} color="text-ndp-accent" bg="bg-ndp-accent/5" active={filter === 'approved'} onClick={() => setFilter(filter === 'approved' ? '' : 'approved')} />
           <StatCard label={t('requests.available_plural')} value={stats.available} icon={CircleCheck} color="text-ndp-success" bg="bg-ndp-success/5" active={filter === 'available'} onClick={() => setFilter(filter === 'available' ? '' : 'available')} />
-          <StatCard label={t('requests.processing_plural')} value={stats.processing} icon={Cog} color="text-blue-400" bg="bg-blue-500/5" />
+          <StatCard label={t('requests.processing_plural')} value={stats.processing} icon={Cog} color="text-blue-400" bg="bg-ndp-accent/5" />
           <StatCard label={t('requests.declined_plural')} value={stats.declined} icon={Ban} color="text-ndp-danger" bg="bg-ndp-danger/5" active={filter === 'declined'} onClick={() => setFilter(filter === 'declined' ? '' : 'declined')} />
         </div>
       )}
@@ -265,7 +265,7 @@ function RequestCard({
           <div className="flex items-center gap-2 mt-2">
             <span className="text-xs text-white/50">{t('requests.status')}</span>
             {download ? (
-              <span className="px-2 py-0.5 rounded text-[11px] font-semibold text-white bg-blue-500 flex items-center gap-1.5">
+              <span className="px-2 py-0.5 rounded text-[11px] font-semibold text-white bg-ndp-accent flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 {t('status.downloading', { progress: download.progress })}
               </span>
@@ -331,7 +331,7 @@ function RequestCard({
       {/* Download progress bar */}
       {download && (
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
-          <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${download.progress}%` }} />
+          <div className="h-full bg-ndp-accent transition-all duration-1000" style={{ width: `${download.progress}%` }} />
         </div>
       )}
     </Link>
