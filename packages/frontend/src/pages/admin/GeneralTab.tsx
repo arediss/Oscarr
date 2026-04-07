@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Loader2, Save, CheckCircle, AlertTriangle, ArrowUpCircle, ExternalLink } from 'lucide-react';
+import { Loader2, Save, CheckCircle, AlertTriangle, ArrowUpCircle, ExternalLink, Key, Copy, RefreshCw, Trash2, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
 import { useFeatures } from '@/context/FeaturesContext';
 import { Spinner } from './Spinner';
@@ -45,9 +45,16 @@ export function GeneralTab() {
   const [bannerText, setBannerText] = useState('');
   const [loading, setLoading] = useState(true);
   const [versionInfo, setVersionInfo] = useState<{ current: string; latest?: string; updateAvailable?: boolean; releaseUrl?: string } | null>(null);
+  const [apiKeyFull, setApiKeyFull] = useState<string | null>(null); // Only set after generate
+  const [apiKeyMasked, setApiKeyMasked] = useState<string | null>(null);
+  const [apiKeyHasKey, setApiKeyHasKey] = useState(false);
+  const [apiKeyCopied, setApiKeyCopied] = useState(false);
+  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
+      api.get('/admin/api-key').then(({ data }) => { setApiKeyHasKey(data.hasKey); setApiKeyMasked(data.maskedKey); }),
       api.get('/admin/settings').then(({ data }) => {
         setAutoApproveRequests(data.autoApproveRequests ?? false);
         setRegistrationEnabled(data.registrationEnabled ?? true);
@@ -189,6 +196,90 @@ export function GeneralTab() {
             />
             <span className="text-sm text-ndp-text-dim">min</span>
           </div>
+        </div>
+      </div>
+
+      {/* API Key */}
+      <div className="mt-8">
+        <h2 className="text-lg font-semibold text-ndp-text mb-2 flex items-center gap-2">
+          <Key className="w-5 h-5" />
+          {t('admin.general.api_key')}
+        </h2>
+        <p className="text-xs text-ndp-text-dim mb-4">{t('admin.general.api_key_desc')}</p>
+        <div className="card p-4">
+          {apiKeyHasKey ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <code className="flex-1 text-xs font-mono bg-black/20 px-3 py-2 rounded-lg text-ndp-text truncate select-all">
+                  {apiKeyFull && apiKeyVisible ? apiKeyFull : apiKeyMasked}
+                </code>
+                {apiKeyFull && (
+                  <>
+                    <button
+                      onClick={() => setApiKeyVisible(!apiKeyVisible)}
+                      className="btn-secondary text-xs flex items-center gap-1.5 flex-shrink-0"
+                    >
+                      {apiKeyVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(apiKeyFull); setApiKeyCopied(true); setTimeout(() => setApiKeyCopied(false), 2000); }}
+                      className="btn-secondary text-xs flex items-center gap-1.5 flex-shrink-0"
+                    >
+                      {apiKeyCopied ? <CheckCircle className="w-3.5 h-3.5 text-ndp-success" /> : <Copy className="w-3.5 h-3.5" />}
+                      {apiKeyCopied ? t('common.copied') : t('common.copy')}
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={async () => {
+                    setApiKeyLoading(true);
+                    try {
+                      const { data } = await api.post('/admin/api-key/generate');
+                      setApiKeyFull(data.apiKey);
+                      setApiKeyMasked(`${data.apiKey.slice(0, 8)}${'•'.repeat(24)}${data.apiKey.slice(-8)}`);
+                      setApiKeyHasKey(true);
+                      setApiKeyVisible(true);
+                    } finally { setApiKeyLoading(false); }
+                  }}
+                  disabled={apiKeyLoading}
+                  className="btn-secondary text-xs flex items-center gap-1.5 flex-shrink-0"
+                >
+                  <RefreshCw className={clsx('w-3.5 h-3.5', apiKeyLoading && 'animate-spin')} />
+                  {t('admin.general.regenerate')}
+                </button>
+                <button
+                  onClick={async () => { await api.delete('/admin/api-key'); setApiKeyFull(null); setApiKeyMasked(null); setApiKeyHasKey(false); setApiKeyVisible(false); }}
+                  className="text-xs text-ndp-danger hover:text-ndp-danger/80 flex items-center gap-1.5 flex-shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {apiKeyFull && (
+                <p className="text-xs text-ndp-warning">{t('admin.general.api_key_copy_warning')}</p>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-ndp-text-dim">{t('admin.general.no_api_key')}</span>
+              <button
+                onClick={async () => {
+                  setApiKeyLoading(true);
+                  try {
+                    const { data } = await api.post('/admin/api-key/generate');
+                    setApiKeyFull(data.apiKey);
+                    setApiKeyMasked(`${data.apiKey.slice(0, 8)}${'•'.repeat(24)}${data.apiKey.slice(-8)}`);
+                    setApiKeyHasKey(true);
+                    setApiKeyVisible(true);
+                  } finally { setApiKeyLoading(false); }
+                }}
+                disabled={apiKeyLoading}
+                className="btn-primary text-sm flex items-center gap-2"
+              >
+                {apiKeyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
+                {t('admin.general.generate_api_key')}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

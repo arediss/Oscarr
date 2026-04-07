@@ -2,8 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import axios from 'axios';
+import crypto from 'crypto';
 import { prisma } from '../utils/prisma.js';
 import { pluginEngine } from '../plugins/engine.js';
+import { getArrClient } from '../providers/index.js';
+import { getServiceConfig } from '../utils/services.js';
 
 const APP_VERSION = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../../../../package.json'), 'utf-8')
@@ -40,6 +43,50 @@ export async function appRoutes(app: FastifyInstance) {
       where: { mappings: { some: {} } },
       orderBy: { position: 'asc' },
     });
+  });
+
+  // ─── Health check (authenticated via API key) ─────────────────────
+  app.get('/health', async (request, reply) => {
+    const apiKey = (request.headers['x-api-key'] as string)
+      || (request.headers.authorization?.replace(/^Bearer\s+/i, ''));
+
+    if (!apiKey) {
+      return reply.status(401).send({ error: 'API key required (X-Api-Key header or Authorization: Bearer)' });
+    }
+
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    if (!settings?.apiKey) {
+      return reply.status(403).send({ error: 'Invalid API key' });
+    }
+    const provided = Buffer.from(apiKey);
+    const stored = Buffer.from(settings.apiKey);
+    if (provided.length !== stored.length || !crypto.timingSafeEqual(provided, stored)) {
+      return reply.status(403).send({ error: 'Invalid API key' });
+    }
+
+    const uptime = process.uptime();
+    const services: Record<string, { online: boolean; version?: string }> = {};
+
+    // Check each configured arr service
+    for (const type of ['radarr', 'sonarr']) {
+      const config = await getServiceConfig(type);
+      if (!config) continue;
+      try {
+        const client = await getArrClient(type);
+        const status = await client.getSystemStatus();
+        services[type] = { online: true, version: status.version };
+      } catch {
+        services[type] = { online: false };
+      }
+    }
+
+    return {
+      status: 'ok',
+      version: APP_VERSION,
+      uptime: Math.floor(uptime),
+      database: 'ok',
+      services,
+    };
   });
 
   // Get feature flags (no auth — needed by Layout before auth check)

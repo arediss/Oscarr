@@ -85,6 +85,7 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   // ── App ──
   'GET:/api/app/version':                { permission: AUTH },
   'GET:/api/app/banner':                 { permission: PUBLIC },
+  'GET:/api/app/health':                 { permission: PUBLIC },  // Auth via API key, not JWT
   'GET:/api/app/quality-options':        { permission: AUTH },
   'GET:/api/app/features':               { permission: PUBLIC },
 
