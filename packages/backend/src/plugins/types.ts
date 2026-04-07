@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
 import type { NotificationRegistry } from '../notifications/registry.js';
 import type { NotificationPayload } from '../notifications/types.js';
+import type { ArrClient } from '../providers/types.js';
 
 // ─── Plugin Manifest (manifest.json) ────────────────────────────────
 
@@ -53,6 +54,7 @@ export interface PluginContext {
   sendNotification(type: string, data: NotificationPayload): Promise<void>;
   sendUserNotification(userId: number, payload: { type: string; title: string; message: string; metadata?: Record<string, unknown> }): Promise<void>;
   notificationRegistry: NotificationRegistry;
+  getArrClient(serviceType: string): Promise<ArrClient>;
 }
 
 // ─── Plugin Registration (what register() returns) ──────────────────

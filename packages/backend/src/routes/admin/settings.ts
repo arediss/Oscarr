@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import crypto from 'crypto';
 import { prisma } from '../../utils/prisma.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { safeNotify } from '../../utils/safeNotify.js';
@@ -47,8 +48,9 @@ export async function settingsRoutes(app: FastifyInstance) {
         data: { id: 1, updatedAt: new Date() },
       });
     }
+    const { apiKey: _omit, ...safeSettings } = settings;
     return {
-      ...settings,
+      ...safeSettings,
       instanceLanguages: JSON.parse(settings.instanceLanguages),
     };
   });
@@ -165,6 +167,35 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (banner) {
       safeNotify('incident_banner', { title: 'Incident', message: banner });
     }
+    return { ok: true };
+  });
+
+  // ─── API Key management ─────────────────────────────────────────────
+
+  app.get('/api-key', async () => {
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    if (!settings?.apiKey) return { hasKey: false, maskedKey: null };
+    const key = settings.apiKey;
+    return { hasKey: true, maskedKey: `${key.slice(0, 8)}${'•'.repeat(24)}${key.slice(-8)}` };
+  });
+
+  app.post('/api-key/generate', async () => {
+    const apiKey = crypto.randomBytes(32).toString('hex');
+    await prisma.appSettings.upsert({
+      where: { id: 1 },
+      update: { apiKey },
+      create: { id: 1, apiKey, updatedAt: new Date() },
+    });
+    logEvent('info', 'Settings', 'API key generated');
+    return { apiKey };
+  });
+
+  app.delete('/api-key', async () => {
+    await prisma.appSettings.update({
+      where: { id: 1 },
+      data: { apiKey: null },
+    });
+    logEvent('info', 'Settings', 'API key revoked');
     return { ok: true };
   });
 }
