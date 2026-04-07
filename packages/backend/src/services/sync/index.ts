@@ -1,6 +1,5 @@
 import { prisma } from '../../utils/prisma.js';
-import { syncRadarr } from './movieSync.js';
-import { syncSonarr } from './tvSync.js';
+import { syncArrService } from './mediaSync.js';
 import { syncAvailabilityDates } from './availabilitySync.js';
 import type { SyncResult } from './helpers.js';
 
@@ -11,8 +10,8 @@ import type { SyncResult } from './helpers.js';
 export async function runNewMediaSync(): Promise<{ radarr: SyncResult; sonarr: SyncResult }> {
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
   // Sequential to avoid SQLite write lock contention
-  const radarrResult = await syncRadarr(settings?.lastRadarrSync);
-  const sonarrResult = await syncSonarr(settings?.lastSonarrSync);
+  const radarrResult = await syncArrService('radarr', settings?.lastRadarrSync);
+  const sonarrResult = await syncArrService('sonarr', settings?.lastSonarrSync);
   // Sync availability dates from history since last sync
   const earliestSync = [settings?.lastRadarrSync, settings?.lastSonarrSync]
     .filter(Boolean)
@@ -25,8 +24,8 @@ export async function runNewMediaSync(): Promise<{ radarr: SyncResult; sonarr: S
 
 export async function runFullSync(): Promise<{ radarr: SyncResult; sonarr: SyncResult }> {
   // Sequential to avoid SQLite write lock contention
-  const radarrResult = await syncRadarr(null);
-  const sonarrResult = await syncSonarr(null);
+  const radarrResult = await syncArrService('radarr', null);
+  const sonarrResult = await syncArrService('sonarr', null);
   // After full sync, also sync availability dates from history
   const avail = await syncAvailabilityDates(null);
   radarrResult.updated += avail.radarrUpdated;
@@ -35,8 +34,7 @@ export async function runFullSync(): Promise<{ radarr: SyncResult; sonarr: SyncR
 }
 
 // Re-export everything for backwards compatibility
-export { syncRadarr } from './movieSync.js';
-export { syncSonarr } from './tvSync.js';
+export { syncArrService } from './mediaSync.js';
 export { syncAvailabilityDates } from './availabilitySync.js';
 export type { SyncResult } from './helpers.js';
 export { syncMissingKeywords, trackKeywordsFromDetails } from './keywordSync.js';

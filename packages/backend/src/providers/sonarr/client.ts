@@ -1,8 +1,14 @@
 import axios, { type AxiosInstance } from 'axios';
-import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder } from '../types.js';
+import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrSeasonItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrEpisode } from '../types.js';
+import { extractImageFromArr } from '../types.js';
 import type { SonarrSeries, SonarrSeason, SonarrQueueItem, SonarrEpisode, SonarrEpisodeFile, SonarrHistoryRecord } from './types.js';
 
 export class SonarrClient implements ArrClient {
+  readonly mediaType = 'tv' as const;
+  readonly serviceType = 'sonarr';
+  readonly dbIdField = 'sonarrId' as const;
+  readonly defaultRootFolder = '/tv';
+
   private api: AxiosInstance;
 
   constructor(url: string, apiKey: string) {
@@ -158,4 +164,150 @@ export class SonarrClient implements ArrClient {
     }
     return all;
   }
+
+  // ─── Normalized interface methods ─────────────────────────────────
+
+  private getSeriesStatus(show: SonarrSeries): string {
+    const stats = show.statistics;
+    if (!stats) return 'unknown';
+    if (stats.percentOfEpisodes >= 100) return 'available';
+    if (stats.episodeFileCount > 0) return 'processing';
+    if (show.monitored) return 'pending';
+    return 'unknown';
+  }
+
+  private getSeasonStatus(season: { monitored: boolean; statistics?: { percentOfEpisodes: number; episodeFileCount: number } }): string {
+    if (!season.statistics) return 'unknown';
+    if (season.statistics.percentOfEpisodes >= 100) return 'available';
+    if (season.statistics.episodeFileCount > 0) return 'processing';
+    if (season.monitored) return 'pending';
+    return 'unknown';
+  }
+
+  async getAllMedia(): Promise<ArrMediaItem[]> {
+    const series = await this.getSeries();
+    return series.map(show => ({
+      serviceMediaId: show.id,
+      externalId: show.tvdbId,
+      title: show.title,
+      status: this.getSeriesStatus(show),
+      posterPath: extractImageFromArr(show.images, 'poster'),
+      backdropPath: extractImageFromArr(show.images, 'fanart'),
+      qualityProfileId: show.qualityProfileId,
+      addedDate: show.added || null,
+      tags: show.tags || [],
+      hasFile: (show.statistics?.percentOfEpisodes ?? 0) >= 100,
+      seasons: show.seasons
+        .filter(s => s.seasonNumber > 0)
+        .map(s => ({
+          seasonNumber: s.seasonNumber,
+          monitored: s.monitored,
+          episodeFileCount: s.statistics?.episodeFileCount ?? 0,
+          totalEpisodeCount: s.statistics?.totalEpisodeCount ?? 0,
+          percentComplete: s.statistics?.percentOfEpisodes ?? 0,
+          status: this.getSeasonStatus(s),
+        })),
+    }));
+  }
+
+  async checkAvailability(tvdbId: number): Promise<ArrAvailabilityResult> {
+    const series = await this.getSeriesByTvdbId(tvdbId);
+    if (!series) {
+      return { available: false, audioLanguages: null, subtitleLanguages: null };
+    }
+
+    const stats = series.statistics;
+    const available = stats ? stats.percentOfEpisodes >= 100 : false;
+
+    const seasonStats = series.seasons
+      .filter(s => s.seasonNumber > 0)
+      .map(s => ({
+        seasonNumber: s.seasonNumber,
+        episodeFileCount: s.statistics?.episodeFileCount ?? 0,
+        episodeCount: s.statistics?.episodeCount ?? 0,
+        totalEpisodeCount: s.statistics?.totalEpisodeCount ?? 0,
+      }));
+
+    let audioLanguages: string[] | null = null;
+    let subtitleLanguages: string[] | null = null;
+
+    if (stats?.episodeFileCount && stats.episodeFileCount > 0) {
+      try {
+        const files = await this.getEpisodeFiles(series.id);
+        const audioCounts = new Map<string, number>();
+        const subCounts = new Map<string, number>();
+        for (const f of files) {
+          if (f.mediaInfo?.audioLanguages) {
+            const seen = new Set<string>();
+            for (const l of f.mediaInfo.audioLanguages.split('/')) {
+              const t = l.trim();
+              if (t && !seen.has(t)) { seen.add(t); audioCounts.set(t, (audioCounts.get(t) || 0) + 1); }
+            }
+          }
+          if (f.mediaInfo?.subtitles) {
+            const seen = new Set<string>();
+            for (const l of f.mediaInfo.subtitles.split('/')) {
+              const t = l.trim();
+              if (t && !seen.has(t)) { seen.add(t); subCounts.set(t, (subCounts.get(t) || 0) + 1); }
+            }
+          }
+        }
+        const threshold = Math.max(1, Math.floor(files.length * 0.5));
+        const filteredAudio = [...audioCounts.entries()].filter(([, c]) => c >= threshold).map(([l]) => l);
+        const filteredSubs = [...subCounts.entries()].filter(([, c]) => c >= threshold).map(([l]) => l);
+        if (filteredAudio.length > 0) audioLanguages = filteredAudio;
+        if (filteredSubs.length > 0) subtitleLanguages = filteredSubs;
+      } catch (err) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        console.warn(`[Sonarr] Failed to fetch episode files for series ${series.id} (HTTP ${status || 'unknown'}), skipping language data`);
+      }
+    }
+
+    return { available, audioLanguages, subtitleLanguages, seasonStats };
+  }
+
+  async findByExternalId(tvdbId: number): Promise<{ id: number } | null> {
+    const series = await this.getSeriesByTvdbId(tvdbId);
+    return series ? { id: series.id } : null;
+  }
+
+  async addMedia(options: ArrAddMediaOptions): Promise<void> {
+    await this.addSeries({
+      title: options.title,
+      tvdbId: options.externalId,
+      qualityProfileId: options.qualityProfileId,
+      rootFolderPath: options.rootFolderPath,
+      seriesType: (options.seriesType as 'standard' | 'anime' | 'daily') || 'standard',
+      seasons: options.seasons || [],
+      tags: options.tags,
+      searchForMissingEpisodes: true,
+    });
+  }
+
+  async searchMedia(seriesId: number): Promise<void> {
+    await this.searchMissingEpisodes(seriesId);
+  }
+
+  async getEpisodesNormalized(serviceMediaId: number, seasonNumber?: number): Promise<ArrEpisode[]> {
+    const episodes = await this.getEpisodes(serviceMediaId, seasonNumber);
+    return episodes.map(ep => ({
+      episodeNumber: ep.episodeNumber,
+      title: ep.title,
+      airDateUtc: ep.airDateUtc,
+      hasFile: ep.hasFile,
+      monitored: ep.monitored,
+      quality: ep.episodeFile?.quality?.quality?.name || null,
+      size: ep.episodeFile?.size || null,
+    }));
+  }
+
+  async getHistoryEntries(since?: Date | null): Promise<ArrHistoryEntry[]> {
+    const records = await this.getHistory(since);
+    return records.map(r => ({
+      serviceMediaId: r.seriesId,
+      date: new Date(r.date),
+      extraData: r.episode ? { episode: r.episode } : undefined,
+    }));
+  }
+
 }

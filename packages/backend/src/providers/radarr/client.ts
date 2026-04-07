@@ -1,8 +1,14 @@
 import axios, { type AxiosInstance } from 'axios';
-import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder } from '../types.js';
+import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions } from '../types.js';
+import { extractImageFromArr } from '../types.js';
 import type { RadarrMovie, RadarrQueueItem, RadarrHistoryRecord } from './types.js';
 
 export class RadarrClient implements ArrClient {
+  readonly mediaType = 'movie' as const;
+  readonly serviceType = 'radarr';
+  readonly dbIdField = 'radarrId' as const;
+  readonly defaultRootFolder = '/movies';
+
   private api: AxiosInstance;
 
   constructor(url: string, apiKey: string) {
@@ -125,5 +131,90 @@ export class RadarrClient implements ArrClient {
   async getSystemStatus(): Promise<{ version: string }> {
     const { data } = await this.api.get('/system/status');
     return data;
+  }
+
+  // ─── Normalized interface methods ─────────────────────────────────
+
+  private getMovieStatus(movie: RadarrMovie): string {
+    if (movie.hasFile) return 'available';
+    if (!movie.monitored) return 'unknown';
+
+    const now = new Date();
+    const digitalRelease = movie.digitalRelease ? new Date(movie.digitalRelease) : null;
+    const physicalRelease = movie.physicalRelease ? new Date(movie.physicalRelease) : null;
+    const inCinemas = movie.inCinemas ? new Date(movie.inCinemas) : null;
+    const releaseDate = movie.releaseDate ? new Date(movie.releaseDate) : null;
+
+    const effectiveRelease = digitalRelease || physicalRelease || releaseDate || inCinemas;
+    if (effectiveRelease && effectiveRelease > now) {
+      return 'upcoming';
+    }
+    return 'searching';
+  }
+
+  async getAllMedia(): Promise<ArrMediaItem[]> {
+    const movies = await this.getMovies();
+    return movies.map(movie => ({
+      serviceMediaId: movie.id,
+      externalId: movie.tmdbId,
+      title: movie.title,
+      status: this.getMovieStatus(movie),
+      posterPath: extractImageFromArr(movie.images, 'poster'),
+      backdropPath: extractImageFromArr(movie.images, 'fanart'),
+      qualityProfileId: movie.qualityProfileId,
+      addedDate: movie.added || null,
+      tags: movie.tags || [],
+      hasFile: movie.hasFile,
+    }));
+  }
+
+  async checkAvailability(tmdbId: number): Promise<ArrAvailabilityResult> {
+    const movie = await this.getMovieByTmdbId(tmdbId);
+    if (!movie?.hasFile) {
+      return { available: false, audioLanguages: null, subtitleLanguages: null };
+    }
+
+    let audioLanguages: string[] | null = null;
+    let subtitleLanguages: string[] | null = null;
+
+    const mi = movie.movieFile?.mediaInfo;
+    if (mi?.audioLanguages) {
+      audioLanguages = mi.audioLanguages.split('/').map(s => s.trim()).filter(Boolean);
+    } else if (movie.movieFile?.languages?.length) {
+      audioLanguages = movie.movieFile.languages.map(l => l.name);
+    }
+    if (mi?.subtitles) {
+      subtitleLanguages = mi.subtitles.split('/').map(s => s.trim()).filter(Boolean);
+    }
+
+    return { available: true, audioLanguages, subtitleLanguages };
+  }
+
+  async findByExternalId(tmdbId: number): Promise<{ id: number } | null> {
+    const movie = await this.getMovieByTmdbId(tmdbId);
+    return movie ? { id: movie.id } : null;
+  }
+
+  async addMedia(options: ArrAddMediaOptions): Promise<void> {
+    await this.addMovie({
+      title: options.title,
+      tmdbId: options.externalId,
+      qualityProfileId: options.qualityProfileId,
+      rootFolderPath: options.rootFolderPath,
+      tags: options.tags,
+      searchForMovie: true,
+    });
+  }
+
+  async searchMedia(movieId: number): Promise<void> {
+    await this.searchMovie(movieId);
+  }
+
+  async getHistoryEntries(since?: Date | null): Promise<ArrHistoryEntry[]> {
+    const records = await this.getHistory(since);
+    return records.map(r => ({
+      serviceMediaId: r.movieId,
+      date: new Date(r.date),
+    }));
   }
 }

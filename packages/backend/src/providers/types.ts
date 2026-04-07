@@ -6,6 +6,64 @@ export interface ArrTag { id: number; label: string }
 export interface ArrQualityProfile { id: number; name: string }
 export interface ArrRootFolder { id: number; path: string; freeSpace: number }
 
+// ─── Normalized types for business logic ────────────────────────────
+
+export interface ArrMediaItem {
+  serviceMediaId: number;
+  externalId: number;
+  title: string;
+  status: string;
+  posterPath: string | null;
+  backdropPath: string | null;
+  qualityProfileId: number;
+  addedDate: string | null;
+  tags: number[];
+  hasFile: boolean;
+  seasons?: ArrSeasonItem[];
+}
+
+export interface ArrSeasonItem {
+  seasonNumber: number;
+  monitored: boolean;
+  episodeFileCount: number;
+  totalEpisodeCount: number;
+  percentComplete: number;
+  status: string;
+}
+
+export interface ArrAvailabilityResult {
+  available: boolean;
+  audioLanguages: string[] | null;
+  subtitleLanguages: string[] | null;
+  seasonStats?: { seasonNumber: number; episodeFileCount: number; episodeCount: number; totalEpisodeCount: number }[];
+}
+
+export interface ArrHistoryEntry {
+  serviceMediaId: number;
+  date: Date;
+  extraData?: Record<string, unknown>;
+}
+
+export interface ArrEpisode {
+  episodeNumber: number;
+  title: string;
+  airDateUtc: string | null;
+  hasFile: boolean;
+  monitored: boolean;
+  quality: string | null;
+  size: number | null;
+}
+
+export interface ArrAddMediaOptions {
+  title: string;
+  externalId: number;
+  qualityProfileId: number;
+  rootFolderPath: string;
+  tags: number[];
+  seasons?: number[];
+  seriesType?: string;
+}
+
 export interface ArrClient {
   getTags(): Promise<ArrTag[]>;
   createTag(label: string): Promise<ArrTag>;
@@ -16,6 +74,41 @@ export interface ArrClient {
   getQueue(): Promise<{ records: unknown[] }>;
   getHistory(since?: Date | null): Promise<unknown[]>;
   getCalendar(start: string, end: string): Promise<unknown[]>;
+
+  // Sync
+  getAllMedia(): Promise<ArrMediaItem[]>;
+
+  // Live check
+  checkAvailability(externalId: number): Promise<ArrAvailabilityResult>;
+
+  // Request dispatch
+  findByExternalId(externalId: number): Promise<{ id: number } | null>;
+  addMedia(options: ArrAddMediaOptions): Promise<void>;
+  searchMedia(serviceMediaId: number): Promise<void>;
+
+  // Normalized history
+  getHistoryEntries(since?: Date | null): Promise<ArrHistoryEntry[]>;
+
+  // Episodes (TV only — optional, not implemented by movie providers)
+  getEpisodesNormalized?(serviceMediaId: number, seasonNumber?: number): Promise<ArrEpisode[]>;
+
+  // Metadata
+  readonly mediaType: 'movie' | 'tv';
+  readonly serviceType: string;
+  readonly dbIdField: 'radarrId' | 'sonarrId';
+  readonly defaultRootFolder: string;
+}
+
+// ─── Shared image extraction utility ────────────────────────────────
+
+export function extractImageFromArr(images: { coverType: string; remoteUrl: string }[] | undefined, type: 'poster' | 'fanart'): string | null {
+  const url = images?.find(i => i.coverType === type)?.remoteUrl;
+  if (!url) return null;
+  const match = url.match(/\/t\/p\/\w+(\/.+?)(?:\?|$)/);
+  if (match) return match[1];
+  // For non-TMDB URLs (TVDB etc.), store the full URL
+  if (url.startsWith('http')) return url;
+  return null;
 }
 
 // ─── Service Definition ─────────────────────────────────────────────

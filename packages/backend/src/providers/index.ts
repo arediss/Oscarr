@@ -97,4 +97,5 @@ export function getServiceTypeForMedia(mediaType: string): string {
 }
 
 // Re-export types
-export type { Provider, ServiceDefinition, AuthProvider, AuthHelpers, AuthProviderConfig, ServiceField, ArrClient } from './types.js';
+export type { Provider, ServiceDefinition, AuthProvider, AuthHelpers, AuthProviderConfig, ServiceField, ArrClient, ArrMediaItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrSeasonItem } from './types.js';
+export { extractImageFromArr } from './types.js';

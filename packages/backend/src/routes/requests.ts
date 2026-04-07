@@ -1,8 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
-import { getArrClient } from '../providers/index.js';
-import type { RadarrClient } from '../providers/radarr/index.js';
-import type { SonarrClient } from '../providers/sonarr/index.js';
+import { getArrClient, getServiceTypeForMedia } from '../providers/index.js';
 import { getCollection } from '../services/tmdb.js';
 import { logEvent } from '../utils/logEvent.js';
 import { safeNotify, safeUserNotify } from '../utils/safeNotify.js';
@@ -265,15 +263,13 @@ export async function requestRoutes(app: FastifyInstance) {
     }
 
     try {
-      if (mediaType === 'tv' && media.sonarrId) {
-        const sonarr = await getArrClient('sonarr') as SonarrClient;
-        await sonarr.searchMissingEpisodes(media.sonarrId);
-      } else if (mediaType === 'movie' && media.radarrId) {
-        const radarr = await getArrClient('radarr') as RadarrClient;
-        await radarr.searchMovie(media.radarrId);
-      } else {
-        return reply.status(400).send({ error: 'Ce média n\'est pas encore dans Sonarr/Radarr' });
+      const serviceId = mediaType === 'movie' ? media.radarrId : media.sonarrId;
+      if (!serviceId) {
+        return reply.status(400).send({ error: 'Ce média n\'est pas encore dans le service' });
       }
+      const serviceType = getServiceTypeForMedia(mediaType);
+      const client = await getArrClient(serviceType);
+      await client.searchMedia(serviceId);
 
       await prisma.media.update({ where: { id: media.id }, data: { lastMissingSearchAt: new Date() } });
       logEvent('info', 'Request', `Recherche des manquants lancée pour "${media.title}"`);

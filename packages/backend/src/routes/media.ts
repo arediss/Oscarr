@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { getArrClient } from '../providers/index.js';
-import type { SonarrClient } from '../providers/sonarr/index.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 import { isMatureRating } from '../services/tmdb.js';
 import { normalizeLanguages } from '../utils/languages.js';
@@ -326,17 +325,9 @@ export async function mediaRoutes(app: FastifyInstance) {
     }
 
     try {
-      const sonarr = await getArrClient('sonarr') as SonarrClient;
-      const episodes = await sonarr.getEpisodes(media.sonarrId, seasonNum);
-      return episodes.map((ep) => ({
-        episodeNumber: ep.episodeNumber,
-        title: ep.title,
-        airDateUtc: ep.airDateUtc,
-        hasFile: ep.hasFile,
-        monitored: ep.monitored,
-        quality: ep.episodeFile?.quality?.quality?.name || null,
-        size: ep.episodeFile?.size || null,
-      }));
+      const client = await getArrClient('sonarr');
+      if (!client.getEpisodesNormalized) return reply.status(400).send({ error: 'Ce service ne supporte pas les épisodes' });
+      return await client.getEpisodesNormalized(media.sonarrId, seasonNum);
     } catch {
       return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
     }

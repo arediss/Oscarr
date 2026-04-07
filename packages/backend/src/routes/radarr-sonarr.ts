@@ -1,14 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { getArrClient } from '../providers/index.js';
-import type { RadarrClient } from '../providers/radarr/index.js';
-import type { SonarrClient } from '../providers/sonarr/index.js';
 import { prisma } from '../utils/prisma.js';
 
 export async function radarrSonarrRoutes(app: FastifyInstance) {
   // Radarr status
   app.get('/radarr/status', async (_request, reply) => {
     try {
-      const radarr = await getArrClient('radarr') as RadarrClient;
+      const radarr = await getArrClient('radarr');
       const status = await radarr.getSystemStatus();
       return { online: true, version: status.version };
     } catch {
@@ -19,7 +17,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
   // Sonarr status
   app.get('/sonarr/status', async (_request, reply) => {
     try {
-      const sonarr = await getArrClient('sonarr') as SonarrClient;
+      const sonarr = await getArrClient('sonarr');
       const status = await sonarr.getSystemStatus();
       return { online: true, version: status.version };
     } catch {
@@ -29,47 +27,53 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
 
   // Radarr queue (download status)
   app.get('/radarr/queue', async () => {
-    const radarr = await getArrClient('radarr') as RadarrClient;
+    const radarr = await getArrClient('radarr');
     const queue = await radarr.getQueue();
-    return queue.records.map(item => ({
-      movieId: item.movieId,
-      title: item.title,
-      status: item.status,
-      size: item.size,
-      sizeLeft: item.sizeleft,
-      timeLeft: item.timeleft,
-      estimatedCompletion: item.estimatedCompletionTime,
-      progress: item.size > 0 ? Math.round(((item.size - item.sizeleft) / item.size) * 100) : 0,
-    }));
+    return queue.records.map(raw => {
+      const item = raw as { movieId: number; title: string; status: string; size: number; sizeleft: number; timeleft: string; estimatedCompletionTime: string };
+      return {
+        movieId: item.movieId,
+        title: item.title,
+        status: item.status,
+        size: item.size,
+        sizeLeft: item.sizeleft,
+        timeLeft: item.timeleft,
+        estimatedCompletion: item.estimatedCompletionTime,
+        progress: item.size > 0 ? Math.round(((item.size - item.sizeleft) / item.size) * 100) : 0,
+      };
+    });
   });
 
   // Sonarr queue (download status)
   app.get('/sonarr/queue', async () => {
-    const sonarr = await getArrClient('sonarr') as SonarrClient;
+    const sonarr = await getArrClient('sonarr');
     const queue = await sonarr.getQueue();
-    return queue.records.map(item => ({
-      seriesId: item.seriesId,
-      title: item.title,
-      status: item.status,
-      size: item.size,
-      sizeLeft: item.sizeleft,
-      timeLeft: item.timeleft,
-      estimatedCompletion: item.estimatedCompletionTime,
-      progress: item.size > 0 ? Math.round(((item.size - item.sizeleft) / item.size) * 100) : 0,
-      episode: item.episode,
-    }));
+    return queue.records.map(raw => {
+      const item = raw as { seriesId: number; title: string; status: string; size: number; sizeleft: number; timeleft: string; estimatedCompletionTime: string; episode?: { seasonNumber: number; episodeNumber: number; title: string } };
+      return {
+        seriesId: item.seriesId,
+        title: item.title,
+        status: item.status,
+        size: item.size,
+        sizeLeft: item.sizeleft,
+        timeLeft: item.timeleft,
+        estimatedCompletion: item.estimatedCompletionTime,
+        progress: item.size > 0 ? Math.round(((item.size - item.sizeleft) / item.size) * 100) : 0,
+        episode: item.episode,
+      };
+    });
   });
 
   // Combined download queue mapped to tmdbId
   app.get('/downloads', async () => {
     try {
       const [radarr, sonarr] = await Promise.all([
-        getArrClient('radarr') as Promise<RadarrClient>,
-        getArrClient('sonarr') as Promise<SonarrClient>,
+        getArrClient('radarr'),
+        getArrClient('sonarr'),
       ]);
       const [radarrQueue, sonarrQueue] = await Promise.all([
-        radarr.getQueue().catch(() => ({ records: [] as never[] })),
-        sonarr.getQueue().catch(() => ({ records: [] as never[] })),
+        radarr.getQueue().catch(() => ({ records: [] as unknown[] })),
+        sonarr.getQueue().catch(() => ({ records: [] as unknown[] })),
       ]);
 
       const downloads: {
@@ -79,11 +83,11 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
         episode?: { seasonNumber: number; episodeNumber: number; title: string };
       }[] = [];
 
-      for (const item of radarrQueue.records) {
-        const movie = (item as unknown as Record<string, unknown>).movie as { tmdbId?: number } | undefined;
-        if (!movie?.tmdbId) continue;
+      for (const raw of radarrQueue.records) {
+        const item = raw as { title: string; status: string; size: number; sizeleft: number; timeleft: string; estimatedCompletionTime: string; movie?: { tmdbId?: number } };
+        if (!item.movie?.tmdbId) continue;
         downloads.push({
-          tmdbId: movie.tmdbId,
+          tmdbId: item.movie.tmdbId,
           mediaType: 'movie',
           title: item.title,
           progress: item.size > 0 ? Math.round(((item.size - item.sizeleft) / item.size) * 100) : 0,
@@ -95,11 +99,11 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
         });
       }
 
-      for (const item of sonarrQueue.records) {
-        const series = (item as unknown as Record<string, unknown>).series as { tvdbId?: number } | undefined;
-        if (!series?.tvdbId) continue;
+      for (const raw of sonarrQueue.records) {
+        const item = raw as { title: string; status: string; size: number; sizeleft: number; timeleft: string; estimatedCompletionTime: string; series?: { tvdbId?: number }; episode?: { seasonNumber: number; episodeNumber: number; title: string } };
+        if (!item.series?.tvdbId) continue;
         // Look up tmdbId from our DB via tvdbId
-        const media = await prisma.media.findFirst({ where: { tvdbId: series.tvdbId, mediaType: 'tv' }, select: { tmdbId: true } });
+        const media = await prisma.media.findFirst({ where: { tvdbId: item.series.tvdbId, mediaType: 'tv' }, select: { tmdbId: true } });
         if (!media) continue;
         downloads.push({
           tmdbId: media.tmdbId,
@@ -116,7 +120,8 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
       }
 
       return downloads;
-    } catch {
+    } catch (err) {
+      console.warn('[Downloads] Failed to fetch queue:', err);
       return [];
     }
   });
@@ -125,31 +130,32 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
   app.get('/stats', async () => {
     try {
       const [radarr, sonarr] = await Promise.all([
-        getArrClient('radarr') as Promise<RadarrClient>,
-        getArrClient('sonarr') as Promise<SonarrClient>,
+        getArrClient('radarr'),
+        getArrClient('sonarr'),
       ]);
-      const [movies, series] = await Promise.all([
-        radarr.getMovies(),
-        sonarr.getSeries(),
+      const [radarrMedia, sonarrMedia] = await Promise.all([
+        radarr.getAllMedia(),
+        sonarr.getAllMedia(),
       ]);
 
       return {
         radarr: {
-          totalMovies: movies.length,
-          moviesWithFiles: movies.filter(m => m.hasFile).length,
-          monitoredMovies: movies.filter(m => m.monitored).length,
-          totalSizeOnDisk: movies.reduce((acc, m) => acc + m.sizeOnDisk, 0),
+          totalMovies: radarrMedia.length,
+          moviesWithFiles: radarrMedia.filter(m => m.status === 'available').length,
+          monitoredMovies: radarrMedia.length, // All synced media is monitored by definition in getAllMedia
+          totalSizeOnDisk: 0, // Not available via normalized interface
         },
         sonarr: {
-          totalSeries: series.length,
-          monitoredSeries: series.filter(s => s.monitored).length,
-          totalEpisodes: series.reduce((acc, s) => acc + (s.statistics?.totalEpisodeCount ?? 0), 0),
-          downloadedEpisodes: series.reduce((acc, s) => acc + (s.statistics?.episodeFileCount ?? 0), 0),
-          totalSizeOnDisk: series.reduce((acc, s) => acc + (s.statistics?.sizeOnDisk ?? 0), 0),
+          totalSeries: sonarrMedia.length,
+          monitoredSeries: sonarrMedia.length,
+          totalEpisodes: sonarrMedia.reduce((acc, s) => acc + (s.seasons?.reduce((a, se) => a + se.totalEpisodeCount, 0) ?? 0), 0),
+          downloadedEpisodes: sonarrMedia.reduce((acc, s) => acc + (s.seasons?.reduce((a, se) => a + se.episodeFileCount, 0) ?? 0), 0),
+          totalSizeOnDisk: 0,
         },
       };
     } catch (err) {
-      return { error: 'Impossible de récupérer les statistiques' };
+      console.warn('[Stats] Failed to fetch library stats:', err);
+      return { error: 'Impossible de recuperer les statistiques' };
     }
   });
 
@@ -172,16 +178,20 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
 
     try {
       const [radarr, sonarr] = await Promise.all([
-        getArrClient('radarr') as Promise<RadarrClient>,
-        getArrClient('sonarr') as Promise<SonarrClient>,
+        getArrClient('radarr'),
+        getArrClient('sonarr'),
       ]);
       const [movies, episodes] = await Promise.all([
         radarr.getCalendar(start, end),
         sonarr.getCalendar(start, end),
       ]);
 
-      // Resolve tvdbId → tmdbId for episodes via DB
-      const tvdbIds = [...new Set(episodes.map((e) => e.series?.tvdbId).filter(Boolean))] as number[];
+      // Cast calendar results to the shapes returned by each provider
+      const movieItems = movies as { title: string; tmdbId: number; hasFile: boolean; digitalRelease?: string; physicalRelease?: string; inCinemas?: string; releaseDate?: string; images?: { coverType: string; remoteUrl: string }[] }[];
+      const episodeItems = episodes as { seriesId: number; seasonNumber: number; episodeNumber: number; title: string; airDateUtc: string; hasFile?: boolean; series: { title: string; tvdbId: number; images: { coverType: string; remoteUrl: string }[] } }[];
+
+      // Resolve tvdbId -> tmdbId for episodes via DB
+      const tvdbIds = [...new Set(episodeItems.map((e) => e.series?.tvdbId).filter(Boolean))] as number[];
       const tvdbToTmdb = new Map<number, number>();
       if (tvdbIds.length > 0) {
         const dbMedia = await prisma.media.findMany({
@@ -194,7 +204,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
       }
 
       const items = [
-        ...movies.map((m) => ({
+        ...movieItems.map((m) => ({
           type: 'movie' as const,
           title: m.title,
           date: m.digitalRelease || m.physicalRelease || m.inCinemas || m.releaseDate || '',
@@ -202,9 +212,9 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
           poster: m.images?.find((i) => i.coverType === 'poster')?.remoteUrl || null,
           hasFile: m.hasFile,
         })),
-        ...episodes.map((e) => ({
+        ...episodeItems.map((e) => ({
           type: 'episode' as const,
-          title: e.series?.title || 'Série inconnue',
+          title: e.series?.title || 'Serie inconnue',
           episodeTitle: e.title,
           season: e.seasonNumber,
           episode: e.episodeNumber,
@@ -212,12 +222,13 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
           tvdbId: e.series?.tvdbId,
           tmdbId: e.series?.tvdbId ? tvdbToTmdb.get(e.series.tvdbId) ?? undefined : undefined,
           poster: e.series?.images?.find((i: { coverType: string }) => i.coverType === 'poster')?.remoteUrl || null,
-          hasFile: !!(e as unknown as { hasFile?: boolean }).hasFile,
+          hasFile: !!e.hasFile,
         })),
       ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       return items;
     } catch (err) {
+      console.warn('[Calendar] Failed to fetch calendar:', err);
       return [];
     }
   });

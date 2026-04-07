@@ -1,7 +1,5 @@
 import { prisma } from '../utils/prisma.js';
-import { getArrClient } from '../providers/index.js';
-import type { RadarrClient } from '../providers/radarr/index.js';
-import type { SonarrClient } from '../providers/sonarr/index.js';
+import { getArrClient, getServiceTypeForMedia } from '../providers/index.js';
 import { normalizeLanguages } from '../utils/languages.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
 
@@ -31,82 +29,27 @@ export async function performLiveCheck(
 ): Promise<LiveCheckResult> {
   const result: LiveCheckResult = { liveAvailable: false, sonarrSeasonStats: null, audioLanguages: null, subtitleLanguages: null };
   try {
-    if (mediaType === 'movie') {
-      const radarr = await getArrClient('radarr') as RadarrClient;
-      const radarrMovie = await radarr.getMovieByTmdbId(tmdbId);
-      if (radarrMovie?.hasFile) {
-        result.liveAvailable = true;
-        if (!hasCachedAudio) {
-          const mi = radarrMovie.movieFile?.mediaInfo;
-          if (mi?.audioLanguages) {
-            result.audioLanguages = mi.audioLanguages.split('/').map((s) => s.trim()).filter(Boolean);
-          } else if (radarrMovie.movieFile?.languages?.length) {
-            result.audioLanguages = radarrMovie.movieFile.languages.map((l) => l.name);
-          }
-          if (mi?.subtitles) {
-            result.subtitleLanguages = mi.subtitles.split('/').map((s) => s.trim()).filter(Boolean);
-          }
-        }
-      }
-    } else if (mediaType === 'tv') {
-      let resolvedTvdbId = tvdbId;
-      if (!resolvedTvdbId) {
-        const { getTvDetails } = await import('./tmdb.js');
-        const tmdbData = await getTvDetails(tmdbId);
-        resolvedTvdbId = tmdbData.external_ids?.tvdb_id ?? null;
-      }
-      if (resolvedTvdbId) {
-        const sonarr = await getArrClient('sonarr') as SonarrClient;
-        const sonarrSeries = await sonarr.getSeriesByTvdbId(resolvedTvdbId);
-        if (sonarrSeries) {
-          const stats = sonarrSeries.statistics;
-          if (stats?.percentOfEpisodes >= 100) {
-            result.liveAvailable = true;
-          }
-          result.sonarrSeasonStats = sonarrSeries.seasons
-            .filter((s) => s.seasonNumber > 0)
-            .map((s) => ({
-              seasonNumber: s.seasonNumber,
-              episodeFileCount: s.statistics?.episodeFileCount ?? 0,
-              episodeCount: s.statistics?.episodeCount ?? 0,
-              totalEpisodeCount: s.statistics?.totalEpisodeCount ?? 0,
-            }));
+    const serviceType = getServiceTypeForMedia(mediaType);
+    const client = await getArrClient(serviceType);
 
-          if (stats?.episodeFileCount && stats.episodeFileCount > 0 && !hasCachedAudio) {
-            try {
-              const files = await sonarr.getEpisodeFiles(sonarrSeries.id);
-              const audioCounts = new Map<string, number>();
-              const subCounts = new Map<string, number>();
-              for (const f of files) {
-                if (f.mediaInfo?.audioLanguages) {
-                  const seen = new Set<string>();
-                  for (const l of f.mediaInfo.audioLanguages.split('/')) {
-                    const t = l.trim();
-                    if (t && !seen.has(t)) { seen.add(t); audioCounts.set(t, (audioCounts.get(t) || 0) + 1); }
-                  }
-                }
-                if (f.mediaInfo?.subtitles) {
-                  const seen = new Set<string>();
-                  for (const l of f.mediaInfo.subtitles.split('/')) {
-                    const t = l.trim();
-                    if (t && !seen.has(t)) { seen.add(t); subCounts.set(t, (subCounts.get(t) || 0) + 1); }
-                  }
-                }
-              }
-              const threshold = Math.max(1, Math.floor(files.length * 0.5));
-              const filteredAudio = [...audioCounts.entries()].filter(([, c]) => c >= threshold).map(([l]) => l);
-              const filteredSubs = [...subCounts.entries()].filter(([, c]) => c >= threshold).map(([l]) => l);
-              if (filteredAudio.length > 0) result.audioLanguages = filteredAudio;
-              if (filteredSubs.length > 0) result.subtitleLanguages = filteredSubs;
-            } catch (err) {
-              const status = (err as { response?: { status?: number } })?.response?.status;
-              console.warn(`[Media] Failed to fetch episode files for series ${sonarrSeries.id} (HTTP ${status || 'unknown'}), skipping language data`);
-            }
-          }
-        }
-      }
+    let externalId: number | null = mediaType === 'movie' ? tmdbId : tvdbId;
+    if (!externalId && mediaType === 'tv') {
+      const { getTvDetails } = await import('./tmdb.js');
+      const tmdbData = await getTvDetails(tmdbId);
+      externalId = tmdbData.external_ids?.tvdb_id ?? null;
     }
-  } catch { /* Radarr/Sonarr unreachable, use DB state */ }
+    if (!externalId) return result;
+
+    const availability = await client.checkAvailability(externalId);
+    result.liveAvailable = availability.available;
+    if (!hasCachedAudio) {
+      result.audioLanguages = availability.audioLanguages;
+      result.subtitleLanguages = availability.subtitleLanguages;
+    }
+    if (availability.seasonStats) {
+      result.sonarrSeasonStats = availability.seasonStats;
+    }
+  } catch { /* Service unreachable, use DB state */ }
   return result;
 }
 

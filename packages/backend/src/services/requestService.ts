@@ -1,7 +1,5 @@
 import { prisma } from '../utils/prisma.js';
 import { getArrClient, getArrClientForService, getServiceTypeForMedia } from '../providers/index.js';
-import { type RadarrClient } from '../providers/radarr/index.js';
-import { type SonarrClient } from '../providers/sonarr/index.js';
 import { getMovieDetails, getTvDetails } from './tmdb.js';
 import { matchFolderRule } from './folderRules.js';
 import { logEvent } from '../utils/logEvent.js';
@@ -144,59 +142,42 @@ export async function resolveServiceContext(
   return { targetService, targetProfileId, defaultProfileId, defaultFolder, ruleMatch };
 }
 
-async function sendToRadarr(
-  media: { tmdbId: number; title: string },
-  username: string,
-  ctx: ServiceContext,
-) {
-  const radarr = (ctx.targetService
-    ? getArrClientForService(ctx.targetService.id, 'radarr', ctx.targetService.config)
-    : await getArrClient('radarr')) as RadarrClient;
-  const folderPath = ctx.ruleMatch?.folderPath || ctx.defaultFolder || (await radarr.getRootFolders())[0]?.path || '/movies';
-  const tagId = await radarr.getOrCreateTag(username);
-  const existing = await radarr.getMovieByTmdbId(media.tmdbId);
-  if (existing) {
-    await radarr.searchMovie(existing.id);
-    return;
-  }
-  const profileId = ctx.targetProfileId ?? ctx.defaultProfileId ?? (await radarr.getQualityProfiles())[0]?.id ?? 1;
-  await radarr.addMovie({
-    title: media.title,
-    tmdbId: media.tmdbId,
-    qualityProfileId: profileId,
-    rootFolderPath: folderPath,
-    tags: [tagId],
-    searchForMovie: true,
-  });
-}
-
-async function sendToSonarr(
-  media: { tmdbId: number; tvdbId: number; title: string },
+async function sendToArrService(
+  media: { tmdbId: number; tvdbId: number | null; title: string },
+  mediaType: string,
   username: string,
   ctx: ServiceContext,
   seasons?: number[],
 ) {
-  const sonarr = (ctx.targetService
-    ? getArrClientForService(ctx.targetService.id, 'sonarr', ctx.targetService.config)
-    : await getArrClient('sonarr')) as SonarrClient;
-  const folderPath = ctx.ruleMatch?.folderPath || ctx.defaultFolder || (await sonarr.getRootFolders())[0]?.path || '/tv';
-  const seriesType = (ctx.ruleMatch?.seriesType as 'anime' | 'standard' | 'daily') || 'standard';
-  const tagId = await sonarr.getOrCreateTag(username);
-  const existing = await sonarr.getSeriesByTvdbId(media.tvdbId);
+  const serviceType = getServiceTypeForMedia(mediaType);
+  const client = ctx.targetService
+    ? getArrClientForService(ctx.targetService.id, serviceType, ctx.targetService.config)
+    : await getArrClient(serviceType);
+
+  const folderPath = ctx.ruleMatch?.folderPath || ctx.defaultFolder
+    || (await client.getRootFolders())[0]?.path || client.defaultRootFolder;
+  const tagId = await client.getOrCreateTag(username);
+
+  const externalId = mediaType === 'movie' ? media.tmdbId : media.tvdbId;
+  if (!externalId) throw new Error(`Missing external ID for ${mediaType} "${media.title}"`);
+
+  const existing = await client.findByExternalId(externalId);
   if (existing) {
-    await sonarr.searchMissingEpisodes(existing.id);
+    await client.searchMedia(existing.id);
     return;
   }
-  const profileId = ctx.targetProfileId ?? ctx.defaultProfileId ?? (await sonarr.getQualityProfiles())[0]?.id ?? 1;
-  await sonarr.addSeries({
+
+  const profileId = ctx.targetProfileId ?? ctx.defaultProfileId
+    ?? (await client.getQualityProfiles())[0]?.id ?? 1;
+
+  await client.addMedia({
     title: media.title,
-    tvdbId: media.tvdbId,
+    externalId,
     qualityProfileId: profileId,
     rootFolderPath: folderPath,
-    seriesType,
-    seasons: seasons ?? [],
     tags: [tagId],
-    searchForMissingEpisodes: true,
+    seasons,
+    seriesType: ctx.ruleMatch?.seriesType as string | undefined,
   });
 }
 
@@ -211,15 +192,12 @@ export async function sendToService(
   try {
     const ctx = await resolveServiceContext(mediaType as 'movie' | 'tv', media.tmdbId, userId, qualityOptionId);
 
-    if (mediaType === 'movie') {
-      await sendToRadarr(media, username, ctx);
-    } else if (mediaType === 'tv') {
-      if (!media.tvdbId) {
-        console.error('Cannot send TV request — missing tvdbId for "%s"', media.title);
-        return false;
-      }
-      await sendToSonarr({ ...media, tvdbId: media.tvdbId }, username, ctx, seasons);
+    if (mediaType === 'tv' && !media.tvdbId) {
+      console.error('Cannot send TV request — missing tvdbId for "%s"', media.title);
+      return false;
     }
+
+    await sendToArrService(media, mediaType, username, ctx, seasons);
     return true;
   } catch (err) {
     console.error('Failed to send %s "%s" to service:', mediaType, media.title, err);

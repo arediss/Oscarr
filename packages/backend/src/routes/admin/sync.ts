@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../utils/prisma.js';
-import { syncRadarr, syncSonarr, syncAvailabilityDates } from '../../services/sync.js';
+import { syncArrService, syncAvailabilityDates } from '../../services/sync.js';
 import { triggerJob } from '../../services/scheduler.js';
 
 export async function syncRoutes(app: FastifyInstance) {
@@ -27,8 +27,8 @@ export async function syncRoutes(app: FastifyInstance) {
       update: { lastRadarrSync: null, lastSonarrSync: null },
       create: { id: 1, lastRadarrSync: null, lastSonarrSync: null, updatedAt: new Date() },
     });
-    const radarrResult = await syncRadarr(null);
-    const sonarrResult = await syncSonarr(null);
+    const radarrResult = await syncArrService('radarr', null);
+    const sonarrResult = await syncArrService('sonarr', null);
     await syncAvailabilityDates(null);
     return { radarr: radarrResult, sonarr: sonarrResult };
   });

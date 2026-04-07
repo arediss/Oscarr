@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { logEvent } from '../utils/logEvent.js';
 import { safeUserNotify } from '../utils/safeNotify.js';
+import { parseId } from '../utils/params.js';
 
 export async function supportRoutes(app: FastifyInstance) {
   // List tickets (user sees own, admin sees all)
@@ -86,8 +87,8 @@ export async function supportRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     const { id } = request.params as { id: string };
-    const ticketId = parseInt(id, 10);
-    if (isNaN(ticketId)) return reply.status(400).send({ error: 'ID invalide' });
+    const ticketId = parseId(id);
+    if (!ticketId) return reply.status(400).send({ error: 'ID invalide' });
 
     const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
     if (!ticket) return reply.status(404).send({ error: 'Ticket introuvable' });
@@ -126,8 +127,8 @@ export async function supportRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const user = request.user as { id: number; role: string };
     const { id } = request.params as { id: string };
-    const ticketId = parseInt(id, 10);
-    if (isNaN(ticketId)) return reply.status(400).send({ error: 'ID invalide' });
+    const ticketId = parseId(id);
+    if (!ticketId) return reply.status(400).send({ error: 'ID invalide' });
 
     const { content } = request.body as { content: string };
     if (!content?.trim()) return reply.status(400).send({ error: 'Contenu requis' });
@@ -182,8 +183,8 @@ export async function supportRoutes(app: FastifyInstance) {
     },
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const ticketId = parseInt(id, 10);
-    if (isNaN(ticketId)) return reply.status(400).send({ error: 'ID invalide' });
+    const ticketId = parseId(id);
+    if (!ticketId) return reply.status(400).send({ error: 'ID invalide' });
 
     const { status } = request.body as { status: string };
     if (!['open', 'closed'].includes(status)) return reply.status(400).send({ error: 'Statut invalide' });
