@@ -15,7 +15,7 @@ import { tmdbRoutes } from './routes/tmdb.js';
 import { requestRoutes } from './routes/requests.js';
 import { mediaRoutes } from './routes/media.js';
 import { radarrSonarrRoutes } from './routes/radarr-sonarr.js';
-import { adminRoutes } from './routes/admin.js';
+import { adminRoutes } from './routes/admin/index.js';
 import { setupRoutes } from './routes/setup.js';
 import { appRoutes } from './routes/app.js';
 import { supportRoutes } from './routes/support.js';

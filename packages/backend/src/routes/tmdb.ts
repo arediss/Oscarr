@@ -17,7 +17,7 @@ import {
   extractKeywords,
   isMatureRating,
 } from '../services/tmdb.js';
-import { trackKeywordsFromDetails } from '../services/keywordSync.js';
+import { trackKeywordsFromDetails } from '../services/sync/keywordSync.js';
 import { prisma } from '../utils/prisma.js';
 import { parseId, parsePage } from '../utils/params.js';
 

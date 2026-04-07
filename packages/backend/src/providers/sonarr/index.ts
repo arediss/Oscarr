@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { Provider } from '../types.js';
+import { SonarrClient } from './client.js';
 
 export const sonarrProvider: Provider = {
   service: {
@@ -18,5 +19,11 @@ export const sonarrProvider: Provider = {
       });
       return { ok: true, version: data.version };
     },
+    createClient(config) {
+      return new SonarrClient(config.url || '', config.apiKey || '');
+    },
   },
 };
+
+export { SonarrClient } from './client.js';
+export type { SonarrSeries, SonarrSeason, SonarrQueueItem, SonarrEpisode, SonarrEpisodeFile, SonarrHistoryRecord } from './types.js';

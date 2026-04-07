@@ -1,7 +1,8 @@
 import { prisma } from '../utils/prisma.js';
-import { getRadarrAsync } from './radarr.js';
-import { getSonarrAsync } from './sonarr.js';
+import { getArrClient } from '../providers/index.js';
+import type { ArrMediaItem } from '../providers/types.js';
 import { getServiceConfig } from '../utils/services.js';
+import { chunk } from '../utils/batch.js';
 
 export async function cleanupOrphanedRequests(): Promise<{ deleted: number }> {
   const result = await prisma.$executeRaw`DELETE FROM MediaRequest WHERE userId NOT IN (SELECT id FROM User) OR mediaId NOT IN (SELECT id FROM Media)`;
@@ -15,7 +16,6 @@ interface SyncResult {
 }
 
 function extractUsernameFromTag(label: string): string | null {
-  // Matches both old Overseerr format "ID - username" and new NDP format "ndp - username"
   const match = label.match(/^(?:\d+|ndp)\s*-\s*(.+)$/);
   return match ? match[1].trim().toLowerCase() : null;
 }
@@ -25,7 +25,6 @@ export async function syncRequestsFromTags(): Promise<{ radarr: SyncResult; sona
     select: { id: true, displayName: true, email: true, providers: { select: { providerUsername: true } } },
   });
 
-  // Build a map of lowercase username -> userId (search by displayName, provider usernames, and email)
   const usernameMap = new Map<string, number>();
   for (const u of users) {
     if (u.displayName) usernameMap.set(u.displayName.toLowerCase(), u.id);
@@ -35,29 +34,28 @@ export async function syncRequestsFromTags(): Promise<{ radarr: SyncResult; sona
     }
   }
 
-  const radarrResult = await syncRadarrRequests(usernameMap);
-  const sonarrResult = await syncSonarrRequests(usernameMap);
+  const radarrResult = await syncServiceRequests('radarr', usernameMap);
+  const sonarrResult = await syncServiceRequests('sonarr', usernameMap);
 
   return { radarr: radarrResult, sonarr: sonarrResult };
 }
 
-async function syncRadarrRequests(usernameMap: Map<string, number>): Promise<SyncResult> {
+async function syncServiceRequests(serviceType: string, usernameMap: Map<string, number>): Promise<SyncResult> {
   let imported = 0;
   let skipped = 0;
   let errors = 0;
 
-  // Guard: skip if no Radarr service configured
-  const radarrConfig = await getServiceConfig('radarr');
-  if (!radarrConfig) {
-    console.log('[RequestSync] Radarr: no service configured, skipping');
+  const config = await getServiceConfig(serviceType);
+  if (!config) {
+    console.log(`[RequestSync] ${serviceType}: no service configured, skipping`);
     return { imported: 0, skipped: 0, errors: 0 };
   }
 
   try {
-    const radarr = await getRadarrAsync();
-    const [tags, movies] = await Promise.all([
-      radarr.getTags(),
-      radarr.getMovies(),
+    const client = await getArrClient(serviceType);
+    const [tags, allMedia] = await Promise.all([
+      client.getTags(),
+      client.getAllMedia(),
     ]);
 
     // Build tag ID -> userId map
@@ -69,142 +67,71 @@ async function syncRadarrRequests(usernameMap: Map<string, number>): Promise<Syn
       }
     }
 
-    for (const movie of movies) {
-      if (!movie.tags || movie.tags.length === 0) continue;
+    // Filter to media with relevant tags
+    const taggedMedia = allMedia.filter(m => m.tags?.some(t => tagToUser.has(t)));
+    if (taggedMedia.length === 0) return { imported: 0, skipped: 0, errors: 0 };
 
-      // Find which user requested this movie via tags
-      for (const tagId of movie.tags) {
+    // Bulk fetch DB media records (chunked for SQLite param limit)
+    const externalIds = taggedMedia.map(m => m.externalId);
+    const idField = client.mediaType === 'movie' ? 'tmdbId' : 'tvdbId';
+    const allDbMedia: { id: number; tmdbId: number; tvdbId: number | null }[] = [];
+    for (const batch of chunk(externalIds)) {
+      const results = await prisma.media.findMany({
+        where: { mediaType: client.mediaType, [idField]: { in: batch } },
+        select: { id: true, tmdbId: true, tvdbId: true },
+      });
+      allDbMedia.push(...results);
+    }
+    const mediaByExternalId = new Map(allDbMedia.map(m => [
+      client.mediaType === 'movie' ? m.tmdbId : (m.tvdbId ?? m.tmdbId), m,
+    ]));
+
+    // Bulk fetch existing requests
+    const mediaIds = allDbMedia.map(m => m.id);
+    const allRequests: { mediaId: number; userId: number }[] = [];
+    for (const batch of chunk(mediaIds)) {
+      const results = await prisma.mediaRequest.findMany({
+        where: { mediaId: { in: batch } },
+        select: { mediaId: true, userId: true },
+      });
+      allRequests.push(...results);
+    }
+    const requestSet = new Set(allRequests.map(r => `${r.mediaId}:${r.userId}`));
+
+    // Build batch of new requests
+    const toCreate: { mediaId: number; userId: number; mediaType: string; status: string; createdAt?: Date }[] = [];
+    for (const item of taggedMedia) {
+      const dbMedia = mediaByExternalId.get(item.externalId);
+      if (!dbMedia) { skipped++; continue; }
+
+      for (const tagId of item.tags) {
         const userId = tagToUser.get(tagId);
         if (!userId) continue;
 
-        try {
-          // Find or create media in our DB
-          let media = await prisma.media.findUnique({
-            where: { tmdbId_mediaType: { tmdbId: movie.tmdbId, mediaType: 'movie' } },
-          });
+        const key = `${dbMedia.id}:${userId}`;
+        if (requestSet.has(key)) { skipped++; continue; }
 
-          if (!media) {
-            skipped++;
-            continue;
-          }
+        const status = item.hasFile ? 'available'
+          : item.status === 'processing' ? 'processing'
+          : 'approved';
 
-          // Check if request already exists
-          const existing = await prisma.mediaRequest.findFirst({
-            where: { mediaId: media.id, userId },
-          });
-
-          if (existing) {
-            skipped++;
-            continue;
-          }
-
-          // Create the request with original added date from Radarr
-          await prisma.mediaRequest.create({
-            data: {
-              mediaId: media.id,
-              userId,
-              mediaType: 'movie',
-              status: movie.hasFile ? 'available' : 'approved',
-              createdAt: movie.added ? new Date(movie.added) : undefined,
-            },
-          });
-          imported++;
-        } catch (err) {
-          errors++;
-        }
+        toCreate.push({
+          mediaId: dbMedia.id,
+          userId,
+          mediaType: client.mediaType,
+          status,
+          ...(item.addedDate ? { createdAt: new Date(item.addedDate) } : {}),
+        });
+        requestSet.add(key);
       }
+    }
+
+    if (toCreate.length > 0) {
+      await prisma.mediaRequest.createMany({ data: toCreate });
+      imported = toCreate.length;
     }
   } catch (err) {
-    console.error('[RequestSync] Radarr sync failed:', err);
-    errors++;
-  }
-
-  return { imported, skipped, errors };
-}
-
-async function syncSonarrRequests(usernameMap: Map<string, number>): Promise<SyncResult> {
-  let imported = 0;
-  let skipped = 0;
-  let errors = 0;
-
-  // Guard: skip if no Sonarr service configured
-  const sonarrConfig = await getServiceConfig('sonarr');
-  if (!sonarrConfig) {
-    console.log('[RequestSync] Sonarr: no service configured, skipping');
-    return { imported: 0, skipped: 0, errors: 0 };
-  }
-
-  try {
-    const sonarr = await getSonarrAsync();
-    const [tags, series] = await Promise.all([
-      sonarr.getTags(),
-      sonarr.getSeries(),
-    ]);
-
-    const tagToUser = new Map<number, number>();
-    for (const tag of tags) {
-      const username = extractUsernameFromTag(tag.label);
-      if (username && usernameMap.has(username)) {
-        tagToUser.set(tag.id, usernameMap.get(username)!);
-      }
-    }
-
-    for (const show of series) {
-      if (!show.tags || show.tags.length === 0) continue;
-
-      for (const tagId of show.tags) {
-        const userId = tagToUser.get(tagId);
-        if (!userId) continue;
-
-        try {
-          // Find media by tvdbId
-          let media = await prisma.media.findFirst({
-            where: {
-              mediaType: 'tv',
-              OR: [
-                { tvdbId: show.tvdbId },
-                { tmdbId: show.tvdbId },
-              ],
-            },
-          });
-
-          if (!media) {
-            skipped++;
-            continue;
-          }
-
-          const existing = await prisma.mediaRequest.findFirst({
-            where: { mediaId: media.id, userId },
-          });
-
-          if (existing) {
-            skipped++;
-            continue;
-          }
-
-          const stats = show.statistics;
-          const status = stats && stats.percentOfEpisodes >= 100 ? 'available'
-            : stats && stats.episodeFileCount > 0 ? 'processing'
-            : 'approved';
-
-          const addedDate = (show as unknown as { added?: string }).added;
-          await prisma.mediaRequest.create({
-            data: {
-              mediaId: media.id,
-              userId,
-              mediaType: 'tv',
-              status,
-              createdAt: addedDate ? new Date(addedDate) : undefined,
-            },
-          });
-          imported++;
-        } catch (err) {
-          errors++;
-        }
-      }
-    }
-  } catch (err) {
-    console.error('[RequestSync] Sonarr sync failed:', err);
+    console.error(`[RequestSync] ${serviceType} sync failed:`, err);
     errors++;
   }
 
