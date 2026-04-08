@@ -27,6 +27,7 @@ export const discordProvider: NotificationProvider = {
       embeds: [{
         title: payload.label ?? payload.type,
         description: buildDescription(payload),
+        url: payload.url || undefined,
         color: payload.color ?? 0x808080,
         thumbnail: posterUrl ? { url: posterUrl } : undefined,
         footer: { text: 'Oscarr' },

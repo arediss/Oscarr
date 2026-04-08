@@ -288,6 +288,10 @@ export class SonarrClient implements ArrClient {
     await this.searchMissingEpisodes(seriesId);
   }
 
+  async deleteMedia(seriesId: number, deleteFiles = true): Promise<void> {
+    await this.api.delete(`/series/${seriesId}`, { params: { deleteFiles } });
+  }
+
   async getEpisodesNormalized(serviceMediaId: number, seasonNumber?: number): Promise<ArrEpisode[]> {
     const episodes = await this.getEpisodes(serviceMediaId, seasonNumber);
     return episodes.map(ep => ({

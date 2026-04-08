@@ -147,6 +147,7 @@ export interface MediaRequest {
   media?: Media;
   user?: Pick<User, 'id' | 'displayName' | 'avatar'>;
   approvedBy?: Pick<User, 'id' | 'displayName'>;
+  qualityOption?: { id: number; label: string } | null;
 }
 
 export interface QueueItem {

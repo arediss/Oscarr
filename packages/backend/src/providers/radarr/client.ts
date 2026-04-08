@@ -210,6 +210,10 @@ export class RadarrClient implements ArrClient {
     await this.searchMovie(movieId);
   }
 
+  async deleteMedia(movieId: number, deleteFiles = true): Promise<void> {
+    await this.api.delete(`/movie/${movieId}`, { params: { deleteFiles } });
+  }
+
   async getHistoryEntries(since?: Date | null): Promise<ArrHistoryEntry[]> {
     const records = await this.getHistory(since);
     return records.map(r => ({

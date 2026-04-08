@@ -23,6 +23,7 @@ model User {
   supportTickets        SupportTicket[]
   ticketMessages        TicketMessage[]
   notifications         UserNotification[]
+  blacklistedMedia      BlacklistedMedia[] @relation("BlacklistCreatedBy")
 }
 
 model Role {
@@ -163,6 +164,7 @@ model AppSettings {
   registrationEnabled   Boolean   @default(true)
   missingSearchCooldownMin Int   @default(60) // Minutes before allowing another missing search
   instanceLanguages     String    @default("[\"en\"]") // JSON array of ISO 639-1 codes, e.g. ["fr","en"]
+  siteUrl               String?   // Public URL of the instance (e.g. https://oscarr.example.com) for notification links
   apiKey                String?   // API key for external access (health check, integrations)
   updatedAt             DateTime  @updatedAt
 }
@@ -252,6 +254,21 @@ model NotificationProviderConfig {
   settings   String   @default("{}")   // JSON blob: { "webhookUrl": "...", "botToken": "..." }
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+model BlacklistedMedia {
+  id            Int       @id @default(autoincrement())
+  tmdbId        Int
+  mediaType     String    // "movie" | "tv"
+  title         String    // Display name for admin reference
+  posterPath    String?   // TMDB poster path for display
+  reason        String?   // Optional reason
+  createdById   Int?
+  createdAt     DateTime  @default(now())
+
+  createdBy     User?     @relation("BlacklistCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([tmdbId, mediaType])
 }
 
 model TmdbCache {

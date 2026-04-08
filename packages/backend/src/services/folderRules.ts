@@ -2,12 +2,13 @@ import { prisma } from '../utils/prisma.js';
 import type { TmdbMovie, TmdbTv } from './tmdb.js';
 
 export interface RuleCondition {
-  field: 'genre' | 'language' | 'country' | 'user' | 'role' | 'tag';
+  field: 'genre' | 'language' | 'country' | 'user' | 'role' | 'tag' | 'quality';
   operator: 'contains' | 'is' | 'in';
   value: string; // Comma-separated for "in" operator
 }
 
 export interface RuleMatch {
+  ruleName: string;
   folderPath: string;
   seriesType?: string | null;
   serviceId?: number | null;
@@ -21,6 +22,7 @@ interface MediaContext {
   userId: number | null;
   userRole: string | null;
   keywordTags: string[];
+  qualityLabel: string | null;
 }
 
 async function resolveUserRole(userId: number | null): Promise<string | null> {
@@ -67,15 +69,17 @@ async function buildContext(
   mediaType: 'movie' | 'tv',
   tmdbData: TmdbMovie | TmdbTv,
   userId: number | null,
+  qualityOptionId?: number | null,
 ): Promise<MediaContext> {
   const genres = tmdbData.genres?.map(g => g.name.toLowerCase()) ?? [];
   const originCountry = 'origin_country' in tmdbData ? (tmdbData.origin_country ?? []) : [];
   const originalLanguage = 'original_language' in tmdbData ? (tmdbData.original_language ?? '') : '';
 
   const tmdbId = 'id' in tmdbData ? tmdbData.id : null;
-  const [userRole, keywordTags] = await Promise.all([
+  const [userRole, keywordTags, qualityOption] = await Promise.all([
     resolveUserRole(userId),
     resolveKeywordTags(tmdbId),
+    qualityOptionId ? prisma.qualityOption.findUnique({ where: { id: qualityOptionId }, select: { label: true } }) : null,
   ]);
 
   return {
@@ -84,6 +88,7 @@ async function buildContext(
     originalLanguage,
     userId, userRole,
     keywordTags: keywordTags.map(t => t.toLowerCase()),
+    qualityLabel: qualityOption?.label ?? null,
   };
 }
 
@@ -127,6 +132,12 @@ function evaluateCondition(condition: RuleCondition, ctx: MediaContext): boolean
       }
       return false;
 
+    case 'quality':
+      if (condition.operator === 'is' || condition.operator === 'in') {
+        return ctx.qualityLabel !== null && values.includes(ctx.qualityLabel.toLowerCase());
+      }
+      return false;
+
     default:
       return false;
   }
@@ -156,6 +167,7 @@ export async function matchFolderRule(
   mediaType: 'movie' | 'tv',
   tmdbData: TmdbMovie | TmdbTv,
   userId: number | null = null,
+  qualityOptionId?: number | null,
 ): Promise<RuleMatch | null> {
   const rules = await prisma.folderRule.findMany({
     where: { mediaType, enabled: true },
@@ -164,7 +176,7 @@ export async function matchFolderRule(
 
   if (rules.length === 0) return null;
 
-  const ctx = await buildContext(mediaType, tmdbData, userId);
+  const ctx = await buildContext(mediaType, tmdbData, userId, qualityOptionId);
 
   for (const rule of rules) {
     const conditions = parseRuleConditions(rule);
@@ -175,6 +187,7 @@ export async function matchFolderRule(
 
     const folderPath = rule.folderPath || await resolveDefaultFolder(mediaType, rule.seriesType);
     return {
+      ruleName: rule.name,
       folderPath,
       seriesType: rule.seriesType,
       serviceId: rule.serviceId,

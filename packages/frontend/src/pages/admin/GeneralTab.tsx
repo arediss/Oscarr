@@ -42,6 +42,7 @@ export function GeneralTab() {
   const [calendarEnabled, setCalendarEnabled] = useState(true);
   const [missingSearchCooldownMin, setMissingSearchCooldownMin] = useState(60);
   const [siteName, setSiteName] = useState('Oscarr');
+  const [siteUrl, setSiteUrl] = useState('');
   const [instanceLanguage, setInstanceLanguage] = useState('en');
   const [bannerText, setBannerText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -67,6 +68,7 @@ export function GeneralTab() {
           calendarEnabled: data.calendarEnabled ?? true,
           missingSearchCooldownMin: data.missingSearchCooldownMin ?? 60,
           siteName: data.siteName ?? 'Oscarr',
+          siteUrl: data.siteUrl ?? '',
           instanceLanguage: data.instanceLanguages?.[0] ?? 'en',
         };
         setAutoApproveRequests(vals.autoApproveRequests);
@@ -76,6 +78,7 @@ export function GeneralTab() {
         setCalendarEnabled(vals.calendarEnabled);
         setMissingSearchCooldownMin(vals.missingSearchCooldownMin);
         setSiteName(vals.siteName);
+        setSiteUrl(vals.siteUrl);
         setInstanceLanguage(vals.instanceLanguage);
         initialValues.current = { ...vals };
         return data;
@@ -90,9 +93,9 @@ export function GeneralTab() {
 
   const currentValues = useMemo(() => ({
     autoApproveRequests, registrationEnabled, requestsEnabled, supportEnabled,
-    calendarEnabled, missingSearchCooldownMin, siteName, instanceLanguage, bannerText,
+    calendarEnabled, missingSearchCooldownMin, siteName, siteUrl, instanceLanguage, bannerText,
   }), [autoApproveRequests, registrationEnabled, requestsEnabled, supportEnabled,
-    calendarEnabled, missingSearchCooldownMin, siteName, instanceLanguage, bannerText]);
+    calendarEnabled, missingSearchCooldownMin, siteName, siteUrl, instanceLanguage, bannerText]);
 
   const hasChanges = !loading && Object.keys(initialValues.current).length > 0 &&
     Object.entries(currentValues).some(([k, v]) => initialValues.current[k] !== v);
@@ -106,6 +109,7 @@ export function GeneralTab() {
     setCalendarEnabled(iv.calendarEnabled as boolean);
     setMissingSearchCooldownMin(iv.missingSearchCooldownMin as number);
     setSiteName(iv.siteName as string);
+    setSiteUrl(iv.siteUrl as string);
     setInstanceLanguage(iv.instanceLanguage as string);
     setBannerText(iv.bannerText as string);
   };
@@ -122,6 +126,7 @@ export function GeneralTab() {
           calendarEnabled,
           missingSearchCooldownMin,
           siteName: siteName.trim() || 'Oscarr',
+          siteUrl: siteUrl.trim() || '',
           instanceLanguages: [instanceLanguage],
         }),
         api.put('/admin/banner', { banner: bannerText.trim() || null }),
@@ -183,6 +188,18 @@ export function GeneralTab() {
             value={siteName}
             onChange={(e) => setSiteName(e.target.value)}
             placeholder="Oscarr"
+            className="input w-full text-sm"
+          />
+        </div>
+        <div className="card p-4">
+          <div className="mb-2">
+            <span className="text-sm font-medium text-ndp-text">{t('admin.general.site_url')}</span>
+            <span className="text-xs text-ndp-text-dim ml-2">{t('admin.general.site_url_desc')}</span>
+          </div>
+          <input
+            value={siteUrl}
+            onChange={(e) => setSiteUrl(e.target.value)}
+            placeholder="https://oscarr.example.com"
             className="input w-full text-sm"
           />
         </div>
