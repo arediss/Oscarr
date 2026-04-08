@@ -5,7 +5,6 @@ import { clsx } from 'clsx';
 import { Loader2, Trash2, ShieldBan, Search, Film, X } from 'lucide-react';
 import api from '@/lib/api';
 import { posterUrl } from '@/lib/api';
-import { localizedDate } from '@/i18n/formatters';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 
