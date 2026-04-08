@@ -63,6 +63,7 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'GET:/api/requests/:id/resolve':        { permission: 'requests.approve' },
   'PUT:/api/requests/:id':                { permission: 'requests.approve' },
   'POST:/api/requests/cleanup':           { permission: 'admin.danger' },
+  'GET:/api/admin/blacklist/check':       { permission: AUTH },
   'POST:/api/requests/:id/approve':      { permission: 'requests.approve' },
   'POST:/api/requests/:id/decline':      { permission: 'requests.decline' },
   'DELETE:/api/requests/:id':            { permission: 'requests.delete', ownerScoped: true },
@@ -174,6 +175,7 @@ const PERMISSION_DESCRIPTIONS: Record<string, string> = {
   'support.create':    'Create support tickets',
   'support.write':     'Reply to support tickets',
   'support.manage':    'Close and reopen support tickets',
+  'admin.danger':      'Execute bulk cleanup and dangerous data operations',
 };
 
 // ── Plugin overrides (plugins can add/replace rules at runtime) ─────────────

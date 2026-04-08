@@ -196,12 +196,17 @@ export async function requestRoutes(app: FastifyInstance) {
     if (!mediaRequest) return reply.status(404).send({ error: 'Demande introuvable' });
 
     const effectiveQuality = overrideQuality ?? mediaRequest.qualityOptionId ?? undefined;
-    const ctx = await resolveServiceContext(
-      mediaRequest.mediaType as 'movie' | 'tv',
-      mediaRequest.media.tmdbId,
-      mediaRequest.userId,
-      effectiveQuality,
-    );
+    let ctx;
+    try {
+      ctx = await resolveServiceContext(
+        mediaRequest.mediaType as 'movie' | 'tv',
+        mediaRequest.media.tmdbId,
+        mediaRequest.userId,
+        effectiveQuality,
+      );
+    } catch (err) {
+      return reply.status(502).send({ error: 'Unable to resolve service context (TMDB or service unreachable)' });
+    }
 
     const matchedRuleName = ctx.ruleMatch?.ruleName ?? null;
 
@@ -375,6 +380,9 @@ export async function requestRoutes(app: FastifyInstance) {
 
     if (Object.keys(data).length === 0) return reply.status(400).send({ error: 'Nothing to update' });
 
+    const existing = await prisma.mediaRequest.findUnique({ where: { id: requestId } });
+    if (!existing) return reply.status(404).send({ error: 'Demande introuvable' });
+
     const updated = await prisma.mediaRequest.update({
       where: { id: requestId },
       data,
@@ -384,27 +392,58 @@ export async function requestRoutes(app: FastifyInstance) {
   });
 
   // ─── Bulk cleanup requests (admin) ─────────────────────────────────
+  // Actions per status: 'keep' | 'remove' (Oscarr only) | 'remove_with_service' (Oscarr + Radarr/Sonarr)
   app.post('/cleanup', {
     schema: {
       body: {
         type: 'object',
-        required: ['statuses'],
+        required: ['actions'],
         properties: {
-          statuses: { type: 'array', items: { type: 'string' } },
+          actions: {
+            type: 'object',
+            additionalProperties: { type: 'string', enum: ['keep', 'remove', 'remove_with_service'] },
+          },
         },
       },
     },
   }, async (request, reply) => {
-    const { statuses } = request.body as { statuses: string[] };
-    const valid = statuses.filter(s => ['available', 'approved', 'declined', 'failed'].includes(s));
-    if (valid.length === 0) return reply.status(400).send({ error: 'No valid statuses to cleanup' });
+    const { actions } = request.body as { actions: Record<string, 'keep' | 'remove' | 'remove_with_service'> };
+    const validStatuses = ['pending', 'available', 'approved', 'declined', 'failed'];
+    let deletedFromOscarr = 0;
+    let deletedFromService = 0;
 
-    const result = await prisma.mediaRequest.deleteMany({
-      where: { status: { in: valid } },
-    });
+    for (const [status, action] of Object.entries(actions)) {
+      if (!validStatuses.includes(status) || action === 'keep') continue;
 
-    logEvent('info', 'Request', `Cleanup: ${result.count} requests deleted (${valid.join(', ')})`);
-    return { deleted: result.count, statuses: valid };
+      // If deleting from service too, fetch requests with their media to get service IDs
+      if (action === 'remove_with_service') {
+        const requests = await prisma.mediaRequest.findMany({
+          where: { status },
+          include: { media: { select: { radarrId: true, sonarrId: true, mediaType: true } } },
+        });
+
+        for (const req of requests) {
+          try {
+            const serviceType = req.media.mediaType === 'movie' ? 'radarr' : 'sonarr';
+            const serviceId = req.media.mediaType === 'movie' ? req.media.radarrId : req.media.sonarrId;
+            if (serviceId) {
+              const { getArrClient } = await import('../providers/index.js');
+              const client = await getArrClient(serviceType);
+              await client.deleteMedia(serviceId, true);
+              deletedFromService++;
+            }
+          } catch (err) {
+            console.warn(`[Cleanup] Failed to delete from service for request ${req.id}:`, err);
+          }
+        }
+      }
+
+      const result = await prisma.mediaRequest.deleteMany({ where: { status } });
+      deletedFromOscarr += result.count;
+    }
+
+    logEvent('info', 'Request', `Cleanup: ${deletedFromOscarr} requests deleted, ${deletedFromService} removed from services`);
+    return { deletedFromOscarr, deletedFromService };
   });
 
   // ─── Delete request ───────────────────────────────────────────────

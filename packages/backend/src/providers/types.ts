@@ -85,6 +85,7 @@ export interface ArrClient {
   findByExternalId(externalId: number): Promise<{ id: number } | null>;
   addMedia(options: ArrAddMediaOptions): Promise<void>;
   searchMedia(serviceMediaId: number): Promise<void>;
+  deleteMedia(serviceMediaId: number, deleteFiles?: boolean): Promise<void>;
 
   // Normalized history
   getHistoryEntries(since?: Date | null): Promise<ArrHistoryEntry[]>;

@@ -69,9 +69,10 @@ export default function RequestsPage() {
   const [total, setTotal] = useState(0);
   const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string }[]>([]);
   const [showCleanup, setShowCleanup] = useState(false);
-  const [cleanupStatuses, setCleanupStatuses] = useState<Set<string>>(new Set());
+  type CleanupAction = 'keep' | 'remove' | 'remove_with_service';
+  const [cleanupActions, setCleanupActions] = useState<Record<string, CleanupAction>>({});
   const [cleanupLoading, setCleanupLoading] = useState(false);
-  const [cleanupResult, setCleanupResult] = useState<number | null>(null);
+  const [cleanupResult, setCleanupResult] = useState<{ oscarr: number; service: number } | null>(null);
 
   useEffect(() => {
     api.get('/requests/stats').then(({ data }) => setStats(data)).catch(() => {});
@@ -165,7 +166,7 @@ export default function RequestsPage() {
           <h1 className="text-2xl font-bold text-ndp-text">{t('requests.title')}</h1>
           {isAdmin && stats && (stats.available > 0 || stats.approved > 0 || stats.declined > 0) && (
             <button
-              onClick={() => { setShowCleanup(true); setCleanupStatuses(new Set()); setCleanupResult(null); }}
+              onClick={() => { setShowCleanup(true); setCleanupActions({}); setCleanupResult(null); }}
               className="text-xs text-ndp-text-dim hover:text-ndp-text flex items-center gap-1.5 hover:bg-white/5 px-3 py-1.5 rounded-lg transition-colors"
             >
               <Eraser className="w-3.5 h-3.5" />
@@ -273,7 +274,7 @@ export default function RequestsPage() {
       {/* Cleanup modal */}
       {showCleanup && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowCleanup(false); }}>
-          <div className="bg-ndp-surface border border-white/10 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-ndp-surface border border-white/10 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-base font-bold text-ndp-text flex items-center gap-2">
                 <Eraser className="w-4 h-4 text-ndp-text-muted" />
@@ -286,34 +287,51 @@ export default function RequestsPage() {
 
             <p className="text-xs text-ndp-text-muted mb-4">{t('requests.cleanup_desc')}</p>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               {[
-                { key: 'available', label: t('status.available'), count: stats?.available ?? 0, color: 'text-ndp-success' },
-                { key: 'approved', label: t('status.approved'), count: stats?.approved ?? 0, color: 'text-ndp-accent' },
-                { key: 'declined', label: t('status.declined'), count: stats?.declined ?? 0, color: 'text-ndp-danger' },
-                { key: 'failed', label: t('status.failed'), count: 0, color: 'text-ndp-danger' },
-              ].filter(s => s.count > 0 || s.key === 'failed').map(s => (
-                <label key={s.key} className="flex items-center gap-3 p-3 rounded-xl bg-ndp-surface-light hover:bg-ndp-surface-hover cursor-pointer transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={cleanupStatuses.has(s.key)}
-                    onChange={(e) => {
-                      const next = new Set(cleanupStatuses);
-                      e.target.checked ? next.add(s.key) : next.delete(s.key);
-                      setCleanupStatuses(next);
-                    }}
-                    className="rounded border-white/20 bg-ndp-surface text-ndp-accent focus:ring-ndp-accent/50"
-                  />
-                  <span className={clsx('text-sm font-medium flex-1', s.color)}>{s.label}</span>
-                  {s.count > 0 && <span className="text-xs text-ndp-text-dim">{s.count}</span>}
-                </label>
-              ))}
+                { key: 'pending', label: t('status.pending'), count: stats?.pending ?? 0, color: 'text-ndp-warning', dot: 'bg-ndp-warning' },
+                { key: 'available', label: t('status.available'), count: stats?.available ?? 0, color: 'text-ndp-success', dot: 'bg-ndp-success' },
+                { key: 'approved', label: t('status.approved'), count: stats?.approved ?? 0, color: 'text-ndp-accent', dot: 'bg-ndp-accent' },
+                { key: 'declined', label: t('status.declined'), count: stats?.declined ?? 0, color: 'text-ndp-danger', dot: 'bg-ndp-danger' },
+                { key: 'failed', label: t('status.failed'), count: 0, color: 'text-purple-400', dot: 'bg-purple-400' },
+              ].map(s => {
+                const action = cleanupActions[s.key] || 'keep';
+                return (
+                  <div key={s.key} className="rounded-xl bg-ndp-surface-light p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={clsx('w-2 h-2 rounded-full', s.dot)} />
+                      <span className={clsx('text-sm font-medium flex-1', s.color)}>{s.label}</span>
+                      <span className="text-xs text-ndp-text-dim">{s.count}</span>
+                    </div>
+                    <div className="flex gap-1 bg-ndp-surface/60 rounded-lg p-1">
+                      {(['keep', 'remove', 'remove_with_service'] as const).map(a => (
+                        <button
+                          key={a}
+                          onClick={() => setCleanupActions(prev => ({ ...prev, [s.key]: a }))}
+                          className={clsx(
+                            'flex-1 text-[11px] font-medium py-1.5 rounded-md transition-all duration-200',
+                            action === a
+                              ? a === 'keep' ? 'bg-white/10 text-ndp-text shadow-sm'
+                                : a === 'remove' ? 'bg-ndp-warning/20 text-ndp-warning shadow-sm'
+                                : 'bg-ndp-danger/20 text-ndp-danger shadow-sm'
+                              : 'text-ndp-text-dim hover:text-ndp-text-muted',
+                          )}
+                        >
+                          {a === 'keep' ? t('requests.cleanup_keep')
+                            : a === 'remove' ? t('requests.cleanup_remove')
+                            : t('requests.cleanup_remove_service')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            {cleanupResult !== null && (
+            {cleanupResult && (
               <div className="mt-4 p-3 rounded-xl bg-ndp-success/10 text-ndp-success text-sm flex items-center gap-2">
                 <CheckCircle className="w-4 h-4" />
-                {t('requests.cleanup_result', { count: cleanupResult })}
+                {t('requests.cleanup_result_detail', { oscarr: cleanupResult.oscarr, service: cleanupResult.service })}
               </div>
             )}
 
@@ -323,17 +341,18 @@ export default function RequestsPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (cleanupStatuses.size === 0) return;
+                  const hasAction = Object.values(cleanupActions).some(a => a !== 'keep');
+                  if (!hasAction) return;
                   setCleanupLoading(true);
                   try {
-                    const { data } = await api.post('/requests/cleanup', { statuses: [...cleanupStatuses] });
-                    setCleanupResult(data.deleted);
+                    const { data } = await api.post('/requests/cleanup', { actions: cleanupActions });
+                    setCleanupResult({ oscarr: data.deletedFromOscarr, service: data.deletedFromService });
                     fetchRequests(1);
                     api.get('/requests/stats').then(({ data }) => setStats(data)).catch(() => {});
                   } catch (err) { console.error('Cleanup failed:', err); }
                   finally { setCleanupLoading(false); }
                 }}
-                disabled={cleanupStatuses.size === 0 || cleanupLoading}
+                disabled={!Object.values(cleanupActions).some(a => a !== 'keep') || cleanupLoading}
                 className="btn-danger text-sm flex items-center gap-1.5"
               >
                 {cleanupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eraser className="w-3.5 h-3.5" />}
@@ -663,12 +682,16 @@ function RequestCard({
                 {t('common.close')}
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   const updates: Record<string, unknown> = {};
                   if (overridePath && overridePath !== resolvedCtx?.folderPath) updates.rootFolder = overridePath;
                   if (selectedQuality !== (req.qualityOptionId ?? undefined)) updates.qualityOptionId = selectedQuality || null;
                   if (Object.keys(updates).length > 0) {
-                    api.put(`/requests/${req.id}`, updates).catch(() => {});
+                    try {
+                      await api.put(`/requests/${req.id}`, updates);
+                    } catch (err) {
+                      console.error('Failed to save request settings:', err);
+                    }
                   }
                   setShowSettings(false);
                 }}
@@ -678,9 +701,9 @@ function RequestCard({
                 {t('common.save')}
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (overridePath && overridePath !== resolvedCtx?.folderPath) {
-                    api.put(`/requests/${req.id}`, { rootFolder: overridePath }).catch(() => {});
+                    await api.put(`/requests/${req.id}`, { rootFolder: overridePath }).catch(() => {});
                   }
                   setShowSettings(false);
                   onAction(req.id, 'approve', selectedQuality);

@@ -224,6 +224,9 @@ export async function requestCollectionMovie(
   movieTmdbId: number,
   user: { id: number; role: string },
 ): Promise<boolean> {
+  const bl = await isBlacklisted(movieTmdbId, 'movie');
+  if (bl.blacklisted) return false;
+
   const existingRequest = await prisma.mediaRequest.findFirst({
     where: {
       media: { tmdbId: movieTmdbId, mediaType: 'movie' },
