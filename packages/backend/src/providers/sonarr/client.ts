@@ -1,5 +1,5 @@
 import axios, { type AxiosInstance } from 'axios';
-import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrSeasonItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrEpisode } from '../types.js';
+import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrSeasonItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrEpisode, ArrWebhookEvent } from '../types.js';
 import { extractImageFromArr } from '../types.js';
 import type { SonarrSeries, SonarrSeason, SonarrQueueItem, SonarrEpisode, SonarrEpisodeFile, SonarrHistoryRecord } from './types.js';
 
@@ -314,4 +314,19 @@ export class SonarrClient implements ArrClient {
     }));
   }
 
+  parseWebhookPayload(body: unknown): ArrWebhookEvent | null {
+    const payload = body as { eventType?: string; series?: { tvdbId?: number; title?: string }; episodes?: { seasonNumber?: number; episodeNumber?: number }[] };
+    if (!payload.eventType) return null;
+    if (payload.eventType === 'Test') return { type: 'test', externalId: 0, title: 'Test' };
+    if (!payload.series?.tvdbId) return null;
+    const typeMap: Record<string, ArrWebhookEvent['type']> = { Download: 'download', Grab: 'grab' };
+    const ep = payload.episodes?.[0];
+    return {
+      type: typeMap[payload.eventType] || 'unknown',
+      externalId: payload.series.tvdbId,
+      title: payload.series.title || 'Unknown',
+      seasonNumber: ep?.seasonNumber,
+      episodeNumber: ep?.episodeNumber,
+    };
+  }
 }

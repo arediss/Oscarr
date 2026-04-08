@@ -1,5 +1,5 @@
 import axios, { type AxiosInstance } from 'axios';
-import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions } from '../types.js';
+import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrWebhookEvent } from '../types.js';
 import { extractImageFromArr } from '../types.js';
 import type { RadarrMovie, RadarrQueueItem, RadarrHistoryRecord } from './types.js';
 
@@ -220,5 +220,19 @@ export class RadarrClient implements ArrClient {
       serviceMediaId: r.movieId,
       date: new Date(r.date),
     }));
+  }
+
+  parseWebhookPayload(body: unknown): ArrWebhookEvent | null {
+    const payload = body as { eventType?: string; movie?: { tmdbId?: number; title?: string } };
+    if (!payload.eventType) return null;
+    // Test event has no movie data
+    if (payload.eventType === 'Test') return { type: 'test', externalId: 0, title: 'Test' };
+    if (!payload.movie?.tmdbId) return null;
+    const typeMap: Record<string, ArrWebhookEvent['type']> = { Download: 'download', Grab: 'grab' };
+    return {
+      type: typeMap[payload.eventType] || 'unknown',
+      externalId: payload.movie.tmdbId,
+      title: payload.movie.title || 'Unknown',
+    };
   }
 }

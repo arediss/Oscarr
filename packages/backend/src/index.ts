@@ -124,6 +124,7 @@ async function start() {
   await app.register(appRoutes, { prefix: '/api/app' });
   await app.register(supportRoutes, { prefix: '/api/support' });
   await app.register(notificationRoutes, { prefix: '/api/notifications' });
+  await app.register((await import('./routes/webhooks.js')).webhookRoutes, { prefix: '/api/webhooks' });
 
   // Initialize notification system (before plugins, so they can extend it)
   initNotifications();

@@ -54,6 +54,14 @@ export interface ArrEpisode {
   size: number | null;
 }
 
+export interface ArrWebhookEvent {
+  type: 'download' | 'grab' | 'test' | 'unknown';
+  externalId: number;
+  title: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
+}
+
 export interface ArrAddMediaOptions {
   title: string;
   externalId: number;
@@ -92,6 +100,9 @@ export interface ArrClient {
 
   // Episodes (TV only — optional, not implemented by movie providers)
   getEpisodesNormalized?(serviceMediaId: number, seasonNumber?: number): Promise<ArrEpisode[]>;
+
+  // Webhooks — parse incoming webhook payload from the service
+  parseWebhookPayload?(body: unknown): ArrWebhookEvent | null;
 
   // Metadata
   readonly mediaType: 'movie' | 'tv';
