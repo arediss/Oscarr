@@ -344,6 +344,7 @@
   "admin.paths.user": "Utilisateur",
   "admin.paths.role": "Rôle",
   "admin.paths.tag": "Tag",
+  "admin.paths.quality": "Qualité",
   "admin.paths.select_user": "Sélectionner un utilisateur",
   "admin.paths.select_role": "Sélectionner un rôle",
   "admin.paths.select_tag": "Sélectionner un tag",
