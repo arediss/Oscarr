@@ -59,7 +59,7 @@ export default function MediaDetailPage({ type }: Props) {
   const {
     media, dbMedia, sonarrSeasons, inLibrary, recommendations,
     loading, qualityOptions, activeQualityOptionIds,
-    audioLanguages, subtitleLanguages, download, refreshDbData,
+    audioLanguages, subtitleLanguages, download, blacklisted, refreshDbData,
   } = useMediaDetailData(id, type);
 
   const {
@@ -328,6 +328,11 @@ export default function MediaDetailPage({ type }: Props) {
                     {t('media.request_rest')}
                   </button>
                 )
+              ) : blacklisted.blocked ? (
+                <button disabled className="btn-secondary flex items-center gap-2 cursor-not-allowed opacity-60" title={blacklisted.reason || undefined}>
+                  <ShieldAlert className="w-4 h-4 text-ndp-danger" />
+                  {t('media.blocked')}
+                </button>
               ) : (
                 <button
                   onClick={handleRequest}

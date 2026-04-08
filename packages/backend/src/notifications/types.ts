@@ -23,6 +23,7 @@ export interface NotificationPayload {
   tmdbId?: number;
   message?: string;
   color?: number;
+  url?: string;
 }
 
 /**
