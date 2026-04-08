@@ -23,6 +23,7 @@ model User {
   supportTickets        SupportTicket[]
   ticketMessages        TicketMessage[]
   notifications         UserNotification[]
+  blacklistedMedia      BlacklistedMedia[] @relation("BlacklistCreatedBy")
 }
 
 model Role {
@@ -253,6 +254,21 @@ model NotificationProviderConfig {
   settings   String   @default("{}")   // JSON blob: { "webhookUrl": "...", "botToken": "..." }
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+model BlacklistedMedia {
+  id            Int       @id @default(autoincrement())
+  tmdbId        Int
+  mediaType     String    // "movie" | "tv"
+  title         String    // Display name for admin reference
+  posterPath    String?   // TMDB poster path for display
+  reason        String?   // Optional reason
+  createdById   Int?
+  createdAt     DateTime  @default(now())
+
+  createdBy     User?     @relation("BlacklistCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([tmdbId, mediaType])
 }
 
 model TmdbCache {

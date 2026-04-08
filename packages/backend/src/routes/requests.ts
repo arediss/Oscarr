@@ -15,6 +15,7 @@ import {
   requestCollectionMovie,
   promoteStaleStatuses,
   resolveServiceContext,
+  isBlacklisted,
 } from '../services/requestService.js';
 
 const VALID_STATUSES: string[] = [...REQUEST_STATUSES];
@@ -122,6 +123,10 @@ export async function requestRoutes(app: FastifyInstance) {
       const guardResult = await runPluginGuard(user.id);
       if (guardResult?.blocked) return reply.status(guardResult.statusCode || 403).send({ error: guardResult.error });
     }
+
+    // Blacklist check
+    const bl = await isBlacklisted(tmdbId, mediaType);
+    if (bl.blacklisted) return reply.status(403).send({ error: bl.reason || 'This media has been blocked by an administrator.' });
 
     const media = await findOrCreateMedia(tmdbId, mediaType);
 

@@ -5,12 +5,14 @@ import { QualityTab } from './QualityTab';
 import { PathsTab } from './PathsTab';
 import { RoutingRulesTab } from './RoutingRulesTab';
 import { KeywordsTab } from './KeywordsTab';
+import { BlacklistTab } from './BlacklistTab';
 
 const SUB_TABS = [
   { id: 'quality', labelKey: 'admin.tab.quality' },
   { id: 'paths', labelKey: 'admin.tab.paths' },
   { id: 'rules', labelKey: 'admin.tab.rules' },
   { id: 'keywords', labelKey: 'admin.tab.keywords' },
+  { id: 'blacklist', labelKey: 'admin.tab.blacklist' },
 ] as const;
 
 type SubTab = typeof SUB_TABS[number]['id'];
@@ -45,6 +47,7 @@ export function MediaConfigTab() {
         {activeSubTab === 'paths' && <PathsTab />}
         {activeSubTab === 'rules' && <RoutingRulesTab />}
         {activeSubTab === 'keywords' && <KeywordsTab />}
+        {activeSubTab === 'blacklist' && <BlacklistTab />}
       </div>
     </div>
   );

@@ -75,6 +75,13 @@ export async function findOrCreateMedia(tmdbId: number, mediaType: 'movie' | 'tv
   return media;
 }
 
+export async function isBlacklisted(tmdbId: number, mediaType: string): Promise<{ blacklisted: boolean; reason: string | null }> {
+  const entry = await prisma.blacklistedMedia.findUnique({
+    where: { tmdbId_mediaType: { tmdbId, mediaType } },
+  });
+  return { blacklisted: !!entry, reason: entry?.reason || null };
+}
+
 export async function getUserTagName(userId: number): Promise<string> {
   const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { displayName: true, email: true } });
   return dbUser?.displayName || dbUser?.email || `user-${userId}`;

@@ -24,6 +24,7 @@ export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv')
   const [activeQualityOptionIds, setActiveQualityOptionIds] = useState<number[]>([]);
   const [audioLanguages, setAudioLanguages] = useState<string[]>([]);
   const [subtitleLanguages, setSubtitleLanguages] = useState<string[]>([]);
+  const [blacklisted, setBlacklisted] = useState<{ blocked: boolean; reason: string | null }>({ blocked: false, reason: null });
 
   const applyDbData = useCallback((data: Record<string, unknown>) => {
     if (data.id) setDbMedia(data as unknown as Media);
@@ -75,7 +76,10 @@ export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv')
         setLoading(false);
       }
 
-      // 3. Recommendations (non-blocking)
+      // 3. Blacklist check + Recommendations (non-blocking)
+      api.get(`/admin/blacklist/check?tmdbId=${id}&mediaType=${type}`)
+        .then(({ data }) => setBlacklisted({ blocked: data.blacklisted, reason: data.reason }))
+        .catch(() => setBlacklisted({ blocked: false, reason: null }));
       api.get(`/tmdb/${type}/${id}/recommendations`).then(({ data }) => {
         setRecommendations(data.results?.map((r: TmdbMedia) => ({ ...r, media_type: type })) || []);
         if (data.nsfwTmdbIds?.length) addNsfwIds(data.nsfwTmdbIds);
@@ -116,6 +120,7 @@ export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv')
     audioLanguages,
     subtitleLanguages,
     download,
+    blacklisted,
     applyDbData,
     refreshDbData,
   };
