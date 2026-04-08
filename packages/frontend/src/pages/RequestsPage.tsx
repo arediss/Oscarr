@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -10,12 +11,11 @@ import {
   Film,
   Search,
   CalendarClock,
-  LayoutGrid,
-  Hourglass,
-  ThumbsUp,
-  CircleCheck,
-  Cog,
-  Ban,
+  Trash2,
+  Settings2,
+  X,
+  Save,
+  Eraser,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -26,15 +26,15 @@ import { useDownloadForMedia } from '@/hooks/useDownloads';
 import { localizedDate } from '@/i18n/formatters';
 import type { MediaRequest } from '@/types';
 
-const STATUS_CONFIG: Record<string, { labelKey: string; icon: typeof Clock; color: string; bg: string }> = {
-  pending: { labelKey: 'pending', icon: Clock, color: 'text-ndp-warning', bg: 'bg-ndp-warning' },
-  approved: { labelKey: 'approved', icon: CheckCircle, color: 'text-ndp-accent', bg: 'bg-ndp-accent' },
-  declined: { labelKey: 'declined', icon: XCircle, color: 'text-ndp-danger', bg: 'bg-ndp-danger' },
-  processing: { labelKey: 'processing', icon: Loader2, color: 'text-blue-400', bg: 'bg-ndp-accent' },
-  available: { labelKey: 'available', icon: CheckCircle, color: 'text-ndp-success', bg: 'bg-ndp-success' },
-  searching: { labelKey: 'searching', icon: Search, color: 'text-ndp-accent', bg: 'bg-ndp-accent' },
-  upcoming: { labelKey: 'upcoming', icon: CalendarClock, color: 'text-purple-400', bg: 'bg-purple-500' },
-  failed: { labelKey: 'failed', icon: AlertCircle, color: 'text-ndp-danger', bg: 'bg-ndp-danger' },
+const STATUS_CONFIG: Record<string, { labelKey: string; icon: typeof Clock; color: string; bg: string; dot: string }> = {
+  pending: { labelKey: 'pending', icon: Clock, color: 'text-ndp-warning', bg: 'bg-ndp-warning', dot: 'bg-ndp-warning' },
+  approved: { labelKey: 'approved', icon: CheckCircle, color: 'text-ndp-accent', bg: 'bg-ndp-accent', dot: 'bg-ndp-accent' },
+  declined: { labelKey: 'declined', icon: XCircle, color: 'text-ndp-danger', bg: 'bg-ndp-danger', dot: 'bg-ndp-danger' },
+  processing: { labelKey: 'processing', icon: Loader2, color: 'text-blue-400', bg: 'bg-ndp-accent', dot: 'bg-blue-400' },
+  available: { labelKey: 'available', icon: CheckCircle, color: 'text-ndp-success', bg: 'bg-ndp-success', dot: 'bg-ndp-success' },
+  searching: { labelKey: 'searching', icon: Search, color: 'text-ndp-accent', bg: 'bg-ndp-accent', dot: 'bg-ndp-accent' },
+  upcoming: { labelKey: 'upcoming', icon: CalendarClock, color: 'text-purple-400', bg: 'bg-purple-500', dot: 'bg-purple-400' },
+  failed: { labelKey: 'failed', icon: AlertCircle, color: 'text-ndp-danger', bg: 'bg-ndp-danger', dot: 'bg-ndp-danger' },
 };
 
 interface RequestStats {
@@ -45,6 +45,14 @@ interface RequestStats {
   declined: number;
   processing: number;
 }
+
+const FILTER_TABS = [
+  { key: '', labelKey: 'requests.all' },
+  { key: 'pending', labelKey: 'status.pending' },
+  { key: 'approved', labelKey: 'status.approved' },
+  { key: 'available', labelKey: 'status.available' },
+  { key: 'declined', labelKey: 'status.declined' },
+] as const;
 
 export default function RequestsPage() {
   const { t } = useTranslation();
@@ -59,9 +67,15 @@ export default function RequestsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string }[]>([]);
+  const [showCleanup, setShowCleanup] = useState(false);
+  const [cleanupStatuses, setCleanupStatuses] = useState<Set<string>>(new Set());
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<number | null>(null);
 
   useEffect(() => {
     api.get('/requests/stats').then(({ data }) => setStats(data)).catch(() => {});
+    api.get('/app/quality-options').then(({ data }) => setQualityOptions(data)).catch(() => {});
   }, []);
 
   const fetchRequests = useCallback(async (pageNum: number, append = false) => {
@@ -92,17 +106,31 @@ export default function RequestsPage() {
     fetchRequests(1);
   }, [filter]);
 
-  const loadMore = () => {
+  const loadMore = useCallback(() => {
     if (loadingMore || page >= totalPages) return;
     setLoadingMore(true);
     fetchRequests(page + 1, true);
-  };
+  }, [loadingMore, page, totalPages, fetchRequests]);
 
-  const handleAction = async (id: number, action: 'approve' | 'decline') => {
+  // Infinite scroll — trigger loadMore when sentinel enters viewport
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) loadMore(); },
+      { rootMargin: '200px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore]);
+
+  const handleAction = async (id: number, action: 'approve' | 'decline', qualityOptionId?: number) => {
     setActionLoading(id);
     try {
-      await api.post(`/requests/${id}/${action}`);
+      await api.post(`/requests/${id}/${action}`, qualityOptionId ? { qualityOptionId } : {});
       fetchRequests(1);
+      api.get('/requests/stats').then(({ data }) => setStats(data)).catch(() => {});
     } catch (err) {
       console.error(`Failed to ${action} request:`, err);
     } finally {
@@ -115,6 +143,7 @@ export default function RequestsPage() {
     try {
       await api.delete(`/requests/${id}`);
       fetchRequests(1);
+      api.get('/requests/stats').then(({ data }) => setStats(data)).catch(() => {});
     } catch (err) {
       console.error('Failed to delete request:', err);
     } finally {
@@ -122,33 +151,64 @@ export default function RequestsPage() {
     }
   };
 
+  const getStatCount = (key: string): number => {
+    if (!stats) return 0;
+    if (key === '') return stats.total;
+    return (stats as unknown as Record<string, number>)[key] ?? 0;
+  };
+
   return (
     <div className="max-w-[1800px] mx-auto px-4 sm:px-8 py-8">
-      {/* Stats */}
-      {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-          <StatCard label={t('requests.total')} value={stats.total} icon={LayoutGrid} color="text-ndp-text" bg="bg-white/5" active={filter === ''} onClick={() => setFilter('')} />
-          <StatCard label={t('status.pending')} value={stats.pending} icon={Hourglass} color="text-ndp-warning" bg="bg-ndp-warning/5" active={filter === 'pending'} onClick={() => setFilter(filter === 'pending' ? '' : 'pending')} />
-          <StatCard label={t('requests.approved_plural')} value={stats.approved} icon={ThumbsUp} color="text-ndp-accent" bg="bg-ndp-accent/5" active={filter === 'approved'} onClick={() => setFilter(filter === 'approved' ? '' : 'approved')} />
-          <StatCard label={t('requests.available_plural')} value={stats.available} icon={CircleCheck} color="text-ndp-success" bg="bg-ndp-success/5" active={filter === 'available'} onClick={() => setFilter(filter === 'available' ? '' : 'available')} />
-          <StatCard label={t('requests.processing_plural')} value={stats.processing} icon={Cog} color="text-blue-400" bg="bg-ndp-accent/5" />
-          <StatCard label={t('requests.declined_plural')} value={stats.declined} icon={Ban} color="text-ndp-danger" bg="bg-ndp-danger/5" active={filter === 'declined'} onClick={() => setFilter(filter === 'declined' ? '' : 'declined')} />
+      {/* Header + filter tabs */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold text-ndp-text">{t('requests.title')}</h1>
+          {isAdmin && stats && (stats.available > 0 || stats.approved > 0 || stats.declined > 0) && (
+            <button
+              onClick={() => { setShowCleanup(true); setCleanupStatuses(new Set()); setCleanupResult(null); }}
+              className="text-xs text-ndp-text-dim hover:text-ndp-text flex items-center gap-1.5 hover:bg-white/5 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Eraser className="w-3.5 h-3.5" />
+              {t('requests.cleanup')}
+            </button>
+          )}
         </div>
-      )}
 
-      <div className="flex items-center gap-3 mb-8">
-        <h1 className="text-2xl font-bold text-ndp-text">{t('requests.title')}</h1>
-        {filter && (
-          <button onClick={() => setFilter('')} className="text-xs text-ndp-text-dim hover:text-ndp-text bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-full transition-colors flex items-center gap-1">
-            <XCircle className="w-3 h-3" />
-            {t('requests.clear_filter')}
-          </button>
-        )}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          {FILTER_TABS.map(tab => {
+            const count = getStatCount(tab.key);
+            const isActive = filter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setFilter(tab.key)}
+                className={clsx(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors duration-200',
+                  isActive
+                    ? 'bg-ndp-accent text-white'
+                    : 'text-ndp-text-muted hover:bg-ndp-surface-light',
+                )}
+              >
+                {t(tab.labelKey)}
+                {count > 0 && (
+                  <span className={clsx(
+                    'text-xs px-1.5 py-0.5 rounded-md font-semibold',
+                    isActive ? 'bg-white/20' : 'bg-white/5',
+                  )}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="w-8 h-8 text-ndp-accent animate-spin" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="h-[200px] rounded-2xl skeleton" />
+          ))}
         </div>
       ) : requests.length === 0 ? (
         <div className="text-center py-20">
@@ -160,37 +220,129 @@ export default function RequestsPage() {
         </div>
       ) : (
         <>
-          <div
-            className={clsx(
-              'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 transition-opacity duration-300',
-              filtering ? 'opacity-40' : 'opacity-100'
-            )}
-          >
-            {requests.map((req) => (
-              <RequestCard
-                key={req.id}
-                request={req}
-                isAdmin={isAdmin}
-                actionLoading={actionLoading}
-                onAction={handleAction}
-                onDelete={handleDelete}
-              />
-            ))}
+          <div className={clsx('transition-opacity duration-300', filtering ? 'opacity-40' : 'opacity-100')}>
+            {(() => {
+              const pendingRequests = !filter ? requests.filter(r => r.status === 'pending') : [];
+              const otherRequests = !filter ? requests.filter(r => r.status !== 'pending') : requests;
+
+              return (
+                <>
+                  {pendingRequests.length > 0 && (
+                    <div className="mb-8">
+                      <h2 className="text-sm font-semibold text-ndp-warning uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        {t('requests.pending_section', { count: pendingRequests.length })}
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                        {pendingRequests.map((req, index) => (
+                          <RequestCard key={req.id} request={req} isAdmin={isAdmin} actionLoading={actionLoading} onAction={handleAction} onDelete={handleDelete} qualityOptions={qualityOptions} index={index} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {otherRequests.length > 0 && (
+                    <div>
+                      {pendingRequests.length > 0 && (
+                        <h2 className="text-sm font-semibold text-ndp-text-dim uppercase tracking-wider mb-3">
+                          {t('requests.processed_section')}
+                        </h2>
+                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                        {otherRequests.map((req, index) => (
+                          <RequestCard key={req.id} request={req} isAdmin={isAdmin} actionLoading={actionLoading} onAction={handleAction} onDelete={handleDelete} qualityOptions={qualityOptions} index={index} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
-          {page < totalPages && (
-            <div className="flex justify-center mt-8">
-              <button
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="btn-secondary flex items-center gap-2"
-              >
-                {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
-                {t('requests.load_more', { current: requests.length, total })}
-              </button>
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} className="h-1" />
+          {loadingMore && (
+            <div className="flex justify-center py-6">
+              <Loader2 className="w-6 h-6 text-ndp-accent animate-spin" />
             </div>
           )}
         </>
+      )}
+
+      {/* Cleanup modal */}
+      {showCleanup && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowCleanup(false); }}>
+          <div className="bg-ndp-surface border border-white/10 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-bold text-ndp-text flex items-center gap-2">
+                <Eraser className="w-4 h-4 text-ndp-text-muted" />
+                {t('requests.cleanup_title')}
+              </h3>
+              <button onClick={() => setShowCleanup(false)} className="text-ndp-text-dim hover:text-ndp-text transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-ndp-text-muted mb-4">{t('requests.cleanup_desc')}</p>
+
+            <div className="space-y-2">
+              {[
+                { key: 'available', label: t('status.available'), count: stats?.available ?? 0, color: 'text-ndp-success' },
+                { key: 'approved', label: t('status.approved'), count: stats?.approved ?? 0, color: 'text-ndp-accent' },
+                { key: 'declined', label: t('status.declined'), count: stats?.declined ?? 0, color: 'text-ndp-danger' },
+                { key: 'failed', label: t('status.failed'), count: 0, color: 'text-ndp-danger' },
+              ].filter(s => s.count > 0 || s.key === 'failed').map(s => (
+                <label key={s.key} className="flex items-center gap-3 p-3 rounded-xl bg-ndp-surface-light hover:bg-ndp-surface-hover cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={cleanupStatuses.has(s.key)}
+                    onChange={(e) => {
+                      const next = new Set(cleanupStatuses);
+                      e.target.checked ? next.add(s.key) : next.delete(s.key);
+                      setCleanupStatuses(next);
+                    }}
+                    className="rounded border-white/20 bg-ndp-surface text-ndp-accent focus:ring-ndp-accent/50"
+                  />
+                  <span className={clsx('text-sm font-medium flex-1', s.color)}>{s.label}</span>
+                  {s.count > 0 && <span className="text-xs text-ndp-text-dim">{s.count}</span>}
+                </label>
+              ))}
+            </div>
+
+            {cleanupResult !== null && (
+              <div className="mt-4 p-3 rounded-xl bg-ndp-success/10 text-ndp-success text-sm flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" />
+                {t('requests.cleanup_result', { count: cleanupResult })}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setShowCleanup(false)} className="btn-secondary text-sm">
+                {t('common.close')}
+              </button>
+              <button
+                onClick={async () => {
+                  if (cleanupStatuses.size === 0) return;
+                  setCleanupLoading(true);
+                  try {
+                    const { data } = await api.post('/requests/cleanup', { statuses: [...cleanupStatuses] });
+                    setCleanupResult(data.deleted);
+                    fetchRequests(1);
+                    api.get('/requests/stats').then(({ data }) => setStats(data)).catch(() => {});
+                  } catch (err) { console.error('Cleanup failed:', err); }
+                  finally { setCleanupLoading(false); }
+                }}
+                disabled={cleanupStatuses.size === 0 || cleanupLoading}
+                className="btn-danger text-sm flex items-center gap-1.5"
+              >
+                {cleanupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eraser className="w-3.5 h-3.5" />}
+                {t('requests.cleanup_confirm')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -202,166 +354,348 @@ function RequestCard({
   actionLoading,
   onAction,
   onDelete,
+  qualityOptions,
+  index,
 }: {
   request: MediaRequest;
   isAdmin: boolean;
   actionLoading: number | null;
-  onAction: (id: number, action: 'approve' | 'decline') => void;
+  onAction: (id: number, action: 'approve' | 'decline', qualityOptionId?: number) => void;
   onDelete: (id: number) => void;
+  qualityOptions: { id: number; label: string }[];
+  index: number;
 }) {
   const { t } = useTranslation();
+  const [selectedQuality, setSelectedQuality] = useState<number | undefined>(req.qualityOptionId ?? undefined);
+  const [showSettings, setShowSettings] = useState(false);
+  interface ResolvedCtx {
+    folderPath: string | null;
+    matchedRule: string | null;
+    serviceName: string | null;
+    qualityOption: { id: number; label: string } | null;
+    seriesType: string | null;
+    targetServiceId: number | null;
+    availableRootFolders: { path: string }[];
+    availableServices: { id: number; name: string }[];
+  }
+  const [resolvedCtx, setResolvedCtx] = useState<ResolvedCtx | null>(null);
+  const [overridePath, setOverridePath] = useState<string>('');
+  const [overrideServiceId, setOverrideServiceId] = useState<number | null>(null);
+  const [useCustomPath, setUseCustomPath] = useState(false);
+  const [resolvingCtx, setResolvingCtx] = useState(false);
   const download = useDownloadForMedia(req.media?.tmdbId, req.mediaType);
   const status = STATUS_CONFIG[req.status] || STATUS_CONFIG.pending;
   const mediaLink = `/${req.mediaType}/${req.media?.tmdbId}`;
   const year = req.media?.releaseDate?.slice(0, 4);
   const backdrop = req.media?.backdropPath;
+  const isPending = req.status === 'pending';
 
   return (
     <Link
       to={mediaLink}
-      className="group relative rounded-2xl overflow-hidden h-[180px] flex transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-black/40"
+      className="group relative rounded-2xl overflow-hidden h-[160px] flex transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-black/40 animate-fade-in border border-white/5"
+      style={{ animationDelay: `${Math.min(index * 50, 400)}ms`, animationFillMode: 'backwards' }}
     >
-      {/* Background: backdrop image */}
-      <div className="absolute inset-0">
-        {backdrop ? (
-          <img
-            src={backdropUrl(backdrop, 'w780')}
-            alt=""
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full bg-ndp-surface" />
+{/* No left bar — status shown inline */}
+
+      {/* Background — subtle backdrop hint */}
+      <div className="absolute inset-0 bg-ndp-surface">
+        {backdrop && (
+          <>
+            <img src={backdropUrl(backdrop, 'w300')} alt="" className="absolute right-0 top-0 h-full w-2/3 object-cover opacity-[0.07]" />
+            <div className="absolute inset-0 bg-gradient-to-r from-ndp-surface via-ndp-surface/95 to-transparent" />
+          </>
         )}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/30" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
       </div>
 
       {/* Content */}
-      <div className="relative flex w-full p-4">
+      <div className="relative flex w-full p-3.5">
         {/* Left: info */}
-        <div className="flex-1 flex flex-col justify-between min-w-0 pr-4">
-          <div>
-            <div className="flex items-center gap-2">
-              {year && <span className="text-xs text-white/60 font-medium">{year}</span>}
-              <span className="text-xs text-white/40">
-                {localizedDate(req.createdAt)}
-              </span>
-            </div>
-            <h3 className="text-lg font-bold text-white leading-tight line-clamp-2 mt-0.5">
-              {req.media?.title || t('requests.unknown_media')}
-            </h3>
-            <div className="flex items-center gap-2 mt-2">
-              {req.user?.avatar ? (
-                <img src={req.user.avatar} alt="" className="w-5 h-5 rounded-full ring-1 ring-white/20" />
-              ) : (
-                <div className="w-5 h-5 rounded-full bg-ndp-accent/30 flex items-center justify-center text-[10px] text-white font-bold">
-                  {(req.user?.displayName || '?')[0].toUpperCase()}
-                </div>
-              )}
-              <span className="text-xs text-white/70">{req.user?.displayName}</span>
-            </div>
+        <div className="flex-1 flex flex-col min-w-0 pr-3">
+          <h3 className="text-base font-bold text-white leading-tight line-clamp-1">
+            {req.media?.title || t('requests.unknown_media')}
+          </h3>
+
+          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-white/50">
+            {year && <span className="text-white/70">{year}</span>}
+            {year && <span>·</span>}
+            <span>{localizedDate(req.createdAt)}</span>
           </div>
 
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs text-white/50">{t('requests.status')}</span>
-            {download ? (
-              <span className="px-2 py-0.5 rounded text-[11px] font-semibold text-white bg-ndp-accent flex items-center gap-1.5">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                {t('status.downloading', { progress: download.progress })}
-              </span>
+          <div className="flex items-center gap-1.5 mt-2">
+            {req.user?.avatar ? (
+              <img src={req.user.avatar} alt="" className="w-4 h-4 rounded-full ring-1 ring-white/20" />
             ) : (
-              <span className={clsx('px-2 py-0.5 rounded text-[11px] font-semibold text-white', status.bg)}>
-                {t(`status.${status.labelKey}`)}
-              </span>
-            )}
-
-            {/* Admin actions */}
-            {isAdmin && req.status === 'pending' && (
-              <div className="flex items-center gap-1 ml-auto" onClick={(e) => e.preventDefault()}>
-                <button
-                  onClick={(e) => { e.preventDefault(); onAction(req.id, 'approve'); }}
-                  disabled={actionLoading === req.id}
-                  className="p-1.5 rounded-lg bg-ndp-success/20 text-ndp-success hover:bg-ndp-success/30 transition-colors"
-                  title={t('status.approved')}
-                >
-                  {actionLoading === req.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                </button>
-                <button
-                  onClick={(e) => { e.preventDefault(); onAction(req.id, 'decline'); }}
-                  disabled={actionLoading === req.id}
-                  className="p-1.5 rounded-lg bg-ndp-danger/20 text-ndp-danger hover:bg-ndp-danger/30 transition-colors"
-                  title={t('status.declined')}
-                >
-                  <XCircle className="w-3.5 h-3.5" />
-                </button>
+              <div className="w-4 h-4 rounded-full bg-ndp-accent/30 flex items-center justify-center text-[9px] text-white font-bold">
+                {(req.user?.displayName || '?')[0].toUpperCase()}
               </div>
             )}
-
-            {req.status === 'pending' && !isAdmin && (
-              <button
-                onClick={(e) => { e.preventDefault(); onDelete(req.id); }}
-                disabled={actionLoading === req.id}
-                className="p-1.5 rounded-lg text-white/40 hover:text-ndp-danger hover:bg-ndp-danger/20 transition-colors ml-auto"
-                title={t('common.cancel')}
-              >
-                <XCircle className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <span className="text-xs text-white/60 truncate">{req.user?.displayName}</span>
           </div>
+
+          {req.qualityOption && (
+            <div className="mt-1.5">
+              <span className="text-[11px] font-semibold text-ndp-accent">{req.qualityOption.label}</span>
+            </div>
+          )}
+
+          {/* Status badge — hidden when pending (bottom bar shows intent) */}
+          {!isPending && (
+            <div className="mt-auto pt-1.5">
+              <span className={clsx('inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-md', status.color,
+                req.status === 'available' ? 'bg-ndp-success/15' :
+                req.status === 'approved' ? 'bg-ndp-accent/15' :
+                req.status === 'declined' ? 'bg-ndp-danger/15' :
+                'bg-white/10'
+              )}>
+                {t(`status.${status.labelKey}`)}
+              </span>
+            </div>
+          )}
+
+          {/* Download progress */}
+          {download && (
+            <div className="flex items-center gap-2 mt-auto pt-1.5">
+              <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-ndp-accent rounded-full transition-all duration-1000" style={{ width: `${download.progress}%` }} />
+              </div>
+              <span className="text-[10px] text-white/50 font-mono">{Math.round(download.progress)}%</span>
+            </div>
+          )}
         </div>
 
         {/* Right: poster */}
-        <div className="flex-shrink-0 w-[90px] self-center">
-          <div className="aspect-[2/3] rounded-xl overflow-hidden ring-1 ring-white/10 shadow-lg">
+        <div className="flex-shrink-0 w-[80px] self-center">
+          <div className="aspect-[2/3] rounded-xl overflow-hidden ring-1 ring-white/10 shadow-lg group-hover:ring-white/20 transition-all">
             {req.media?.posterPath ? (
-              <img
-                src={posterUrl(req.media.posterPath, 'w185')}
-                alt=""
-                className="w-full h-full object-cover"
-              />
+              <img src={posterUrl(req.media.posterPath, 'w185')} alt="" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-ndp-surface-light flex items-center justify-center">
-                <Film className="w-6 h-6 text-ndp-text-dim" />
+                <Film className="w-5 h-5 text-ndp-text-dim" />
               </div>
             )}
           </div>
         </div>
       </div>
-
-      {/* Download progress bar */}
-      {download && (
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
-          <div className="h-full bg-ndp-accent transition-all duration-1000" style={{ width: `${download.progress}%` }} />
+      {/* Bottom action bar */}
+      {isPending && (
+        <div className="absolute bottom-2 left-2 right-[108px] z-10 flex items-center bg-white/[0.03] backdrop-blur-2xl border border-white/[0.07] rounded-xl" onClick={(e) => e.preventDefault()}>
+          {isAdmin ? (
+            <>
+              <button
+                onClick={(e) => { e.preventDefault(); onAction(req.id, 'approve', selectedQuality); }}
+                disabled={actionLoading === req.id}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-ndp-success hover:bg-ndp-success/10 transition-colors text-xs font-medium rounded-l-xl"
+              >
+                {actionLoading === req.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                {t('requests.approve')}
+              </button>
+              <div className="w-px h-5 bg-white/10" />
+              <button
+                onClick={(e) => { e.preventDefault(); onAction(req.id, 'decline'); }}
+                disabled={actionLoading === req.id}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-ndp-danger hover:bg-ndp-danger/10 transition-colors text-xs font-medium"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                {t('requests.decline')}
+              </button>
+              <div className="w-px h-5 bg-white/10" />
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowSettings(true);
+                  setResolvingCtx(true);
+                  setUseCustomPath(false);
+                  const qParam = selectedQuality ? `?qualityOptionId=${selectedQuality}` : '';
+                  api.get(`/requests/${req.id}/resolve${qParam}`)
+                    .then(({ data }) => { setResolvedCtx(data); setOverridePath(data.folderPath || ''); setOverrideServiceId(data.targetServiceId); })
+                    .catch(() => {})
+                    .finally(() => setResolvingCtx(false));
+                }}
+                className="px-4 py-2 text-white/50 hover:text-white hover:bg-white/5 transition-colors rounded-r-xl"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={(e) => { e.preventDefault(); onDelete(req.id); }}
+              disabled={actionLoading === req.id}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-white/40 hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors text-xs font-medium"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {t('common.cancel')}
+            </button>
+          )}
         </div>
       )}
-    </Link>
-  );
-}
 
-function StatCard({ label, value, icon: Icon, color, bg, active, onClick }: {
-  label: string;
-  value: number;
-  icon: LucideIcon;
-  color: string;
-  bg: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={clsx(
-        'rounded-xl p-4 border text-left transition-all duration-200',
-        active ? 'border-white/20 ring-1 ring-white/10 scale-[1.02]' : 'border-white/5 hover:border-white/10',
-        bg,
-        onClick && 'cursor-pointer'
+      {/* Settings modal */}
+      {showSettings && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowSettings(false); }}>
+          <div className="bg-ndp-surface border border-white/10 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-bold text-ndp-text flex items-center gap-2">
+                <Settings2 className="w-4 h-4 text-ndp-text-muted" />
+                {t('requests.request_settings')}
+              </h3>
+              <button onClick={() => setShowSettings(false)} className="text-ndp-text-dim hover:text-ndp-text transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Quality selection */}
+              {qualityOptions.length > 0 && (
+                <div>
+                  <label className="text-xs text-ndp-text-muted block mb-1.5 font-medium">{t('requests.quality_label')}</label>
+                  <select
+                    value={selectedQuality ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value ? parseInt(e.target.value) : undefined;
+                      setSelectedQuality(val);
+                      setResolvingCtx(true);
+                      const qParam = val ? `?qualityOptionId=${val}` : '';
+                      api.get(`/requests/${req.id}/resolve${qParam}`)
+                        .then(({ data }) => { setResolvedCtx(data); setOverridePath(data.folderPath || ''); setOverrideServiceId(data.targetServiceId); })
+                        .catch(() => {})
+                        .finally(() => setResolvingCtx(false));
+                    }}
+                    className="input w-full text-sm"
+                  >
+                    <option value="">{t('requests.no_quality')}</option>
+                    {qualityOptions.map(q => <option key={q.id} value={q.id}>{q.label}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* Resolved context */}
+              {resolvingCtx ? (
+                <div className="flex items-center gap-2 text-sm text-ndp-text-dim py-4">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {t('common.loading')}
+                </div>
+              ) : resolvedCtx && (
+                <div className="space-y-4">
+                  {/* Service */}
+                  {resolvedCtx.availableServices.length > 1 && (
+                    <div>
+                      <label className="text-xs text-ndp-text-muted block mb-1.5 font-medium">{t('requests.target_service')}</label>
+                      <select
+                        value={overrideServiceId ?? ''}
+                        onChange={(e) => setOverrideServiceId(e.target.value ? parseInt(e.target.value) : null)}
+                        className="input w-full text-sm"
+                      >
+                        {resolvedCtx.availableServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {resolvedCtx.availableServices.length <= 1 && resolvedCtx.serviceName && (
+                    <div className="flex items-center justify-between bg-ndp-surface-light rounded-xl px-4 py-2.5">
+                      <span className="text-xs text-ndp-text-dim">{t('requests.target_service')}</span>
+                      <span className="text-sm text-ndp-text font-medium">{resolvedCtx.serviceName}</span>
+                    </div>
+                  )}
+
+                  {/* Root folder */}
+                  <div>
+                    <label className="text-xs text-ndp-text-muted block mb-1.5 font-medium">{t('requests.root_folder')}</label>
+                    {!useCustomPath ? (
+                      <select
+                        value={overridePath}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            setUseCustomPath(true);
+                            setOverridePath('');
+                          } else {
+                            setOverridePath(e.target.value);
+                          }
+                        }}
+                        className="input w-full text-sm font-mono"
+                      >
+                        {resolvedCtx.availableRootFolders.map(f => (
+                          <option key={f.path} value={f.path}>{f.path}</option>
+                        ))}
+                        <option value="__custom__">{t('requests.custom_path')}</option>
+                      </select>
+                    ) : (
+                      <div className="flex gap-1.5">
+                        <input
+                          value={overridePath}
+                          onChange={(e) => setOverridePath(e.target.value)}
+                          className="input flex-1 text-sm font-mono"
+                          placeholder="/custom/path"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => { setUseCustomPath(false); setOverridePath(resolvedCtx.folderPath || ''); }}
+                          className="btn-secondary text-xs"
+                        >
+                          {t('common.cancel')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Rule match + series type info */}
+                  {(resolvedCtx.matchedRule || resolvedCtx.seriesType) && (
+                    <div className="bg-ndp-surface-light rounded-xl px-4 py-3 space-y-2">
+                      {resolvedCtx.matchedRule && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-ndp-text-dim">{t('requests.matched_rule')}</span>
+                          <span className="text-xs text-ndp-accent font-semibold">{resolvedCtx.matchedRule}</span>
+                        </div>
+                      )}
+                      {resolvedCtx.seriesType && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-ndp-text-dim">{t('requests.series_type')}</span>
+                          <span className="text-xs text-ndp-text font-medium capitalize">{resolvedCtx.seriesType}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={() => setShowSettings(false)} className="btn-secondary text-sm">
+                {t('common.close')}
+              </button>
+              <button
+                onClick={() => {
+                  const updates: Record<string, unknown> = {};
+                  if (overridePath && overridePath !== resolvedCtx?.folderPath) updates.rootFolder = overridePath;
+                  if (selectedQuality !== (req.qualityOptionId ?? undefined)) updates.qualityOptionId = selectedQuality || null;
+                  if (Object.keys(updates).length > 0) {
+                    api.put(`/requests/${req.id}`, updates).catch(() => {});
+                  }
+                  setShowSettings(false);
+                }}
+                className="btn-secondary text-sm flex items-center gap-1.5"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {t('common.save')}
+              </button>
+              <button
+                onClick={() => {
+                  if (overridePath && overridePath !== resolvedCtx?.folderPath) {
+                    api.put(`/requests/${req.id}`, { rootFolder: overridePath }).catch(() => {});
+                  }
+                  setShowSettings(false);
+                  onAction(req.id, 'approve', selectedQuality);
+                }}
+                disabled={actionLoading === req.id}
+                className="btn-primary text-sm flex items-center gap-1.5"
+              >
+                {actionLoading === req.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                {t('requests.approve')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
-    >
-      <div className="flex items-center justify-between mb-1">
-        <Icon className={clsx('w-4 h-4', color)} />
-        <p className={clsx('text-2xl font-bold', color)}>{value}</p>
-      </div>
-      <p className="text-xs text-ndp-text-dim">{label}</p>
-    </button>
+    </Link>
   );
 }

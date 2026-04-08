@@ -109,7 +109,7 @@ export async function resolveServiceContext(
     ? await getMovieDetails(tmdbId)
     : await getTvDetails(tmdbId);
 
-  const ruleMatch = await matchFolderRule(mediaType, tmdbData, userId);
+  const ruleMatch = await matchFolderRule(mediaType, tmdbData, userId, qualityOptionId);
   const defaultFolder = mediaType === 'movie' ? settings?.defaultMovieFolder : settings?.defaultTvFolder;
 
   let targetServiceId: number | null = ruleMatch?.serviceId ?? null;
@@ -148,13 +148,15 @@ async function sendToArrService(
   username: string,
   ctx: ServiceContext,
   seasons?: number[],
+  rootFolderOverride?: string | null,
 ) {
   const serviceType = getServiceTypeForMedia(mediaType);
   const client = ctx.targetService
     ? getArrClientForService(ctx.targetService.id, serviceType, ctx.targetService.config)
     : await getArrClient(serviceType);
 
-  const folderPath = ctx.ruleMatch?.folderPath || ctx.defaultFolder
+  // Priority: explicit override > rule match > default folder > first root folder
+  const folderPath = rootFolderOverride || ctx.ruleMatch?.folderPath || ctx.defaultFolder
     || (await client.getRootFolders())[0]?.path || client.defaultRootFolder;
   const tagId = await client.getOrCreateTag(username);
 
@@ -188,6 +190,7 @@ export async function sendToService(
   userId: number | null = null,
   seasons?: number[],
   qualityOptionId?: number,
+  rootFolderOverride?: string | null,
 ): Promise<boolean> {
   try {
     const ctx = await resolveServiceContext(mediaType as 'movie' | 'tv', media.tmdbId, userId, qualityOptionId);
@@ -197,7 +200,7 @@ export async function sendToService(
       return false;
     }
 
-    await sendToArrService(media, mediaType, username, ctx, seasons);
+    await sendToArrService(media, mediaType, username, ctx, seasons, rootFolderOverride);
     return true;
   } catch (err) {
     console.error('Failed to send %s "%s" to service:', mediaType, media.title, err);

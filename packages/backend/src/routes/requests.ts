@@ -3,7 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { getArrClient, getServiceTypeForMedia } from '../providers/index.js';
 import { getCollection } from '../services/tmdb.js';
 import { logEvent } from '../utils/logEvent.js';
-import { safeNotify, safeUserNotify } from '../utils/safeNotify.js';
+import { safeNotify, safeUserNotify, buildSiteLink } from '../utils/safeNotify.js';
 import { parseId, parsePage } from '../utils/params.js';
 import { REQUEST_STATUSES, ACTIVE_REQUEST_STATUSES } from '../utils/requestStatus.js';
 import {
@@ -14,6 +14,7 @@ import {
   sendToService,
   requestCollectionMovie,
   promoteStaleStatuses,
+  resolveServiceContext,
 } from '../services/requestService.js';
 
 const VALID_STATUSES: string[] = [...REQUEST_STATUSES];
@@ -58,6 +59,7 @@ export async function requestRoutes(app: FastifyInstance) {
           media: true,
           user: { select: { id: true, displayName: true, avatar: true } },
           approvedBy: { select: { id: true, displayName: true } },
+          qualityOption: { select: { id: true, label: true } },
         },
         orderBy: { createdAt: 'desc' },
         take,
@@ -160,7 +162,8 @@ export async function requestRoutes(app: FastifyInstance) {
     // Notifications
     const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { displayName: true } });
     const username = dbUser?.displayName || 'Utilisateur';
-    safeNotify('request_new', { title: media.title, mediaType, username, posterPath: media.posterPath, tmdbId: media.tmdbId });
+    const mediaUrl = await buildSiteLink(`/${mediaType}/${media.tmdbId}`);
+    safeNotify('request_new', { title: media.title, mediaType, username, posterPath: media.posterPath, tmdbId: media.tmdbId, url: mediaUrl });
     if (shouldAutoApprove && !sendFailed) {
       safeUserNotify(user.id, { type: 'request_approved', title: media.title, message: `Votre demande pour "${media.title}" a été approuvée automatiquement.`, metadata: { mediaId: media.id, tmdbId: media.tmdbId, mediaType } });
     }
@@ -170,13 +173,75 @@ export async function requestRoutes(app: FastifyInstance) {
     return reply.status(201).send(mediaRequest);
   });
 
+  // ─── Resolve request context (admin preview) ──────────────────────
+  app.get('/:id/resolve', {
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      querystring: { type: 'object', properties: { qualityOptionId: { type: 'string' } } },
+    },
+  }, async (request, reply) => {
+    const requestId = parseId((request.params as { id: string }).id);
+    if (!requestId) return reply.status(400).send({ error: 'ID invalide' });
+    const overrideQuality = parseId((request.query as { qualityOptionId?: string }).qualityOptionId || '');
+
+    const mediaRequest = await prisma.mediaRequest.findUnique({
+      where: { id: requestId },
+      include: { media: true, qualityOption: { select: { id: true, label: true } } },
+    });
+    if (!mediaRequest) return reply.status(404).send({ error: 'Demande introuvable' });
+
+    const effectiveQuality = overrideQuality ?? mediaRequest.qualityOptionId ?? undefined;
+    const ctx = await resolveServiceContext(
+      mediaRequest.mediaType as 'movie' | 'tv',
+      mediaRequest.media.tmdbId,
+      mediaRequest.userId,
+      effectiveQuality,
+    );
+
+    const matchedRuleName = ctx.ruleMatch?.ruleName ?? null;
+
+    // Fetch available root folders and services
+    const serviceType = mediaRequest.mediaType === 'movie' ? 'radarr' : 'sonarr';
+    let availableRootFolders: { path: string }[] = [];
+    try {
+      const { getArrClient, getArrClientForService } = await import('../providers/index.js');
+      const client = ctx.targetService
+        ? getArrClientForService(ctx.targetService.id, serviceType, ctx.targetService.config)
+        : await getArrClient(serviceType);
+      const folders = await client.getRootFolders();
+      availableRootFolders = folders.map(f => ({ path: f.path }));
+    } catch { /* service unreachable */ }
+
+    const { getAllServices } = await import('../utils/services.js');
+    const availableServices = (await getAllServices(serviceType)).map(s => ({ id: s.id, name: s.name }));
+
+    return {
+      qualityOption: effectiveQuality
+        ? await prisma.qualityOption.findUnique({ where: { id: effectiveQuality }, select: { id: true, label: true } })
+        : mediaRequest.qualityOption,
+      folderPath: ctx.ruleMatch?.folderPath || ctx.defaultFolder || null,
+      matchedRule: matchedRuleName,
+      serviceName: ctx.targetService
+        ? (await prisma.service.findUnique({ where: { id: ctx.targetService.id }, select: { name: true } }))?.name
+        : null,
+      seriesType: ctx.ruleMatch?.seriesType || null,
+      targetServiceId: ctx.targetService?.id || null,
+      availableRootFolders,
+      availableServices,
+    };
+  });
+
   // ─── Approve request ──────────────────────────────────────────────
   app.post('/:id/approve', {
-    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      body: { type: 'object', properties: { qualityOptionId: { type: 'number' } } },
+    },
   }, async (request, reply) => {
     const user = request.user as { id: number };
     const requestId = parseId((request.params as { id: string }).id);
     if (!requestId) return reply.status(400).send({ error: 'ID invalide' });
+    const { qualityOptionId: overrideQuality } = (request.body as { qualityOptionId?: number }) || {};
 
     const mediaRequest = await prisma.mediaRequest.findUnique({
       where: { id: requestId },
@@ -185,18 +250,25 @@ export async function requestRoutes(app: FastifyInstance) {
     if (!mediaRequest) return reply.status(404).send({ error: 'Demande introuvable' });
     if (mediaRequest.status !== 'pending') return reply.status(400).send({ error: 'Cette demande ne peut pas être approuvée' });
 
+    // Use override quality if provided, otherwise keep the original
+    const effectiveQuality = overrideQuality ?? mediaRequest.qualityOptionId ?? undefined;
+    if (overrideQuality && overrideQuality !== mediaRequest.qualityOptionId) {
+      await prisma.mediaRequest.update({ where: { id: requestId }, data: { qualityOptionId: overrideQuality } });
+    }
+
     const seasons = mediaRequest.seasons ? JSON.parse(mediaRequest.seasons) : undefined;
     const tagName = mediaRequest.user.displayName || mediaRequest.user.email || `user-${mediaRequest.user.id}`;
-    const sent = await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, mediaRequest.userId, seasons, mediaRequest.qualityOptionId ?? undefined);
+    const sent = await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, mediaRequest.userId, seasons, effectiveQuality, mediaRequest.rootFolder);
 
     const updated = await prisma.mediaRequest.update({
       where: { id: requestId },
       data: { status: sent ? 'approved' : 'failed', approvedById: user.id },
-      include: { media: true, user: { select: { id: true, displayName: true, avatar: true } } },
+      include: { media: true, user: { select: { id: true, displayName: true, avatar: true } }, qualityOption: { select: { id: true, label: true } } },
     });
 
     if (sent) {
-      safeNotify('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath });
+      const approvedUrl = await buildSiteLink(`/${updated.mediaType}/${updated.media.tmdbId}`);
+      safeNotify('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath, url: approvedUrl });
       safeUserNotify(updated.user.id, { type: 'request_approved', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été approuvée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } });
       logEvent('info', 'Request', `Demande "${updated.media.title}" approuvée`);
     } else {
@@ -220,7 +292,8 @@ export async function requestRoutes(app: FastifyInstance) {
       include: { media: true, user: { select: { id: true, displayName: true, avatar: true } } },
     });
 
-    safeNotify('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath });
+    const declinedUrl = await buildSiteLink(`/${updated.mediaType}/${updated.media.tmdbId}`);
+    safeNotify('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath, url: declinedUrl });
     safeUserNotify(updated.user.id, { type: 'request_declined', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été refusée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } });
     logEvent('info', 'Request', `Demande "${updated.media.title}" refusée`);
 
@@ -278,6 +351,55 @@ export async function requestRoutes(app: FastifyInstance) {
       console.error('Search missing failed:', err);
       return reply.status(502).send({ error: 'Erreur lors du lancement de la recherche' });
     }
+  });
+
+  // ─── Update request (admin) ────────────────────────────────────────
+  app.put('/:id', {
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      body: { type: 'object', properties: { rootFolder: { type: 'string' }, qualityOptionId: { type: 'number' } } },
+    },
+  }, async (request, reply) => {
+    const requestId = parseId((request.params as { id: string }).id);
+    if (!requestId) return reply.status(400).send({ error: 'ID invalide' });
+    const { rootFolder, qualityOptionId } = (request.body as { rootFolder?: string; qualityOptionId?: number }) || {};
+
+    const data: Record<string, unknown> = {};
+    if (rootFolder !== undefined) data.rootFolder = rootFolder || null;
+    if (qualityOptionId !== undefined) data.qualityOptionId = qualityOptionId || null;
+
+    if (Object.keys(data).length === 0) return reply.status(400).send({ error: 'Nothing to update' });
+
+    const updated = await prisma.mediaRequest.update({
+      where: { id: requestId },
+      data,
+      include: { media: true, qualityOption: { select: { id: true, label: true } } },
+    });
+    return reply.send(updated);
+  });
+
+  // ─── Bulk cleanup requests (admin) ─────────────────────────────────
+  app.post('/cleanup', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['statuses'],
+        properties: {
+          statuses: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { statuses } = request.body as { statuses: string[] };
+    const valid = statuses.filter(s => ['available', 'approved', 'declined', 'failed'].includes(s));
+    if (valid.length === 0) return reply.status(400).send({ error: 'No valid statuses to cleanup' });
+
+    const result = await prisma.mediaRequest.deleteMany({
+      where: { status: { in: valid } },
+    });
+
+    logEvent('info', 'Request', `Cleanup: ${result.count} requests deleted (${valid.join(', ')})`);
+    return { deleted: result.count, statuses: valid };
   });
 
   // ─── Delete request ───────────────────────────────────────────────

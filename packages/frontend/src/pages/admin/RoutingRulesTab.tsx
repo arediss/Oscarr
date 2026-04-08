@@ -24,7 +24,7 @@ const GENRES: Record<string, string> = {
   science_fiction: 'Science Fiction', thriller: 'Thriller', war: 'War', western: 'Western',
 };
 
-const CONDITION_FIELDS = ['genre', 'language', 'country', 'user', 'role', 'tag'] as const;
+const CONDITION_FIELDS = ['genre', 'language', 'country', 'user', 'role', 'tag', 'quality'] as const;
 
 async function fetchRootFolders(arrServices: ServiceOption[]) {
   const folders: { path: string; label: string; serviceId: number | null }[] = [];
@@ -53,6 +53,7 @@ export function RoutingRulesTab() {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [tags, setTags] = useState<string[]>([]);
+  const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string }[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [defaultAnimeFolder, setDefaultAnimeFolder] = useState('');
   const [defaultMovieFolder, setDefaultMovieFolder] = useState('');
@@ -75,13 +76,14 @@ export function RoutingRulesTab() {
   useEffect(() => {
     async function load() {
       try {
-        const [settingsRes, rulesRes, usersRes, rolesRes, keywordsRes, servicesRes] = await Promise.all([
+        const [settingsRes, rulesRes, usersRes, rolesRes, keywordsRes, servicesRes, qualityRes] = await Promise.all([
           api.get('/admin/settings'),
           api.get('/admin/folder-rules').catch(() => ({ data: [] })),
           api.get('/admin/users').catch(() => ({ data: [] })),
           api.get('/admin/roles').catch(() => ({ data: [] })),
           api.get('/admin/keywords').catch(() => ({ data: [] })),
           api.get('/admin/services').catch(() => ({ data: [] })),
+          api.get('/app/quality-options').catch(() => ({ data: [] })),
         ]);
         setDefaultAnimeFolder(settingsRes.data.defaultAnimeFolder || '');
         setDefaultMovieFolder(settingsRes.data.defaultMovieFolder || '');
@@ -97,6 +99,7 @@ export function RoutingRulesTab() {
         setTags(uniqueTags);
         const arrServices: ServiceOption[] = servicesRes.data.filter((s: ServiceOption) => s.type === 'radarr' || s.type === 'sonarr');
         setServices(arrServices);
+        setQualityOptions(qualityRes.data);
 
         const { folders, failed } = await fetchRootFolders(arrServices);
         setLabeledFolders(folders);
@@ -400,6 +403,13 @@ export function RoutingRulesTab() {
             {tags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
           </select>
         );
+      case 'quality':
+        return (
+          <select value={cond.value} onChange={(e) => setValue(e.target.value)} className="input text-sm py-1.5 flex-1">
+            <option value="">{t('admin.paths.select_quality')}</option>
+            {qualityOptions.map(q => <option key={q.id} value={q.label.toLowerCase()}>{q.label}</option>)}
+          </select>
+        );
       default:
         return (
           <input value={cond.value} onChange={(e) => setValue(e.target.value)}
@@ -413,7 +423,7 @@ export function RoutingRulesTab() {
 function getDefaultOperator(field: string): string {
   switch (field) {
     case 'genre': case 'tag': return 'contains';
-    case 'user': case 'role': case 'language': return 'is';
+    case 'user': case 'role': case 'language': case 'quality': return 'is';
     case 'country': return 'in';
     default: return 'contains';
   }
@@ -423,7 +433,7 @@ function getOperatorsForField(field: string): string[] {
   switch (field) {
     case 'genre': case 'tag': return ['contains'];
     case 'user': return ['is', 'in'];
-    case 'role': return ['is'];
+    case 'role': case 'quality': return ['is'];
     case 'language': return ['is', 'in'];
     case 'country': return ['contains', 'in'];
     default: return ['contains', 'is', 'in'];

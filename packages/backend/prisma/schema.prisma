@@ -163,6 +163,7 @@ model AppSettings {
   registrationEnabled   Boolean   @default(true)
   missingSearchCooldownMin Int   @default(60) // Minutes before allowing another missing search
   instanceLanguages     String    @default("[\"en\"]") // JSON array of ISO 639-1 codes, e.g. ["fr","en"]
+  siteUrl               String?   // Public URL of the instance (e.g. https://oscarr.example.com) for notification links
   apiKey                String?   // API key for external access (health check, integrations)
   updatedAt             DateTime  @updatedAt
 }

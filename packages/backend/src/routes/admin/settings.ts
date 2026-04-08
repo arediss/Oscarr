@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import crypto from 'crypto';
 import { prisma } from '../../utils/prisma.js';
 import { logEvent } from '../../utils/logEvent.js';
-import { safeNotify } from '../../utils/safeNotify.js';
+import { safeNotify, invalidateSiteUrl } from '../../utils/safeNotify.js';
 import { invalidateLanguageCache } from '../../services/tmdb.js';
 
 export async function settingsRoutes(app: FastifyInstance) {
@@ -73,6 +73,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           supportEnabled: { type: 'boolean', description: 'Enable the support/ticket system' },
           calendarEnabled: { type: 'boolean', description: 'Enable the calendar feature' },
           siteName: { type: 'string', description: 'Custom site name' },
+          siteUrl: { type: 'string', description: 'Public URL of the instance for notification links' },
           instanceLanguages: { type: 'array', items: { type: 'string' }, description: 'Instance languages (ISO 639-1 codes)' },
         },
       },
@@ -93,6 +94,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       supportEnabled?: boolean;
       calendarEnabled?: boolean;
       siteName?: string;
+      siteUrl?: string;
       instanceLanguages?: string[];
     };
 
@@ -112,6 +114,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         supportEnabled: body.supportEnabled ?? undefined,
         calendarEnabled: body.calendarEnabled ?? undefined,
         siteName: body.siteName ?? undefined,
+        siteUrl: body.siteUrl !== undefined ? (body.siteUrl?.trim() || null) : undefined,
         instanceLanguages: body.instanceLanguages ? JSON.stringify(body.instanceLanguages) : undefined,
       },
       create: {
@@ -141,6 +144,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       logEvent('info', 'Settings', 'Cache TMDB vid\u00e9 suite au changement de langue');
     }
 
+    if (body.siteUrl !== undefined) invalidateSiteUrl();
     logEvent('info', 'Settings', 'Param\u00e8tres mis \u00e0 jour');
     return settings;
   });
