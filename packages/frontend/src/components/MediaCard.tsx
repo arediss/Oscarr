@@ -137,7 +137,7 @@ export default function MediaCard({ media, className, availability, index = 0 }:
       )}
 
       {/* Bottom-left: latest episode badge for TV */}
-      {media.lastEpisodeInfo && type === 'tv' && (
+      {media.lastEpisodeInfo && type === 'tv' && (media.lastEpisodeInfo.season != null) && (media.lastEpisodeInfo.episode != null) && (
         <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-black/75 text-white transition-opacity duration-300 group-hover:opacity-0">
           S{String(media.lastEpisodeInfo.season).padStart(2, '0')}E{String(media.lastEpisodeInfo.episode).padStart(2, '0')}
         </div>
