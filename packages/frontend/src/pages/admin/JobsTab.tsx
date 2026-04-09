@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Loader2, CheckCircle, XCircle, RefreshCw, Pencil, Power } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, RefreshCw, Pencil, Power, Webhook } from 'lucide-react';
 import cronstrue from 'cronstrue/i18n';
 import i18n from '@/i18n';
 import { localizedDateTime } from '@/i18n/formatters';
 import api from '@/lib/api';
+import { showToast as showGlobalToast } from '@/utils/toast';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import { DangerZone } from './GeneralTab';
+import { useServiceSchemas, type ServiceData } from '@/hooks/useServiceSchemas';
 
 interface CronJobData {
   id: number;
@@ -27,13 +29,27 @@ interface SyncToast {
   message: string;
 }
 
+interface WebhookStatus {
+  serviceId: number;
+  serviceName: string;
+  serviceType: string;
+  icon: string;
+  enabled: boolean;
+  url: string;
+  events: { key: string; label: string; description: string }[];
+  supportsWebhooks: boolean;
+}
+
 export function JobsTab() {
   const { t } = useTranslation();
+  const { schemas: SERVICE_SCHEMAS } = useServiceSchemas();
   const [jobs, setJobs] = useState<CronJobData[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
   const [editingCron, setEditingCron] = useState<{ key: string; value: string } | null>(null);
   const [toast, setToast] = useState<SyncToast | null>(null);
+  const [webhooks, setWebhooks] = useState<WebhookStatus[]>([]);
+  const [webhookLoading, setWebhookLoading] = useState<number | null>(null);
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -42,7 +58,22 @@ export function JobsTab() {
     } catch { /* empty */ } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchJobs(); }, [fetchJobs]);
+  const fetchWebhooks = useCallback(async () => {
+    try {
+      const { data: services } = await api.get('/admin/services') as { data: ServiceData[] };
+      const arrServices = services.filter(s => ['radarr', 'sonarr'].includes(s.type));
+      const statuses = await Promise.all(arrServices.map(async (svc) => {
+        try {
+          const { data } = await api.get(`/admin/services/${svc.id}/webhook/status`);
+          const schema = SERVICE_SCHEMAS[svc.type];
+          return { serviceId: svc.id, serviceName: svc.name, serviceType: svc.type, icon: schema?.icon || '', ...data } as WebhookStatus;
+        } catch { return null; }
+      }));
+      setWebhooks(statuses.filter(Boolean) as WebhookStatus[]);
+    } catch { /* ignore */ }
+  }, [SERVICE_SCHEMAS]);
+
+  useEffect(() => { fetchJobs(); fetchWebhooks(); }, [fetchJobs, fetchWebhooks]);
 
   const showToast = (t: SyncToast) => { setToast(t); setTimeout(() => setToast(null), 6000); };
 
@@ -191,6 +222,77 @@ export function JobsTab() {
           );
         })}
       </div>
+
+      {/* Webhooks section */}
+      {webhooks.length > 0 && (
+        <div className="mt-10">
+          <div className="flex items-center gap-2 mb-4">
+            <Webhook className="w-5 h-5 text-ndp-accent" />
+            <h2 className="text-lg font-semibold text-ndp-text">{t('admin.jobs.webhooks_title')}</h2>
+          </div>
+          <p className="text-xs text-ndp-text-dim mb-4">{t('admin.jobs.webhooks_desc')}</p>
+
+          <div className="space-y-3">
+            {webhooks.map(wh => (
+              <div key={wh.serviceId} className={clsx('card', !wh.enabled && 'opacity-50')}>
+                <div className="flex items-center gap-4 p-4">
+                  {/* Service icon */}
+                  {wh.icon ? (
+                    <img src={wh.icon} alt="" className="w-6 h-6 rounded-lg object-contain flex-shrink-0" />
+                  ) : (
+                    <Webhook className="w-5 h-5 text-ndp-text-dim flex-shrink-0" />
+                  )}
+
+                  {/* Name + event labels */}
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-ndp-text">{wh.serviceName}</span>
+                    {wh.supportsWebhooks && wh.events.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                        {wh.events.map(ev => (
+                          <span
+                            key={ev.key}
+                            title={ev.description}
+                            className={clsx(
+                              'text-[10px] font-medium px-1.5 py-0.5 rounded-md cursor-default',
+                              wh.enabled ? 'bg-ndp-success/10 text-ndp-success' : 'bg-white/5 text-ndp-text-dim',
+                            )}
+                          >
+                            {ev.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Power toggle */}
+                  <button
+                    onClick={async () => {
+                      setWebhookLoading(wh.serviceId);
+                      try {
+                        if (wh.enabled) {
+                          await api.post(`/admin/services/${wh.serviceId}/webhook/disable`);
+                          showGlobalToast(t('admin.services.webhook_disabled_toast', { name: wh.serviceName }), 'info');
+                        } else {
+                          await api.post(`/admin/services/${wh.serviceId}/webhook/enable`);
+                          showGlobalToast(t('admin.services.webhook_enabled_toast', { name: wh.serviceName }), 'success');
+                        }
+                        fetchWebhooks();
+                      } catch {
+                        showGlobalToast(t('admin.services.webhook_failed_toast'), 'error');
+                      } finally { setWebhookLoading(null); }
+                    }}
+                    disabled={webhookLoading === wh.serviceId}
+                    className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors flex-shrink-0"
+                    title={wh.enabled ? t('common.disable') : t('common.enable')}
+                  >
+                    {webhookLoading === wh.serviceId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className={clsx('w-4 h-4', wh.enabled && 'text-ndp-success')} />}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Danger Zone */}
       <DangerZone />

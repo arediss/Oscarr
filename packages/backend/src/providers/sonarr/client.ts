@@ -1,5 +1,5 @@
 import axios, { type AxiosInstance } from 'axios';
-import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrSeasonItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrEpisode } from '../types.js';
+import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrSeasonItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrEpisode, ArrWebhookEvent } from '../types.js';
 import { extractImageFromArr } from '../types.js';
 import type { SonarrSeries, SonarrSeason, SonarrQueueItem, SonarrEpisode, SonarrEpisodeFile, SonarrHistoryRecord } from './types.js';
 
@@ -310,8 +310,62 @@ export class SonarrClient implements ArrClient {
     return records.map(r => ({
       serviceMediaId: r.seriesId,
       date: new Date(r.date),
-      extraData: r.episode ? { episode: r.episode } : undefined,
+      extraData: r.episode ? { episode: { season: r.episode.seasonNumber, episode: r.episode.episodeNumber, title: r.episode.title } } : undefined,
     }));
   }
 
+  async registerWebhook(name: string, url: string, apiKey: string): Promise<number> {
+    const { data } = await this.api.post('/notification', {
+      name,
+      implementation: 'Webhook',
+      configContract: 'WebhookSettings',
+      onDownload: true,
+      onUpgrade: true,
+      onImportComplete: true,
+      onSeriesAdd: true,
+      onSeriesDelete: true,
+      includeHealthWarnings: false,
+      fields: [
+        { name: 'url', value: url },
+        { name: 'method', value: 1 },
+        { name: 'username', value: '' },
+        { name: 'password', value: apiKey },
+      ],
+    });
+    return data.id;
+  }
+
+  async removeWebhook(webhookId: number): Promise<void> {
+    await this.api.delete(`/notification/${webhookId}`);
+  }
+
+  async checkWebhookExists(webhookId: number): Promise<boolean> {
+    const { data } = await this.api.get('/notification');
+    return Array.isArray(data) && data.some((n: { id: number }) => n.id === webhookId);
+  }
+
+  getWebhookEvents() {
+    return [
+      { key: 'Download', label: 'Import', description: 'When an episode file is imported' },
+      { key: 'Upgrade', label: 'Upgrade', description: 'When an episode is upgraded to better quality' },
+      { key: 'SeriesAdd', label: 'Series added', description: 'When a series is added to the library' },
+      { key: 'SeriesDelete', label: 'Series deleted', description: 'When a series is removed from the library' },
+    ];
+  }
+
+  parseWebhookPayload(body: unknown): ArrWebhookEvent | null {
+    const payload = body as { eventType?: string; series?: { tvdbId?: number; title?: string }; episodes?: { seasonNumber?: number; episodeNumber?: number }[] };
+    if (!payload.eventType) return null;
+    if (payload.eventType === 'Test') return { type: 'test', externalId: 0, title: 'Test' };
+    if (!payload.series?.tvdbId) return null;
+    const typeMap: Record<string, ArrWebhookEvent['type']> = { Download: 'download', Grab: 'grab', SeriesAdd: 'added', SeriesDelete: 'deleted' };
+    const ep = payload.episodes?.[0];
+    return {
+      type: typeMap[payload.eventType] || 'unknown',
+      externalId: payload.series.tvdbId,
+      title: payload.series.title || 'Unknown',
+      seasonNumber: ep?.seasonNumber,
+      episodeNumber: ep?.episodeNumber,
+    };
+  }
 }
