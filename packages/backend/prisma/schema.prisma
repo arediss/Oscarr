@@ -190,6 +190,7 @@ model Service {
   config        String    // JSON object with service-specific config
   isDefault     Boolean   @default(false)
   enabled       Boolean   @default(true)
+  webhookId     Int?      // ID of the webhook registered in the service (null = webhooks disabled)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

@@ -129,6 +129,7 @@ const PREFIX_DEFAULTS: [string, RouteRule][] = [
   ['/api/admin',  { permission: 'admin.*' }],
   ['/api/setup',  { permission: PUBLIC }],    // setup has its own secret-based guards
   ['/api/auth',   { permission: PUBLIC }],    // OAuth callback routes registered dynamically
+  ['/api/webhooks', { permission: PUBLIC }],  // Auth via API key in handler
 ];
 
 // ── DB-backed role cache ────────────────────────────────────────────────────
