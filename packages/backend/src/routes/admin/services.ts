@@ -280,19 +280,15 @@ export async function servicesRoutes(app: FastifyInstance) {
     const host = request.headers['x-forwarded-host'] || request.headers.host;
     const baseUrl = settings?.siteUrl || `${protocol}://${host}`;
 
-    // Verify webhook still exists in the service
-    let webhookAlive = false;
-    if (svc.webhookId && client) {
+    // Verify webhook still exists in the service (skip cleanup if service unreachable)
+    if (svc.webhookId && client?.checkWebhookExists) {
       try {
-        const { data: notifications } = await (client as any).api.get('/notification');
-        webhookAlive = Array.isArray(notifications) && notifications.some((n: any) => n.id === svc.webhookId);
-      } catch { /* service unreachable */ }
-
-      // Auto-cleanup if webhook was deleted from the service
-      if (!webhookAlive) {
-        await prisma.service.update({ where: { id: serviceId }, data: { webhookId: null } });
-        svc.webhookId = null;
-      }
+        const exists = await client.checkWebhookExists(svc.webhookId);
+        if (!exists) {
+          await prisma.service.update({ where: { id: serviceId }, data: { webhookId: null } });
+          svc.webhookId = null;
+        }
+      } catch { /* service unreachable — don't cleanup, assume webhook still exists */ }
     }
 
     return {
@@ -333,7 +329,13 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     try {
       const webhookId = await client.registerWebhook('Oscarr', webhookUrl, settings.apiKey);
-      await prisma.service.update({ where: { id: serviceId }, data: { webhookId } });
+      try {
+        await prisma.service.update({ where: { id: serviceId }, data: { webhookId } });
+      } catch (dbErr) {
+        // Rollback: remove webhook from service if DB update failed
+        await client.removeWebhook?.(webhookId).catch(() => {});
+        throw dbErr;
+      }
       logEvent('info', 'Webhook', `Webhook enabled for ${svc.name} (ID: ${webhookId})`);
       return { ok: true, webhookId };
     } catch (err) {

@@ -339,6 +339,11 @@ export class SonarrClient implements ArrClient {
     await this.api.delete(`/notification/${webhookId}`);
   }
 
+  async checkWebhookExists(webhookId: number): Promise<boolean> {
+    const { data } = await this.api.get('/notification');
+    return Array.isArray(data) && data.some((n: { id: number }) => n.id === webhookId);
+  }
+
   getWebhookEvents() {
     return [
       { key: 'Download', label: 'Import', description: 'When an episode file is imported' },

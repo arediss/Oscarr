@@ -22,7 +22,8 @@ export async function webhookRoutes(app: FastifyInstance) {
     // Support Basic Auth — API key as password (Radarr/Sonarr webhook format)
     if (!apiKey && request.headers.authorization?.startsWith('Basic ')) {
       const decoded = Buffer.from(request.headers.authorization.slice(6), 'base64').toString();
-      const password = decoded.split(':')[1];
+      const colonIdx = decoded.indexOf(':');
+      const password = colonIdx !== -1 ? decoded.slice(colonIdx + 1) : '';
       if (password) apiKey = password;
     }
 
@@ -69,6 +70,11 @@ export async function webhookRoutes(app: FastifyInstance) {
       console.log(`[Webhook] ${sanitize(serviceType)} test received`);
       logEvent('info', 'Webhook', `${sanitize(serviceType)} webhook test successful`);
       return reply.send({ ok: true, message: 'Webhook configured successfully' });
+    }
+
+    // Validate externalId for actionable events
+    if (!event.externalId || event.externalId <= 0) {
+      return reply.send({ ok: true, message: 'Invalid externalId, skipped' });
     }
 
     if (event.type === 'grab') {

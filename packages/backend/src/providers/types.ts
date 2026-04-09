@@ -105,6 +105,7 @@ export interface ArrClient {
   parseWebhookPayload?(body: unknown): ArrWebhookEvent | null;
   registerWebhook?(name: string, url: string, apiKey: string): Promise<number>;
   removeWebhook?(webhookId: number): Promise<void>;
+  checkWebhookExists?(webhookId: number): Promise<boolean>;
   getWebhookEvents?(): { key: string; label: string; description: string }[];
 
   // Metadata
