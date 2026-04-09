@@ -97,6 +97,20 @@ export interface TmdbCrew {
   profile_path: string | null;
 }
 
+export interface TmdbPerson {
+  id: number;
+  name: string;
+  biography: string;
+  birthday: string | null;
+  deathday: string | null;
+  place_of_birth: string | null;
+  profile_path: string | null;
+  known_for_department: string;
+  combined_credits: {
+    cast: (TmdbMedia & { character: string; release_date?: string; first_air_date?: string })[];
+  };
+}
+
 export interface TmdbVideo {
   key: string;
   site: string;

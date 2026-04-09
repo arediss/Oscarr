@@ -9,6 +9,7 @@ import LoginPage from '@/pages/LoginPage';
 import InstallPage from '@/pages/InstallPage';
 import SearchPage from '@/pages/SearchPage';
 import MediaDetailPage from '@/pages/MediaDetailPage';
+import PersonPage from '@/pages/PersonPage';
 import RequestsPage from '@/pages/RequestsPage';
 import MessagesPage from '@/pages/MessagesPage';
 
@@ -106,6 +107,7 @@ export default function App() {
                   <Route path="/search" element={<RequireAccess><SearchPage /></RequireAccess>} />
                   <Route path="/movie/:id" element={<RequireAccess><MediaDetailPage type="movie" /></RequireAccess>} />
                   <Route path="/tv/:id" element={<RequireAccess><MediaDetailPage type="tv" /></RequireAccess>} />
+                  <Route path="/person/:id" element={<RequireAccess><PersonPage /></RequireAccess>} />
                   <Route path="/requests" element={<RequireFeature feature="requestsEnabled"><RequireAccess><RequestsPage /></RequireAccess></RequireFeature>} />
 
                   <Route path="/discover/:mediaType/genre/:genreId" element={<RequireAccess><DiscoverGenrePage /></RequireAccess>} />
