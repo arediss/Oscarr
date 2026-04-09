@@ -259,4 +259,113 @@ export async function servicesRoutes(app: FastifyInstance) {
       return reply.status(502).send({ error: 'Impossible de contacter le service' });
     }
   });
+
+  // ─── Webhook status + toggle ─────────────────────────────────────────
+
+  app.get('/services/:id/webhook/status', {
+    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
+  }, async (request, reply) => {
+    const serviceId = parseId((request.params as { id: string }).id);
+    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+
+    const svc = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!svc) return reply.status(404).send({ error: 'Service introuvable' });
+
+    const config = JSON.parse(svc.config);
+    const def = getServiceDefinition(svc.type);
+    const client = def?.createClient?.(config);
+
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 }, select: { siteUrl: true } });
+    const protocol = request.headers['x-forwarded-proto'] || 'http';
+    const host = request.headers['x-forwarded-host'] || request.headers.host;
+    const baseUrl = settings?.siteUrl || `${protocol}://${host}`;
+
+    // Verify webhook still exists in the service
+    let webhookAlive = false;
+    if (svc.webhookId && client) {
+      try {
+        const { data: notifications } = await (client as any).api.get('/notification');
+        webhookAlive = Array.isArray(notifications) && notifications.some((n: any) => n.id === svc.webhookId);
+      } catch { /* service unreachable */ }
+
+      // Auto-cleanup if webhook was deleted from the service
+      if (!webhookAlive) {
+        await prisma.service.update({ where: { id: serviceId }, data: { webhookId: null } });
+        svc.webhookId = null;
+      }
+    }
+
+    return {
+      enabled: !!svc.webhookId,
+      webhookId: svc.webhookId,
+      url: `${baseUrl.replace(/\/$/, '')}/api/webhooks/${svc.type}`,
+      events: client?.getWebhookEvents?.() || [],
+      supportsWebhooks: !!(client?.parseWebhookPayload && client?.registerWebhook),
+    };
+  });
+
+  app.post('/services/:id/webhook/enable', {
+    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
+  }, async (request, reply) => {
+    const serviceId = parseId((request.params as { id: string }).id);
+    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+
+    const svc = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!svc) return reply.status(404).send({ error: 'Service introuvable' });
+    if (svc.webhookId) return reply.status(409).send({ error: 'Webhook already enabled', webhookId: svc.webhookId });
+
+    const config = JSON.parse(svc.config);
+    const def = getServiceDefinition(svc.type);
+    if (!def?.createClient) return reply.status(400).send({ error: 'Service does not support webhooks' });
+
+    const client = def.createClient(config);
+    if (!client.registerWebhook) return reply.status(400).send({ error: 'Service does not support webhooks' });
+
+    // Build webhook URL — use the request's origin (the actual backend URL) not siteUrl
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 }, select: { siteUrl: true, apiKey: true } });
+    if (!settings?.apiKey) return reply.status(400).send({ error: 'API key not configured (Admin > General)' });
+
+    // Prefer siteUrl if set, otherwise derive from the incoming request
+    const protocol = request.headers['x-forwarded-proto'] || 'http';
+    const host = request.headers['x-forwarded-host'] || request.headers.host;
+    const baseUrl = settings?.siteUrl || `${protocol}://${host}`;
+    const webhookUrl = `${baseUrl.replace(/\/$/, '')}/api/webhooks/${svc.type}`;
+
+    try {
+      const webhookId = await client.registerWebhook('Oscarr', webhookUrl, settings.apiKey);
+      await prisma.service.update({ where: { id: serviceId }, data: { webhookId } });
+      logEvent('info', 'Webhook', `Webhook enabled for ${svc.name} (ID: ${webhookId})`);
+      return { ok: true, webhookId };
+    } catch (err) {
+      console.error(`[Webhook] Failed to register webhook for ${svc.name}:`, err);
+      return reply.status(502).send({ error: 'Failed to register webhook in service' });
+    }
+  });
+
+  app.post('/services/:id/webhook/disable', {
+    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
+  }, async (request, reply) => {
+    const serviceId = parseId((request.params as { id: string }).id);
+    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+
+    const svc = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!svc) return reply.status(404).send({ error: 'Service introuvable' });
+    if (!svc.webhookId) return reply.send({ ok: true, message: 'Webhook already disabled' });
+
+    const config = JSON.parse(svc.config);
+    const def = getServiceDefinition(svc.type);
+    const client = def?.createClient?.(config);
+
+    if (client?.removeWebhook) {
+      try {
+        await client.removeWebhook(svc.webhookId);
+      } catch (err) {
+        console.warn(`[Webhook] Failed to remove webhook ${svc.webhookId} from ${svc.name}:`, err);
+      }
+    }
+
+    await prisma.service.update({ where: { id: serviceId }, data: { webhookId: null } });
+    logEvent('info', 'Webhook', `Webhook disabled for ${svc.name}`);
+    return { ok: true };
+  });
 }

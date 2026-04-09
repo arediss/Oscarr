@@ -24,6 +24,7 @@ export interface ServiceData {
   config: Record<string, string>;
   isDefault: boolean;
   enabled: boolean;
+  webhookId: number | null;
 }
 
 let cachedSchemas: Record<string, ServiceSchema> | null = null;

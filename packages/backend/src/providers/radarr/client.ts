@@ -222,13 +222,47 @@ export class RadarrClient implements ArrClient {
     }));
   }
 
+  async registerWebhook(name: string, url: string, apiKey: string): Promise<number> {
+    const { data } = await this.api.post('/notification', {
+      name,
+      implementation: 'Webhook',
+      configContract: 'WebhookSettings',
+      onDownload: true,
+      onUpgrade: true,
+      onImportComplete: true,
+      onMovieAdded: true,
+      onMovieDelete: true,
+      includeHealthWarnings: false,
+      fields: [
+        { name: 'url', value: url },
+        { name: 'method', value: 1 }, // POST
+        { name: 'username', value: '' },
+        { name: 'password', value: apiKey },
+      ],
+    });
+    return data.id;
+  }
+
+  async removeWebhook(webhookId: number): Promise<void> {
+    await this.api.delete(`/notification/${webhookId}`);
+  }
+
+  getWebhookEvents() {
+    return [
+      { key: 'Download', label: 'Import', description: 'When a movie file is imported' },
+      { key: 'Upgrade', label: 'Upgrade', description: 'When a movie is upgraded to better quality' },
+      { key: 'MovieAdded', label: 'Movie added', description: 'When a movie is added to the library' },
+      { key: 'MovieDelete', label: 'Movie deleted', description: 'When a movie is removed from the library' },
+    ];
+  }
+
   parseWebhookPayload(body: unknown): ArrWebhookEvent | null {
     const payload = body as { eventType?: string; movie?: { tmdbId?: number; title?: string } };
     if (!payload.eventType) return null;
     // Test event has no movie data
     if (payload.eventType === 'Test') return { type: 'test', externalId: 0, title: 'Test' };
     if (!payload.movie?.tmdbId) return null;
-    const typeMap: Record<string, ArrWebhookEvent['type']> = { Download: 'download', Grab: 'grab' };
+    const typeMap: Record<string, ArrWebhookEvent['type']> = { Download: 'download', Grab: 'grab', MovieAdded: 'added', MovieDelete: 'deleted' };
     return {
       type: typeMap[payload.eventType] || 'unknown',
       externalId: payload.movie.tmdbId,

@@ -63,7 +63,53 @@ export async function webhookRoutes(app: FastifyInstance) {
     // 3. Handle event
     if (event.type === 'test') {
       console.log(`[Webhook] ${serviceType} test received`);
+      logEvent('info', 'Webhook', `${serviceType} webhook test successful`);
       return reply.send({ ok: true, message: 'Webhook configured successfully' });
+    }
+
+    if (event.type === 'grab') {
+      logEvent('info', 'Webhook', `${serviceType}: "${event.title}" grabbed for download`);
+      return reply.send({ ok: true });
+    }
+
+    if (event.type === 'added') {
+      const mediaType = client.mediaType;
+      // Create media in DB if it doesn't exist yet
+      const existing = mediaType === 'movie'
+        ? await prisma.media.findUnique({ where: { tmdbId_mediaType: { tmdbId: event.externalId, mediaType: 'movie' } } })
+        : await prisma.media.findFirst({ where: { mediaType: 'tv', tvdbId: event.externalId } });
+
+      if (!existing) {
+        await prisma.media.create({
+          data: {
+            tmdbId: mediaType === 'movie' ? event.externalId : -(event.externalId),
+            ...(mediaType === 'tv' ? { tvdbId: event.externalId } : {}),
+            mediaType,
+            title: event.title,
+            status: 'searching',
+          },
+        });
+        logEvent('info', 'Webhook', `${serviceType}: "${event.title}" added — created in Oscarr`);
+        console.log(`[Webhook] ${serviceType}: "${event.title}" added → created in DB`);
+      }
+      return reply.send({ ok: true });
+    }
+
+    if (event.type === 'deleted') {
+      const mediaType = client.mediaType;
+      const media = mediaType === 'movie'
+        ? await prisma.media.findUnique({ where: { tmdbId_mediaType: { tmdbId: event.externalId, mediaType: 'movie' } } })
+        : await prisma.media.findFirst({ where: { mediaType: 'tv', tvdbId: event.externalId } });
+
+      if (media && media.status === 'available') {
+        await prisma.media.update({
+          where: { id: media.id },
+          data: { status: 'deleted' },
+        });
+        logEvent('info', 'Webhook', `${serviceType}: "${event.title}" deleted from service`);
+        console.log(`[Webhook] ${serviceType}: "${event.title}" → deleted`);
+      }
+      return reply.send({ ok: true });
     }
 
     if (event.type === 'download') {
