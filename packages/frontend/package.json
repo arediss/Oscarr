@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "axios": "^1.14.0",
+    "axios": "^1.15.0",
     "clsx": "^2.1.1",
     "cronstrue": "^3.14.0",
     "i18next": "^26.0.3",
