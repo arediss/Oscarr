@@ -83,12 +83,13 @@ export function GeneralTab() {
         setSiteName(vals.siteName);
         setSiteUrl(vals.siteUrl);
         setInstanceLanguage(vals.instanceLanguage);
-        initialValues.current = { ...vals };
+        initialValues.current = { ...vals, bannerText: initialValues.current.bannerText ?? '' };
         return data;
       }),
       api.get('/app/banner').then(({ data }) => {
-        setBannerText(data.banner || '');
-        initialValues.current.bannerText = data.banner || '';
+        const banner = data.banner || '';
+        setBannerText(banner);
+        initialValues.current = { ...initialValues.current, bannerText: banner };
       }),
       api.get('/app/version').then(({ data }) => setVersionInfo(data)),
     ]).catch(() => {}).finally(() => setLoading(false));
