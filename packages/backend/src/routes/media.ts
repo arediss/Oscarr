@@ -167,6 +167,19 @@ export async function mediaRoutes(app: FastifyInstance) {
         media.requests = media.requests.map((r) =>
           (COMPLETABLE_REQUEST_STATUSES as readonly string[]).includes(r.status) ? { ...r, status: 'available' } : r
         );
+      } else if (!liveAvailable && sonarrSeasonStats) {
+        const hasAnyFiles = sonarrSeasonStats.some((s: { episodeFileCount: number }) => s.episodeFileCount > 0);
+        if (hasAnyFiles && media.status !== 'processing') {
+          await prisma.media.update({ where: { id: media.id }, data: { status: 'processing' } });
+          await prisma.mediaRequest.updateMany({
+            where: { mediaId: media.id, status: { in: ['approved', 'failed'] } },
+            data: { status: 'processing' },
+          });
+          media.status = 'processing';
+          media.requests = media.requests.map((r) =>
+            ['approved', 'failed'].includes(r.status) ? { ...r, status: 'processing' } : r
+          );
+        }
       }
     }
 

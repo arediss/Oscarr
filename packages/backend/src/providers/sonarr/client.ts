@@ -48,9 +48,10 @@ export class SonarrClient implements ArrClient {
     const lookupData = await this.lookupByTvdbId(options.tvdbId);
     if (!lookupData) throw new Error(`Series not found on TVDB: ${options.tvdbId}`);
 
+    const monitorAll = !options.seasons || options.seasons.length === 0;
     const seasons = lookupData.seasons.map((s: SonarrSeason) => ({
       seasonNumber: s.seasonNumber,
-      monitored: options.seasons.includes(s.seasonNumber),
+      monitored: s.seasonNumber > 0 && (monitorAll || options.seasons.includes(s.seasonNumber)),
     }));
 
     const { data } = await this.api.post('/series', {
