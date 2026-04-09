@@ -8,6 +8,7 @@ import {
   searchMulti,
   getMovieDetails,
   getTvDetails,
+  getPersonDetails,
   getMovieRecommendations,
   getTvRecommendations,
   discoverByGenre,
@@ -175,6 +176,16 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const details = await getTvDetails(tvId, getLang(request));
     trackKeywordsFromDetails(tvId, 'tv', details).catch(() => {});
     return details;
+  });
+
+  app.get('/person/:id', {
+    schema: { params: idParamSchema },
+
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const personId = parseId(id);
+    if (!personId) return reply.status(400).send({ error: 'Invalid ID' });
+    return getPersonDetails(personId, getLang(request));
   });
 
   app.get('/movie/:id/recommendations', {

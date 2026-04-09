@@ -50,6 +50,7 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'GET:/api/tmdb/tv/:id':                              { permission: AUTH },
   'GET:/api/tmdb/movie/:id/recommendations':           { permission: AUTH },
   'GET:/api/tmdb/tv/:id/recommendations':              { permission: AUTH },
+  'GET:/api/tmdb/person/:id':                           { permission: AUTH },
   'GET:/api/tmdb/collection/:id':                      { permission: AUTH },
   'GET:/api/tmdb/discover/:mediaType/genre/:genreId':  { permission: AUTH },
   'GET:/api/tmdb/genre-backdrops':                     { permission: AUTH },
