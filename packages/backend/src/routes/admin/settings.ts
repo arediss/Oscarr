@@ -70,6 +70,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           registrationEnabled: { type: 'boolean', description: 'Allow new account registration' },
           missingSearchCooldownMin: { type: 'number', description: 'Cooldown in minutes before allowing another missing search' },
           requestsEnabled: { type: 'boolean', description: 'Enable the request system' },
+          nsfwBlurEnabled: { type: 'boolean', description: 'Enable NSFW content blur' },
           supportEnabled: { type: 'boolean', description: 'Enable the support/ticket system' },
           calendarEnabled: { type: 'boolean', description: 'Enable the calendar feature' },
           siteName: { type: 'string', description: 'Custom site name' },
@@ -91,6 +92,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       registrationEnabled?: boolean;
       missingSearchCooldownMin?: number;
       requestsEnabled?: boolean;
+      nsfwBlurEnabled?: boolean;
       supportEnabled?: boolean;
       calendarEnabled?: boolean;
       siteName?: string;
@@ -111,6 +113,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         registrationEnabled: body.registrationEnabled ?? undefined,
         missingSearchCooldownMin: body.missingSearchCooldownMin ?? undefined,
         requestsEnabled: body.requestsEnabled ?? undefined,
+        nsfwBlurEnabled: body.nsfwBlurEnabled ?? undefined,
         supportEnabled: body.supportEnabled ?? undefined,
         calendarEnabled: body.calendarEnabled ?? undefined,
         siteName: body.siteName ?? undefined,

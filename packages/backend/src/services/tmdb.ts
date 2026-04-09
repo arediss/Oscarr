@@ -146,10 +146,10 @@ export function extractKeywords(details: TmdbMovie | TmdbTv): { id: number; name
   return movie.keywords?.keywords ?? tv.keywords?.results ?? [];
 }
 
-/** Ratings considered mature/NSFW */
+/** Ratings considered explicitly adult/NSFW (not just age-restricted) */
 const MATURE_RATINGS = new Set([
-  'NC-17', 'TV-MA', 'X',       // US
-  '18', '18+', 'VM18',         // FR, DE, BR, RU, IT
+  'NC-17', 'X', 'XXX',         // US explicit
+  'VM18',                       // IT explicit
 ]);
 
 /** Non-informative ratings to skip when extracting */

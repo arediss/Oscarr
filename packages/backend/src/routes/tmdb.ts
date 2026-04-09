@@ -80,7 +80,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   }, async (request) => {
     const { page } = request.query as { page?: string };
-    return getTrending(parsePage(page), getLang(request));
+    const lang = getLang(request);
+    const data = await getTrending(parsePage(page), lang);
+    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
   });
 
   app.get('/movies/popular', {
@@ -88,7 +91,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   }, async (request) => {
     const { page } = request.query as { page?: string };
-    return getPopularMovies(parsePage(page), getLang(request));
+    const lang = getLang(request);
+    const data = await getPopularMovies(parsePage(page), lang);
+    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
   });
 
   app.get('/tv/popular', {
@@ -96,7 +102,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   }, async (request) => {
     const { page } = request.query as { page?: string };
-    return getPopularTv(parsePage(page), getLang(request));
+    const lang = getLang(request);
+    const data = await getPopularTv(parsePage(page), lang);
+    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'tv', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
   });
 
   app.get('/tv/trending-anime', {
@@ -104,7 +113,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   }, async (request) => {
     const { page } = request.query as { page?: string };
-    return getTrendingAnime(parsePage(page), getLang(request));
+    const lang = getLang(request);
+    const data = await getTrendingAnime(parsePage(page), lang);
+    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'tv', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
   });
 
   app.get('/movies/upcoming', {
@@ -112,7 +124,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   }, async (request) => {
     const { page } = request.query as { page?: string };
-    return getUpcomingMovies(parsePage(page), getLang(request));
+    const lang = getLang(request);
+    const data = await getUpcomingMovies(parsePage(page), lang);
+    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
   });
 
   app.get('/search', {
@@ -132,7 +147,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
     if (!q || q.trim().length === 0) {
       return { results: [], total_pages: 0, total_results: 0 };
     }
-    return searchMulti(q.trim(), parsePage(page), getLang(request));
+    const lang = getLang(request);
+    const data = await searchMulti(q.trim(), parsePage(page), lang);
+    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
   });
 
   app.get('/movie/:id', {
@@ -168,7 +186,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     if (!movieId) return reply.status(400).send({ error: 'Invalid ID' });
     const lang = getLang(request);
     const data = await getMovieRecommendations(movieId, lang);
-    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang);
+    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
@@ -181,7 +199,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     if (!tvId) return reply.status(400).send({ error: 'Invalid ID' });
     const lang = getLang(request);
     const data = await getTvRecommendations(tvId, lang);
-    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'tv', lang);
+    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'tv', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
@@ -216,7 +234,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
     }
     const gid = parseId(genreId);
     if (!gid) return reply.status(400).send({ error: 'Invalid genreId' });
-    return discoverByGenre(mediaType, gid, parsePage(page), getLang(request));
+    const lang = getLang(request);
+    const data = await discoverByGenre(mediaType, gid, parsePage(page), lang);
+    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], mediaType, lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
   });
 
   app.get('/genre-backdrops', async () => {

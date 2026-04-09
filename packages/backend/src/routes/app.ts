@@ -99,6 +99,7 @@ export async function appRoutes(app: FastifyInstance) {
       calendarEnabled: settings?.calendarEnabled ?? true,
       siteName: settings?.siteName ?? 'Oscarr',
       registrationEnabled: settings?.registrationEnabled ?? true,
+      nsfwBlurEnabled: settings?.nsfwBlurEnabled ?? true,
       ...pluginFeatures,
     };
   });
