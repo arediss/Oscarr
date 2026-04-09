@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Star,
@@ -15,6 +15,9 @@ import {
   X,
   EyeOff,
   ShieldAlert,
+  ChevronLeft,
+  ChevronRight,
+  User,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
@@ -27,7 +30,7 @@ import { PluginSlot } from '@/plugins/PluginSlot';
 import { useMediaDetailData } from '@/hooks/useMediaDetailData';
 import { useMediaRequestActions } from '@/hooks/useMediaRequestActions';
 import { useEpisodeModal } from '@/hooks/useEpisodeModal';
-import type { TmdbMedia, Media } from '@/types';
+import type { TmdbMedia, Media, TmdbCast, TmdbCrew } from '@/types';
 import { ACTIVE_REQUEST_STATUSES } from '@/utils/requestStatus';
 
 interface Props {
@@ -37,6 +40,7 @@ interface Props {
 export default function MediaDetailPage({ type }: Props) {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { isNsfw, disableBlur } = useNsfwFilter();
   const [revealed, setRevealed] = useState(false);
@@ -120,7 +124,7 @@ export default function MediaDetailPage({ type }: Props) {
   const year = (media.release_date || media.first_air_date || '').slice(0, 4);
   const genres = media.genres?.map((g) => g.name).join(', ');
   const trailer = media.videos?.results?.find((v) => v.type === 'Trailer' && v.site === 'YouTube');
-  const cast = media.credits?.cast?.slice(0, 12) || [];
+  const cast = media.credits?.cast?.slice(0, 20) || [];
   const director = media.credits?.crew?.find((c) => c.job === 'Director');
 
   return (
@@ -143,9 +147,9 @@ export default function MediaDetailPage({ type }: Props) {
       </div>
 
       {/* Back button - fixed */}
-      <Link to="/" className="fixed top-20 left-4 sm:left-8 z-20 p-2 glass rounded-xl hover:bg-white/10 transition-colors">
+      <button onClick={() => navigate(-1)} className="fixed top-20 left-4 sm:left-8 z-20 p-2 glass rounded-xl hover:bg-white/10 transition-colors">
         <ArrowLeft className="w-5 h-5 text-white" />
-      </Link>
+      </button>
 
       {/* Scrollable content */}
       <div className="relative z-10 pt-[35vh] min-h-screen">
@@ -502,37 +506,13 @@ export default function MediaDetailPage({ type }: Props) {
 
         {/* Cast */}
         {cast.length > 0 && (
-          <div className="mt-12">
-            <h3 className="text-lg font-bold text-ndp-text mb-4">{t('media.casting')}</h3>
-            <div className="flex gap-4 overflow-x-auto pb-4">
-              {cast.map((person) => (
-                <div key={person.id} className="flex-shrink-0 w-28 text-center">
-                  <div className="w-20 h-20 mx-auto rounded-full overflow-hidden bg-ndp-surface-light mb-2">
-                    {person.profile_path ? (
-                      <img
-                        src={`https://image.tmdb.org/t/p/w185${person.profile_path}`}
-                        alt={person.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-ndp-text-dim text-xl">
-                        {person.name[0]}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs font-medium text-ndp-text truncate">{person.name}</p>
-                  <p className="text-[10px] text-ndp-text-dim truncate">{person.character}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          <CastSection cast={cast} title={t('media.casting')} director={director} />
         )}
 
         {/* Recommendations */}
         {recommendations.length > 0 && (
           <div className="mt-12 pb-16">
-            <MediaRow title={t('media.recommendations')} media={recommendations} />
+            <MediaRow title={t('media.recommendations')} media={recommendations} size="large" />
           </div>
         )}
         </div>
@@ -716,6 +696,81 @@ export default function MediaDetailPage({ type }: Props) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Cast Section ───────────────────────────────────────────────────
+
+function CastSection({ cast, title, director }: { cast: TmdbCast[]; title: string; director?: TmdbCrew }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    const amount = scrollRef.current.clientWidth * 0.75;
+    scrollRef.current.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="mt-12 relative group/cast">
+      <div className="flex items-center gap-3 mb-4 sm:px-8">
+        <h3 className="text-xl font-bold text-ndp-text">{title}</h3>
+        {director && (
+          <span className="text-sm text-ndp-text-muted">
+            <span className="text-ndp-text-dim">·</span>{' '}
+            <span className="text-ndp-accent font-medium">{director.name}</span>
+          </span>
+        )}
+      </div>
+
+      <button
+        onClick={() => scroll('left')}
+        className="absolute left-0 top-12 bottom-0 z-20 w-10 bg-gradient-to-r from-ndp-bg to-transparent flex items-center justify-center opacity-0 group-hover/cast:opacity-100 transition-opacity"
+      >
+        <ChevronLeft className="w-5 h-5 text-white" />
+      </button>
+      <button
+        onClick={() => scroll('right')}
+        className="absolute right-0 top-12 bottom-0 z-20 w-10 bg-gradient-to-l from-ndp-bg to-transparent flex items-center justify-center opacity-0 group-hover/cast:opacity-100 transition-opacity"
+      >
+        <ChevronRight className="w-5 h-5 text-white" />
+      </button>
+
+      <div
+        ref={scrollRef}
+        className="flex gap-3 overflow-x-auto px-4 sm:px-8 pb-2"
+        style={{ scrollbarWidth: 'none' }}
+      >
+        {cast.map((person, i) => (
+          <Link
+            to={`/person/${person.id}`}
+            key={person.id}
+            className="flex-shrink-0 w-[120px] group/card"
+            style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}
+          >
+            <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-ndp-surface-light">
+              {person.profile_path ? (
+                <img
+                  src={`https://image.tmdb.org/t/p/w185${person.profile_path}`}
+                  alt={person.name}
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover/card:scale-105"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-ndp-surface-light to-ndp-bg">
+                  <User className="w-10 h-10 text-ndp-text-dim/30" />
+                </div>
+              )}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-8 pb-2.5 px-2.5">
+                <p className="text-xs font-semibold text-white leading-tight truncate">{person.name}</p>
+                {person.character && (
+                  <p className="text-[10px] text-ndp-text-muted leading-tight truncate mt-0.5">{person.character}</p>
+                )}
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

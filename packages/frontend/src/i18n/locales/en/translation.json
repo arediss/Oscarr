@@ -17,6 +17,8 @@
   "common.configure": "Configure",
   "common.refresh": "Refresh",
   "common.error": "Error",
+  "common.show_more": "Show more",
+  "common.show_less": "Show less",
   "common.forbidden": "Access denied — insufficient permissions",
   "common.send": "Send",
   "common.sent": "Sent!",
@@ -199,6 +201,9 @@
   "media.all_seasons": "All seasons",
   "media.episodes_short": "ep.",
   "media.casting": "Cast",
+
+  "person.years_old": "years old",
+  "person.filmography": "Filmography",
   "media.recommendations": "Recommendations",
   "media.season_one": "{{count}} season",
   "media.season_other": "{{count}} seasons",

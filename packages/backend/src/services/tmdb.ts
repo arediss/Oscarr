@@ -302,6 +302,30 @@ export async function searchMulti(query: string, page = 1, lang?: string) {
   }, 1);
 }
 
+export interface TmdbPerson {
+  id: number;
+  name: string;
+  biography: string;
+  birthday: string | null;
+  deathday: string | null;
+  place_of_birth: string | null;
+  profile_path: string | null;
+  known_for_department: string;
+  combined_credits: {
+    cast: (TmdbMovie & TmdbTv & { media_type: string; character: string })[];
+  };
+}
+
+export async function getPersonDetails(personId: number, lang?: string): Promise<TmdbPerson> {
+  const l = normalizeLang(lang);
+  return cachedRequest(`person:${personId}:${l}`, async () => {
+    const { data } = await getTmdbApi(l).get(`/person/${personId}`, {
+      params: { append_to_response: 'combined_credits' },
+    });
+    return data;
+  }, 24);
+}
+
 export async function getMovieDetails(movieId: number, lang?: string): Promise<TmdbMovie> {
   const l = normalizeLang(lang);
   return cachedRequest(`movie:${movieId}:${l}`, async () => {
