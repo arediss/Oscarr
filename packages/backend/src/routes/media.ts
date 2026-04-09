@@ -7,6 +7,25 @@ import { normalizeLanguages } from '../utils/languages.js';
 import { performLiveCheckWithTimeout, cacheLanguageData, promoteMediaToAvailable } from '../services/mediaService.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
 
+/** Normalize episode info to { season, episode, title } regardless of source format */
+function normalizeEpisodeInfo(info: Record<string, unknown>): { season: number; episode: number; title: string } | null {
+  const season = info.season ?? info.seasonNumber;
+  const episode = info.episode ?? info.episodeNumber;
+  if (season == null || episode == null) return null;
+  return { season: Number(season), episode: Number(episode), title: String(info.title || '') };
+}
+
+/** Normalize lastEpisodeInfo — handles both old (raw Sonarr) and new (normalized) formats */
+function parseEpisodeInfo(raw: string): { season: number; episode: number; title: string } | null {
+  try {
+    const info = JSON.parse(raw);
+    const season = info.season ?? info.seasonNumber;
+    const episode = info.episode ?? info.episodeNumber;
+    if (season == null || episode == null) return null;
+    return { season: Number(season), episode: Number(episode), title: String(info.title || '') };
+  } catch { return null; }
+}
+
 export async function mediaRoutes(app: FastifyInstance) {
   app.get('/', {
     schema: {
@@ -244,7 +263,7 @@ export async function mediaRoutes(app: FastifyInstance) {
 
     return media.map((m) => ({
       ...m,
-      lastEpisodeInfo: m.lastEpisodeInfo ? JSON.parse(m.lastEpisodeInfo) : null,
+      lastEpisodeInfo: m.lastEpisodeInfo ? parseEpisodeInfo(m.lastEpisodeInfo) : null,
     }));
   });
 
