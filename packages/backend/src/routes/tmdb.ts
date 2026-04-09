@@ -14,45 +14,84 @@ import {
   discoverByGenre,
   getCollection,
   getGenreBackdrops,
-  extractContentRating,
-  extractKeywords,
   isMatureRating,
 } from '../services/tmdb.js';
 import { trackKeywordsFromDetails } from '../services/sync/keywordSync.js';
 import { prisma } from '../utils/prisma.js';
 import { parseId, parsePage } from '../utils/params.js';
 
-/** For a list of TMDB results, fetch details in parallel (cached), track data, return NSFW IDs */
-async function trackAndFlagNsfw(
+/**
+ * Check NSFW status: DB first (fast), TMDB fallback for unknown items (background).
+ * Returns NSFW IDs from DB immediately. Items not in DB are checked via TMDB
+ * in the background — their NSFW status will be available on the next request.
+ */
+async function flagNsfwFromDb(
   results: { id: number; media_type?: string; title?: string; name?: string }[],
   defaultMediaType: 'movie' | 'tv',
-  lang: string,
+  lang?: string,
 ): Promise<number[]> {
-  // Load NSFW keyword IDs for checking
+  const items = results.slice(0, 20)
+    .filter(r => {
+      const mt = r.media_type || (r.name ? 'tv' : r.title ? 'movie' : defaultMediaType);
+      return mt === 'movie' || mt === 'tv';
+    })
+    .map(r => ({
+      tmdbId: r.id,
+      mediaType: (r.media_type === 'movie' || r.media_type === 'tv')
+        ? r.media_type
+        : (r.name ? 'tv' as const : 'movie' as const),
+    }));
+  if (items.length === 0) return [];
+
+  // Load NSFW keyword IDs
   const nsfwKeywords = await prisma.keyword.findMany({ where: { tag: 'nsfw' }, select: { tmdbId: true } });
-  const nsfwKwSet = new Set(nsfwKeywords.map((k) => k.tmdbId));
+  const nsfwKwSet = new Set(nsfwKeywords.map(k => k.tmdbId));
+
+  // Batch DB lookup
+  const METADATA_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const mediaRows = await prisma.media.findMany({
+    where: { OR: items.map(i => ({ tmdbId: i.tmdbId, mediaType: i.mediaType })) },
+    select: { tmdbId: true, mediaType: true, keywordIds: true, contentRating: true, updatedAt: true },
+  });
 
   const nsfwIds: number[] = [];
-  await Promise.allSettled(
-    results.slice(0, 20).map(async (item) => {
-      const mt = item.media_type || (item.name ? 'tv' : item.title ? 'movie' : defaultMediaType);
-      const details = mt === 'movie'
-        ? await getMovieDetails(item.id, lang)
-        : await getTvDetails(item.id, lang);
-      await trackKeywordsFromDetails(item.id, mt, details).catch(() => {});
+  const foundTmdbIds = new Set(mediaRows.map(r => `${r.mediaType}:${r.tmdbId}`));
+  const now = Date.now();
+  const stale: typeof items = [];
 
-      // Check rating
-      if (isMatureRating(await extractContentRating(details))) {
-        nsfwIds.push(item.id);
-        return;
-      }
-      // Check keywords
-      const kws = extractKeywords(details);
-      if (nsfwKwSet.size > 0 && kws.some((k) => nsfwKwSet.has(k.id))) {
-        nsfwIds.push(item.id);
-      }
-    }),
-  );
+  for (const row of mediaRows) {
+    if (isMatureRating(row.contentRating)) {
+      nsfwIds.push(row.tmdbId);
+    } else if (row.keywordIds && nsfwKwSet.size > 0) {
+      try {
+        const kwIds: number[] = JSON.parse(row.keywordIds);
+        if (kwIds.some(id => nsfwKwSet.has(id))) {
+          nsfwIds.push(row.tmdbId);
+        }
+      } catch { /* skip */ }
+    }
+    // Mark stale or incomplete metadata for background refresh
+    if (now - new Date(row.updatedAt).getTime() > METADATA_TTL || row.keywordIds === null) {
+      stale.push({ tmdbId: row.tmdbId, mediaType: row.mediaType as 'movie' | 'tv' });
+    }
+  }
+
+  // Background: fetch TMDB details for items not in DB + stale metadata
+  const missing = [
+    ...items.filter(i => !foundTmdbIds.has(`${i.mediaType}:${i.tmdbId}`)),
+    ...stale,
+  ];
+  if (missing.length > 0 && lang) {
+    void Promise.allSettled(
+      missing.map(async (item) => {
+        const details = item.mediaType === 'movie'
+          ? await getMovieDetails(item.tmdbId, lang)
+          : await getTvDetails(item.tmdbId, lang);
+        await trackKeywordsFromDetails(item.tmdbId, item.mediaType, details).catch(() => {});
+      }),
+    );
+  }
+
   return nsfwIds;
 }
 
@@ -83,7 +122,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const { page } = request.query as { page?: string };
     const lang = getLang(request);
     const data = await getTrending(parsePage(page), lang);
-    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang).catch(() => []);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'movie', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
@@ -94,7 +133,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const { page } = request.query as { page?: string };
     const lang = getLang(request);
     const data = await getPopularMovies(parsePage(page), lang);
-    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang).catch(() => []);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'movie', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
@@ -105,7 +144,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const { page } = request.query as { page?: string };
     const lang = getLang(request);
     const data = await getPopularTv(parsePage(page), lang);
-    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'tv', lang).catch(() => []);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'tv', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
@@ -116,7 +155,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const { page } = request.query as { page?: string };
     const lang = getLang(request);
     const data = await getTrendingAnime(parsePage(page), lang);
-    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'tv', lang).catch(() => []);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'tv', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
@@ -127,7 +166,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     const { page } = request.query as { page?: string };
     const lang = getLang(request);
     const data = await getUpcomingMovies(parsePage(page), lang);
-    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang).catch(() => []);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'movie', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
@@ -150,7 +189,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     }
     const lang = getLang(request);
     const data = await searchMulti(q.trim(), parsePage(page), lang);
-    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang).catch(() => []);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'movie', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
@@ -197,7 +236,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     if (!movieId) return reply.status(400).send({ error: 'Invalid ID' });
     const lang = getLang(request);
     const data = await getMovieRecommendations(movieId, lang);
-    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'movie', lang).catch(() => []);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'movie', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
@@ -210,7 +249,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     if (!tvId) return reply.status(400).send({ error: 'Invalid ID' });
     const lang = getLang(request);
     const data = await getTvRecommendations(tvId, lang);
-    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], 'tv', lang).catch(() => []);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'tv', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
@@ -247,7 +286,7 @@ export async function tmdbRoutes(app: FastifyInstance) {
     if (!gid) return reply.status(400).send({ error: 'Invalid genreId' });
     const lang = getLang(request);
     const data = await discoverByGenre(mediaType, gid, parsePage(page), lang);
-    const nsfwTmdbIds = await trackAndFlagNsfw(data.results || [], mediaType, lang).catch(() => []);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], mediaType as 'movie' | 'tv', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
