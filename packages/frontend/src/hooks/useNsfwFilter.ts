@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import api from '@/lib/api';
+import { registerNsfwHandler } from '@/lib/api';
+import { useFeatures } from '@/context/FeaturesContext';
 
 const STORAGE_KEY = 'nsfw-show-all';
 
@@ -24,6 +26,8 @@ export function useNsfwFilter() {
 }
 
 export function useNsfwFilterProvider() {
+  const { features } = useFeatures();
+  const blurEnabled = features?.nsfwBlurEnabled !== false;
   const [nsfwSet, setNsfwSet] = useState<Set<number>>(new Set());
   const [showAll, setShowAll] = useState(() => localStorage.getItem(STORAGE_KEY) === 'true');
   const [loaded, setLoaded] = useState(false);
@@ -49,8 +53,14 @@ export function useNsfwFilterProvider() {
     });
   }, []);
 
+  // Register global interceptor so any API response with nsfwTmdbIds auto-updates the filter
+  useEffect(() => {
+    registerNsfwHandler(addNsfwIds);
+    return () => registerNsfwHandler(() => {});
+  }, [addNsfwIds]);
+
   return {
-    isNsfw: (tmdbId: number) => !showAll && nsfwSet.has(tmdbId),
+    isNsfw: (tmdbId: number) => blurEnabled && !showAll && nsfwSet.has(tmdbId),
     addNsfwIds,
     showAll,
     disableBlur,

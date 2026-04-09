@@ -497,6 +497,8 @@
   "admin.general.feature.auto_approve_desc": "Requests are automatically approved without admin validation",
   "admin.general.feature.support": "Support",
   "admin.general.feature.support_desc": "Support ticket system",
+  "admin.general.feature.nsfw_blur": "NSFW blur",
+  "admin.general.feature.nsfw_blur_desc": "Blur content rated as explicitly adult (NC-17, X). Does not affect age-restricted content (R, 18+).",
   "admin.general.feature.calendar": "Calendar",
   "admin.general.feature.calendar_desc": "Upcoming releases calendar",
 

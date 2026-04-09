@@ -497,6 +497,8 @@
   "admin.general.feature.auto_approve_desc": "Les demandes sont automatiquement approuvées sans validation admin",
   "admin.general.feature.support": "Support",
   "admin.general.feature.support_desc": "Système de tickets de support",
+  "admin.general.feature.nsfw_blur": "Flou NSFW",
+  "admin.general.feature.nsfw_blur_desc": "Flouter le contenu classé explicitement adulte (NC-17, X). N'affecte pas le contenu avec restriction d'âge (R, 18+).",
   "admin.general.feature.calendar": "Calendrier",
   "admin.general.feature.calendar_desc": "Calendrier des sorties à venir",
 
