@@ -82,17 +82,18 @@ export async function requestRoutes(app: FastifyInstance) {
     const user = request.user as { id: number; role: string };
     const userFilter = request.ownerScoped ? { userId: user.id } : {};
 
-    const [total, pending, approved, available, declined, searching, upcoming] = await Promise.all([
+    const [total, pending, approved, available, declined, failed, searching, upcoming] = await Promise.all([
       prisma.mediaRequest.count({ where: userFilter }),
       prisma.mediaRequest.count({ where: { ...userFilter, status: 'pending' } }),
       prisma.mediaRequest.count({ where: { ...userFilter, status: 'approved' } }),
       prisma.mediaRequest.count({ where: { ...userFilter, status: 'available' } }),
       prisma.mediaRequest.count({ where: { ...userFilter, status: 'declined' } }),
+      prisma.mediaRequest.count({ where: { ...userFilter, status: 'failed' } }),
       prisma.mediaRequest.count({ where: { ...userFilter, status: { in: ['searching'] } } }),
       prisma.mediaRequest.count({ where: { ...userFilter, status: 'upcoming' } }),
     ]);
 
-    return { total, pending, approved, available, declined, processing: searching + upcoming };
+    return { total, pending, approved, available, declined, failed, processing: searching + upcoming };
   });
 
   // ─── Create request ───────────────────────────────────────────────

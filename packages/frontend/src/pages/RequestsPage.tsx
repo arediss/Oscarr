@@ -43,6 +43,7 @@ interface RequestStats {
   approved: number;
   available: number;
   declined: number;
+  failed: number;
   processing: number;
 }
 
@@ -293,7 +294,7 @@ export default function RequestsPage() {
                 { key: 'available', label: t('status.available'), count: stats?.available ?? 0, color: 'text-ndp-success', dot: 'bg-ndp-success' },
                 { key: 'approved', label: t('status.approved'), count: stats?.approved ?? 0, color: 'text-ndp-accent', dot: 'bg-ndp-accent' },
                 { key: 'declined', label: t('status.declined'), count: stats?.declined ?? 0, color: 'text-ndp-danger', dot: 'bg-ndp-danger' },
-                { key: 'failed', label: t('status.failed'), count: 0, color: 'text-purple-400', dot: 'bg-purple-400' },
+                { key: 'failed', label: t('status.failed'), count: stats?.failed ?? 0, color: 'text-purple-400', dot: 'bg-purple-400' },
               ].map(s => {
                 const action = cleanupActions[s.key] || 'keep';
                 return (
