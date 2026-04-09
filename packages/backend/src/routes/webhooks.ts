@@ -6,6 +6,10 @@ import { promoteMediaToAvailable } from '../services/mediaService.js';
 import { sendAvailabilityNotifications } from '../services/sync/helpers.js';
 import { logEvent } from '../utils/logEvent.js';
 
+function sanitize(input: string): string {
+  return input.replace(/[\r\n\t]/g, '');
+}
+
 export async function webhookRoutes(app: FastifyInstance) {
 
   app.post('/:serviceType', async (request, reply) => {
@@ -39,7 +43,7 @@ export async function webhookRoutes(app: FastifyInstance) {
     // 2. Get provider and parse webhook
     const def = getServiceDefinition(serviceType);
     if (!def?.createClient) {
-      return reply.status(400).send({ error: `Unknown service type: ${serviceType}` });
+      return reply.status(400).send({ error: `Unknown service type: ${sanitize(serviceType)}` });
     }
 
     let client;
@@ -52,7 +56,7 @@ export async function webhookRoutes(app: FastifyInstance) {
     }
 
     if (!client.parseWebhookPayload) {
-      return reply.status(400).send({ error: `Service ${serviceType} does not support webhooks` });
+      return reply.status(400).send({ error: `Service ${sanitize(serviceType)} does not support webhooks` });
     }
 
     const event = client.parseWebhookPayload(request.body);
@@ -62,13 +66,13 @@ export async function webhookRoutes(app: FastifyInstance) {
 
     // 3. Handle event
     if (event.type === 'test') {
-      console.log(`[Webhook] ${serviceType} test received`);
-      logEvent('info', 'Webhook', `${serviceType} webhook test successful`);
+      console.log(`[Webhook] ${sanitize(serviceType)} test received`);
+      logEvent('info', 'Webhook', `${sanitize(serviceType)} webhook test successful`);
       return reply.send({ ok: true, message: 'Webhook configured successfully' });
     }
 
     if (event.type === 'grab') {
-      logEvent('info', 'Webhook', `${serviceType}: "${event.title}" grabbed for download`);
+      logEvent('info', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" grabbed for download`);
       return reply.send({ ok: true });
     }
 
@@ -85,12 +89,12 @@ export async function webhookRoutes(app: FastifyInstance) {
             tmdbId: mediaType === 'movie' ? event.externalId : -(event.externalId),
             ...(mediaType === 'tv' ? { tvdbId: event.externalId } : {}),
             mediaType,
-            title: event.title,
+            title: sanitize(event.title),
             status: 'searching',
           },
         });
-        logEvent('info', 'Webhook', `${serviceType}: "${event.title}" added — created in Oscarr`);
-        console.log(`[Webhook] ${serviceType}: "${event.title}" added → created in DB`);
+        logEvent('info', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" added — created in Oscarr`);
+        console.log(`[Webhook] ${sanitize(serviceType)}: "${sanitize(event.title)}" added → created in DB`);
       }
       return reply.send({ ok: true });
     }
@@ -106,8 +110,8 @@ export async function webhookRoutes(app: FastifyInstance) {
           where: { id: media.id },
           data: { status: 'deleted' },
         });
-        logEvent('info', 'Webhook', `${serviceType}: "${event.title}" deleted from service`);
-        console.log(`[Webhook] ${serviceType}: "${event.title}" → deleted`);
+        logEvent('info', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" deleted from service`);
+        console.log(`[Webhook] ${sanitize(serviceType)}: "${sanitize(event.title)}" → deleted`);
       }
       return reply.send({ ok: true });
     }
@@ -128,7 +132,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       }
 
       if (!media) {
-        console.log(`[Webhook] ${serviceType} download event for unknown media: ${event.title} (${event.externalId})`);
+        console.log(`[Webhook] ${sanitize(serviceType)} download event for unknown media: ${sanitize(event.title)} (${event.externalId})`);
         return reply.send({ ok: true, message: 'Media not tracked' });
       }
 
@@ -136,14 +140,14 @@ export async function webhookRoutes(app: FastifyInstance) {
       if (media.status !== 'available') {
         await promoteMediaToAvailable(media.id, !!media.availableAt);
         sendAvailabilityNotifications(
-          media.title || event.title,
+          media.title || sanitize(event.title),
           mediaType,
           media.posterPath,
           media.id,
           media.tmdbId,
         );
-        logEvent('info', 'Webhook', `"${event.title}" is now available (via ${serviceType} webhook)`);
-        console.log(`[Webhook] ${serviceType}: "${event.title}" → available`);
+        logEvent('info', 'Webhook', `"${sanitize(event.title)}" is now available (via ${sanitize(serviceType)} webhook)`);
+        console.log(`[Webhook] ${sanitize(serviceType)}: "${sanitize(event.title)}" → available`);
       }
 
       return reply.send({ ok: true, message: 'Media updated' });
