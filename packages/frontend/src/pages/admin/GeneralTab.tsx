@@ -40,6 +40,7 @@ export function GeneralTab() {
   const [requestsEnabled, setRequestsEnabled] = useState(true);
   const [supportEnabled, setSupportEnabled] = useState(true);
   const [calendarEnabled, setCalendarEnabled] = useState(true);
+  const [nsfwBlurEnabled, setNsfwBlurEnabled] = useState(true);
   const [missingSearchCooldownMin, setMissingSearchCooldownMin] = useState(60);
   const [siteName, setSiteName] = useState('Oscarr');
   const [siteUrl, setSiteUrl] = useState('');
@@ -66,6 +67,7 @@ export function GeneralTab() {
           requestsEnabled: data.requestsEnabled ?? true,
           supportEnabled: data.supportEnabled ?? true,
           calendarEnabled: data.calendarEnabled ?? true,
+          nsfwBlurEnabled: data.nsfwBlurEnabled ?? true,
           missingSearchCooldownMin: data.missingSearchCooldownMin ?? 60,
           siteName: data.siteName ?? 'Oscarr',
           siteUrl: data.siteUrl ?? '',
@@ -76,6 +78,7 @@ export function GeneralTab() {
         setRequestsEnabled(vals.requestsEnabled);
         setSupportEnabled(vals.supportEnabled);
         setCalendarEnabled(vals.calendarEnabled);
+        setNsfwBlurEnabled(vals.nsfwBlurEnabled);
         setMissingSearchCooldownMin(vals.missingSearchCooldownMin);
         setSiteName(vals.siteName);
         setSiteUrl(vals.siteUrl);
@@ -92,9 +95,9 @@ export function GeneralTab() {
   }, []);
 
   const currentValues = useMemo(() => ({
-    autoApproveRequests, registrationEnabled, requestsEnabled, supportEnabled,
+    autoApproveRequests, registrationEnabled, requestsEnabled, nsfwBlurEnabled, supportEnabled,
     calendarEnabled, missingSearchCooldownMin, siteName, siteUrl, instanceLanguage, bannerText,
-  }), [autoApproveRequests, registrationEnabled, requestsEnabled, supportEnabled,
+  }), [autoApproveRequests, registrationEnabled, requestsEnabled, nsfwBlurEnabled, supportEnabled,
     calendarEnabled, missingSearchCooldownMin, siteName, siteUrl, instanceLanguage, bannerText]);
 
   const hasChanges = !loading && Object.keys(initialValues.current).length > 0 &&
@@ -107,6 +110,7 @@ export function GeneralTab() {
     setRequestsEnabled(iv.requestsEnabled as boolean);
     setSupportEnabled(iv.supportEnabled as boolean);
     setCalendarEnabled(iv.calendarEnabled as boolean);
+    setNsfwBlurEnabled(iv.nsfwBlurEnabled as boolean);
     setMissingSearchCooldownMin(iv.missingSearchCooldownMin as number);
     setSiteName(iv.siteName as string);
     setSiteUrl(iv.siteUrl as string);
@@ -122,6 +126,7 @@ export function GeneralTab() {
           autoApproveRequests,
           registrationEnabled,
           requestsEnabled,
+          nsfwBlurEnabled,
           supportEnabled,
           calendarEnabled,
           missingSearchCooldownMin,
@@ -145,6 +150,7 @@ export function GeneralTab() {
     { label: t('admin.general.feature.auto_approve'), desc: t('admin.general.feature.auto_approve_desc'), value: autoApproveRequests, set: setAutoApproveRequests },
     { label: t('admin.general.feature.support'), desc: t('admin.general.feature.support_desc'), value: supportEnabled, set: setSupportEnabled },
     { label: t('admin.general.feature.calendar'), desc: t('admin.general.feature.calendar_desc'), value: calendarEnabled, set: setCalendarEnabled },
+    { label: t('admin.general.feature.nsfw_blur'), desc: t('admin.general.feature.nsfw_blur_desc'), value: nsfwBlurEnabled, set: setNsfwBlurEnabled },
   ];
 
   return (

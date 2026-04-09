@@ -6,16 +6,23 @@ const BATCH_SIZE = 20;
 const BATCH_DELAY_MS = 1000;
 
 /** Upsert keywords into the Keyword table and store IDs + content rating on the media row */
+/** Keywords auto-tagged as NSFW when first seen */
+const AUTO_NSFW_KEYWORDS = new Set([
+  'hentai', 'softcore', 'sexploitation',
+  'pornography', 'pornographic video', 'adult animation',
+]);
+
 async function upsertKeywordsAndRating(
   mediaId: number,
   keywords: { id: number; name: string }[],
   contentRating: string | null,
 ): Promise<void> {
   for (const kw of keywords) {
+    const autoTag = AUTO_NSFW_KEYWORDS.has(kw.name.toLowerCase()) ? 'nsfw' : undefined;
     await prisma.keyword.upsert({
       where: { tmdbId: kw.id },
       update: { name: kw.name },
-      create: { tmdbId: kw.id, name: kw.name },
+      create: { tmdbId: kw.id, name: kw.name, ...(autoTag ? { tag: autoTag } : {}) },
     });
   }
 
@@ -88,10 +95,11 @@ export async function trackKeywordsFromDetails(
   const contentRating = await extractContentRating(details);
 
   for (const kw of keywords) {
+    const autoTag = AUTO_NSFW_KEYWORDS.has(kw.name.toLowerCase()) ? 'nsfw' : undefined;
     await prisma.keyword.upsert({
       where: { tmdbId: kw.id },
       update: { name: kw.name },
-      create: { tmdbId: kw.id, name: kw.name },
+      create: { tmdbId: kw.id, name: kw.name, ...(autoTag ? { tag: autoTag } : {}) },
     });
   }
 

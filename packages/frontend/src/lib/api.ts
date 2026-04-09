@@ -42,8 +42,18 @@ function showErrorToast(message: string) {
   setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
 }
 
+// Global NSFW detection — any API response with nsfwTmdbIds automatically updates the filter
+let _addNsfwIds: ((ids: number[]) => void) | null = null;
+export function registerNsfwHandler(handler: (ids: number[]) => void) { _addNsfwIds = handler; }
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const ids = response.data?.nsfwTmdbIds;
+    if (Array.isArray(ids) && ids.length > 0 && _addNsfwIds) {
+      _addNsfwIds(ids);
+    }
+    return response;
+  },
   (error) => {
     // 401 handling is done by AuthContext + InstallGuard, not here
     if (error.response?.status === 403) {
