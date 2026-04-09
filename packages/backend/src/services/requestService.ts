@@ -202,12 +202,29 @@ export async function sendToService(
   try {
     const ctx = await resolveServiceContext(mediaType as 'movie' | 'tv', media.tmdbId, userId, qualityOptionId);
 
+    // Resolve tvdbId from TMDB if missing
+    let resolvedMedia = media;
     if (mediaType === 'tv' && !media.tvdbId) {
-      console.error('Cannot send TV request — missing tvdbId for "%s"', media.title);
-      return false;
+      try {
+        const tmdbData = await getTvDetails(media.tmdbId);
+        const resolvedTvdbId = tmdbData.external_ids?.tvdb_id ?? null;
+        if (resolvedTvdbId) {
+          resolvedMedia = { ...media, tvdbId: resolvedTvdbId };
+          await prisma.media.update({
+            where: { tmdbId_mediaType: { tmdbId: media.tmdbId, mediaType: 'tv' } },
+            data: { tvdbId: resolvedTvdbId },
+          });
+        } else {
+          console.error('Cannot send TV request — tvdbId not found in TMDB for "%s"', media.title);
+          return false;
+        }
+      } catch {
+        console.error('Cannot send TV request — failed to resolve tvdbId for "%s"', media.title);
+        return false;
+      }
     }
 
-    await sendToArrService(media, mediaType, username, ctx, seasons, rootFolderOverride);
+    await sendToArrService(resolvedMedia, mediaType, username, ctx, seasons, rootFolderOverride);
     return true;
   } catch (err) {
     console.error('Failed to send %s "%s" to service:', mediaType, media.title, err);

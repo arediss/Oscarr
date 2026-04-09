@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '@/lib/api';
 import { useNsfwFilter } from '@/hooks/useNsfwFilter';
 import { useDownloadForMedia, useOnDownloadComplete } from '@/hooks/useDownloads';
@@ -99,10 +99,29 @@ export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv')
   const download = useDownloadForMedia(media?.id, type);
 
   // Auto-refresh when download completes (disappears from queue)
+  // Sonarr/Radarr may still be importing when the item leaves the queue,
+  // so retry a few times if the status isn't 'available' yet.
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(retryTimerRef.current), [id, type]);
+
   useOnDownloadComplete(media?.id, () => {
     if (!id || !media) return;
+    clearTimeout(retryTimerRef.current);
     invalidateMediaStatus(media.id, type);
-    api.get(`/media/tmdb/${id}/${type}`).then(({ data }) => applyDbData(data)).catch(() => {});
+    const capturedId = id;
+
+    let retries = 0;
+    const check = () => {
+      api.get(`/media/tmdb/${capturedId}/${type}`).then(({ data }) => {
+        if (id !== capturedId) return;
+        applyDbData(data);
+        if (data.status !== 'available' && !data.inLibrary && retries < 3) {
+          retries++;
+          retryTimerRef.current = setTimeout(check, 5000);
+        }
+      }).catch(() => {});
+    };
+    check();
   });
 
   // Ignore stale dbMedia from a previous page during navigation
