@@ -23,7 +23,7 @@
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.5",
     "@prisma/client": "^6.19.3",
-    "axios": "^1.14.0",
+    "axios": "^1.15.0",
     "dotenv": "^17.4.1",
     "fastify": "^5.8.4",
     "node-cron": "^4.2.1",
