@@ -12,6 +12,7 @@ import {
   getMovieRecommendations,
   getTvRecommendations,
   discoverByGenre,
+  discoverMixed,
   getCollection,
   getGenreBackdrops,
   isMatureRating,
@@ -269,24 +270,47 @@ export async function tmdbRoutes(app: FastifyInstance) {
         type: 'object' as const,
         required: ['mediaType', 'genreId'],
         properties: {
-          mediaType: { type: 'string', enum: ['movie', 'tv'], description: 'Type of media to discover' },
+          mediaType: { type: 'string', enum: ['movie', 'tv', 'all'], description: 'Type of media to discover' },
           genreId: { type: 'string', description: 'TMDB genre ID' },
         },
       },
-      querystring: pageQuerySchema,
+      querystring: {
+        type: 'object' as const,
+        properties: {
+          page: { type: 'string' },
+          sortBy: { type: 'string' },
+          voteAverageGte: { type: 'string' },
+          releaseDateGte: { type: 'string' },
+          releaseDateLte: { type: 'string' },
+          originCountry: { type: 'string' },
+          keyword: { type: 'string' },
+        },
+      },
     },
 
   }, async (request, reply) => {
     const { mediaType, genreId } = request.params as { mediaType: string; genreId: string };
-    const { page } = request.query as { page?: string };
-    if (mediaType !== 'movie' && mediaType !== 'tv') {
+    const { page, sortBy, voteAverageGte, releaseDateGte, releaseDateLte, originCountry, keyword } = request.query as {
+      page?: string; sortBy?: string; voteAverageGte?: string; releaseDateGte?: string; releaseDateLte?: string; originCountry?: string; keyword?: string;
+    };
+    if (mediaType !== 'movie' && mediaType !== 'tv' && mediaType !== 'all') {
       return reply.status(400).send({ error: 'Invalid mediaType' });
     }
-    const gid = parseId(genreId);
-    if (!gid) return reply.status(400).send({ error: 'Invalid genreId' });
+    const gid = parseInt(genreId, 10);
+    if (isNaN(gid) || gid < 0) return reply.status(400).send({ error: 'Invalid genreId' });
     const lang = getLang(request);
-    const data = await discoverByGenre(mediaType, gid, parsePage(page), lang);
-    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], mediaType as 'movie' | 'tv', lang).catch(() => []);
+    const filters = {
+      sortBy,
+      voteAverageGte: voteAverageGte ? parseFloat(voteAverageGte) : undefined,
+      releaseDateGte,
+      releaseDateLte,
+      originCountry,
+      keyword: keyword ? parseInt(keyword) : undefined,
+    };
+    const data = mediaType === 'all'
+      ? await discoverMixed(parsePage(page), lang, filters)
+      : await discoverByGenre(mediaType, gid, parsePage(page), lang, filters);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'movie', lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
   });
 
