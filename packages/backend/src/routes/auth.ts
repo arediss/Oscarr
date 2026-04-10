@@ -185,8 +185,8 @@ export async function authRoutes(app: FastifyInstance) {
       await loginEmail(email, password);
     } catch (err) {
       const msg = (err as Error).message;
-      if (msg === 'INVALID_CREDENTIALS') return reply.status(401).send({ error: 'Email ou mot de passe incorrect.' });
-      if (msg === 'PLEX_ACCOUNT') return reply.status(400).send({ error: 'Ce compte utilise un provider OAuth.' });
+      if (msg === 'INVALID_CREDENTIALS') return reply.status(401).send({ error: 'INVALID_CREDENTIALS' });
+      if (msg === 'EXTERNAL_ACCOUNT') return reply.status(400).send({ error: 'EXTERNAL_ACCOUNT' });
       throw err;
     }
 
@@ -209,30 +209,42 @@ export async function authRoutes(app: FastifyInstance) {
     schema: {
       body: {
         type: 'object' as const,
-        required: ['provider', 'pinId'],
+        required: ['provider'],
         properties: {
           provider: { type: 'string' },
           pinId: { type: 'number' },
+          username: { type: 'string' },
+          password: { type: 'string' },
         },
       },
     },
 
   }, async (request, reply) => {
     const currentUser = request.user as { id: number };
-    const { provider: providerId, pinId } = request.body as { provider: string; pinId: number };
+    const { provider: providerId, pinId, username, password } = request.body as {
+      provider: string; pinId?: number; username?: string; password?: string;
+    };
 
     const provider = getAuthProvider(providerId);
-    if (!provider?.linkAccount) {
-      return reply.status(400).send({ error: `Provider "${providerId}" ne supporte pas le linking.` });
-    }
+    if (!provider) return reply.status(400).send({ error: `Unknown provider "${providerId}"` });
 
     try {
-      const result = await provider.linkAccount(pinId, currentUser.id);
+      let result: { providerUsername: string };
+      if (username && password && provider.linkAccountByCredentials) {
+        result = await provider.linkAccountByCredentials(username, password, currentUser.id);
+      } else if (pinId && provider.linkAccount) {
+        result = await provider.linkAccount(pinId, currentUser.id);
+      } else {
+        return reply.status(400).send({ error: `Provider "${providerId}" does not support this linking method` });
+      }
       return reply.send({ success: true, providerUsername: result.providerUsername });
     } catch (err) {
       const msg = (err as Error).message;
-      if (msg === 'PIN_INVALID') return reply.status(400).send({ error: 'PIN non validé. Réessayez.' });
-      if (msg === 'PROVIDER_ALREADY_LINKED') return reply.status(409).send({ error: 'Ce compte est déjà lié à un autre utilisateur.' });
+      if (msg === 'PIN_INVALID') return reply.status(400).send({ error: 'PIN not validated. Try again.' });
+      if (msg === 'PROVIDER_ALREADY_LINKED') return reply.status(409).send({ error: 'This account is already linked to another user.' });
+      if (msg === 'NOT_CONFIGURED') return reply.status(503).send({ error: 'Server not configured' });
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401) return reply.status(401).send({ error: 'Invalid username or password' });
       throw err;
     }
   });

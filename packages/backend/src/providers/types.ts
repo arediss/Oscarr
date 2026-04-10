@@ -181,6 +181,7 @@ export interface AuthProvider {
   config: AuthProviderConfig;
   registerRoutes(app: FastifyInstance, helpers: AuthHelpers): Promise<void>;
   linkAccount?(pinId: number, userId: number): Promise<{ providerUsername: string }>;
+  linkAccountByCredentials?(username: string, password: string, userId: number): Promise<{ providerUsername: string }>;
   importUsers?(adminUserId: number): Promise<{ imported: number; skipped: number; total: number }>;
   getToken?(adminUserId: number): Promise<string | null>;
 }

@@ -22,6 +22,11 @@ export function UsersTab() {
   const [deletingUser, setDeletingUser] = useState<number | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<number | null>(null);
   const [linkingUser, setLinkingUser] = useState<number | null>(null);
+  const [linkModal, setLinkModal] = useState<{ userId: number; provider: string } | null>(null);
+  const [linkUsername, setLinkUsername] = useState('');
+  const [linkPassword, setLinkPassword] = useState('');
+  const [linkError, setLinkError] = useState('');
+  const [authProviders, setAuthProviders] = useState<{ id: string; label: string; type: string }[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -42,6 +47,7 @@ export function UsersTab() {
   };
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  useEffect(() => { api.get('/auth/providers').then(({ data }) => setAuthProviders(data)).catch(() => {}); }, []);
 
   useEffect(() => {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -79,10 +85,30 @@ export function UsersTab() {
     }
   };
 
-  const handleImportPlex = async () => {
+  const handleLinkCredentials = async () => {
+    if (!linkModal) return;
+    setLinkingUser(linkModal.userId);
+    setLinkError('');
+    try {
+      await api.post(`/admin/users/${linkModal.userId}/link-provider`, {
+        provider: linkModal.provider, username: linkUsername, password: linkPassword,
+      });
+      setLinkModal(null);
+      setLinkUsername('');
+      setLinkPassword('');
+      fetchUsers();
+    } catch (err) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setLinkError(msg || t('login.error'));
+    } finally {
+      setLinkingUser(null);
+    }
+  };
+
+  const handleImport = async (providerId: string) => {
     setImporting(true); setImportResult(null);
     try {
-      const { data } = await api.post('/admin/users/import/plex');
+      const { data } = await api.post(`/admin/users/import/${providerId}`);
       setImportResult(data);
       fetchUsers();
     } catch (err) { console.error('Import failed:', err); }
@@ -102,10 +128,12 @@ export function UsersTab() {
       title={t('admin.users.count', { count: users.length })}
       actions={
         <div className="flex items-center gap-2">
-          <button onClick={handleImportPlex} disabled={importing} className="btn-primary flex items-center gap-2 text-sm">
-            {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-            {t('admin.users.import_plex')}
-          </button>
+          {authProviders.filter(p => p.id !== 'email').map(p => (
+            <button key={p.id} onClick={() => handleImport(p.id)} disabled={importing} className="btn-primary flex items-center gap-2 text-sm">
+              {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+              {t('admin.users.import_provider', { provider: p.label })}
+            </button>
+          ))}
           <button onClick={fetchUsers} className="btn-secondary flex items-center gap-2 text-sm"><RefreshCw className="w-4 h-4" /> {t('common.refresh')}</button>
         </div>
       }
@@ -147,6 +175,8 @@ export function UsersTab() {
                   {(u.providers || []).map((p) => (
                     <span key={p.provider} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                       p.provider === 'plex' ? 'bg-[#e5a00d]/10 text-[#e5a00d]' :
+                      p.provider === 'jellyfin' ? 'bg-[#00a4dc]/10 text-[#00a4dc]' :
+                      p.provider === 'emby' ? 'bg-[#52b54b]/10 text-[#52b54b]' :
                       p.provider === 'email' ? 'bg-ndp-accent/10 text-ndp-accent' :
                       'bg-white/5 text-ndp-text-dim'
                     }`} title={p.email && p.email !== u.email ? p.email : p.username || undefined}>
@@ -154,17 +184,17 @@ export function UsersTab() {
                       {p.email && p.email !== u.email && <span className="ml-1 opacity-60">({p.email})</span>}
                     </span>
                   ))}
-                  {!(u.providers || []).some((p) => p.provider === 'plex') && (
-                    <button
-                      onClick={() => handleLinkPlex(u.id)}
-                      disabled={linkingUser === u.id}
-                      className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#e5a00d]/5 text-[#e5a00d]/60 hover:bg-[#e5a00d]/15 hover:text-[#e5a00d] transition-colors flex items-center gap-1"
-                      title={t('admin.users.link_plex')}
-                    >
-                      {linkingUser === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link className="w-3 h-3" />}
-                      Plex
-                    </button>
-                  )}
+                  <LinkProviderDropdown
+                    userId={u.id}
+                    userProviders={(u.providers || []).map(p => p.provider)}
+                    authProviders={authProviders}
+                    linking={linkingUser === u.id}
+                    onLinkOAuth={(userId) => handleLinkPlex(userId)}
+                    onLinkCredentials={(userId, providerId) => {
+                      setLinkModal({ userId, provider: providerId });
+                      setLinkUsername(''); setLinkPassword(''); setLinkError('');
+                    }}
+                  />
                   {u.id !== currentUser?.id && (
                     <button
                       onClick={() => setConfirmDeleteUser(u.id)}
@@ -208,6 +238,134 @@ export function UsersTab() {
         </div>,
         document.body
       )}
+      {/* Link credentials modal */}
+      {linkModal && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md" onClick={() => setLinkModal(null)}>
+          <div className="bg-ndp-bg rounded-2xl w-full max-w-sm mx-4 p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-ndp-text mb-1">
+              {t('admin.users.link_provider', { provider: authProviders.find(p => p.id === linkModal.provider)?.label || linkModal.provider })}
+            </h3>
+            <p className="text-xs text-ndp-text-dim mb-4">
+              {users.find(u => u.id === linkModal.userId)?.displayName || users.find(u => u.id === linkModal.userId)?.email}
+            </p>
+            {linkError && (
+              <div className="mb-3 p-2 bg-ndp-danger/10 border border-ndp-danger/20 rounded-lg text-ndp-danger text-xs text-center">{linkError}</div>
+            )}
+            <form onSubmit={e => { e.preventDefault(); handleLinkCredentials(); }} className="space-y-3">
+              <input
+                type="text"
+                placeholder={t('login.username')}
+                value={linkUsername}
+                onChange={e => setLinkUsername(e.target.value)}
+                className="input w-full text-sm"
+                autoFocus
+              />
+              <input
+                type="password"
+                placeholder={t('login.password_placeholder')}
+                value={linkPassword}
+                onChange={e => setLinkPassword(e.target.value)}
+                className="input w-full text-sm"
+              />
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setLinkModal(null)} className="btn-secondary text-sm flex-1">
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={linkingUser !== null || !linkUsername || !linkPassword}
+                  className="btn-primary text-sm flex-1 flex items-center justify-center gap-2"
+                >
+                  {linkingUser ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link className="w-4 h-4" />}
+                  {t('admin.users.link')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body,
+      )}
     </AdminTabLayout>
+  );
+}
+
+// ─── Link Provider Dropdown ────────────────────────────────────────
+
+const PROVIDER_COLORS: Record<string, string> = {
+  plex: '#e5a00d', jellyfin: '#00a4dc', emby: '#52b54b',
+};
+
+function LinkProviderDropdown({ userId, userProviders, authProviders, linking, onLinkOAuth, onLinkCredentials }: {
+  userId: number;
+  userProviders: string[];
+  authProviders: { id: string; label: string; type: string }[];
+  linking: boolean;
+  onLinkOAuth: (userId: number) => void;
+  onLinkCredentials: (userId: number, providerId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node) && !btnRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const unlinked = authProviders.filter(ap => ap.id !== 'email' && !userProviders.includes(ap.id));
+  if (unlinked.length === 0) return null;
+
+  const toggle = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen(!open);
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        disabled={linking}
+        className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-white/5 text-ndp-text-dim hover:bg-white/10 hover:text-ndp-text-muted transition-colors flex items-center gap-1"
+      >
+        {linking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link className="w-3 h-3" />}
+        {t('admin.users.link')}
+      </button>
+      {open && createPortal(
+        <div
+          ref={dropRef}
+          className="fixed z-[9999] bg-ndp-surface border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden min-w-[140px]"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          {unlinked.map(ap => {
+            const color = PROVIDER_COLORS[ap.id] || '#888';
+            return (
+              <button
+                key={ap.id}
+                onClick={() => {
+                  setOpen(false);
+                  if (ap.type === 'oauth') onLinkOAuth(userId);
+                  else onLinkCredentials(userId, ap.id);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-ndp-text-muted hover:bg-white/5 transition-colors"
+              >
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
+                {ap.label}
+              </button>
+            );
+          })}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
