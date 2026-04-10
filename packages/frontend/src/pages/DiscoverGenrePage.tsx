@@ -1,26 +1,68 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import { clsx } from 'clsx';
 import api from '@/lib/api';
 import MediaGrid from '@/components/MediaGrid';
+import FilterBar, { DEFAULT_FILTERS, type FilterValues } from '@/components/FilterBar';
+import { useMediaStatus } from '@/hooks/useMediaStatus';
 import { ALL_GENRES } from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
+
+const SORT_OPTIONS_MOVIE = [
+  { value: 'popularity.desc', labelKey: 'filter.sort_popularity' },
+  { value: 'vote_average.desc', labelKey: 'filter.sort_rating' },
+  { value: 'primary_release_date.desc', labelKey: 'filter.sort_newest' },
+  { value: 'primary_release_date.asc', labelKey: 'filter.sort_oldest' },
+];
+
+const SORT_OPTIONS_TV = [
+  { value: 'popularity.desc', labelKey: 'filter.sort_popularity' },
+  { value: 'vote_average.desc', labelKey: 'filter.sort_rating' },
+  { value: 'first_air_date.desc', labelKey: 'filter.sort_newest' },
+  { value: 'first_air_date.asc', labelKey: 'filter.sort_oldest' },
+];
+
+function buildFilterParams(f: FilterValues): string {
+  const params = new URLSearchParams();
+  if (f.sortBy && f.sortBy !== 'popularity.desc') params.set('sortBy', f.sortBy);
+  if (f.voteAverageGte > 0) params.set('voteAverageGte', String(f.voteAverageGte));
+  if (f.releaseYear != null) {
+    params.set('releaseDateGte', `${f.releaseYear}-01-01`);
+    params.set('releaseDateLte', `${f.releaseYear}-12-31`);
+  }
+  const str = params.toString();
+  return str ? `&${str}` : '';
+}
 
 export default function DiscoverGenrePage() {
   const { t } = useTranslation();
   const { mediaType, genreId } = useParams<{ mediaType: string; genreId: string }>();
   const [results, setResults] = useState<TmdbMedia[]>([]);
   const [loading, setLoading] = useState(true);
+  const [transitioning, setTransitioning] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [filters, setFilters] = useState<FilterValues>({ ...DEFAULT_FILTERS });
   const sentinelRef = useRef<HTMLDivElement>(null);
   const seenIds = useRef(new Set<number>());
 
   const gid = parseInt(genreId || '0');
   const genre = ALL_GENRES.find((g) => g.id === gid && g.mediaType === mediaType);
   const genreName = genre ? t(genre.nameKey) : t('genre.unknown');
+
+  const statuses = useMediaStatus(results);
+  const filteredResults = useMemo(() => {
+    if (!filters.hideRequested) return results;
+    return results.filter(item => {
+      const type = item.media_type || (item.title ? 'movie' : 'tv');
+      const key = `${type}:${item.id}`;
+      if (!(key in statuses)) return false;
+      return statuses[key].status === 'unknown';
+    });
+  }, [results, filters.hideRequested, statuses]);
 
   function dedup(items: TmdbMedia[]): TmdbMedia[] {
     return items.filter((item) => {
@@ -30,26 +72,38 @@ export default function DiscoverGenrePage() {
     });
   }
 
-  useEffect(() => {
-    setResults([]);
-    setPage(1);
-    setLoading(true);
-    seenIds.current.clear();
+  const prevRouteRef = useRef(`${mediaType}:${genreId}`);
 
-    api.get(`/tmdb/discover/${mediaType}/genre/${genreId}?page=1`).then(({ data }) => {
+  useEffect(() => {
+    const routeKey = `${mediaType}:${genreId}`;
+    const isRouteChange = prevRouteRef.current !== routeKey;
+    prevRouteRef.current = routeKey;
+
+    if (isRouteChange) {
+      setResults([]);
+      setLoading(true);
+    } else {
+      setTransitioning(true);
+    }
+    setPage(1);
+    seenIds.current.clear();
+    const fp = buildFilterParams(filters);
+
+    api.get(`/tmdb/discover/${mediaType}/genre/${genreId}?page=1${fp}`).then(({ data }) => {
       setResults(dedup(data.results.map((r: TmdbMedia) => ({ ...r, media_type: mediaType }))));
       setTotalPages(data.total_pages);
     }).catch((err) => {
       console.error('Failed to discover:', err);
-    }).finally(() => setLoading(false));
-  }, [mediaType, genreId]);
+    }).finally(() => { setLoading(false); setTransitioning(false); });
+  }, [mediaType, genreId, filters]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || page >= totalPages) return;
     setLoadingMore(true);
     const nextPage = page + 1;
+    const fp = buildFilterParams(filters);
     try {
-      const { data } = await api.get(`/tmdb/discover/${mediaType}/genre/${genreId}?page=${nextPage}`);
+      const { data } = await api.get(`/tmdb/discover/${mediaType}/genre/${genreId}?page=${nextPage}${fp}`);
       const items = dedup(data.results.map((r: TmdbMedia) => ({ ...r, media_type: mediaType })));
       setResults((prev) => [...prev, ...items]);
       setPage(nextPage);
@@ -58,7 +112,7 @@ export default function DiscoverGenrePage() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, page, totalPages, mediaType, genreId]);
+  }, [loadingMore, page, totalPages, mediaType, genreId, filters]);
 
   // Infinite scroll
   useEffect(() => {
@@ -73,20 +127,23 @@ export default function DiscoverGenrePage() {
   }, [loadMore]);
 
   return (
-    <div className="max-w-[1800px] mx-auto px-4 sm:px-8 py-8">
-      <div className="flex items-center gap-4 mb-8">
-        <Link to="/" className="p-2 glass rounded-xl hover:bg-white/10 transition-colors">
-          <ArrowLeft className="w-5 h-5 text-white" />
-        </Link>
-        <div>
-          <p className="text-xs text-ndp-accent uppercase tracking-wider font-semibold">
-            {mediaType === 'movie' ? t('discover.movies') : t('discover.series')}
-          </p>
-          <h1 className="text-2xl font-bold text-ndp-text">{genreName}</h1>
-        </div>
-      </div>
+    <div className="max-w-[1800px] mx-auto px-4 sm:px-8 pt-4 pb-16">
+      <FilterBar
+        filters={filters}
+        onChange={setFilters}
+        sortOptions={mediaType === 'movie' ? SORT_OPTIONS_MOVIE : SORT_OPTIONS_TV}
+        title={genreName}
+        subtitle={mediaType === 'movie' ? t('discover.movies') : t('discover.series')}
+        backButton={
+          <Link to="/" className="p-2 glass rounded-xl hover:bg-white/10 transition-colors flex-shrink-0">
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </Link>
+        }
+      />
 
-      <MediaGrid media={results} loading={loading} />
+      <div className={clsx('transition-opacity duration-300', transitioning && 'opacity-40 pointer-events-none')}>
+        <MediaGrid media={filteredResults} loading={loading} />
+      </div>
 
       {!loading && page < totalPages && (
         <div ref={sentinelRef} className="flex justify-center py-8">
