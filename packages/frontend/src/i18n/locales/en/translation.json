@@ -218,6 +218,8 @@
   "calendar.today": "Today",
   "calendar.no_releases": "No upcoming releases",
   "calendar.release_count": "{{count}} releases",
+  "calendar.release_one": "release",
+  "calendar.release_other": "releases",
   "calendar.days_short": "d",
   "calendar.available_short": "Avail.",
 
