@@ -18,6 +18,8 @@ interface CategoryDef {
   defaultFilters?: Partial<FilterValues>;
   originCountry?: string;
   keyword?: number;
+  /** Use this endpoint when no filters are active (same data as homepage) */
+  defaultEndpoint?: string;
 }
 
 const CATEGORIES: Record<string, CategoryDef> = {
@@ -25,6 +27,7 @@ const CATEGORIES: Record<string, CategoryDef> = {
     titleKey: 'category.trending',
     mediaType: 'all',
     genreId: 0,
+    defaultEndpoint: '/tmdb/trending',
   },
   'movies-popular': {
     titleKey: 'category.popular_movies',
@@ -106,6 +109,10 @@ export default function CategoryPage() {
   }
 
   function buildUrl(pageNum: number, f: FilterValues): string {
+    const hasFilters = f.sortBy !== 'popularity.desc' || f.voteAverageGte > 0 || f.releaseYear != null || f.hideRequested;
+    if (category!.defaultEndpoint && !hasFilters) {
+      return `${category!.defaultEndpoint}?page=${pageNum}`;
+    }
     const fp = buildFilterParams(f, category!);
     return `/tmdb/discover/${category!.mediaType}/genre/${category!.genreId}?page=${pageNum}${fp}`;
   }
