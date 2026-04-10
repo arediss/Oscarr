@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Search, Tag, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '@/lib/api';
@@ -74,10 +75,21 @@ function TagCell({ keyword, allTags, onUpdate }: { keyword: Keyword; allTags: st
     );
   }
 
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+
+  useEffect(() => {
+    if (editing && inputRef.current && suggestions.length > 0) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+  }, [editing, suggestions]);
+
   if (editing) {
     return (
-      <div className="relative">
+      <div>
         <input
+          ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -87,8 +99,11 @@ function TagCell({ keyword, allTags, onUpdate }: { keyword: Keyword; allTags: st
           autoFocus
           className="w-full px-2.5 py-1 bg-ndp-surface rounded-lg text-xs text-ndp-text border border-ndp-accent/30 focus:outline-none"
         />
-        {suggestions.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-ndp-surface border border-white/10 rounded-lg shadow-xl z-10 max-h-32 overflow-y-auto">
+        {suggestions.length > 0 && createPortal(
+          <div
+            className="fixed bg-ndp-surface border border-white/10 rounded-lg shadow-xl z-[9999] max-h-32 overflow-y-auto"
+            style={{ top: dropPos.top, left: dropPos.left, width: dropPos.width }}
+          >
             {suggestions.map((tag, i) => (
               <button
                 key={tag}
@@ -99,7 +114,8 @@ function TagCell({ keyword, allTags, onUpdate }: { keyword: Keyword; allTags: st
                 {tag}
               </button>
             ))}
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
     );
