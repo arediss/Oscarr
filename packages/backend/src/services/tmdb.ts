@@ -370,18 +370,91 @@ export async function getCollection(collectionId: number, lang?: string): Promis
   }, 48);
 }
 
-export async function discoverByGenre(mediaType: 'movie' | 'tv', genreId: number, page = 1, lang?: string) {
+export interface DiscoverFilters {
+  sortBy?: string;
+  voteAverageGte?: number;
+  releaseDateGte?: string;
+  releaseDateLte?: string;
+  originCountry?: string;
+  keyword?: number;
+}
+
+const ALLOWED_SORT = new Set([
+  'popularity.desc', 'popularity.asc',
+  'vote_average.desc', 'vote_average.asc',
+  'primary_release_date.desc', 'primary_release_date.asc',
+  'first_air_date.desc', 'first_air_date.asc',
+]);
+
+export async function discoverByGenre(
+  mediaType: 'movie' | 'tv', genreId: number, page = 1, lang?: string, filters?: DiscoverFilters,
+) {
   const l = normalizeLang(lang);
-  return cachedRequest(`discover:${mediaType}:genre:${genreId}:${page}:${l}`, async () => {
-    const { data } = await getTmdbApi(l).get(`/discover/${mediaType}`, {
-      params: {
-        with_genres: genreId,
-        sort_by: 'popularity.desc',
-        page,
-      },
-    });
+  const sortBy = filters?.sortBy && ALLOWED_SORT.has(filters.sortBy) ? filters.sortBy : 'popularity.desc';
+  const cacheKey = `discover:${mediaType}:genre:${genreId}:${page}:${l}:${sortBy}:${filters?.voteAverageGte || 0}:${filters?.releaseDateGte || ''}:${filters?.releaseDateLte || ''}:${filters?.originCountry || ''}:${filters?.keyword || ''}`;
+
+  return cachedRequest(cacheKey, async () => {
+    const dateGte = mediaType === 'movie' ? 'primary_release_date.gte' : 'first_air_date.gte';
+    const dateLte = mediaType === 'movie' ? 'primary_release_date.lte' : 'first_air_date.lte';
+    const params: Record<string, unknown> = {
+      sort_by: sortBy,
+      page,
+    };
+    if (genreId > 0) params.with_genres = genreId;
+    if (filters?.voteAverageGte) params['vote_average.gte'] = filters.voteAverageGte;
+    if (filters?.releaseDateGte) params[dateGte] = filters.releaseDateGte;
+    if (filters?.releaseDateLte) params[dateLte] = filters.releaseDateLte;
+    if (filters?.originCountry) params.with_origin_country = filters.originCountry;
+    if (filters?.keyword) params.with_keywords = filters.keyword;
+    // Require minimum votes when sorting by rating to avoid obscure titles
+    if (sortBy.startsWith('vote_average')) params['vote_count.gte'] = 50;
+
+    const { data } = await getTmdbApi(l).get(`/discover/${mediaType}`, { params });
     return data;
   }, 12);
+}
+
+/** Discover both movie + tv, merge by popularity, return a single page */
+export async function discoverMixed(page = 1, lang?: string, filters?: DiscoverFilters) {
+  const l = normalizeLang(lang);
+  const sortBy = filters?.sortBy && ALLOWED_SORT.has(filters.sortBy) ? filters.sortBy : 'popularity.desc';
+  const cacheKey = `discover:mixed:${page}:${l}:${sortBy}:${filters?.voteAverageGte || 0}:${filters?.releaseDateGte || ''}:${filters?.releaseDateLte || ''}:${filters?.originCountry || ''}:${filters?.keyword || ''}`;
+
+  return cachedRequest(cacheKey, async () => {
+    const [movies, tv] = await Promise.all([
+      discoverByGenre('movie', 0, page, l, filters),
+      discoverByGenre('tv', 0, page, l, filters),
+    ]);
+    const merged = [
+      ...(movies.results || []).map((r: TmdbMediaResult) => ({ ...r, media_type: 'movie' })),
+      ...(tv.results || []).map((r: TmdbMediaResult) => ({ ...r, media_type: 'tv' })),
+    ];
+    const desc = sortBy.endsWith('.desc');
+    merged.sort((a, b) => {
+      const ra = a as Record<string, unknown>;
+      const rb = b as Record<string, unknown>;
+      let va: number | string, vb: number | string;
+      if (sortBy.startsWith('vote_average')) {
+        va = (ra.vote_average as number) ?? 0;
+        vb = (rb.vote_average as number) ?? 0;
+      } else if (sortBy.startsWith('primary_release_date') || sortBy.startsWith('first_air_date')) {
+        va = (ra.release_date || ra.first_air_date || '') as string;
+        vb = (rb.release_date || rb.first_air_date || '') as string;
+        return desc ? String(vb).localeCompare(String(va)) : String(va).localeCompare(String(vb));
+      } else {
+        va = (ra.popularity as number) ?? 0;
+        vb = (rb.popularity as number) ?? 0;
+      }
+      return desc ? (vb as number) - (va as number) : (va as number) - (vb as number);
+    });
+    merged.splice(20);
+
+    return {
+      results: merged,
+      total_pages: Math.min(movies.total_pages || 1, tv.total_pages || 1),
+      total_results: (movies.total_results || 0) + (tv.total_results || 0),
+    };
+  }, 1);
 }
 
 const GENRE_IDS = [28, 12, 16, 35, 80, 99, 18, 10751, 14, 36, 27, 10402, 9648, 10749, 878, 53, 10752, 37];
