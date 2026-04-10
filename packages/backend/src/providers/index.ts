@@ -1,10 +1,13 @@
 import { plexProvider } from './plex/index.js';
+import { jellyfinProvider } from './jellyfin/index.js';
+import { embyProvider } from './emby/index.js';
 import { radarrProvider } from './radarr/index.js';
 import { sonarrProvider } from './sonarr/index.js';
 import { qbittorrentProvider } from './qbittorrent/index.js';
 import { tautulliProvider } from './tautulli/index.js';
 import type { Provider, ServiceDefinition, AuthProvider, ArrClient } from './types.js';
 import { getServiceConfig } from '../utils/services.js';
+import { prisma } from '../utils/prisma.js';
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Add new providers here — they auto-register everywhere
@@ -12,6 +15,8 @@ const ALL_PROVIDERS: Provider[] = [
   radarrProvider,
   sonarrProvider,
   plexProvider,
+  jellyfinProvider,
+  embyProvider,
   qbittorrentProvider,
   tautulliProvider,
 ];
@@ -47,10 +52,14 @@ export function getAuthProvider(id: string): AuthProvider | undefined {
   return ALL_PROVIDERS.find((p) => p.auth?.config.id === id)?.auth;
 }
 
-export function getAuthProviderConfigs() {
+export async function getAuthProviderConfigs() {
+  const enabledServices = await prisma.service.findMany({ where: { enabled: true }, select: { type: true } });
+  const enabledTypes = new Set(enabledServices.map(s => s.type));
   return [
     { id: 'email', label: 'Email', type: 'credentials' as const },
-    ...getAuthProviders().map((p) => p.config),
+    ...getAuthProviders()
+      .filter(p => enabledTypes.has(p.config.id))
+      .map(p => p.config),
   ];
 }
 

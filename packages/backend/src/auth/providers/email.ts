@@ -26,7 +26,7 @@ export async function registerEmail(email: string, password: string, displayName
 export async function loginEmail(email: string, password: string): Promise<AuthResult> {
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
   if (!user) throw new Error('INVALID_CREDENTIALS');
-  if (!user.passwordHash) throw new Error('PLEX_ACCOUNT');
+  if (!user.passwordHash) throw new Error('EXTERNAL_ACCOUNT');
 
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) throw new Error('INVALID_CREDENTIALS');

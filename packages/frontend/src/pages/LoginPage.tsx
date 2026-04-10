@@ -32,13 +32,31 @@ export default function LoginPage() {
     };
   }, []);
 
-  if (user) {
-    navigate('/', { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    if (user) navigate('/', { replace: true });
+  }, [user, navigate]);
 
   const hasEmailProvider = providers.some((p) => p.id === 'email');
   const oauthProviders = providers.filter((p) => p.type === 'oauth');
+  const credentialProviders = providers.filter((p) => p.type === 'credentials' && p.id !== 'email');
+  const [activeCredProvider, setActiveCredProvider] = useState<string | null>(null);
+  const [credUsername, setCredUsername] = useState('');
+  const [credPassword, setCredPassword] = useState('');
+
+  const handleCredentialLogin = async (providerId: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.post(`/auth/${providerId}/login`, { username: credUsername, password: credPassword });
+      login('', data.user);
+      navigate('/', { replace: true });
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg || t('login.error'));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,6 +138,8 @@ export default function LoginPage() {
   const PROVIDER_STYLES: Record<string, { bg: string; hover: string; text: string }> = {
     plex: { bg: 'bg-[#e5a00d]', hover: 'hover:bg-[#cc8c00]', text: 'text-black' },
     discord: { bg: 'bg-[#5865F2]', hover: 'hover:bg-[#4752C4]', text: 'text-white' },
+    jellyfin: { bg: 'bg-[#00a4dc]', hover: 'hover:bg-[#0090c4]', text: 'text-white' },
+    emby: { bg: 'bg-[#52b54b]', hover: 'hover:bg-[#429a3d]', text: 'text-white' },
   };
 
   return (
@@ -203,71 +223,124 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* Login form */}
+          {/* Login */}
           {mode === 'login' && (
             <>
-              {hasEmailProvider && (
-                <form onSubmit={handleEmailLogin} className="space-y-4">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={t('login.email_placeholder')}
-                    required
-                    className="input w-full"
-                  />
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder={t('login.password_placeholder')}
-                      required
-                      className="input w-full pr-10"
-                    />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text">
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {/* Active credential form (Jellyfin/Emby) */}
+              {activeCredProvider ? (() => {
+                const provider = credentialProviders.find(p => p.id === activeCredProvider);
+                if (!provider) return null;
+                const style = PROVIDER_STYLES[provider.id] || { bg: 'bg-white/10', hover: 'hover:bg-white/20', text: 'text-white' };
+                return (
+                  <div className="space-y-4">
+                    <form onSubmit={e => { e.preventDefault(); handleCredentialLogin(provider.id); }} className="space-y-4">
+                      <input
+                        type="text"
+                        placeholder={t('login.username')}
+                        value={credUsername}
+                        onChange={e => setCredUsername(e.target.value)}
+                        className="input w-full"
+                        autoFocus
+                      />
+                      <input
+                        type="password"
+                        placeholder={t('login.password_placeholder')}
+                        value={credPassword}
+                        onChange={e => setCredPassword(e.target.value)}
+                        className="input w-full"
+                      />
+                      <button
+                        type="submit"
+                        disabled={loading || !credUsername || !credPassword}
+                        className={`w-full ${style.bg} ${style.hover} ${style.text} font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                      >
+                        {loading ? (
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          t('login.credentials_button', { provider: provider.label })
+                        )}
+                      </button>
+                    </form>
+                    <button
+                      onClick={() => { setActiveCredProvider(null); setError(''); }}
+                      className="w-full text-sm text-ndp-text-dim hover:text-ndp-text-muted transition-colors"
+                    >
+                      {t('login.back_to_providers')}
                     </button>
                   </div>
-                  <button type="submit" disabled={loading && !polling} className="btn-primary w-full flex items-center justify-center gap-2">
-                    {loading && !polling ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Mail className="w-4 h-4" />}
-                    {t('login.signin')}
-                  </button>
-                </form>
-              )}
+                );
+              })()
 
-              {/* Divider */}
-              {hasEmailProvider && oauthProviders.length > 0 && (
-                <div className="flex items-center gap-3 my-6">
-                  <div className="flex-1 h-px bg-white/10" />
-                  <span className="text-ndp-text-dim text-xs uppercase">{t('login.or')}</span>
-                  <div className="flex-1 h-px bg-white/10" />
+              /* Provider selection */
+              : (
+                <div className="space-y-3">
+                  {/* Email login */}
+                  {hasEmailProvider && (
+                    <form onSubmit={handleEmailLogin} className="space-y-3 mb-3">
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder={t('login.email_placeholder')}
+                        required
+                        className="input w-full"
+                      />
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder={t('login.password_placeholder')}
+                          required
+                          className="input w-full pr-10"
+                        />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text">
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <button type="submit" disabled={loading && !polling} className="btn-primary w-full flex items-center justify-center gap-2">
+                        {loading && !polling ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Mail className="w-4 h-4" />}
+                        {t('login.signin')}
+                      </button>
+                    </form>
+                  )}
+
+                  {/* Divider */}
+                  {hasEmailProvider && (oauthProviders.length > 0 || credentialProviders.length > 0) && (
+                    <div className="flex items-center gap-3 py-3">
+                      <div className="flex-1 h-px bg-white/10" />
+                      <span className="text-ndp-text-dim text-xs uppercase">{t('login.or')}</span>
+                      <div className="flex-1 h-px bg-white/10" />
+                    </div>
+                  )}
+
+                  {/* All external providers as buttons */}
+                  {[...oauthProviders, ...credentialProviders].map((provider) => {
+                    const style = PROVIDER_STYLES[provider.id] || { bg: 'bg-white/10', hover: 'hover:bg-white/20', text: 'text-white' };
+                    const isOAuth = provider.type === 'oauth';
+                    return (
+                      <button
+                        key={provider.id}
+                        onClick={() => {
+                          if (isOAuth) handleOAuthLogin(provider.id);
+                          else { setActiveCredProvider(provider.id); setCredUsername(''); setCredPassword(''); setError(''); }
+                        }}
+                        disabled={loading}
+                        className={`w-full flex items-center justify-center gap-3 ${style.bg} ${style.hover} ${style.text} font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {polling && provider.id === 'plex' ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                            {t('login.waiting')}
+                          </>
+                        ) : (
+                          t('login.oauth_button', { provider: provider.label })
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
-
-              {/* OAuth providers */}
-              <div className="space-y-3">
-                {oauthProviders.map((provider) => {
-                  const style = PROVIDER_STYLES[provider.id] || { bg: 'bg-white/10', hover: 'hover:bg-white/20', text: 'text-white' };
-                  return (
-                    <button
-                      key={provider.id}
-                      onClick={() => handleOAuthLogin(provider.id)}
-                      disabled={loading}
-                      className={`w-full flex items-center justify-center gap-3 ${style.bg} ${style.hover} ${style.text} font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                      {polling && provider.id === 'plex' ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                          {t('login.waiting')}
-                        </>
-                      ) : (
-                        t('login.oauth_button', { provider: provider.label })
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
 
               {/* Register link */}
               {hasEmailProvider && features.registrationEnabled && (
