@@ -2,6 +2,7 @@ import axios, { type AxiosInstance } from 'axios';
 import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrSeasonItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrEpisode, ArrWebhookEvent } from '../types.js';
 import { extractImageFromArr } from '../types.js';
 import type { SonarrSeries, SonarrSeason, SonarrQueueItem, SonarrEpisode, SonarrEpisodeFile, SonarrHistoryRecord } from './types.js';
+import { logEvent } from '../../utils/logEvent.js';
 
 export class SonarrClient implements ArrClient {
   readonly mediaType = 'tv' as const;
@@ -157,9 +158,9 @@ export class SonarrClient implements ArrClient {
         // Sonarr can crash on corrupted history entries — log details for debugging
         const statusCode = (err as { response?: { status?: number } })?.response?.status;
         const errorBody = (err as { response?: { data?: unknown } })?.response?.data;
-        console.warn(`[Sonarr] History pagination failed at page ${page} (records ${(page - 1) * 500}-${page * 500}), HTTP ${statusCode || 'unknown'}`);
-        if (errorBody) console.warn(`[Sonarr] Error details:`, typeof errorBody === 'string' ? errorBody.slice(0, 500) : JSON.stringify(errorBody).slice(0, 500));
-        console.warn(`[Sonarr] Using ${all.length} records collected so far`);
+        logEvent('debug', 'Sonarr', `History pagination failed at page ${page} (records ${(page - 1) * 500}-${page * 500}), HTTP ${statusCode || 'unknown'}`);
+        if (errorBody) logEvent('debug', 'Sonarr', `Error details: ${typeof errorBody === 'string' ? errorBody.slice(0, 500) : JSON.stringify(errorBody).slice(0, 500)}`);
+        logEvent('debug', 'Sonarr', `Using ${all.length} records collected so far`);
         break;
       }
     }
@@ -260,7 +261,7 @@ export class SonarrClient implements ArrClient {
         if (filteredSubs.length > 0) subtitleLanguages = filteredSubs;
       } catch (err) {
         const status = (err as { response?: { status?: number } })?.response?.status;
-        console.warn(`[Sonarr] Failed to fetch episode files for series ${series.id} (HTTP ${status || 'unknown'}), skipping language data`);
+        logEvent('debug', 'Sonarr', `Failed to fetch episode files for series ${series.id} (HTTP ${status || 'unknown'}), skipping language data`);
       }
     }
 

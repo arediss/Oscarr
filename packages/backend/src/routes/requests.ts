@@ -135,7 +135,7 @@ export async function requestRoutes(app: FastifyInstance) {
     const existing = await prisma.mediaRequest.findFirst({
       where: { mediaId: media.id, userId: user.id, status: { in: [...ACTIVE_REQUEST_STATUSES] } },
     });
-    if (existing) return reply.status(409).send({ error: 'Vous avez déjà une demande en cours pour ce média' });
+    if (existing) return reply.status(409).send({ error: 'You already have an active request for this media' });
 
     // Validate quality option role restriction
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
@@ -180,13 +180,13 @@ export async function requestRoutes(app: FastifyInstance) {
 
     // Notifications
     const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { displayName: true } });
-    const username = dbUser?.displayName || 'Utilisateur';
+    const username = dbUser?.displayName || 'User';
     const mediaUrl = await buildSiteLink(`/${mediaType}/${media.tmdbId}`);
     safeNotify('request_new', { title: media.title, mediaType, username, posterPath: media.posterPath, tmdbId: media.tmdbId, url: mediaUrl });
     if (shouldAutoApprove && !sendFailed) {
-      safeUserNotify(user.id, { type: 'request_approved', title: media.title, message: `Votre demande pour "${media.title}" a été approuvée automatiquement.`, metadata: { mediaId: media.id, tmdbId: media.tmdbId, mediaType } });
+      safeUserNotify(user.id, { type: 'request_approved', title: media.title, message: 'notifications.msg.request_auto_approved', metadata: { mediaId: media.id, tmdbId: media.tmdbId, mediaType, msgParams: { title: media.title } } });
     }
-    logEvent('info', 'Request', `${username} a demandé "${media.title}"`);
+    logEvent('info', 'Request', `${username} requested "${media.title}"`);
 
     if (sendFailed) return reply.status(202).send({ ...mediaRequest, status: 'failed', sendError: true });
     return reply.status(201).send(mediaRequest);
@@ -200,14 +200,14 @@ export async function requestRoutes(app: FastifyInstance) {
     },
   }, async (request, reply) => {
     const requestId = parseId((request.params as { id: string }).id);
-    if (!requestId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!requestId) return reply.status(400).send({ error: 'Invalid ID' });
     const overrideQuality = parseId((request.query as { qualityOptionId?: string }).qualityOptionId || '');
 
     const mediaRequest = await prisma.mediaRequest.findUnique({
       where: { id: requestId },
       include: { media: true, qualityOption: { select: { id: true, label: true } } },
     });
-    if (!mediaRequest) return reply.status(404).send({ error: 'Demande introuvable' });
+    if (!mediaRequest) return reply.status(404).send({ error: 'Request not found' });
 
     const effectiveQuality = overrideQuality ?? mediaRequest.qualityOptionId ?? undefined;
     let ctx;
@@ -264,15 +264,15 @@ export async function requestRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const user = request.user as { id: number };
     const requestId = parseId((request.params as { id: string }).id);
-    if (!requestId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!requestId) return reply.status(400).send({ error: 'Invalid ID' });
     const { qualityOptionId: overrideQuality } = (request.body as { qualityOptionId?: number }) || {};
 
     const mediaRequest = await prisma.mediaRequest.findUnique({
       where: { id: requestId },
       include: { media: true, user: { select: { displayName: true, email: true, id: true } } },
     });
-    if (!mediaRequest) return reply.status(404).send({ error: 'Demande introuvable' });
-    if (mediaRequest.status !== 'pending') return reply.status(400).send({ error: 'Cette demande ne peut pas être approuvée' });
+    if (!mediaRequest) return reply.status(404).send({ error: 'Request not found' });
+    if (mediaRequest.status !== 'pending') return reply.status(400).send({ error: 'This request cannot be approved' });
 
     // Use override quality if provided, otherwise keep the original
     const effectiveQuality = overrideQuality ?? mediaRequest.qualityOptionId ?? undefined;
@@ -292,11 +292,11 @@ export async function requestRoutes(app: FastifyInstance) {
 
     if (sent) {
       const approvedUrl = await buildSiteLink(`/${updated.mediaType}/${updated.media.tmdbId}`);
-      safeNotify('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath, url: approvedUrl });
-      safeUserNotify(updated.user.id, { type: 'request_approved', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été approuvée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } });
-      logEvent('info', 'Request', `Demande "${updated.media.title}" approuvée`);
+      safeNotify('request_approved', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'User', posterPath: updated.media.posterPath, url: approvedUrl });
+      safeUserNotify(updated.user.id, { type: 'request_approved', title: updated.media.title, message: 'notifications.msg.request_approved', metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType, msgParams: { title: updated.media.title } } });
+      logEvent('info', 'Request', `Request "${updated.media.title}" approved`);
     } else {
-      logEvent('error', 'Request', `Demande "${updated.media.title}" approuvée mais l'envoi au service a échoué`);
+      logEvent('error', 'Request', `Request "${updated.media.title}" approved but failed to send to service`);
     }
 
     return reply.send(updated);
@@ -308,7 +308,7 @@ export async function requestRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const user = request.user as { id: number };
     const requestId = parseId((request.params as { id: string }).id);
-    if (!requestId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!requestId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const updated = await prisma.mediaRequest.update({
       where: { id: requestId },
@@ -317,9 +317,9 @@ export async function requestRoutes(app: FastifyInstance) {
     });
 
     const declinedUrl = await buildSiteLink(`/${updated.mediaType}/${updated.media.tmdbId}`);
-    safeNotify('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'Utilisateur', posterPath: updated.media.posterPath, url: declinedUrl });
-    safeUserNotify(updated.user.id, { type: 'request_declined', title: updated.media.title, message: `Votre demande pour "${updated.media.title}" a été refusée.`, metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType } });
-    logEvent('info', 'Request', `Demande "${updated.media.title}" refusée`);
+    safeNotify('request_declined', { title: updated.media.title, mediaType: updated.mediaType as 'movie' | 'tv', username: updated.user?.displayName || 'User', posterPath: updated.media.posterPath, url: declinedUrl });
+    safeUserNotify(updated.user.id, { type: 'request_declined', title: updated.media.title, message: 'notifications.msg.request_declined', metadata: { mediaId: updated.mediaId, tmdbId: updated.media.tmdbId, mediaType: updated.mediaType, msgParams: { title: updated.media.title } } });
+    logEvent('info', 'Request', `Request "${updated.media.title}" declined`);
 
     return reply.send(updated);
   });
@@ -346,7 +346,7 @@ export async function requestRoutes(app: FastifyInstance) {
     }
 
     const media = await prisma.media.findUnique({ where: { tmdbId_mediaType: { tmdbId, mediaType } } });
-    if (!media) return reply.status(404).send({ error: 'Média introuvable' });
+    if (!media) return reply.status(404).send({ error: 'Media not found' });
 
     // Cooldown check
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
@@ -355,25 +355,25 @@ export async function requestRoutes(app: FastifyInstance) {
       const elapsed = Date.now() - new Date(media.lastMissingSearchAt).getTime();
       const remaining = Math.ceil((cooldownMin * 60 * 1000 - elapsed) / 60000);
       if (elapsed < cooldownMin * 60 * 1000) {
-        return reply.status(429).send({ error: `Recherche déjà lancée récemment. Réessayez dans ${remaining} min.`, cooldownRemaining: remaining });
+        return reply.status(429).send({ error: `Search already started recently. Try again in ${remaining} min.`, cooldownRemaining: remaining });
       }
     }
 
     try {
       const serviceId = mediaType === 'movie' ? media.radarrId : media.sonarrId;
       if (!serviceId) {
-        return reply.status(400).send({ error: 'Ce média n\'est pas encore dans le service' });
+        return reply.status(400).send({ error: 'This media is not yet in the service' });
       }
       const serviceType = getServiceTypeForMedia(mediaType);
       const client = await getArrClient(serviceType);
       await client.searchMedia(serviceId);
 
       await prisma.media.update({ where: { id: media.id }, data: { lastMissingSearchAt: new Date() } });
-      logEvent('info', 'Request', `Recherche des manquants lancée pour "${media.title}"`);
+      logEvent('info', 'Request', `Missing episodes search started for "${media.title}"`);
       return reply.send({ ok: true });
     } catch (err) {
-      console.error('Search missing failed:', err);
-      return reply.status(502).send({ error: 'Erreur lors du lancement de la recherche' });
+      logEvent('debug', 'Request', `Search missing failed: ${err}`);
+      return reply.status(502).send({ error: 'Failed to start search' });
     }
   });
 
@@ -385,7 +385,7 @@ export async function requestRoutes(app: FastifyInstance) {
     },
   }, async (request, reply) => {
     const requestId = parseId((request.params as { id: string }).id);
-    if (!requestId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!requestId) return reply.status(400).send({ error: 'Invalid ID' });
     const { rootFolder, qualityOptionId } = (request.body as { rootFolder?: string; qualityOptionId?: number }) || {};
 
     const data: Record<string, unknown> = {};
@@ -395,7 +395,7 @@ export async function requestRoutes(app: FastifyInstance) {
     if (Object.keys(data).length === 0) return reply.status(400).send({ error: 'Nothing to update' });
 
     const existing = await prisma.mediaRequest.findUnique({ where: { id: requestId } });
-    if (!existing) return reply.status(404).send({ error: 'Demande introuvable' });
+    if (!existing) return reply.status(404).send({ error: 'Request not found' });
 
     const updated = await prisma.mediaRequest.update({
       where: { id: requestId },
@@ -447,7 +447,7 @@ export async function requestRoutes(app: FastifyInstance) {
               deletedFromService++;
             }
           } catch (err) {
-            console.warn(`[Cleanup] Failed to delete from service for request ${req.id}:`, err);
+            logEvent('debug', 'Cleanup', `Failed to delete from service for request ${req.id}: ${err}`);
           }
         }
       }
@@ -466,11 +466,11 @@ export async function requestRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const user = request.user as { id: number };
     const requestId = parseId((request.params as { id: string }).id);
-    if (!requestId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!requestId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const mediaRequest = await prisma.mediaRequest.findUnique({ where: { id: requestId } });
-    if (!mediaRequest) return reply.status(404).send({ error: 'Demande introuvable' });
-    if (request.ownerScoped && mediaRequest.userId !== user.id) return reply.status(403).send({ error: 'Non autorisé' });
+    if (!mediaRequest) return reply.status(404).send({ error: 'Request not found' });
+    if (request.ownerScoped && mediaRequest.userId !== user.id) return reply.status(403).send({ error: 'Unauthorized' });
 
     await prisma.mediaRequest.delete({ where: { id: requestId } });
     return reply.send({ ok: true });
@@ -490,7 +490,7 @@ export async function requestRoutes(app: FastifyInstance) {
     const { collectionId } = request.body as { collectionId: unknown };
 
     if (typeof collectionId !== 'number' || !Number.isFinite(collectionId) || collectionId < 1) {
-      return reply.status(400).send({ error: 'collectionId invalide' });
+      return reply.status(400).send({ error: 'Invalid collectionId' });
     }
 
     if (user.role !== 'admin') {
@@ -499,7 +499,7 @@ export async function requestRoutes(app: FastifyInstance) {
     }
 
     const collection = await getCollection(collectionId);
-    if (!collection?.parts?.length) return reply.status(404).send({ error: 'Collection introuvable' });
+    if (!collection?.parts?.length) return reply.status(404).send({ error: 'Collection not found' });
 
     let requested = 0;
     let skipped = 0;

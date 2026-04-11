@@ -1,6 +1,7 @@
 import { prisma } from '../../utils/prisma.js';
 import { getArrClient } from '../../providers/index.js';
 import { getServiceConfig } from '../../utils/services.js';
+import { logEvent } from '../../utils/logEvent.js';
 
 export async function syncAvailabilityDates(since?: Date | null): Promise<{ radarrUpdated: number; sonarrUpdated: number }> {
   let radarrUpdated = 0;
@@ -9,13 +10,13 @@ export async function syncAvailabilityDates(since?: Date | null): Promise<{ rada
   try {
     radarrUpdated = await syncServiceAvailability('radarr', since ?? null);
   } catch (err) {
-    console.error('[Sync] Radarr availability sync failed:', err);
+    logEvent('debug', 'Sync', `Radarr availability sync failed: ${err}`);
   }
 
   try {
     sonarrUpdated = await syncServiceAvailability('sonarr', since ?? null);
   } catch (err) {
-    console.error('[Sync] Sonarr availability sync failed:', err);
+    logEvent('debug', 'Sync', `Sonarr availability sync failed: ${err}`);
   }
 
   return { radarrUpdated, sonarrUpdated };
@@ -57,10 +58,10 @@ async function syncServiceAvailability(serviceType: string, since: Date | null):
       updated += result.count;
     }
 
-    console.log(`[Sync] ${serviceType} availability: ${entries.length} history events -> ${updated} media updated`);
+    logEvent('debug', 'Sync', `${serviceType} availability: ${entries.length} history events -> ${updated} media updated`);
     return updated;
   } catch (err) {
-    console.error(`[Sync] ${serviceType} availability sync failed:`, err);
+    logEvent('debug', 'Sync', `${serviceType} availability sync failed: ${err}`);
     return 0;
   }
 }

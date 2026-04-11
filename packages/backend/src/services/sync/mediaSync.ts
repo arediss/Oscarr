@@ -13,7 +13,7 @@ export async function syncArrService(serviceType: string, since?: Date | null): 
 
   const config = await getServiceConfig(serviceType);
   if (!config) {
-    console.log(`[Sync] ${serviceType}: no service configured, skipping`);
+    logEvent('debug', 'Sync', `${serviceType}: no service configured, skipping`);
     return { added: 0, updated: 0, errors: 0, duration: 0 };
   }
 
@@ -45,11 +45,11 @@ export async function syncArrService(serviceType: string, since?: Date | null): 
       filtered = [...combined.values()];
 
       if (needsUpdateIds.size > 0) {
-        console.log(`[Sync] ${serviceType} incremental: ${newlyAdded.length} newly added, ${toUpdate.length} need status update`);
+        logEvent('debug', 'Sync', `${serviceType} incremental: ${newlyAdded.length} newly added, ${toUpdate.length} need status update`);
       }
     }
 
-    console.log(`[Sync] ${serviceType}: ${filtered.length} items to process (${since ? 'incremental' : 'full scan'})`);
+    logEvent('debug', 'Sync', `${serviceType}: ${filtered.length} items to process (${since ? 'incremental' : 'full scan'})`);
 
     for (const item of filtered) {
       try {
@@ -58,7 +58,7 @@ export async function syncArrService(serviceType: string, since?: Date | null): 
         else if (result === 'updated') updated++;
       } catch (err) {
         errors++;
-        console.error(`[Sync] Error processing ${item.title}:`, err);
+        logEvent('debug', 'Sync', `Error processing ${item.title}: ${err}`);
       }
     }
 
@@ -70,7 +70,6 @@ export async function syncArrService(serviceType: string, since?: Date | null): 
       create: { id: 1, [syncField]: new Date(), updatedAt: new Date() },
     });
   } catch (err) {
-    console.error(`[Sync] ${serviceType} sync failed:`, err);
     logEvent('error', 'Sync', `${serviceType} sync failed: ${err}`);
     errors++;
   }
@@ -153,7 +152,7 @@ async function processSingleMedia(item: ArrMediaItem, client: ArrClient): Promis
 
   const becameAvailable = item.status === 'available' && existing.status !== 'available';
   if (becameAvailable) {
-    console.log(`[Sync] "${item.title}" (${client.serviceType}:${item.externalId}) status: ${existing.status} -> ${item.status}`);
+    logEvent('debug', 'Sync', `"${item.title}" (${client.serviceType}:${item.externalId}) status: ${existing.status} -> ${item.status}`);
     sendAvailabilityNotifications(
       existing.title || item.title,
       client.mediaType,

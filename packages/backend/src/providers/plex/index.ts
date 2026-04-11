@@ -67,7 +67,7 @@ async function importPlexUsers(plexToken: string, machineId: string) {
     imported++;
   }
 
-  logEvent('info', 'User', `Import Plex : ${imported} importés, ${skipped} existants`);
+  logEvent('info', 'User', `Plex import: ${imported} imported, ${skipped} already existed`);
   return { imported, skipped, total: sharedUsers.length };
 }
 
@@ -95,13 +95,13 @@ const plexAuth: AuthProvider = {
     }, async (request, reply) => {
       const { pinId } = request.body as { pinId: unknown };
       if (typeof pinId !== 'number' || !Number.isFinite(pinId) || pinId < 1) {
-        return reply.status(400).send({ error: 'pinId invalide' });
+        return reply.status(400).send({ error: 'Invalid pinId' });
       }
 
       const authToken = await checkPlexPin(pinId, PLEX_CLIENT_ID);
       if (!authToken) {
-        logEvent('warn', 'Auth', `Échec de validation PIN (pinId: ${pinId})`);
-        return reply.status(400).send({ error: 'PIN non validé. Réessayez.' });
+        logEvent('warn', 'Auth', `PIN validation failed (pinId: ${pinId})`);
+        return reply.status(400).send({ error: 'PIN not validated. Try again.' });
       }
 
       const plexAccount = await getPlexUser(authToken);
@@ -116,7 +116,7 @@ const plexAuth: AuthProvider = {
         avatar: plexAccount.thumb,
       });
 
-      logEvent('info', 'Auth', `${result.displayName} s'est connecté (plex)${result.isNew ? ' — nouveau compte' : ''}`);
+      logEvent('info', 'Auth', `${result.displayName} logged in (plex)${result.isNew ? ' — new account' : ''}`);
       return helpers.signAndSend(reply, result.id);
     });
   },
@@ -138,7 +138,7 @@ const plexAuth: AuthProvider = {
     });
 
     await prisma.user.update({ where: { id: userId }, data: { avatar: plexAccount.thumb } });
-    logEvent('info', 'Auth', `Compte Plex lié : ${plexAccount.username}`);
+    logEvent('info', 'Auth', `Plex account linked: ${plexAccount.username}`);
     return { providerUsername: plexAccount.username };
   },
 

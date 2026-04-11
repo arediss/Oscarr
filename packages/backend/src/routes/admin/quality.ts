@@ -31,7 +31,7 @@ export async function qualityRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
 
     const { label, position } = request.body as { label: string; position?: number };
-    if (!label) return reply.status(400).send({ error: 'Label requis' });
+    if (!label) return reply.status(400).send({ error: 'Label required' });
     const maxPos = await prisma.qualityOption.aggregate({ _max: { position: true } });
     const option = await prisma.qualityOption.create({
       data: { label, position: position ?? (maxPos._max.position ?? 0) + 1 },
@@ -62,7 +62,7 @@ export async function qualityRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const optionId = parseId(id);
-    if (!optionId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!optionId) return reply.status(400).send({ error: 'Invalid ID' });
     const { label, position, allowedRoles, approvalMode } = request.body as {
       label?: string; position?: number; allowedRoles?: string[] | null; approvalMode?: string | null;
     };
@@ -92,7 +92,7 @@ export async function qualityRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const optionId = parseId(id);
-    if (!optionId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!optionId) return reply.status(400).send({ error: 'Invalid ID' });
     await prisma.qualityOption.delete({ where: { id: optionId } });
     return { ok: true };
   });
@@ -149,14 +149,14 @@ export async function qualityRoutes(app: FastifyInstance) {
       qualityOptionId: number; serviceId: number; qualityProfileId: number; qualityProfileName: string;
     };
     if (!qualityOptionId || !serviceId || !qualityProfileId || !qualityProfileName) {
-      return reply.status(400).send({ error: 'Tous les champs sont requis' });
+      return reply.status(400).send({ error: 'All fields are required' });
     }
     // Check for duplicate
     const existing = await prisma.qualityMapping.findFirst({
       where: { qualityOptionId, serviceId, qualityProfileId },
     });
     if (existing) {
-      return reply.status(409).send({ error: 'Ce mapping existe d\u00e9j\u00e0' });
+      return reply.status(409).send({ error: 'This mapping already exists' });
     }
     const mapping = await prisma.qualityMapping.create({
       data: { qualityOptionId, serviceId, qualityProfileId, qualityProfileName },
@@ -182,7 +182,7 @@ export async function qualityRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const mappingId = parseId(id);
-    if (!mappingId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!mappingId) return reply.status(400).send({ error: 'Invalid ID' });
     await prisma.qualityMapping.delete({ where: { id: mappingId } });
     return { ok: true };
   });

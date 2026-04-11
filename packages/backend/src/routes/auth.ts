@@ -140,7 +140,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (!isFirstUser) {
       const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
       if (!(settings?.registrationEnabled ?? true)) {
-        return reply.status(403).send({ error: 'L\'inscription est désactivée.' });
+        return reply.status(403).send({ error: 'Registration is disabled.' });
       }
     }
 
@@ -156,13 +156,13 @@ export async function authRoutes(app: FastifyInstance) {
         },
       });
 
-      logEvent('info', 'Auth', `Nouveau compte email créé : ${result.displayName} (${isFirstUser ? 'admin' : 'user'})`);
+      logEvent('info', 'Auth', `New email account created: ${result.displayName} (${isFirstUser ? 'admin' : 'user'})`);
       return helpers.signAndSend(reply, user.id);
     } catch (err) {
       const msg = (err as Error).message;
-      if (msg === 'EMAIL_EXISTS') return reply.status(409).send({ error: 'Cet email est déjà utilisé.' });
-      if (msg === 'PASSWORD_TOO_SHORT') return reply.status(400).send({ error: 'Le mot de passe doit faire au moins 8 caractères.' });
-      if (msg === 'DISPLAY_NAME_REQUIRED') return reply.status(400).send({ error: 'Le nom d\'affichage est requis.' });
+      if (msg === 'EMAIL_EXISTS') return reply.status(409).send({ error: 'This email is already in use.' });
+      if (msg === 'PASSWORD_TOO_SHORT') return reply.status(400).send({ error: 'Password must be at least 8 characters.' });
+      if (msg === 'DISPLAY_NAME_REQUIRED') return reply.status(400).send({ error: 'Display name is required.' });
       throw err;
     }
   });
@@ -192,9 +192,9 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (!user) return reply.status(401).send({ error: 'Email ou mot de passe incorrect.' });
+    if (!user) return reply.status(401).send({ error: 'Invalid email or password.' });
 
-    logEvent('info', 'Auth', `${user.displayName} s'est connecté (email)`);
+    logEvent('info', 'Auth', `${user.displayName} logged in (email)`);
     return helpers.signAndSend(reply, user.id);
   });
 
@@ -261,7 +261,7 @@ export async function authRoutes(app: FastifyInstance) {
         providers: { select: { provider: true, providerUsername: true, providerEmail: true } },
       },
     });
-    if (!user) return reply.status(404).send({ error: 'Utilisateur introuvable' });
+    if (!user) return reply.status(404).send({ error: 'User not found' });
     return reply.send(user);
   });
 

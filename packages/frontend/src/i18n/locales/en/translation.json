@@ -593,5 +593,10 @@
   "notifications.request_approved": "Request approved",
   "notifications.request_declined": "Request declined",
   "notifications.media_available": "Media available",
-  "notifications.support_reply": "Support reply"
+  "notifications.support_reply": "Support reply",
+  "notifications.msg.request_auto_approved": "Your request for \"{{title}}\" has been auto-approved.",
+  "notifications.msg.request_approved": "Your request for \"{{title}}\" has been approved.",
+  "notifications.msg.request_declined": "Your request for \"{{title}}\" has been declined.",
+  "notifications.msg.media_available": "\"{{title}}\" is now available.",
+  "notifications.msg.support_reply": "Reply on your ticket #{{ticketId}}"
 }

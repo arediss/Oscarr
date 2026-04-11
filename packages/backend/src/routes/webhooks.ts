@@ -67,7 +67,7 @@ export async function webhookRoutes(app: FastifyInstance) {
 
     // 3. Handle event
     if (event.type === 'test') {
-      console.log(`[Webhook] ${sanitize(serviceType)} test received`);
+      logEvent('debug', 'Webhook', `${sanitize(serviceType)} test received`);
       logEvent('info', 'Webhook', `${sanitize(serviceType)} webhook test successful`);
       return reply.send({ ok: true, message: 'Webhook configured successfully' });
     }
@@ -100,7 +100,7 @@ export async function webhookRoutes(app: FastifyInstance) {
           },
         });
         logEvent('info', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" added — created in Oscarr`);
-        console.log(`[Webhook] ${sanitize(serviceType)}: "${sanitize(event.title)}" added → created in DB`);
+        logEvent('debug', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" added, created in DB`);
       }
       return reply.send({ ok: true });
     }
@@ -117,7 +117,7 @@ export async function webhookRoutes(app: FastifyInstance) {
           data: { status: 'deleted' },
         });
         logEvent('info', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" deleted from service`);
-        console.log(`[Webhook] ${sanitize(serviceType)}: "${sanitize(event.title)}" → deleted`);
+        logEvent('debug', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" deleted`);
       }
       return reply.send({ ok: true });
     }
@@ -138,7 +138,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       }
 
       if (!media) {
-        console.log(`[Webhook] ${sanitize(serviceType)} download event for unknown media: ${sanitize(event.title)} (${event.externalId})`);
+        logEvent('debug', 'Webhook', `${sanitize(serviceType)} download event for unknown media: ${sanitize(event.title)} (${event.externalId})`);
         return reply.send({ ok: true, message: 'Media not tracked' });
       }
 
@@ -153,7 +153,7 @@ export async function webhookRoutes(app: FastifyInstance) {
           media.tmdbId,
         );
         logEvent('info', 'Webhook', `"${sanitize(event.title)}" is now available (via ${sanitize(serviceType)} webhook)`);
-        console.log(`[Webhook] ${sanitize(serviceType)}: "${sanitize(event.title)}" → available`);
+        logEvent('debug', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" now available`);
       }
 
       return reply.send({ ok: true, message: 'Media updated' });

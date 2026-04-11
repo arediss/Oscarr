@@ -48,7 +48,7 @@ export async function syncMissingKeywords(): Promise<{ synced: number; errors: n
 
   if (mediasWithoutKeywords.length === 0) return { synced: 0, errors: 0 };
 
-  console.log(`[KeywordSync] ${mediasWithoutKeywords.length} media without keywords`);
+  logEvent('debug', 'KeywordSync', `${mediasWithoutKeywords.length} media without keywords`);
 
   for (let i = 0; i < mediasWithoutKeywords.length; i += BATCH_SIZE) {
     const batch = mediasWithoutKeywords.slice(i, i + BATCH_SIZE);
@@ -69,7 +69,7 @@ export async function syncMissingKeywords(): Promise<{ synced: number; errors: n
           data: { keywordIds: '[]' },
         }).catch(() => {});
         errors++;
-        console.error(`[KeywordSync] Failed for "${media.title}" (tmdb:${media.tmdbId}):`, err);
+        logEvent('debug', 'KeywordSync', `Failed for "${media.title}" (tmdb:${media.tmdbId}): ${err}`);
       }
     }
 

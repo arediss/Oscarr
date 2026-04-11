@@ -110,9 +110,15 @@ export default function NotificationBell() {
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <p className={clsx('text-sm truncate', notif.read ? 'text-ndp-text-muted' : 'text-ndp-text font-medium')}>
-                      {notif.title}
+                      {notif.title?.startsWith('notifications.msg.')
+                        ? t(notif.title, (notif.metadata?.msgParams as Record<string, unknown>) || {})
+                        : notif.title}
                     </p>
-                    <p className="text-xs text-ndp-text-dim mt-0.5 line-clamp-2">{notif.message}</p>
+                    <p className="text-xs text-ndp-text-dim mt-0.5 line-clamp-2">
+                      {notif.message?.startsWith('notifications.msg.')
+                        ? t(notif.message, (notif.metadata?.msgParams as Record<string, unknown>) || {})
+                        : notif.message}
+                    </p>
                     <p className="text-[10px] text-ndp-text-dim mt-1">{timeAgo(notif.createdAt, t)}</p>
                   </div>
 
