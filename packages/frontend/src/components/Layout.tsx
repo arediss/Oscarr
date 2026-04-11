@@ -17,9 +17,12 @@ import {
   Shield,
   ChevronDown,
   Globe,
+  Sparkles,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import NotificationBell from '@/components/NotificationBell';
+import ChangelogModal from '@/components/ChangelogModal';
+import { useChangelogNotification } from '@/hooks/useChangelogNotification';
 import { PluginSlot } from '@/plugins/PluginSlot';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
 import { useFeatures } from '@/context/FeaturesContext';
@@ -41,6 +44,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [banner, setBanner] = useState<string | null>(null);
+  const changelog = useChangelogNotification();
+  const [changelogOpen, setChangelogOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [viewAsRole, setViewAsRole] = useState<string | null>(sessionStorage.getItem('view-as-role'));
   const [availableRoles, setAvailableRoles] = useState<{ name: string }[]>([]);
@@ -235,6 +240,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               {/* Plugin hook: header actions */}
               <PluginSlot hookPoint="header.actions" context={{ user }} />
 
+              {/* Changelog notification */}
+              {isAdmin && changelog.hasNew && (
+                <button
+                  onClick={() => { setChangelogOpen(true); changelog.dismiss(); }}
+                  className="relative p-2 rounded-xl hover:bg-white/5 transition-colors"
+                  title={t('changelog.new_version')}
+                >
+                  <Sparkles className="w-5 h-5 text-ndp-accent" />
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-ndp-accent rounded-full animate-pulse" />
+                </button>
+              )}
+
               {/* Notification bell */}
               <NotificationBell />
 
@@ -420,6 +437,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       >
         {children}
       </main>
+      <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
     </div>
   );
 }

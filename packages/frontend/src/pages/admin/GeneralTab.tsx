@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Loader2, CheckCircle, AlertTriangle, ArrowUpCircle, ExternalLink, Key, Copy, RefreshCw, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, CheckCircle, AlertTriangle, ArrowUpCircle, ExternalLink, Key, Copy, RefreshCw, Trash2, Eye, EyeOff, FileText } from 'lucide-react';
+import ChangelogModal from '@/components/ChangelogModal';
 import api from '@/lib/api';
 import { useFeatures } from '@/context/FeaturesContext';
 import { Spinner } from './Spinner';
@@ -48,6 +49,7 @@ export function GeneralTab() {
   const [bannerText, setBannerText] = useState('');
   const [loading, setLoading] = useState(true);
   const [versionInfo, setVersionInfo] = useState<{ current: string; latest?: string; updateAvailable?: boolean; releaseUrl?: string } | null>(null);
+  const [changelogOpen, setChangelogOpen] = useState(false);
   const [apiKeyFull, setApiKeyFull] = useState<string | null>(null); // Only set after generate
   const [apiKeyMasked, setApiKeyMasked] = useState<string | null>(null);
   const [apiKeyHasKey, setApiKeyHasKey] = useState(false);
@@ -159,8 +161,8 @@ export function GeneralTab() {
 
       {/* Version */}
       {versionInfo && (
-        <div className="card p-4">
-          <div className="flex items-center justify-between">
+        <div className="flex gap-3">
+          <div className="card p-4 flex-[7] flex items-center justify-between">
             <div>
               <span className="text-sm font-medium text-ndp-text">{t('admin.general.oscarr')}</span>
               <span className="text-xs text-ndp-text-dim font-mono ml-2">{versionInfo.current}</span>
@@ -181,6 +183,13 @@ export function GeneralTab() {
               <span className="text-xs text-ndp-text-dim">{t('admin.general.update_check_failed')}</span>
             )}
           </div>
+          <button
+            onClick={() => setChangelogOpen(true)}
+            className="card px-4 py-3 flex items-center justify-center gap-1.5 text-xs font-medium text-ndp-text-dim hover:text-ndp-accent transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {t('changelog.view')}
+          </button>
         </div>
       )}
 
@@ -366,6 +375,7 @@ export function GeneralTab() {
       </div>
 
       <FloatingSaveBar show={hasChanges} saving={saving} saved={saved} onSave={handleSave} onReset={handleReset} />
+      <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
 
     </AdminTabLayout>
   );

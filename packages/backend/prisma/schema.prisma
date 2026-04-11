@@ -314,3 +314,13 @@ model Keyword {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model Patchnote {
+  id      Int      @id @default(autoincrement())
+  version String   @unique
+  type    String   // "major" | "minor" | "patch"
+  date    DateTime
+  titleEn String
+  titleFr String
+  entries String   // JSON: [{ type: "feat"|"fix"|"perf", titleEn, titleFr, descEn?, descFr? }]
+}
