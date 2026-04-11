@@ -23,7 +23,8 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
         .setCookie('token', token, {
           path: '/',
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
+          secure: process.env.COOKIE_SECURE === 'true'
+            || (process.env.COOKIE_SECURE !== 'false' && reply.request.protocol === 'https'),
           sameSite: 'lax',
           maxAge: 24 * 60 * 60,
         })
