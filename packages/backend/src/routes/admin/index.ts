@@ -12,6 +12,7 @@ import { dangerRoutes } from './danger.js';
 import { rolesRoutes } from './roles.js';
 import { keywordsRoutes } from './keywords.js';
 import { blacklistRoutes } from './blacklist.js';
+import { backupRoutes } from './backup.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   await settingsRoutes(app);
@@ -27,4 +28,5 @@ export async function adminRoutes(app: FastifyInstance) {
   await rolesRoutes(app);
   await keywordsRoutes(app);
   await blacklistRoutes(app);
+  await backupRoutes(app);
 }
