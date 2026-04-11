@@ -28,7 +28,7 @@ import { pluginRoutes } from './plugins/routes.js';
 import { loadInstallState } from './utils/install.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: true, trustProxy: true });
 
 async function start() {
   loadInstallState();
