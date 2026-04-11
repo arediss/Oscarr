@@ -42,12 +42,12 @@ async function start() {
     throw new Error('JWT_SECRET environment variable is required');
   }
 
+  await app.register(cookie);
+
   await app.register(jwt, {
     secret: jwtSecret,
     cookie: { cookieName: 'token', signed: false },
   });
-
-  await app.register(cookie);
   await app.register(rateLimit, { global: false });
 
   // Hydrate instance language cache before any route handles requests
