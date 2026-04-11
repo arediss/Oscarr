@@ -22,13 +22,20 @@ export default function PersonPage() {
     api.get(`/tmdb/person/${id}`).then(({ data }) => setPerson(data)).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
 
-  const filmography = useMemo(() =>
+  const [showAllFilmo, setShowAllFilmo] = useState(false);
+  const FILMO_INITIAL = 40;
+
+  const allFilmography = useMemo(() =>
     person?.combined_credits?.cast
       ?.filter((c) => c.poster_path && (c.vote_count ?? 0) > 5)
       .sort((a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0))
-      .slice(0, 40)
       .map((c) => ({ ...c, media_type: c.media_type || (c.title ? 'movie' : 'tv') })) || [],
     [person],
+  );
+
+  const filmography = useMemo(
+    () => showAllFilmo ? allFilmography : allFilmography.slice(0, FILMO_INITIAL),
+    [showAllFilmo, allFilmography],
   );
 
   const statuses = useMediaStatus(filmography as TmdbMedia[]);
@@ -93,7 +100,7 @@ export default function PersonPage() {
                   <Calendar className="w-4 h-4 text-ndp-text-dim" />
                   {new Date(person.birthday).toLocaleDateString()}
                   {age != null && !person.deathday && (
-                    <span className="text-ndp-text-dim">({age} {t('person.years_old', 'ans')})</span>
+                    <span className="text-ndp-text-dim">({age} {t('person.years_old')})</span>
                   )}
                 </span>
               )}
@@ -121,7 +128,7 @@ export default function PersonPage() {
                     onClick={() => setShowFullBio(!showFullBio)}
                     className="text-sm text-ndp-accent hover:text-ndp-accent/80 mt-2 transition-colors"
                   >
-                    {showFullBio ? t('common.show_less', 'Voir moins') : t('common.show_more', 'Voir plus')}
+                    {showFullBio ? t('common.show_less') : t('common.show_more')}
                   </button>
                 )}
               </div>
@@ -133,8 +140,8 @@ export default function PersonPage() {
         {filmography.length > 0 && (
           <div className="mt-12">
             <h3 className="text-xl font-bold text-ndp-text mb-6">
-              {t('person.filmography', 'Filmographie')}
-              <span className="text-sm font-normal text-ndp-text-dim ml-2">({filmography.length})</span>
+              {t('person.filmography')}
+              <span className="text-sm font-normal text-ndp-text-dim ml-2">({allFilmography.length})</span>
             </h3>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
               {filmography.map((item, i) => {
@@ -149,6 +156,14 @@ export default function PersonPage() {
                 );
               })}
             </div>
+            {!showAllFilmo && allFilmography.length > FILMO_INITIAL && (
+              <button
+                onClick={() => setShowAllFilmo(true)}
+                className="mt-4 w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-sm font-medium text-ndp-text-muted hover:text-ndp-text transition-colors"
+              >
+                {t('common.show_more')} ({allFilmography.length - FILMO_INITIAL} {t('person.more_items')})
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -31,12 +31,16 @@ export async function requestRoutes(app: FastifyInstance) {
           status: { type: 'string', description: 'Filter by request status (pending, approved, declined, processing, available, failed)' },
           page: { type: 'string', description: 'Page number for pagination' },
           userId: { type: 'string', description: 'Filter by user ID (admin only)' },
+          mediaType: { type: 'string', enum: ['movie', 'tv'], description: 'Filter by media type' },
+          qualityOptionId: { type: 'string', description: 'Filter by quality option ID' },
         },
       },
     },
   }, async (request) => {
     const user = request.user as { id: number; role: string };
-    const { status, page, userId } = request.query as { status?: string; page?: string; userId?: string };
+    const { status, page, userId, mediaType, qualityOptionId } = request.query as {
+      status?: string; page?: string; userId?: string; mediaType?: string; qualityOptionId?: string;
+    };
     const pageNum = parsePage(page);
     const take = 20;
     const skip = (pageNum - 1) * take;
@@ -49,6 +53,11 @@ export async function requestRoutes(app: FastifyInstance) {
       if (uid) where.userId = uid;
     }
     if (status && VALID_STATUSES.includes(status)) where.status = status;
+    if (mediaType && ['movie', 'tv'].includes(mediaType)) where.mediaType = mediaType;
+    if (qualityOptionId) {
+      const qid = parseId(qualityOptionId);
+      if (qid) where.qualityOptionId = qid;
+    }
 
     // Promote stale statuses before reading
     await promoteStaleStatuses();
