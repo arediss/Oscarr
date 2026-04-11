@@ -453,9 +453,11 @@ function RequestCard({
             <span className="text-xs text-white/60 truncate">{req.user?.displayName}</span>
           </div>
 
-          {req.qualityOption && (
+          {qualityOptions.length > 0 && (
             <div className="mt-1.5">
-              <span className="text-[11px] font-semibold text-ndp-accent">{req.qualityOption.label}</span>
+              <span className={clsx('text-[11px] font-semibold', req.qualityOption ? 'text-ndp-accent' : 'text-ndp-text-dim')}>
+                {req.qualityOption?.label || t('requests.no_quality')}
+              </span>
             </div>
           )}
 
