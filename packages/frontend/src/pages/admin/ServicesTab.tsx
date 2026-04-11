@@ -28,16 +28,16 @@ export function ServicesTab() {
     } catch { return []; } finally { setLoading(false); }
   }, []);
 
-  const testAllServices = useCallback(async (serviceList: ServiceData[]) => {
-    for (const svc of serviceList) {
-      if (!svc.enabled) continue;
+  const testAllServices = useCallback((serviceList: ServiceData[]) => {
+    serviceList.forEach(async (svc) => {
+      if (!svc.enabled) return;
       try {
         const { data } = await api.post(`/admin/services/${svc.id}/test`);
         setTestResults(prev => ({ ...prev, [svc.id]: { ok: true, version: data.version } }));
       } catch {
         setTestResults(prev => ({ ...prev, [svc.id]: { ok: false } }));
       }
-    }
+    });
   }, []);
 
   useEffect(() => {
