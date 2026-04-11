@@ -24,7 +24,7 @@ export async function usersRoutes(app: FastifyInstance) {
     const authProvider = getAuthProvider(providerId);
 
     if (!authProvider?.importUsers) {
-      return reply.status(400).send({ error: `Le provider "${providerId}" ne supporte pas l'import d'utilisateurs.` });
+      return reply.status(400).send({ error: `Provider "${providerId}" does not support user import.` });
     }
 
     const adminUser = request.user as { id: number };
@@ -33,12 +33,12 @@ export async function usersRoutes(app: FastifyInstance) {
       return result;
     } catch (err) {
       const msg = (err as Error).message;
-      if (msg === 'NO_TOKEN') return reply.status(400).send({ error: `Aucun token ${providerId} trouv\u00e9. Configurez le service dans les param\u00e8tres.` });
-      if (msg === 'NO_MACHINE_ID') return reply.status(400).send({ error: `Aucun serveur ${providerId} configur\u00e9.` });
+      if (msg === 'NO_TOKEN') return reply.status(400).send({ error: `No ${providerId} token found. Configure the service in settings.` });
+      if (msg === 'NO_MACHINE_ID') return reply.status(400).send({ error: `No ${providerId} server configured.` });
       const safeProviderId = providerId.replace(/[\r\n\t]/g, '');
       console.error('Failed to import %s users:', safeProviderId, err);
-      logEvent('error', 'User', `Import ${safeProviderId} \u00e9chou\u00e9 : ${String(err)}`);
-      return reply.status(502).send({ error: `Impossible de r\u00e9cup\u00e9rer les utilisateurs ${providerId}` });
+      logEvent('error', 'User', `${safeProviderId} import failed: ${String(err)}`);
+      return reply.status(502).send({ error: `Unable to retrieve ${providerId} users` });
     }
   });
 
@@ -139,13 +139,13 @@ export async function usersRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const userId = parseId(id);
-    if (!userId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!userId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const { role } = request.body as { role: string };
 
     // Validate role exists in DB
     const roleExists = await prisma.role.findUnique({ where: { name: role } });
-    if (!roleExists) return reply.status(400).send({ error: 'R\u00f4le invalide' });
+    if (!roleExists) return reply.status(400).send({ error: 'Invalid role' });
 
     const user = await prisma.user.update({
       where: { id: userId },
@@ -153,7 +153,7 @@ export async function usersRoutes(app: FastifyInstance) {
       select: { id: true, displayName: true, role: true },
     });
 
-    logEvent('info', 'User', `R\u00f4le de ${user.displayName} chang\u00e9 en ${role}`);
+    logEvent('info', 'User', `${user.displayName} role changed to ${role}`);
     return user;
   });
 }

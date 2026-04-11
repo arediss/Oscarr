@@ -17,10 +17,10 @@ export function validateRequestBody(body: { tmdbId: unknown; mediaType: unknown;
 } | { valid: false; error: string } {
   const { tmdbId, mediaType, seasons } = body;
   if (typeof tmdbId !== 'number' || !Number.isFinite(tmdbId) || tmdbId < 1) {
-    return { valid: false, error: 'tmdbId invalide' };
+    return { valid: false, error: 'Invalid tmdbId' };
   }
   if (!VALID_MEDIA_TYPES.includes(mediaType as string)) {
-    return { valid: false, error: 'mediaType doit être "movie" ou "tv"' };
+    return { valid: false, error: 'mediaType must be "movie" or "tv"' };
   }
   const validSeasons = Array.isArray(seasons) && seasons.every((s) => typeof s === 'number' && Number.isFinite(s))
     ? (seasons as number[])
@@ -215,11 +215,11 @@ export async function sendToService(
             data: { tvdbId: resolvedTvdbId },
           });
         } else {
-          console.error('Cannot send TV request — tvdbId not found in TMDB for "%s"', media.title);
+          logEvent('debug', 'Request', `Cannot send TV request — tvdbId not found in TMDB for "${media.title}"`);
           return false;
         }
       } catch {
-        console.error('Cannot send TV request — failed to resolve tvdbId for "%s"', media.title);
+        logEvent('debug', 'Request', `Cannot send TV request — failed to resolve tvdbId for "${media.title}"`);
         return false;
       }
     }
@@ -227,8 +227,8 @@ export async function sendToService(
     await sendToArrService(resolvedMedia, mediaType, username, ctx, seasons, rootFolderOverride);
     return true;
   } catch (err) {
-    console.error('Failed to send %s "%s" to service:', mediaType, media.title, err);
-    logEvent('error', 'Request', `Échec d'envoi de "${media.title}" vers ${getServiceTypeForMedia(mediaType)} : ${String(err)}`);
+    logEvent('debug', 'Request', `Failed to send ${mediaType} "${media.title}" to service: ${err}`);
+    logEvent('error', 'Request', `Failed to send "${media.title}" to ${getServiceTypeForMedia(mediaType)}: ${String(err)}`);
     return false;
   }
 }
@@ -318,7 +318,7 @@ export async function retryFailedRequests(): Promise<{ retried: number; succeede
   }
 
   if (succeeded > 0) {
-    logEvent('info', 'Request', `${succeeded}/${failed.length} demandes échouées réessayées avec succès`);
+    logEvent('info', 'Request', `${succeeded}/${failed.length} failed requests retried successfully`);
   }
 
   return { retried: failed.length, succeeded };

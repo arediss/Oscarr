@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getArrClient } from '../providers/index.js';
 import { prisma } from '../utils/prisma.js';
+import { logEvent } from '../utils/logEvent.js';
 
 export async function radarrSonarrRoutes(app: FastifyInstance) {
   // Radarr status
@@ -121,7 +122,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
 
       return downloads;
     } catch (err) {
-      console.warn('[Downloads] Failed to fetch queue:', err);
+      logEvent('debug', 'Downloads', `Failed to fetch queue: ${err}`);
       return [];
     }
   });
@@ -154,8 +155,8 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
         },
       };
     } catch (err) {
-      console.warn('[Stats] Failed to fetch library stats:', err);
-      return { error: 'Impossible de recuperer les statistiques' };
+      logEvent('debug', 'Stats', `Failed to fetch library stats: ${err}`);
+      return { error: 'Unable to retrieve statistics' };
     }
   });
 
@@ -214,7 +215,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
         })),
         ...episodeItems.map((e) => ({
           type: 'episode' as const,
-          title: e.series?.title || 'Serie inconnue',
+          title: e.series?.title || 'Unknown series',
           episodeTitle: e.title,
           season: e.seasonNumber,
           episode: e.episodeNumber,
@@ -228,7 +229,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
 
       return items;
     } catch (err) {
-      console.warn('[Calendar] Failed to fetch calendar:', err);
+      logEvent('debug', 'Calendar', `Failed to fetch calendar: ${err}`);
       return [];
     }
   });

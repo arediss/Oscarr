@@ -34,7 +34,7 @@ export async function jobsRoutes(app: FastifyInstance) {
     const { cronExpression, enabled } = request.body as { cronExpression?: string; enabled?: boolean };
 
     if (cronExpression && !nodeSchedule.validate(cronExpression)) {
-      return reply.status(400).send({ error: 'Expression CRON invalide' });
+      return reply.status(400).send({ error: 'Invalid CRON expression' });
     }
 
     const job = await prisma.cronJob.update({
@@ -67,7 +67,7 @@ export async function jobsRoutes(app: FastifyInstance) {
       const job = await prisma.cronJob.findUnique({ where: { key } });
       return { ok: true, result, job };
     } catch (err) {
-      return reply.status(500).send({ error: 'Le job a \u00e9chou\u00e9', details: String(err) });
+      return reply.status(500).send({ error: 'Job failed', details: String(err) });
     }
   });
 }

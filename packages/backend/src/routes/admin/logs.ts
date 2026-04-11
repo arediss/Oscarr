@@ -10,7 +10,7 @@ export async function logsRoutes(app: FastifyInstance) {
         type: 'object',
         properties: {
           page: { type: 'string', description: 'Page number (defaults to 1)' },
-          level: { type: 'string', enum: ['info', 'warn', 'error'], description: 'Filter logs by level' },
+          level: { type: 'string', enum: ['info', 'warn', 'error', 'debug'], description: 'Filter logs by level' },
           label: { type: 'string', description: 'Filter logs by label' },
         },
       },
@@ -22,7 +22,7 @@ export async function logsRoutes(app: FastifyInstance) {
     const take = 50;
     const skip = (pageNum - 1) * take;
     const where: Record<string, unknown> = {};
-    if (level && ['info', 'warn', 'error'].includes(level)) where.level = level;
+    if (level && ['info', 'warn', 'error', 'debug'].includes(level)) where.level = level;
     if (label) where.label = label;
 
     const [logs, total] = await Promise.all([

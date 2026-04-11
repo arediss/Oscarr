@@ -66,12 +66,11 @@ async function runJob(key: string) {
         lastResult: JSON.stringify(result ?? null),
       },
     });
-    console.log(`[Scheduler] Job "${sanitize(key)}" completed in ${duration}ms`);
-    logEvent('info', 'Job', `Job "${sanitize(key)}" terminé en ${duration}ms`);
+    logEvent('info', 'Job', `Job "${sanitize(key)}" completed in ${duration}ms`);
 
     // After the first successful full sync, start all cron schedules
     if (wasFirstSync && key === 'full_sync' && activeTasks.size === 0) {
-      console.log('[Scheduler] First full sync done — starting cron schedules');
+      logEvent('debug', 'Job', 'First full sync done — starting cron schedules');
       await startAllJobs();
     }
 
@@ -87,8 +86,7 @@ async function runJob(key: string) {
         lastResult: JSON.stringify({ error: String(err) }),
       },
     });
-    console.error('[Scheduler] Job "%s" failed:', sanitize(key), err);
-    logEvent('error', 'Job', `Job "${sanitize(key)}" échoué : ${String(err)}`);
+    logEvent('error', 'Job', `Job "${sanitize(key)}" failed: ${String(err)}`);
     throw err;
   }
 }
@@ -102,7 +100,7 @@ function scheduleJob(key: string, cronExpression: string) {
   }
 
   if (!cron.validate(cronExpression)) {
-    console.error('[Scheduler] Invalid cron expression for "%s": %s', sanitize(key), sanitize(cronExpression));
+    logEvent('debug', 'Job', `Invalid cron expression for "${sanitize(key)}": ${sanitize(cronExpression)}`);
     return;
   }
 
@@ -110,7 +108,7 @@ function scheduleJob(key: string, cronExpression: string) {
     runJob(key).catch(() => {});
   });
   activeTasks.set(key, task);
-  console.log('[Scheduler] Job "%s" scheduled: %s', sanitize(key), sanitize(cronExpression));
+  logEvent('debug', 'Job', `Job "${sanitize(key)}" scheduled: ${sanitize(cronExpression)}`);
 }
 
 /** Check if a first full sync has been completed */
@@ -127,7 +125,7 @@ async function startAllJobs() {
       scheduleJob(job.key, job.cronExpression);
     }
   }
-  console.log(`[Scheduler] ${jobs.filter((j) => j.enabled).length}/${jobs.length} jobs active`);
+  logEvent('debug', 'Job', `${jobs.filter((j) => j.enabled).length}/${jobs.length} jobs active`);
 }
 
 export async function initScheduler(pluginEngine?: PluginEngine) {
@@ -152,7 +150,7 @@ export async function initScheduler(pluginEngine?: PluginEngine) {
   if (await hasCompletedFirstSync()) {
     await startAllJobs();
   } else {
-    console.log('[Scheduler] Jobs seeded but not started — waiting for first full sync');
+    logEvent('debug', 'Job', 'Jobs seeded but not started — waiting for first full sync');
   }
 }
 

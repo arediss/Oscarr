@@ -94,7 +94,7 @@ export async function mediaRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const mediaId = parseId(id);
-    if (!mediaId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!mediaId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const media = await prisma.media.findUnique({
       where: { id: mediaId },
@@ -110,7 +110,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       },
     });
 
-    if (!media) return reply.status(404).send({ error: 'Média introuvable' });
+    if (!media) return reply.status(404).send({ error: 'Media not found' });
     return media;
   });
 
@@ -129,8 +129,8 @@ export async function mediaRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { tmdbId, mediaType } = request.params as { tmdbId: string; mediaType: string };
     const tmdbIdNum = parseId(tmdbId);
-    if (!tmdbIdNum) return reply.status(400).send({ error: 'tmdbId invalide' });
-    if (!VALID_MEDIA_TYPES.includes(mediaType)) return reply.status(400).send({ error: 'mediaType invalide' });
+    if (!tmdbIdNum) return reply.status(400).send({ error: 'Invalid tmdbId' });
+    if (!VALID_MEDIA_TYPES.includes(mediaType)) return reply.status(400).send({ error: 'Invalid mediaType' });
 
     const media = await prisma.media.findUnique({
       where: {
@@ -293,7 +293,7 @@ export async function mediaRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { ids } = request.body as { ids?: unknown };
     if (!Array.isArray(ids) || ids.length === 0) {
-      return reply.status(400).send({ error: 'ids requis (array of {tmdbId, mediaType})' });
+      return reply.status(400).send({ error: 'ids required (array of {tmdbId, mediaType})' });
     }
 
     // Limit to 50 per request
@@ -345,7 +345,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     const { tmdbId, seasonNumber } = request.query as { tmdbId: string; seasonNumber: string };
     const tmdbIdNum = parseId(tmdbId);
     const seasonNum = parseInt(seasonNumber, 10);
-    if (!tmdbIdNum || isNaN(seasonNum)) return reply.status(400).send({ error: 'Paramètres invalides' });
+    if (!tmdbIdNum || isNaN(seasonNum)) return reply.status(400).send({ error: 'Invalid parameters' });
 
     // Find the media in our DB to get sonarrId
     const media = await prisma.media.findUnique({
@@ -353,15 +353,15 @@ export async function mediaRoutes(app: FastifyInstance) {
     });
 
     if (!media?.sonarrId) {
-      return reply.status(404).send({ error: 'Série non trouvée dans Sonarr' });
+      return reply.status(404).send({ error: 'Series not found in Sonarr' });
     }
 
     try {
       const client = await getArrClient('sonarr');
-      if (!client.getEpisodesNormalized) return reply.status(400).send({ error: 'Ce service ne supporte pas les épisodes' });
+      if (!client.getEpisodesNormalized) return reply.status(400).send({ error: 'This service does not support episodes' });
       return await client.getEpisodesNormalized(media.sonarrId, seasonNum);
     } catch {
-      return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
+      return reply.status(502).send({ error: 'Unable to reach Sonarr' });
     }
   });
 
