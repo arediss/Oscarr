@@ -63,14 +63,15 @@ export function JobsTab() {
     try {
       const { data: services } = await api.get('/admin/services') as { data: ServiceData[] };
       const arrServices = services.filter(s => ['radarr', 'sonarr'].includes(s.type));
-      const statuses = await Promise.all(arrServices.map(async (svc) => {
+      setWebhooks([]);
+      arrServices.forEach(async (svc) => {
         try {
           const { data } = await api.get(`/admin/services/${svc.id}/webhook/status`);
           const schema = SERVICE_SCHEMAS[svc.type];
-          return { serviceId: svc.id, serviceName: svc.name, serviceType: svc.type, icon: schema?.icon || '', ...data } as WebhookStatus;
-        } catch { return null; }
-      }));
-      setWebhooks(statuses.filter(Boolean) as WebhookStatus[]);
+          const status = { serviceId: svc.id, serviceName: svc.name, serviceType: svc.type, icon: schema?.icon || '', ...data } as WebhookStatus;
+          setWebhooks(prev => [...prev.filter(w => w.serviceId !== svc.id), status]);
+        } catch { /* ignore */ }
+      });
     } catch { /* ignore */ }
   }, [SERVICE_SCHEMAS]);
 
