@@ -218,6 +218,8 @@ model QualityOption {
   id            Int       @id @default(autoincrement())
   label         String    @unique // "SD", "HD", "4K", "4K HDR"
   position      Int       @default(0) // Display order
+  allowedRoles  String?   // JSON array of role names, null = all roles
+  approvalMode  String?   // null = inherit global, "auto" = force auto-approve, "manual" = force manual
   createdAt     DateTime  @default(now())
 
   mappings      QualityMapping[]

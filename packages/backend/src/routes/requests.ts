@@ -137,9 +137,22 @@ export async function requestRoutes(app: FastifyInstance) {
     });
     if (existing) return reply.status(409).send({ error: 'Vous avez déjà une demande en cours pour ce média' });
 
-    // Auto-approve
+    // Validate quality option role restriction
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-    const shouldAutoApprove = user.role === 'admin' || (settings?.autoApproveRequests ?? false);
+    let shouldAutoApprove = user.role === 'admin' || (settings?.autoApproveRequests ?? false);
+    if (body.qualityOptionId != null) {
+      const qualityOpt = await prisma.qualityOption.findUnique({ where: { id: body.qualityOptionId as number } });
+      if (qualityOpt?.allowedRoles && user.role !== 'admin') {
+        try {
+          const roles = JSON.parse(qualityOpt.allowedRoles) as string[];
+          if (roles.length > 0 && !roles.includes(user.role)) {
+            return reply.status(403).send({ error: 'QUALITY_NOT_ALLOWED' });
+          }
+        } catch { /* malformed JSON — allow */ }
+      }
+      if (qualityOpt?.approvalMode === 'auto') shouldAutoApprove = true;
+      else if (qualityOpt?.approvalMode === 'manual') shouldAutoApprove = user.role === 'admin';
+    }
 
     const mediaRequest = await prisma.mediaRequest.create({
       data: {
