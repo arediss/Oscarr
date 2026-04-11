@@ -61,10 +61,19 @@ export async function appRoutes(app: FastifyInstance) {
   });
 
   // Quality options available for requests (only those with at least one mapping)
-  app.get('/quality-options', async () => {
-    return prisma.qualityOption.findMany({
+  app.get('/quality-options', async (request) => {
+    const user = request.user as { id: number; role: string } | undefined;
+    const options = await prisma.qualityOption.findMany({
       where: { mappings: { some: {} } },
       orderBy: { position: 'asc' },
+    });
+    if (!user || user.role === 'admin') return options;
+    return options.filter(opt => {
+      if (!opt.allowedRoles) return true;
+      try {
+        const roles = JSON.parse(opt.allowedRoles) as string[];
+        return roles.length === 0 || roles.includes(user.role);
+      } catch { return false; }
     });
   });
 
