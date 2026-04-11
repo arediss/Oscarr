@@ -35,6 +35,7 @@ interface WebhookStatus {
   serviceType: string;
   icon: string;
   enabled: boolean;
+  serviceReachable: boolean;
   url: string;
   events: { key: string; label: string; description: string }[];
   supportsWebhooks: boolean;
@@ -245,7 +246,14 @@ export function JobsTab() {
 
                   {/* Name + event labels */}
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-ndp-text">{wh.serviceName}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-ndp-text">{wh.serviceName}</span>
+                      {wh.enabled && !wh.serviceReachable && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-ndp-warning/10 text-ndp-warning font-medium">
+                          {t('admin.services.unreachable')}
+                        </span>
+                      )}
+                    </div>
                     {wh.supportsWebhooks && wh.events.length > 0 && (
                       <div className="flex items-center gap-1.5 flex-wrap mt-1">
                         {wh.events.map(ev => (
