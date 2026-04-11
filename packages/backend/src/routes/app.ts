@@ -31,6 +31,29 @@ export async function appRoutes(app: FastifyInstance) {
     return result;
   });
 
+  // Get changelog from DB patchnotes
+  app.get('/changelog', async (request) => {
+    const lang = ((request.headers['accept-language'] || '').split(',')[0]?.split('-')[0] || 'en').toLowerCase();
+    const patchnotes = await prisma.patchnote.findMany({ orderBy: { date: 'desc' }, take: 15 });
+    return {
+      current: APP_VERSION,
+      releases: patchnotes.map(p => {
+        const entries = JSON.parse(p.entries) as { type: string; titleEn: string; titleFr: string; descEn?: string; descFr?: string }[];
+        return {
+          version: p.version,
+          type: p.type,
+          title: lang === 'fr' ? p.titleFr : p.titleEn,
+          date: p.date.toISOString(),
+          entries: entries.map(e => ({
+            type: e.type,
+            title: lang === 'fr' ? e.titleFr : e.titleEn,
+            description: lang === 'fr' ? (e.descFr || null) : (e.descEn || null),
+          })),
+        };
+      }),
+    };
+  });
+
   // Get incident banner (no auth — displayed before login)
   app.get('/banner', async () => {
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
