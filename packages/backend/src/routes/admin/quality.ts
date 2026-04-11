@@ -53,6 +53,8 @@ export async function qualityRoutes(app: FastifyInstance) {
         properties: {
           label: { type: 'string', description: 'Quality option label' },
           position: { type: 'number', description: 'Display order position' },
+          allowedRoles: { type: 'array', items: { type: 'string' }, nullable: true, description: 'Roles allowed to use this quality (null = all)' },
+          approvalMode: { type: 'string', nullable: true, description: 'Approval override: null = inherit, "auto" = force auto, "manual" = force manual' },
         },
       },
     },
@@ -61,12 +63,16 @@ export async function qualityRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const optionId = parseId(id);
     if (!optionId) return reply.status(400).send({ error: 'ID invalide' });
-    const { label, position } = request.body as { label?: string; position?: number };
+    const { label, position, allowedRoles, approvalMode } = request.body as {
+      label?: string; position?: number; allowedRoles?: string[] | null; approvalMode?: string | null;
+    };
     const option = await prisma.qualityOption.update({
       where: { id: optionId },
       data: {
         ...(label !== undefined ? { label } : {}),
         ...(position !== undefined ? { position } : {}),
+        ...(allowedRoles !== undefined ? { allowedRoles: allowedRoles && allowedRoles.length > 0 ? JSON.stringify(allowedRoles) : null } : {}),
+        ...(approvalMode !== undefined ? { approvalMode: approvalMode === 'auto' || approvalMode === 'manual' ? approvalMode : null } : {}),
       },
     });
     return option;
