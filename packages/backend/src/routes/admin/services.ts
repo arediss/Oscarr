@@ -273,7 +273,11 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     const config = JSON.parse(svc.config);
     const def = getServiceDefinition(svc.type);
-    const client = def?.createClient?.(config);
+    let client: ReturnType<NonNullable<NonNullable<typeof def>['createClient']>> | null = null;
+    let serviceReachable = true;
+    try {
+      client = def?.createClient?.(config) ?? null;
+    } catch { /* createClient failed */ }
 
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 }, select: { siteUrl: true } });
     const protocol = request.headers['x-forwarded-proto'] || 'http';
@@ -288,12 +292,13 @@ export async function servicesRoutes(app: FastifyInstance) {
           await prisma.service.update({ where: { id: serviceId }, data: { webhookId: null } });
           svc.webhookId = null;
         }
-      } catch { /* service unreachable — don't cleanup, assume webhook still exists */ }
+      } catch { serviceReachable = false; }
     }
 
     return {
       enabled: !!svc.webhookId,
       webhookId: svc.webhookId,
+      serviceReachable,
       url: `${baseUrl.replace(/\/$/, '')}/api/webhooks/${svc.type}`,
       events: client?.getWebhookEvents?.() || [],
       supportsWebhooks: !!(client?.parseWebhookPayload && client?.registerWebhook),

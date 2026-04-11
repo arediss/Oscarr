@@ -334,6 +334,7 @@
   "admin.services.webhook_enable": "Enable webhook (auto-sync)",
   "admin.services.webhook_disable": "Disable webhook",
   "admin.services.webhook_enabled_toast": "Webhook enabled for {{name}} — instant sync active",
+  "admin.services.unreachable": "Unreachable",
   "admin.services.webhook_disabled_toast": "Webhook disabled for {{name}}",
   "admin.services.webhook_failed_toast": "Failed to toggle webhook. Check Site URL and API Key in General settings.",
   "admin.services.set_default": "Set as default service",
