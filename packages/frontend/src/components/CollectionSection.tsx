@@ -68,7 +68,7 @@ export default function CollectionSection({ collection }: Props) {
     : t('media.request_collection');
 
   return (
-    <div className="mt-12">
+    <div className="mt-12 px-4 sm:px-8">
       <div className="flex items-center justify-between mb-4 gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <h3 className="text-lg font-bold text-ndp-text truncate">{collection.name}</h3>
