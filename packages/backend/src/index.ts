@@ -92,7 +92,7 @@ async function start() {
       },
       uiHooks: {
         preHandler: async (request, reply) => {
-          try { await request.jwtVerify(); } catch { return reply.status(401).send({ error: 'Non autorisé' }); }
+          try { await request.jwtVerify(); } catch { return reply.status(401).send({ error: 'Unauthorized' }); }
           const user = request.user as { id: number; role: string };
           if (user.role !== 'admin') return reply.status(403).send({ error: 'Admin only' });
         },

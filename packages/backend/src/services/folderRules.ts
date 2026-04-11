@@ -1,5 +1,6 @@
 import { prisma } from '../utils/prisma.js';
 import type { TmdbMovie, TmdbTv } from './tmdb.js';
+import { logEvent } from '../utils/logEvent.js';
 
 export interface RuleCondition {
   field: 'genre' | 'language' | 'country' | 'user' | 'role' | 'tag' | 'quality';
@@ -36,7 +37,7 @@ function parseKeywordIds(raw: string, tmdbId: number): number[] {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
-    console.warn(`[FolderRules] Malformed keywordIds for tmdbId=${tmdbId}: ${raw}`);
+    logEvent('debug', 'FolderRules', `Malformed keywordIds for tmdbId=${tmdbId}: ${raw}`);
     return [];
   }
 }
@@ -147,7 +148,7 @@ function parseRuleConditions(rule: { id: number; name: string; conditions: strin
   try {
     return JSON.parse(rule.conditions);
   } catch {
-    console.warn(`[FolderRules] Malformed conditions in rule id=${rule.id} "${rule.name}", skipping`);
+    logEvent('debug', 'FolderRules', `Malformed conditions in rule id=${rule.id} "${rule.name}", skipping`);
     return null;
   }
 }

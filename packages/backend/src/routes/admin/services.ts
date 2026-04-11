@@ -39,7 +39,7 @@ export async function servicesRoutes(app: FastifyInstance) {
       name: string; type: string; config: Record<string, string>; isDefault?: boolean;
     };
     if (!name || !type || !config) {
-      return reply.status(400).send({ error: 'Nom, type et configuration requis' });
+      return reply.status(400).send({ error: 'Name, type and config required' });
     }
     // If this is set as default, unset other defaults of the same type
     if (isDefault) {
@@ -48,7 +48,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     const service = await prisma.service.create({
       data: { name, type, config: JSON.stringify(config), isDefault: isDefault ?? false },
     });
-    logEvent('info', 'Service', `Service "${name}" (${type}) ajout\u00e9`);
+    logEvent('info', 'Service', `Service "${name}" (${type}) added`);
     return reply.status(201).send({ ...service, config: JSON.parse(service.config) });
   });
 
@@ -75,7 +75,7 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
-    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!serviceId) return reply.status(400).send({ error: 'Invalid ID' });
     const { name, config, isDefault, enabled } = request.body as {
       name?: string; config?: Record<string, string>; isDefault?: boolean; enabled?: boolean;
     };
@@ -112,9 +112,9 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
-    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!serviceId) return reply.status(400).send({ error: 'Invalid ID' });
     const deleted = await prisma.service.delete({ where: { id: serviceId } });
-    logEvent('info', 'Service', `Service "${deleted.name}" supprim\u00e9`);
+    logEvent('info', 'Service', `Service "${deleted.name}" deleted`);
     return { ok: true };
   });
 
@@ -132,18 +132,18 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
-    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!serviceId) return reply.status(400).send({ error: 'Invalid ID' });
     const service = await prisma.service.findUnique({ where: { id: serviceId } });
-    if (!service) return reply.status(404).send({ error: 'Service introuvable' });
+    if (!service) return reply.status(404).send({ error: 'Service not found' });
     const config = JSON.parse(service.config) as Record<string, string>;
 
     const def = getServiceDefinition(service.type);
-    if (!def) return reply.status(400).send({ error: 'Test non support\u00e9 pour ce type de service' });
+    if (!def) return reply.status(400).send({ error: 'Test not supported for this service type' });
 
     try {
       return await def.test(config);
     } catch {
-      return reply.status(502).send({ error: 'Impossible de contacter le service' });
+      return reply.status(502).send({ error: 'Unable to reach the service' });
     }
   });
 
@@ -152,10 +152,10 @@ export async function servicesRoutes(app: FastifyInstance) {
   app.get('/plex-token', async (request, reply) => {
 
     const provider = getAuthProvider('plex');
-    if (!provider?.getToken) return reply.status(404).send({ error: 'Provider Plex non disponible' });
+    if (!provider?.getToken) return reply.status(404).send({ error: 'Plex provider not available' });
     const adminUser = request.user as { id: number };
     const token = await provider.getToken(adminUser.id);
-    if (!token) return reply.status(404).send({ error: 'Aucun token Plex trouv\u00e9' });
+    if (!token) return reply.status(404).send({ error: 'No Plex token found' });
     return { token };
   });
 
@@ -168,7 +168,7 @@ export async function servicesRoutes(app: FastifyInstance) {
       const profiles = await radarr.getQualityProfiles();
       return profiles;
     } catch {
-      return reply.status(502).send({ error: 'Impossible de contacter Radarr' });
+      return reply.status(502).send({ error: 'Unable to reach Radarr' });
     }
   });
 
@@ -179,7 +179,7 @@ export async function servicesRoutes(app: FastifyInstance) {
       const folders = await radarr.getRootFolders();
       return folders;
     } catch {
-      return reply.status(502).send({ error: 'Impossible de contacter Radarr' });
+      return reply.status(502).send({ error: 'Unable to reach Radarr' });
     }
   });
 
@@ -190,7 +190,7 @@ export async function servicesRoutes(app: FastifyInstance) {
       const profiles = await sonarr.getQualityProfiles();
       return profiles;
     } catch {
-      return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
+      return reply.status(502).send({ error: 'Unable to reach Sonarr' });
     }
   });
 
@@ -201,7 +201,7 @@ export async function servicesRoutes(app: FastifyInstance) {
       const folders = await sonarr.getRootFolders();
       return folders;
     } catch {
-      return reply.status(502).send({ error: 'Impossible de contacter Sonarr' });
+      return reply.status(502).send({ error: 'Unable to reach Sonarr' });
     }
   });
 
@@ -221,17 +221,17 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
-    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!serviceId) return reply.status(400).send({ error: 'Invalid ID' });
     const svc = await getServiceById(serviceId);
-    if (!svc) return reply.status(404).send({ error: 'Service introuvable ou d\u00e9sactiv\u00e9' });
+    if (!svc) return reply.status(404).send({ error: 'Service not found or disabled' });
     try {
       const client = createArrClient(svc.type, svc.config);
       return await client.getQualityProfiles();
     } catch (err) {
       if (err instanceof Error && err.message.includes('does not support client creation')) {
-        return reply.status(400).send({ error: 'Ce type de service ne supporte pas les profils qualit\u00e9' });
+        return reply.status(400).send({ error: 'This service type does not support quality profiles' });
       }
-      return reply.status(502).send({ error: 'Impossible de contacter le service' });
+      return reply.status(502).send({ error: 'Unable to reach the service' });
     }
   });
 
@@ -246,17 +246,17 @@ export async function servicesRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const serviceId = parseId(id);
-    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!serviceId) return reply.status(400).send({ error: 'Invalid ID' });
     const svc = await getServiceById(serviceId);
-    if (!svc) return reply.status(404).send({ error: 'Service introuvable ou d\u00e9sactiv\u00e9' });
+    if (!svc) return reply.status(404).send({ error: 'Service not found or disabled' });
     try {
       const client = createArrClient(svc.type, svc.config);
       return await client.getRootFolders();
     } catch (err) {
       if (err instanceof Error && err.message.includes('does not support client creation')) {
-        return reply.status(400).send({ error: 'Ce type de service ne supporte pas les dossiers racine' });
+        return reply.status(400).send({ error: 'This service type does not support root folders' });
       }
-      return reply.status(502).send({ error: 'Impossible de contacter le service' });
+      return reply.status(502).send({ error: 'Unable to reach the service' });
     }
   });
 
@@ -266,10 +266,10 @@ export async function servicesRoutes(app: FastifyInstance) {
     schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
   }, async (request, reply) => {
     const serviceId = parseId((request.params as { id: string }).id);
-    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!serviceId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const svc = await prisma.service.findUnique({ where: { id: serviceId } });
-    if (!svc) return reply.status(404).send({ error: 'Service introuvable' });
+    if (!svc) return reply.status(404).send({ error: 'Service not found' });
 
     const config = JSON.parse(svc.config);
     const def = getServiceDefinition(svc.type);
@@ -309,10 +309,10 @@ export async function servicesRoutes(app: FastifyInstance) {
     schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
   }, async (request, reply) => {
     const serviceId = parseId((request.params as { id: string }).id);
-    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!serviceId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const svc = await prisma.service.findUnique({ where: { id: serviceId } });
-    if (!svc) return reply.status(404).send({ error: 'Service introuvable' });
+    if (!svc) return reply.status(404).send({ error: 'Service not found' });
     if (svc.webhookId) return reply.status(409).send({ error: 'Webhook already enabled', webhookId: svc.webhookId });
 
     const config = JSON.parse(svc.config);
@@ -344,7 +344,7 @@ export async function servicesRoutes(app: FastifyInstance) {
       logEvent('info', 'Webhook', `Webhook enabled for ${svc.name} (ID: ${webhookId})`);
       return { ok: true, webhookId };
     } catch (err) {
-      console.error(`[Webhook] Failed to register webhook for ${svc.name}:`, err);
+      logEvent('debug', 'Webhook', `Failed to register webhook for ${svc.name}: ${err}`);
       return reply.status(502).send({ error: 'Failed to register webhook in service' });
     }
   });
@@ -353,10 +353,10 @@ export async function servicesRoutes(app: FastifyInstance) {
     schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
   }, async (request, reply) => {
     const serviceId = parseId((request.params as { id: string }).id);
-    if (!serviceId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!serviceId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const svc = await prisma.service.findUnique({ where: { id: serviceId } });
-    if (!svc) return reply.status(404).send({ error: 'Service introuvable' });
+    if (!svc) return reply.status(404).send({ error: 'Service not found' });
     if (!svc.webhookId) return reply.send({ ok: true, message: 'Webhook already disabled' });
 
     const config = JSON.parse(svc.config);
@@ -367,7 +367,7 @@ export async function servicesRoutes(app: FastifyInstance) {
       try {
         await client.removeWebhook(svc.webhookId);
       } catch (err) {
-        console.warn(`[Webhook] Failed to remove webhook ${svc.webhookId} from ${svc.name}:`, err);
+        logEvent('debug', 'Webhook', `Failed to remove webhook ${svc.webhookId} from ${svc.name}: ${err}`);
       }
     }
 

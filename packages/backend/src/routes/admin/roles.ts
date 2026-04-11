@@ -33,10 +33,10 @@ export async function rolesRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { name, permissions, position } = request.body as { name: string; permissions: string[]; position?: number };
 
-    if (!name?.trim()) return reply.status(400).send({ error: 'Nom requis' });
+    if (!name?.trim()) return reply.status(400).send({ error: 'Name required' });
 
     const existing = await prisma.role.findUnique({ where: { name: name.trim().toLowerCase() } });
-    if (existing) return reply.status(409).send({ error: 'Ce r\u00f4le existe d\u00e9j\u00e0' });
+    if (existing) return reply.status(409).send({ error: 'This role already exists' });
 
     const maxPos = await prisma.role.aggregate({ _max: { position: true } });
     const role = await prisma.role.create({
@@ -48,7 +48,7 @@ export async function rolesRoutes(app: FastifyInstance) {
     });
 
     await invalidateRoleCache();
-    logEvent('info', 'Admin', `R\u00f4le cr\u00e9\u00e9 : ${role.name}`);
+    logEvent('info', 'Admin', `Role created: ${role.name}`);
     return reply.status(201).send(role);
   });
 
@@ -72,10 +72,10 @@ export async function rolesRoutes(app: FastifyInstance) {
     },
   }, async (request, reply) => {
     const roleId = parseId((request.params as { id: string }).id);
-    if (!roleId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!roleId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const role = await prisma.role.findUnique({ where: { id: roleId } });
-    if (!role) return reply.status(404).send({ error: 'R\u00f4le introuvable' });
+    if (!role) return reply.status(404).send({ error: 'Role not found' });
 
     const { name, permissions, isDefault, position } = request.body as {
       name?: string; permissions?: string[]; isDefault?: boolean; position?: number;
@@ -83,7 +83,7 @@ export async function rolesRoutes(app: FastifyInstance) {
 
     // System roles cannot be renamed
     if (role.isSystem && name && name !== role.name) {
-      return reply.status(400).send({ error: 'Impossible de renommer un r\u00f4le syst\u00e8me' });
+      return reply.status(400).send({ error: 'Cannot rename a system role' });
     }
 
     // If setting as default, unset other defaults
@@ -102,7 +102,7 @@ export async function rolesRoutes(app: FastifyInstance) {
     });
 
     await invalidateRoleCache();
-    logEvent('info', 'Admin', `R\u00f4le modifi\u00e9 : ${updated.name}`);
+    logEvent('info', 'Admin', `Role updated: ${updated.name}`);
     return updated;
   });
 
@@ -117,21 +117,21 @@ export async function rolesRoutes(app: FastifyInstance) {
     },
   }, async (request, reply) => {
     const roleId = parseId((request.params as { id: string }).id);
-    if (!roleId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!roleId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const role = await prisma.role.findUnique({ where: { id: roleId } });
-    if (!role) return reply.status(404).send({ error: 'R\u00f4le introuvable' });
-    if (role.isSystem) return reply.status(400).send({ error: 'Impossible de supprimer un r\u00f4le syst\u00e8me' });
+    if (!role) return reply.status(404).send({ error: 'Role not found' });
+    if (role.isSystem) return reply.status(400).send({ error: 'Cannot delete a system role' });
 
     // Check if any users still have this role
     const usersWithRole = await prisma.user.count({ where: { role: role.name } });
     if (usersWithRole > 0) {
-      return reply.status(400).send({ error: `${usersWithRole} utilisateur(s) ont encore ce r\u00f4le. R\u00e9assignez-les d'abord.` });
+      return reply.status(400).send({ error: `${usersWithRole} user(s) still have this role. Reassign them first.` });
     }
 
     await prisma.role.delete({ where: { id: roleId } });
     await invalidateRoleCache();
-    logEvent('info', 'Admin', `R\u00f4le supprim\u00e9 : ${role.name}`);
+    logEvent('info', 'Admin', `Role deleted: ${role.name}`);
     return { ok: true };
   });
 }

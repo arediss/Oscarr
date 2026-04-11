@@ -14,17 +14,17 @@ if (!SETUP_SECRET) {
 
 async function requireNotInstalled(_request: FastifyRequest, reply: FastifyReply) {
   if (isInstalled()) {
-    return reply.status(403).send({ error: 'Installation déjà effectuée' });
+    return reply.status(403).send({ error: 'Installation already completed' });
   }
 }
 
 async function requireSetupSecret(request: FastifyRequest, reply: FastifyReply) {
   if (!SETUP_SECRET) {
-    return reply.status(500).send({ error: 'SETUP_SECRET non configuré dans le .env' });
+    return reply.status(500).send({ error: 'SETUP_SECRET not configured in .env' });
   }
   const token = request.headers['x-setup-secret'];
   if (token !== SETUP_SECRET) {
-    return reply.status(401).send({ error: 'Secret d\'installation invalide' });
+    return reply.status(401).send({ error: 'Invalid setup secret' });
   }
 }
 
@@ -72,10 +72,10 @@ export async function setupRoutes(app: FastifyInstance) {
     },
   }, async (request, reply) => {
     const { pinId } = request.body as { pinId: number };
-    if (!pinId) return reply.status(400).send({ error: 'pinId requis' });
+    if (!pinId) return reply.status(400).send({ error: 'pinId required' });
     const { plexCheckPin } = await import('../providers/plex/index.js');
     const authToken = await plexCheckPin(pinId);
-    if (!authToken) return reply.status(400).send({ error: 'PIN non validé' });
+    if (!authToken) return reply.status(400).send({ error: 'PIN not validated' });
     return reply.send({ token: authToken });
   });
 
@@ -95,12 +95,12 @@ export async function setupRoutes(app: FastifyInstance) {
     const { type, config } = request.body as { type: string; config: Record<string, string> };
     const { getServiceDefinition } = await import('../providers/index.js');
     const def = getServiceDefinition(type);
-    if (!def) return reply.status(400).send({ error: 'Type de service non supporté' });
+    if (!def) return reply.status(400).send({ error: 'Unsupported service type' });
 
     try {
       return await def.test(config);
     } catch {
-      return reply.status(502).send({ error: 'Impossible de contacter le service' });
+      return reply.status(502).send({ error: 'Unable to reach the service' });
     }
   });
 
@@ -120,7 +120,7 @@ export async function setupRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { name, type, config } = request.body as { name: string; type: string; config: Record<string, string> };
     if (!name || !type || !config) {
-      return reply.status(400).send({ error: 'Tous les champs sont requis' });
+      return reply.status(400).send({ error: 'All fields are required' });
     }
 
     const service = await prisma.service.create({
@@ -142,7 +142,7 @@ export async function setupRoutes(app: FastifyInstance) {
       });
     }
 
-    logEvent('info', 'Setup', `Service "${name}" (${type}) ajouté via l'installation`);
+    logEvent('info', 'Setup', `Service "${name}" (${type}) added during installation`);
     return reply.status(201).send({ ok: true, service: { ...service, config: JSON.parse(service.config) } });
   });
 
@@ -152,7 +152,7 @@ export async function setupRoutes(app: FastifyInstance) {
       where: { type: { in: ['radarr', 'sonarr'] }, enabled: true },
     });
     if (!arrService) {
-      return reply.status(400).send({ error: 'Configurez au moins un service Radarr ou Sonarr' });
+      return reply.status(400).send({ error: 'Configure at least one Radarr or Sonarr service' });
     }
 
     try {
@@ -162,10 +162,10 @@ export async function setupRoutes(app: FastifyInstance) {
       // Mark installation as complete — locks all setup routes
       markInstalled();
 
-      logEvent('info', 'Setup', 'Première synchronisation complète effectuée');
+      logEvent('info', 'Setup', 'First full sync completed');
       return { ok: true, result };
     } catch (err) {
-      return reply.status(500).send({ error: 'Sync échouée', details: String(err) });
+      return reply.status(500).send({ error: 'Sync failed', details: String(err) });
     }
   });
 }

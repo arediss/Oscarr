@@ -2,6 +2,7 @@ import axios, { type AxiosInstance } from 'axios';
 import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrWebhookEvent } from '../types.js';
 import { extractImageFromArr } from '../types.js';
 import type { RadarrMovie, RadarrQueueItem, RadarrHistoryRecord } from './types.js';
+import { logEvent } from '../../utils/logEvent.js';
 
 export class RadarrClient implements ArrClient {
   readonly mediaType = 'movie' as const;
@@ -121,7 +122,7 @@ export class RadarrClient implements ArrClient {
         if (records.length < 1000) break;
         page++;
       } catch {
-        console.warn(`[Radarr] History pagination failed at page ${page}, using ${all.length} records collected so far`);
+        logEvent('debug', 'Radarr', `History pagination failed at page ${page}, using ${all.length} records collected so far`);
         break;
       }
     }

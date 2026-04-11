@@ -52,8 +52,8 @@ export async function supportRoutes(app: FastifyInstance) {
     const user = request.user as { id: number };
     const { subject, message } = request.body as { subject: string; message: string };
 
-    if (!subject?.trim()) return reply.status(400).send({ error: 'Sujet requis' });
-    if (!message?.trim()) return reply.status(400).send({ error: 'Message requis' });
+    if (!subject?.trim()) return reply.status(400).send({ error: 'Subject required' });
+    if (!message?.trim()) return reply.status(400).send({ error: 'Message required' });
 
     const ticket = await prisma.supportTicket.create({
       data: {
@@ -68,7 +68,7 @@ export async function supportRoutes(app: FastifyInstance) {
       },
     });
 
-    logEvent('info', 'Support', `Ticket créé par ${ticket.user.displayName} : "${subject.trim()}"`);
+    logEvent('info', 'Support', `Ticket created by ${ticket.user.displayName}: "${subject.trim()}"`);
     return reply.status(201).send(ticket);
   });
 
@@ -88,12 +88,12 @@ export async function supportRoutes(app: FastifyInstance) {
     const user = request.user as { id: number; role: string };
     const { id } = request.params as { id: string };
     const ticketId = parseId(id);
-    if (!ticketId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!ticketId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
-    if (!ticket) return reply.status(404).send({ error: 'Ticket introuvable' });
+    if (!ticket) return reply.status(404).send({ error: 'Ticket not found' });
     if (request.ownerScoped && ticket.userId !== user.id) {
-      return reply.status(403).send({ error: 'Accès refusé' });
+      return reply.status(403).send({ error: 'Access denied' });
     }
 
     const messages = await prisma.ticketMessage.findMany({
@@ -128,15 +128,15 @@ export async function supportRoutes(app: FastifyInstance) {
     const user = request.user as { id: number; role: string };
     const { id } = request.params as { id: string };
     const ticketId = parseId(id);
-    if (!ticketId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!ticketId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const { content } = request.body as { content: string };
-    if (!content?.trim()) return reply.status(400).send({ error: 'Contenu requis' });
+    if (!content?.trim()) return reply.status(400).send({ error: 'Content required' });
 
     const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
-    if (!ticket) return reply.status(404).send({ error: 'Ticket introuvable' });
+    if (!ticket) return reply.status(404).send({ error: 'Ticket not found' });
     if (request.ownerScoped && ticket.userId !== user.id) {
-      return reply.status(403).send({ error: 'Accès refusé' });
+      return reply.status(403).send({ error: 'Access denied' });
     }
 
     // Reopen ticket if closed and user replies
@@ -153,9 +153,9 @@ export async function supportRoutes(app: FastifyInstance) {
     if (user.role === 'admin' && ticket.userId !== user.id) {
       safeUserNotify(ticket.userId, {
         type: 'support_reply',
-        title: `Réponse sur votre ticket #${ticketId}`,
+        title: 'notifications.msg.support_reply',
         message: content.trim().slice(0, 200),
-        metadata: { ticketId },
+        metadata: { ticketId, msgParams: { ticketId } },
       });
     }
 
@@ -184,10 +184,10 @@ export async function supportRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const ticketId = parseId(id);
-    if (!ticketId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!ticketId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const { status } = request.body as { status: string };
-    if (!['open', 'closed'].includes(status)) return reply.status(400).send({ error: 'Statut invalide' });
+    if (!['open', 'closed'].includes(status)) return reply.status(400).send({ error: 'Invalid status' });
 
     const ticket = await prisma.supportTicket.update({
       where: { id: ticketId },
@@ -197,7 +197,7 @@ export async function supportRoutes(app: FastifyInstance) {
       },
     });
 
-    logEvent('info', 'Support', `Ticket #${ticketId} ${status === 'closed' ? 'fermé' : 'réouvert'}`);
+    logEvent('info', 'Support', `Ticket #${ticketId} ${status === 'closed' ? 'closed' : 'reopened'}`);
     return ticket;
   });
 }

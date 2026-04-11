@@ -27,8 +27,8 @@ export function sendAvailabilityNotifications(
       safeUserNotify(req.userId, {
         type: 'media_available',
         title,
-        message: `"${title}" est maintenant disponible.`,
-        metadata: { mediaId, tmdbId, mediaType },
+        message: 'notifications.msg.media_available',
+        metadata: { mediaId, tmdbId, mediaType, msgParams: { title } },
       });
     }
   }).catch(() => {});

@@ -3,6 +3,7 @@ import { getArrClient } from '../providers/index.js';
 import type { ArrMediaItem } from '../providers/types.js';
 import { getServiceConfig } from '../utils/services.js';
 import { chunk } from '../utils/batch.js';
+import { logEvent } from '../utils/logEvent.js';
 
 export async function cleanupOrphanedRequests(): Promise<{ deleted: number }> {
   const result = await prisma.$executeRaw`DELETE FROM MediaRequest WHERE userId NOT IN (SELECT id FROM User) OR mediaId NOT IN (SELECT id FROM Media)`;
@@ -47,7 +48,7 @@ async function syncServiceRequests(serviceType: string, usernameMap: Map<string,
 
   const config = await getServiceConfig(serviceType);
   if (!config) {
-    console.log(`[RequestSync] ${serviceType}: no service configured, skipping`);
+    logEvent('debug', 'RequestSync', `${serviceType}: no service configured, skipping`);
     return { imported: 0, skipped: 0, errors: 0 };
   }
 
@@ -131,7 +132,7 @@ async function syncServiceRequests(serviceType: string, usernameMap: Map<string,
       imported = toCreate.length;
     }
   } catch (err) {
-    console.error(`[RequestSync] ${serviceType} sync failed:`, err);
+    logEvent('debug', 'RequestSync', `${serviceType} sync failed: ${err}`);
     errors++;
   }
 

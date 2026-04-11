@@ -10,7 +10,7 @@ export async function dangerRoutes(app: FastifyInstance) {
   app.delete('/danger/requests', async (request, reply) => {
 
     const { count } = await prisma.mediaRequest.deleteMany();
-    logEvent('warn', 'Admin', `Purge : ${count} demandes supprim\u00e9es`);
+    logEvent('warn', 'Admin', `Purge: ${count} requests deleted`);
     return { ok: true, deleted: count };
   });
 
@@ -21,7 +21,7 @@ export async function dangerRoutes(app: FastifyInstance) {
     const { count: reqCount } = await prisma.mediaRequest.deleteMany();
     const { count: seasonCount } = await prisma.season.deleteMany();
     const { count: mediaCount } = await prisma.media.deleteMany();
-    logEvent('warn', 'Admin', `Purge : ${mediaCount} m\u00e9dias, ${seasonCount} saisons, ${reqCount} demandes supprim\u00e9s`);
+    logEvent('warn', 'Admin', `Purge: ${mediaCount} media, ${seasonCount} seasons, ${reqCount} requests deleted`);
     return { ok: true, deleted: { media: mediaCount, seasons: seasonCount, requests: reqCount } };
   });
 
@@ -40,16 +40,16 @@ export async function dangerRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const userId = parseId(id);
-    if (!userId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!userId) return reply.status(400).send({ error: 'Invalid ID' });
 
     const currentUser = request.user as { id: number };
-    if (userId === currentUser.id) return reply.status(400).send({ error: 'Impossible de supprimer votre propre compte' });
+    if (userId === currentUser.id) return reply.status(400).send({ error: 'Cannot delete your own account' });
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return reply.status(404).send({ error: 'Utilisateur introuvable' });
+    if (!user) return reply.status(404).send({ error: 'User not found' });
 
     await prisma.user.delete({ where: { id: userId } });
-    logEvent('warn', 'Admin', `Utilisateur supprim\u00e9 : ${user.displayName || user.email}`);
+    logEvent('warn', 'Admin', `User deleted: ${user.displayName || user.email}`);
     return { ok: true };
   });
 
@@ -58,7 +58,7 @@ export async function dangerRoutes(app: FastifyInstance) {
 
     const currentUser = request.user as { id: number };
     const { count } = await prisma.user.deleteMany({ where: { id: { not: currentUser.id } } });
-    logEvent('warn', 'Admin', `Purge : ${count} utilisateurs supprim\u00e9s`);
+    logEvent('warn', 'Admin', `Purge: ${count} users deleted`);
     return { ok: true, deleted: count };
   });
 }

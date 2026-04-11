@@ -32,7 +32,7 @@ export async function folderRulesRoutes(app: FastifyInstance) {
       name: string; mediaType: string; conditions: unknown[]; folderPath: string; seriesType?: string; priority?: number; serviceId?: number;
     };
     if (!name || !mediaType || !conditions || !folderPath) {
-      return reply.status(400).send({ error: 'Tous les champs sont requis' });
+      return reply.status(400).send({ error: 'All fields are required' });
     }
     const rule = await prisma.folderRule.create({
       data: {
@@ -74,7 +74,7 @@ export async function folderRulesRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const ruleId = parseId(id);
-    if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!ruleId) return reply.status(400).send({ error: 'Invalid ID' });
     const { name, mediaType, conditions, folderPath, seriesType, priority, serviceId } = request.body as {
       name?: string; mediaType?: string; conditions?: unknown[]; folderPath?: string; seriesType?: string; priority?: number; serviceId?: number | null;
     };
@@ -107,7 +107,7 @@ export async function folderRulesRoutes(app: FastifyInstance) {
 
     const { id } = request.params as { id: string };
     const ruleId = parseId(id);
-    if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!ruleId) return reply.status(400).send({ error: 'Invalid ID' });
     await prisma.folderRule.delete({ where: { id: ruleId } });
     return reply.send({ ok: true });
   });
@@ -141,9 +141,9 @@ export async function folderRulesRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const ruleId = parseId(id);
-    if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!ruleId) return reply.status(400).send({ error: 'Invalid ID' });
     const rule = await prisma.folderRule.findUnique({ where: { id: ruleId } });
-    if (!rule) return reply.status(404).send({ error: 'R\u00e8gle introuvable' });
+    if (!rule) return reply.status(404).send({ error: 'Rule not found' });
     const updated = await prisma.folderRule.update({ where: { id: ruleId }, data: { enabled: !rule.enabled } });
     return reply.send(updated);
   });
@@ -160,9 +160,9 @@ export async function folderRulesRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const ruleId = parseId(id);
-    if (!ruleId) return reply.status(400).send({ error: 'ID invalide' });
+    if (!ruleId) return reply.status(400).send({ error: 'Invalid ID' });
     const rule = await prisma.folderRule.findUnique({ where: { id: ruleId } });
-    if (!rule) return reply.status(404).send({ error: 'R\u00e8gle introuvable' });
+    if (!rule) return reply.status(404).send({ error: 'Rule not found' });
     const count = await prisma.folderRule.count();
     const copy = await prisma.folderRule.create({
       data: {

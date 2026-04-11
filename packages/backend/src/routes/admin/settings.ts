@@ -144,11 +144,11 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (body.instanceLanguages) {
       invalidateLanguageCache();
       await prisma.tmdbCache.deleteMany();
-      logEvent('info', 'Settings', 'Cache TMDB vid\u00e9 suite au changement de langue');
+      logEvent('info', 'Settings', 'TMDB cache cleared due to language change');
     }
 
     if (body.siteUrl !== undefined) invalidateSiteUrl();
-    logEvent('info', 'Settings', 'Param\u00e8tres mis \u00e0 jour');
+    logEvent('info', 'Settings', 'Settings updated');
     return settings;
   });
 
