@@ -5,6 +5,7 @@ import { syncRequestsFromTags, cleanupOrphanedRequests } from './requestSync.js'
 import { retryFailedRequests } from './requestService.js';
 import { getGenreBackdrops } from './tmdb.js';
 import { syncMissingKeywords } from './sync/keywordSync.js';
+import { runAutoBackup } from '../routes/admin/backup.js';
 import type { PluginEngine } from '../plugins/engine.js';
 import { logEvent } from '../utils/logEvent.js';
 
@@ -22,6 +23,7 @@ const JOB_HANDLERS: Record<string, () => Promise<unknown>> = {
   retry_failed_requests: async () => retryFailedRequests(),
   genre_backdrops_refresh: async () => getGenreBackdrops(),
   keyword_sync: async () => syncMissingKeywords(),
+  auto_backup: async () => runAutoBackup(),
 };
 
 // Default job definitions (seeded on first boot)
@@ -33,6 +35,7 @@ const DEFAULT_JOBS = [
   { key: 'retry_failed_requests', label: 'Retry failed requests', cronExpression: '*/30 * * * *', enabled: true },
   { key: 'genre_backdrops_refresh', label: 'Refresh genre backdrops', cronExpression: '0 4 * * *', enabled: true },
   { key: 'keyword_sync', label: 'Sync TMDB keywords', cronExpression: '0 */1 * * *', enabled: true },
+  { key: 'auto_backup', label: 'Auto backup', cronExpression: '0 */6 * * *', enabled: true },
 ];
 
 const activeTasks = new Map<string, ScheduledTask>();
