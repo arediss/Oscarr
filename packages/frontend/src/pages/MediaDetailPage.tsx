@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   User,
+  Clapperboard,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
@@ -716,10 +717,11 @@ function CastSection({ cast, title, director }: { cast: TmdbCast[]; title: strin
       <div className="flex items-center gap-3 mb-4 sm:px-8">
         <h3 className="text-xl font-bold text-ndp-text">{title}</h3>
         {director && (
-          <span className="text-sm text-ndp-text-muted">
-            <span className="text-ndp-text-dim">·</span>{' '}
-            <span className="text-ndp-accent font-medium">{director.name}</span>
-          </span>
+          <Link to={`/person/${director.id}`} className="flex items-center gap-1.5 text-sm text-ndp-text-muted hover:text-ndp-accent transition-colors">
+            <span className="text-ndp-text-dim">·</span>
+            <Clapperboard className="w-3.5 h-3.5" />
+            <span className="font-medium">{director.name}</span>
+          </Link>
         )}
       </div>
 
