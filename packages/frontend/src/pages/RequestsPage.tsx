@@ -16,6 +16,7 @@ import {
   X,
   Save,
   Eraser,
+  SlidersHorizontal,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -64,6 +65,10 @@ export default function RequestsPage() {
   const [filtering, setFiltering] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<string>('');
+  const [filterUser, setFilterUser] = useState<string>('');
+  const [filterMediaType, setFilterMediaType] = useState<string>('');
+  const [filterQuality, setFilterQuality] = useState<string>('');
+  const [users, setUsers] = useState<{ id: number; displayName: string }[]>([]);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -78,6 +83,7 @@ export default function RequestsPage() {
   useEffect(() => {
     api.get('/requests/stats').then(({ data }) => setStats(data)).catch(() => {});
     api.get('/app/quality-options').then(({ data }) => setQualityOptions(data)).catch(() => {});
+    if (isAdmin) api.get('/admin/users').then(({ data }) => setUsers(data.map((u: { id: number; displayName: string; email: string }) => ({ id: u.id, displayName: u.displayName || u.email })))).catch(() => {});
   }, []);
 
   const fetchRequests = useCallback(async (pageNum: number, append = false) => {
@@ -85,6 +91,9 @@ export default function RequestsPage() {
     try {
       const params = new URLSearchParams();
       if (filter) params.set('status', filter);
+      if (filterUser) params.set('userId', filterUser);
+      if (filterMediaType) params.set('mediaType', filterMediaType);
+      if (filterQuality) params.set('qualityOptionId', filterQuality);
       params.set('page', String(pageNum));
       const { data } = await api.get(`/requests?${params}`);
       if (append) {
@@ -102,11 +111,11 @@ export default function RequestsPage() {
       setFiltering(false);
       setLoadingMore(false);
     }
-  }, [filter]);
+  }, [filter, filterUser, filterMediaType, filterQuality]);
 
   useEffect(() => {
     fetchRequests(1);
-  }, [filter]);
+  }, [filter, filterUser, filterMediaType, filterQuality]);
 
   const loadMore = useCallback(() => {
     if (loadingMore || page >= totalPages) return;
@@ -176,33 +185,45 @@ export default function RequestsPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          {FILTER_TABS.map(tab => {
-            const count = getStatCount(tab.key);
-            const isActive = filter === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setFilter(tab.key)}
-                className={clsx(
-                  'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors duration-200',
-                  isActive
-                    ? 'bg-ndp-accent text-white'
-                    : 'text-ndp-text-muted hover:bg-ndp-surface-light',
-                )}
-              >
-                {t(tab.labelKey)}
-                {count > 0 && (
-                  <span className={clsx(
-                    'text-xs px-1.5 py-0.5 rounded-md font-semibold',
-                    isActive ? 'bg-white/20' : 'bg-white/5',
-                  )}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto flex-1" style={{ scrollbarWidth: 'none' }}>
+            {FILTER_TABS.map(tab => {
+              const count = getStatCount(tab.key);
+              const isActive = filter === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setFilter(tab.key)}
+                  className={clsx(
+                    'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors duration-200',
+                    isActive
+                      ? 'bg-ndp-accent text-white'
+                      : 'text-ndp-text-muted hover:bg-ndp-surface-light',
+                  )}
+                >
+                  {t(tab.labelKey)}
+                  {count > 0 && (
+                    <span className={clsx(
+                      'text-xs px-1.5 py-0.5 rounded-md font-semibold',
+                      isActive ? 'bg-white/20' : 'bg-white/5',
+                    )}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Advanced filters (admin only) */}
+          {isAdmin && (
+            <RequestFilters
+              filterUser={filterUser} setFilterUser={setFilterUser}
+              filterMediaType={filterMediaType} setFilterMediaType={setFilterMediaType}
+              filterQuality={filterQuality} setFilterQuality={setFilterQuality}
+              users={users} qualityOptions={qualityOptions}
+            />
+          )}
         </div>
       </div>
 
@@ -723,5 +744,153 @@ function RequestCard({
         document.body
       )}
     </Link>
+  );
+}
+
+// ─── Request Filters Popover ─────────────────────────────────────
+
+function RequestFilters({ filterUser, setFilterUser, filterMediaType, setFilterMediaType, filterQuality, setFilterQuality, users, qualityOptions }: {
+  filterUser: string; setFilterUser: (v: string) => void;
+  filterMediaType: string; setFilterMediaType: (v: string) => void;
+  filterQuality: string; setFilterQuality: (v: string) => void;
+  users: { id: number; displayName: string }[];
+  qualityOptions: { id: number; label: string }[];
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  const activeCount = [filterUser, filterMediaType, filterQuality].filter(Boolean).length;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const reset = () => { setFilterUser(''); setFilterMediaType(''); setFilterQuality(''); };
+
+  // Active chips
+  const chips: { key: string; label: string; onRemove: () => void }[] = [];
+  if (filterUser) {
+    const userName = users.find(u => String(u.id) === filterUser)?.displayName || filterUser;
+    chips.push({ key: 'user', label: userName, onRemove: () => setFilterUser('') });
+  }
+  if (filterMediaType) {
+    chips.push({ key: 'type', label: filterMediaType === 'movie' ? t('common.movie') : t('common.series'), onRemove: () => setFilterMediaType('') });
+  }
+  if (filterQuality) {
+    const qLabel = qualityOptions.find(q => String(q.id) === filterQuality)?.label || filterQuality;
+    chips.push({ key: 'quality', label: qLabel, onRemove: () => setFilterQuality('') });
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-shrink-0">
+      {/* Chips */}
+      {chips.map(chip => (
+        <span key={chip.key} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-ndp-text-muted">
+          {chip.label}
+          <button onClick={chip.onRemove} className="hover:text-white transition-colors"><X className="w-2.5 h-2.5" /></button>
+        </span>
+      ))}
+
+      {/* Filter button + popover */}
+      <div className="relative" ref={popoverRef}>
+        <button
+          onClick={() => setOpen(!open)}
+          className={clsx(
+            'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+            open || activeCount > 0
+              ? 'bg-ndp-accent/10 text-ndp-accent'
+              : 'bg-white/5 text-ndp-text-muted hover:bg-white/10',
+          )}
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          {t('filter.filters')}
+          {activeCount > 0 && <span className="text-ndp-accent/70">· {activeCount}</span>}
+        </button>
+
+        {open && (
+          <div className="absolute right-0 top-full mt-2 w-64 p-4 rounded-2xl bg-ndp-surface border border-white/10 shadow-2xl shadow-black/50 space-y-4 animate-fade-in z-50">
+            {/* User */}
+            <div>
+              <label className="text-[10px] font-semibold text-ndp-text-dim uppercase tracking-wider mb-1.5 block">{t('requests.filter_all_users')}</label>
+              <select
+                value={filterUser}
+                onChange={e => setFilterUser(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg text-xs text-ndp-text px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-ndp-accent/40 appearance-none cursor-pointer"
+              >
+                <option value="">{t('requests.filter_all_users')}</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+              </select>
+            </div>
+
+            {/* Media type */}
+            <div>
+              <label className="text-[10px] font-semibold text-ndp-text-dim uppercase tracking-wider mb-1.5 block">{t('requests.filter_all_types')}</label>
+              <div className="flex gap-1.5">
+                {[
+                  { value: '', label: t('common.all') },
+                  { value: 'movie', label: t('common.movie') },
+                  { value: 'tv', label: t('common.series') },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setFilterMediaType(opt.value)}
+                    className={clsx(
+                      'flex-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all',
+                      filterMediaType === opt.value ? 'bg-ndp-accent text-white' : 'bg-white/5 text-ndp-text-muted hover:bg-white/10',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quality */}
+            {qualityOptions.length > 0 && (
+              <div>
+                <label className="text-[10px] font-semibold text-ndp-text-dim uppercase tracking-wider mb-1.5 block">{t('requests.filter_all_qualities')}</label>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setFilterQuality('')}
+                    className={clsx(
+                      'px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all',
+                      !filterQuality ? 'bg-ndp-accent text-white' : 'bg-white/5 text-ndp-text-muted hover:bg-white/10',
+                    )}
+                  >
+                    {t('common.all')}
+                  </button>
+                  {qualityOptions.map(q => (
+                    <button
+                      key={q.id}
+                      onClick={() => setFilterQuality(String(q.id))}
+                      className={clsx(
+                        'px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all',
+                        filterQuality === String(q.id) ? 'bg-ndp-accent text-white' : 'bg-white/5 text-ndp-text-muted hover:bg-white/10',
+                      )}
+                    >
+                      {q.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reset */}
+            {activeCount > 0 && (
+              <button onClick={() => { reset(); setOpen(false); }} className="w-full flex items-center justify-center gap-1.5 text-xs text-ndp-text-dim hover:text-ndp-text-muted transition-colors pt-2 border-t border-white/5">
+                <X className="w-3 h-3" />
+                {t('filter.reset')}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

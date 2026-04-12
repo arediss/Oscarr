@@ -208,6 +208,7 @@
 
   "person.years_old": "years old",
   "person.filmography": "Filmography",
+  "person.more_items": "more",
   "media.recommendations": "Recommendations",
   "media.season_one": "{{count}} season",
   "media.season_other": "{{count}} seasons",
@@ -622,5 +623,9 @@
   "admin.backup.try_again": "Try again",
   "admin.backup.include_cache": "Include TMDB cache in backup (larger file)",
   "admin.backup.saved_backups": "Saved backups",
-  "admin.backup.stats_detail": "{{users}} users, {{media}} media, {{requests}} requests"
+  "admin.backup.stats_detail": "{{users}} users, {{media}} media, {{requests}} requests",
+
+  "requests.filter_all_users": "All users",
+  "requests.filter_all_types": "All types",
+  "requests.filter_all_qualities": "All qualities"
 }
