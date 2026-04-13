@@ -167,7 +167,13 @@ export async function pluginRoutes(app: FastifyInstance) {
       const ghToken = process.env.GITHUB_TOKEN;
       if (ghToken) headers['Authorization'] = `Bearer ${ghToken}`;
 
-      const res = await fetch(REGISTRY_URL, { headers });
+      const fetchWithTimeout = (url: string, opts: RequestInit = {}, timeoutMs = 5000) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(timer));
+      };
+
+      const res = await fetchWithTimeout(REGISTRY_URL, { headers });
       if (!res.ok) throw new Error(`Registry fetch failed: ${res.status}`);
       const registry = await res.json() as { plugins: { repository: string; category?: string }[] };
 
@@ -184,13 +190,13 @@ export async function pluginRoutes(app: FastifyInstance) {
       const plugins = await Promise.allSettled(
         validEntries.map(async (entry) => {
           const manifestUrl = `https://raw.githubusercontent.com/${entry.repository}/main/manifest.json`;
-          const mRes = await fetch(manifestUrl, { headers });
+          const mRes = await fetchWithTimeout(manifestUrl, { headers });
           if (!mRes.ok) return null;
           const manifest = await mRes.json() as Record<string, unknown>;
 
           let repoMeta: Record<string, unknown> = {};
           try {
-            const repoRes = await fetch(`https://api.github.com/repos/${entry.repository}`, { headers });
+            const repoRes = await fetchWithTimeout(`https://api.github.com/repos/${entry.repository}`, { headers });
             if (repoRes.ok) repoMeta = await repoRes.json() as Record<string, unknown>;
           } catch { /* ignore */ }
 
