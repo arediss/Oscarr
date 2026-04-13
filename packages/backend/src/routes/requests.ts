@@ -181,7 +181,16 @@ export async function requestRoutes(app: FastifyInstance) {
     if (shouldAutoApprove) {
       const tagName = await getUserTagName(user.id);
       const sent = await sendToService(media, mediaType, tagName, user.id, validSeasons, body.qualityOptionId);
-      if (!sent) {
+      if (sent) {
+        // Update media status immediately so the UI shows "Searching" instead of "Already requested"
+        // Don't override 'available' (quality request) or 'processing' (TV partial — keep showing "request rest")
+        if (media.status !== 'available' && media.status !== 'processing') {
+          await prisma.media.update({
+            where: { id: media.id },
+            data: { status: 'searching' },
+          }).catch(() => {}); // best-effort
+        }
+      } else {
         await prisma.mediaRequest.update({ where: { id: mediaRequest.id }, data: { status: 'failed' } });
         sendFailed = true;
       }
@@ -292,6 +301,15 @@ export async function requestRoutes(app: FastifyInstance) {
     const seasons = mediaRequest.seasons ? JSON.parse(mediaRequest.seasons) : undefined;
     const tagName = mediaRequest.user.displayName || mediaRequest.user.email || `user-${mediaRequest.user.id}`;
     const sent = await sendToService(mediaRequest.media, mediaRequest.mediaType, tagName, mediaRequest.userId, seasons, effectiveQuality, mediaRequest.rootFolder);
+
+    // Update media status immediately so the UI reflects the search
+    // Don't override 'available' or 'processing' (TV partial availability)
+    if (sent && mediaRequest.media.status !== 'available' && mediaRequest.media.status !== 'processing') {
+      await prisma.media.update({
+        where: { id: mediaRequest.media.id },
+        data: { status: 'searching' },
+      }).catch(() => {});
+    }
 
     const updated = await prisma.mediaRequest.update({
       where: { id: requestId },
