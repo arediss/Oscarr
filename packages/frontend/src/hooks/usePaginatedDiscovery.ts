@@ -54,7 +54,6 @@ export function usePaginatedDiscovery({
   const seenIds = useRef(new Set<number>());
   const abortRef = useRef<AbortController | null>(null);
   const prevRouteKeyRef = useRef(routeKey);
-  const filtersRef = useRef<string | null>(null); // null = first render, always fetch
 
   // Keep refs in sync for use inside callbacks that close over stale state
   const buildUrlRef = useRef(buildUrl);
@@ -70,15 +69,10 @@ export function usePaginatedDiscovery({
     });
   }
 
-  // Main fetch — runs on route change or filter change
+  // Main fetch — runs on route change or filter change (useEffect deps dedup natively).
   useEffect(() => {
     const isRouteChange = prevRouteKeyRef.current !== routeKey;
     prevRouteKeyRef.current = routeKey;
-
-    // Skip the filter-triggered effect when it's really a route change that
-    // already set filters via the parent (mirrors CategoryPage guard logic).
-    if (!isRouteChange && filtersRef.current === filterParams) return;
-    filtersRef.current = filterParams;
 
     // Cancel any in-flight request
     abortRef.current?.abort();
