@@ -67,7 +67,7 @@ export async function homepageRoutes(app: FastifyInstance) {
     // Basic validation: each item must have id, type, enabled, title
     for (const s of sections) {
       if (!s.id || !s.type || typeof s.enabled !== 'boolean' || !s.title) {
-        throw new Error('Each section must have id, type, enabled, and title');
+        return reply.status(400).send({ error: 'Each section must have id, type, enabled, and title' });
       }
     }
     await prisma.appSettings.upsert({
