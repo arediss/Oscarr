@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, ChevronDown, ChevronUp, BookOpen, Copy, Check } from 'lucide-react';
+import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, ChevronDown, ChevronUp, BookOpen, Copy, Check, RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
@@ -78,6 +78,32 @@ export function PluginsTab() {
   const [toggling, setToggling] = useState<string | null>(null);
   const [expandedInstall, setExpandedInstall] = useState<string | null>(null);
   const [showHowTo, setShowHowTo] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false);
+
+  const handleRestart = async () => {
+    setShowRestartConfirm(false);
+    setRestarting(true);
+    try {
+      await api.post('/admin/restart');
+    } catch { /* server is shutting down, expected */ }
+
+    // Poll until server is back
+    const poll = async () => {
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        try {
+          await api.get('/app/features');
+          window.location.reload();
+          return;
+        } catch { /* still down */ }
+      }
+      // Give up after 30s
+      setRestarting(false);
+      alert('Server did not come back after 30 seconds. Check the logs.');
+    };
+    poll();
+  };
 
   const fetchPlugins = useCallback(() => {
     api.get('/plugins').then(({ data }) => setPlugins(data)).catch(() => {}).finally(() => setLoading(false));
@@ -159,7 +185,45 @@ export function PluginsTab() {
           <Download className="w-4 h-4" />
           Discover
         </button>
+        <button
+          onClick={() => setShowRestartConfirm(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-ndp-text-muted hover:text-ndp-text hover:bg-white/5 transition-all ml-auto"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Reload plugins
+        </button>
       </div>
+
+      {/* Restart confirmation modal */}
+      {showRestartConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowRestartConfirm(false)}>
+          <div className="card p-6 max-w-md mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-ndp-text font-semibold mb-2">Reload plugins</h3>
+            <p className="text-sm text-ndp-text-muted mb-4">
+              This will restart the Oscarr server to discover and load new plugins. The app will be unavailable for a few seconds.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowRestartConfirm(false)} className="px-4 py-2 text-sm text-ndp-text-dim hover:text-ndp-text transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleRestart} className="px-4 py-2 bg-ndp-accent text-white rounded-lg text-sm font-medium hover:bg-ndp-accent/90 transition-colors">
+                Restart now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restarting overlay */}
+      {restarting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-ndp-accent" />
+            <p className="text-ndp-text font-medium">Restarting Oscarr...</p>
+            <p className="text-sm text-ndp-text-dim">This usually takes a few seconds</p>
+          </div>
+        </div>
+      )}
 
       {/* ═══ Installed tab ═══ */}
       {subTab === 'installed' && (
