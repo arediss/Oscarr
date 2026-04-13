@@ -5,7 +5,6 @@ import {
   Star,
   Calendar,
   Clock,
-  Plus,
   Check,
   Loader2,
   ArrowLeft,
@@ -33,6 +32,8 @@ import { useMediaRequestActions } from '@/hooks/useMediaRequestActions';
 import { useEpisodeModal } from '@/hooks/useEpisodeModal';
 import type { TmdbMedia, Media, TmdbCast, TmdbCrew } from '@/types';
 import { ACTIVE_REQUEST_STATUSES } from '@/utils/requestStatus';
+import { resolveButtonState } from '@/utils/resolveButtonState';
+import ActionButton from '@/components/ActionButton';
 
 interface Props {
   type: 'movie' | 'tv';
@@ -102,6 +103,18 @@ export default function MediaDetailPage({ type }: Props) {
   ]);
   const userHasRequest = activeRequests.some(r => r.user?.id === user?.id);
   const canRequestNewQuality = selectedQuality != null && !takenQualityIds.has(selectedQuality);
+
+  const buttonState = resolveButtonState({
+    isAvailable,
+    isPartiallyAvailable,
+    isDownloading,
+    isUpcoming,
+    isSearching,
+    userHasRequest,
+    canRequestNewQuality,
+    blacklisted: blacklisted?.blocked ?? false,
+    searchMissingState,
+  });
 
   if (loading) {
     return (
@@ -256,98 +269,17 @@ export default function MediaDetailPage({ type }: Props) {
                 </a>
               )}
 
-              {isAvailable && !canRequestNewQuality ? (
-                <button disabled className="btn-success flex items-center gap-2 cursor-default">
-                  <Check className="w-4 h-4" />
-                  {t('status.available')}
-                </button>
-              ) : isAvailable && canRequestNewQuality ? (
-                <button
-                  onClick={handleRequest}
-                  disabled={requesting}
-                  className="btn-primary flex items-center gap-2"
-                >
-                  {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  {t('media.request')}
-                </button>
-              ) : isDownloading ? (
-                <button disabled className="relative overflow-hidden rounded-xl px-5 py-2.5 text-sm font-medium text-white cursor-default min-w-[180px]">
-                  <div
-                    className="absolute inset-0 bg-ndp-accent/80 transition-all duration-1000 ease-out"
-                    style={{ width: `${download.progress}%` }}
-                  />
-                  <div className="absolute inset-0 bg-white/5" />
-                  <div className="relative flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{Math.round(download.progress)}%</span>
-                    {download.timeLeft && download.timeLeft !== '00:00:00' && (
-                      <span className="text-xs opacity-70">— {download.timeLeft.replace(/^0+:?/, '')}</span>
-                    )}
-                  </div>
-                </button>
-              ) : isUpcoming ? (
-                <button disabled className="btn-secondary flex items-center gap-2 cursor-default opacity-60">
-                  <Clock className="w-4 h-4" />
-                  {t('status.upcoming')}
-                </button>
-              ) : isSearching ? (
-                <button disabled className="btn-secondary flex items-center gap-2 cursor-default opacity-60">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {t('status.searching_long')}
-                </button>
-              ) : canRequestNewQuality ? (
-                <button
-                  onClick={handleRequest}
-                  disabled={requesting}
-                  className="btn-primary flex items-center gap-2"
-                >
-                  {requesting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4" />
-                  )}
-                  {t('media.request')}
-                </button>
-              ) : userHasRequest && !canRequestNewQuality && !isPartiallyAvailable ? (
-                <button disabled className="btn-success flex items-center gap-2 cursor-default">
-                  <Check className="w-4 h-4" />
-                  {justRequested ? t('status.request_sent') : t('status.already_requested')}
-                </button>
-              ) : isPartiallyAvailable ? (
-                searchMissingState === 'searching' ? (
-                  <button disabled className="btn-success flex items-center gap-2 cursor-default">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('media.search_missing_in_progress')}
-                  </button>
-                ) : searchMissingState === 'error' ? (
-                  <button disabled className="btn-danger flex items-center gap-2 cursor-default text-sm">
-                    {searchMissingError}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleSearchMissing}
-                    disabled={requesting}
-                    className="btn-primary flex items-center gap-2"
-                  >
-                    {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    {t('media.request_rest')}
-                  </button>
-                )
-              ) : blacklisted.blocked ? (
-                <button disabled className="btn-secondary flex items-center gap-2 cursor-not-allowed opacity-60" title={blacklisted.reason || undefined}>
-                  <ShieldAlert className="w-4 h-4 text-ndp-danger" />
-                  {t('media.blocked')}
-                </button>
-              ) : (
-                <button
-                  onClick={handleRequest}
-                  disabled={requesting}
-                  className="btn-primary flex items-center gap-2"
-                >
-                  {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  {t('media.request')}
-                </button>
-              )}
+              <ActionButton
+                state={buttonState}
+                requesting={requesting}
+                justRequested={justRequested}
+                download={download ? { progress: download.progress, timeLeft: download.timeLeft } : null}
+                searchMissingError={searchMissingError}
+                blacklistReason={blacklisted?.reason ?? undefined}
+                onRequest={handleRequest}
+                onSearchMissing={handleSearchMissing}
+                t={t}
+              />
 
               {/* Request error message */}
               {requestError && (
