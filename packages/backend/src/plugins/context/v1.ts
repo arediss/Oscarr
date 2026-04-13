@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { pluginEventBus } from '../eventBus.js';
 import { prisma } from '../../utils/prisma.js';
 import { notificationRegistry } from '../../notifications/index.js';
 import type { NotificationPayload } from '../../notifications/types.js';
@@ -79,6 +80,11 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
     },
     registerPluginPermission(permission: string, description?: string) {
       rbacRegisterPermission(permission, description);
+    },
+    events: {
+      on: (event, handler) => pluginEventBus.on(event, handler),
+      off: (event, handler) => pluginEventBus.off(event, handler),
+      emit: (event, data) => pluginEventBus.emit(event, data),
     },
   };
 }

@@ -63,6 +63,11 @@ export interface PluginContext {
   getServiceConfig(serviceType: string): Promise<{ url: string; apiKey: string } | null>;
   registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }): void;
   registerPluginPermission(permission: string, description?: string): void;
+  events: {
+    on(event: string, handler: (data: unknown) => void | Promise<void>): void;
+    off(event: string, handler: (data: unknown) => void | Promise<void>): void;
+    emit(event: string, data: unknown): Promise<void>;
+  };
 }
 
 // ─── Plugin Registration (what register() returns) ──────────────────
