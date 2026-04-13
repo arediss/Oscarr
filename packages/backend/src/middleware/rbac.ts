@@ -97,6 +97,7 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'GET:/api/app/quality-options':        { permission: AUTH },
   'GET:/api/app/features':               { permission: PUBLIC },
   'GET:/api/app/homepage-layout':        { permission: PUBLIC },
+  'GET:/api/app/vapid-key':              { permission: PUBLIC },
 
   // ── Support ──
   'GET:/api/support/tickets':                   { permission: 'support.read', ownerScoped: true },
@@ -111,6 +112,10 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'PUT:/api/notifications/:id/read':     { permission: AUTH },
   'PUT:/api/notifications/read-all':     { permission: AUTH },
   'DELETE:/api/notifications/:id':       { permission: AUTH },
+
+  // ── Push notifications ──
+  'POST:/api/push/subscribe':    { permission: AUTH },
+  'DELETE:/api/push/unsubscribe': { permission: AUTH },
 
   // ── Plugins ──
   'GET:/api/plugins/':                   { permission: 'admin.plugins' },

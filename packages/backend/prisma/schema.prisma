@@ -24,6 +24,7 @@ model User {
   ticketMessages        TicketMessage[]
   notifications         UserNotification[]
   blacklistedMedia      BlacklistedMedia[] @relation("BlacklistCreatedBy")
+  pushSubscriptions     PushSubscription[]
 }
 
 model Role {
@@ -327,6 +328,16 @@ model Patchnote {
   titleEn String
   titleFr String
   entries String   // JSON: [{ type: "feat"|"fix"|"perf", titleEn, titleFr, descEn?, descFr? }]
+}
+
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model PluginLog {
