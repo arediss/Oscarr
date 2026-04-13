@@ -666,5 +666,8 @@
 
   "requests.filter_all_users": "Tous les utilisateurs",
   "requests.filter_all_types": "Tous les types",
-  "requests.filter_all_qualities": "Toutes les qualités"
+  "requests.filter_all_qualities": "Toutes les qualités",
+
+  "push.enabled": "Notifications activées",
+  "push.enable": "Activer les notifications"
 }

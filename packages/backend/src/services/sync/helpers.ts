@@ -1,6 +1,7 @@
 import { prisma } from '../../utils/prisma.js';
 import { safeNotify, safeUserNotify } from '../../utils/safeNotify.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '../../utils/requestStatus.js';
+import { sendPushToUsers } from '../../routes/push.js';
 
 export interface SyncResult {
   added: number;
@@ -30,6 +31,18 @@ export function sendAvailabilityNotifications(
         message: 'notifications.msg.media_available',
         metadata: { mediaId, tmdbId, mediaType, msgParams: { title } },
       });
+    }
+
+    // Send push notifications
+    const userIds = [...new Set(requests.map(r => r.userId))];
+    if (userIds.length > 0) {
+      const icon = posterPath ? `https://image.tmdb.org/t/p/w200${posterPath}` : undefined;
+      sendPushToUsers(userIds, {
+        title: `${title} is available!`,
+        body: 'Your requested media is now ready to watch.',
+        icon,
+        url: `/${mediaType}/${tmdbId}`,
+      }).catch(() => {}); // fire-and-forget
     }
   }).catch(() => {});
 }

@@ -141,4 +141,9 @@ export async function appRoutes(app: FastifyInstance) {
   app.get('/homepage-layout', async () => {
     return getHomepageLayout();
   });
+
+  // Get VAPID public key for push notifications (public — needed before subscription)
+  app.get('/vapid-key', async () => {
+    return { key: process.env.VAPID_PUBLIC_KEY || null };
+  });
 }
