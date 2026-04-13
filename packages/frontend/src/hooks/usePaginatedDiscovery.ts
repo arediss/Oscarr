@@ -54,7 +54,7 @@ export function usePaginatedDiscovery({
   const seenIds = useRef(new Set<number>());
   const abortRef = useRef<AbortController | null>(null);
   const prevRouteKeyRef = useRef(routeKey);
-  const filtersRef = useRef(filterParams);
+  const filtersRef = useRef<string | null>(null); // null = first render, always fetch
 
   // Keep refs in sync for use inside callbacks that close over stale state
   const buildUrlRef = useRef(buildUrl);
