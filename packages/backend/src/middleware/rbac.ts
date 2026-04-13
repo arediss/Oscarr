@@ -141,6 +141,7 @@ const PREFIX_DEFAULTS: [string, RouteRule][] = [
   // Plugin custom routes fall through here (registered dynamically by plugins at /api/plugins/:pluginId/*).
   // Any authenticated user can access. Plugins that need admin-only routes should use
   // ctx.registerRoutePermission() to override specific routes.
+  ['/api/tmdb',     { permission: AUTH }],    // All TMDB endpoints — any authenticated user
   ['/api/plugins',  { permission: AUTH }],
   ['/api/setup',    { permission: PUBLIC }],  // setup has its own secret-based guards
   ['/api/auth',     { permission: PUBLIC }],  // OAuth callback routes registered dynamically
