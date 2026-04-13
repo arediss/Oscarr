@@ -272,6 +272,7 @@ function HeroSection() {
 /* ------------------------------------------------------------------ */
 
 function DynamicHomePage({ sections }: { sections: HomepageSection[] }) {
+  const { t } = useTranslation();
   const enabledSections = sections.filter(s => s.enabled);
 
   return (
