@@ -24,20 +24,19 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const url = event.notification.data?.url || '/';
+  const rawUrl = event.notification.data?.url || '/';
+  const absoluteUrl = rawUrl.startsWith('http') ? rawUrl : self.location.origin + rawUrl;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // If app is already open, focus it and navigate
       for (const client of windowClients) {
         if (client.url.includes(self.location.origin)) {
           client.focus();
-          client.navigate(url);
+          if (client.navigate) client.navigate(absoluteUrl); // Safari iOS doesn't support navigate()
           return;
         }
       }
-      // Otherwise open a new window
-      return clients.openWindow(url);
+      return clients.openWindow(absoluteUrl);
     })
   );
 });

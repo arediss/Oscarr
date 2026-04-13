@@ -25,7 +25,7 @@ export async function pushRoutes(app: FastifyInstance) {
 
     await prisma.pushSubscription.upsert({
       where: { endpoint },
-      update: { userId: user.id, p256dh: keys.p256dh, auth: keys.auth },
+      update: { p256dh: keys.p256dh, auth: keys.auth }, // Don't overwrite userId — endpoint belongs to whoever registered it first
       create: { userId: user.id, endpoint, p256dh: keys.p256dh, auth: keys.auth },
     });
 

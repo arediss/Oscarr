@@ -83,14 +83,17 @@ export function usePushNotifications() {
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
         await subscription.unsubscribe();
-        await api.delete('/push/unsubscribe', { data: { endpoint: subscription.endpoint } });
+        // Browser subscription is now gone — update state immediately
+        setState(prev => ({ ...prev, subscribed: false }));
+        // Backend cleanup is best-effort
+        await api.delete('/push/unsubscribe', { data: { endpoint: subscription.endpoint } }).catch(() => {});
       }
 
       setState(prev => ({ ...prev, subscribed: false, loading: false }));
       return true;
     } catch (err) {
       console.error('[Push] Unsubscribe failed:', err);
-      setState(prev => ({ ...prev, loading: false }));
+      setState(prev => ({ ...prev, subscribed: false, loading: false })); // Browser unsub may have succeeded
       return false;
     }
   }, []);
