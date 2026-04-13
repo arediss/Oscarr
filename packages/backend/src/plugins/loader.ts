@@ -29,6 +29,19 @@ function validateManifest(data: unknown, dir: string): PluginManifest {
   }
   if (!m.entry || typeof m.entry !== 'string') throw new Error(`Missing or invalid "entry" in ${dir}`);
 
+  // Prevent path traversal in entry field
+  const normalizedEntry = (m.entry as string).replace(/\\/g, '/');
+  if (normalizedEntry.startsWith('..') || normalizedEntry.includes('/../') || normalizedEntry.startsWith('/')) {
+    throw new Error(`Invalid "entry" in ${dir}: path traversal or absolute path not allowed`);
+  }
+  // Same check for frontend field if present
+  if (typeof m.frontend === 'string') {
+    const normalizedFrontend = m.frontend.replace(/\\/g, '/');
+    if (normalizedFrontend.startsWith('..') || normalizedFrontend.includes('/../') || normalizedFrontend.startsWith('/')) {
+      throw new Error(`Invalid "frontend" in ${dir}: path traversal or absolute path not allowed`);
+    }
+  }
+
   // Validate hooks shape if present
   if (m.hooks !== undefined && (typeof m.hooks !== 'object' || m.hooks === null)) {
     throw new Error(`Invalid "hooks" in ${dir}: must be an object`);

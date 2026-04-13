@@ -115,6 +115,7 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'GET:/api/plugins/:id/settings':       { permission: 'admin.plugins' },
   'PUT:/api/plugins/:id/settings':       { permission: 'admin.plugins' },
   'GET:/api/plugins/ui/:hookPoint':      { permission: AUTH },
+  'GET:/api/plugins/:id/logs':           { permission: 'admin.plugins' },
   'GET:/api/plugins/:id/frontend/*':     { permission: AUTH },
   'GET:/api/plugins/features':           { permission: PUBLIC },
   'GET:/api/plugins/registry':           { permission: AUTH },  // Plugin discovery — any authenticated user
@@ -125,6 +126,7 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'PUT:/api/admin/roles/:id':            { permission: 'admin.roles' },
   'DELETE:/api/admin/roles/:id':         { permission: 'admin.roles' },
   'GET:/api/admin/permissions':          { permission: 'admin.roles' },
+  'POST:/api/admin/restart':             { permission: 'admin.*' },
 };
 
 // ── Prefix-based fallback (first match wins — order matters) ────────────────

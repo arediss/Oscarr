@@ -111,7 +111,8 @@ export async function pluginRoutes(app: FastifyInstance) {
     const fullPath = resolve(join(plugin.dir, 'dist', 'frontend', safePath));
 
     // Path traversal check using relative path
-    const rel = relative(resolve(plugin.dir), fullPath);
+    const frontendRoot = resolve(plugin.dir, 'dist', 'frontend');
+    const rel = relative(frontendRoot, fullPath);
     if (rel.startsWith('..') || rel.includes(`..${sep}`)) {
       return reply.status(403).send({ error: 'Access denied' });
     }
@@ -148,7 +149,7 @@ export async function pluginRoutes(app: FastifyInstance) {
       const logs = await prisma.pluginLog.findMany({
         where: { pluginId: id },
         orderBy: { createdAt: 'desc' },
-        take: Math.min(parseInt(limit), 500),
+        take: Math.min(parseInt(limit, 10) || 100, 500),
       });
       return logs;
     }
@@ -170,8 +171,18 @@ export async function pluginRoutes(app: FastifyInstance) {
       if (!res.ok) throw new Error(`Registry fetch failed: ${res.status}`);
       const registry = await res.json() as { plugins: { repository: string; category?: string }[] };
 
+      // Validate repository format before fetching
+      const validRepo = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
+      const validEntries = registry.plugins.filter(entry => {
+        if (!validRepo.test(entry.repository)) {
+          console.warn(`[Registry] Skipping invalid repository: ${entry.repository}`);
+          return false;
+        }
+        return true;
+      });
+
       const plugins = await Promise.allSettled(
-        registry.plugins.map(async (entry) => {
+        validEntries.map(async (entry) => {
           const manifestUrl = `https://raw.githubusercontent.com/${entry.repository}/main/manifest.json`;
           const mRes = await fetch(manifestUrl, { headers });
           if (!mRes.ok) return null;
