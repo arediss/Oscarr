@@ -44,11 +44,27 @@ export async function homepageRoutes(app: FastifyInstance) {
     return getDefaultLayout();
   });
 
-  // PUT /homepage — Save layout (receives JSON array of sections)
-  app.put('/homepage', async (request) => {
-    const sections = request.body as any[];
-    // Basic validation: must be array, each item must have id, type, enabled, title
-    if (!Array.isArray(sections)) throw new Error('Layout must be an array');
+  // PUT /homepage — Save layout (receives JSON array or { sections, reset })
+  app.put('/homepage', async (request, reply) => {
+    const body = request.body as { sections?: any[]; reset?: boolean } | any[];
+    const sections = Array.isArray(body) ? body : body.sections;
+
+    // Handle reset
+    if (!Array.isArray(body) && (body as any).reset) {
+      await prisma.appSettings.upsert({
+        where: { id: 1 },
+        update: { homepageLayout: null },
+        create: { id: 1, homepageLayout: null, updatedAt: new Date() },
+      });
+      homepageLayoutCache = null;
+      return { ok: true, sections: getDefaultLayout() };
+    }
+
+    if (!Array.isArray(sections)) {
+      return reply.status(400).send({ error: 'Layout must be an array or { sections: [...] }' });
+    }
+
+    // Basic validation: each item must have id, type, enabled, title
     for (const s of sections) {
       if (!s.id || !s.type || typeof s.enabled !== 'boolean' || !s.title) {
         throw new Error('Each section must have id, type, enabled, and title');

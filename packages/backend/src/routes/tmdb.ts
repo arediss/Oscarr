@@ -320,6 +320,37 @@ export async function tmdbRoutes(app: FastifyInstance) {
     return getGenreBackdrops();
   });
 
+  // GET /discover/:mediaType — flat discover (for homepage custom sections)
+  app.get('/discover/:mediaType', {
+    schema: {
+      params: {
+        type: 'object' as const,
+        required: ['mediaType'],
+        properties: {
+          mediaType: { type: 'string', enum: ['movie', 'tv'], description: 'movie or tv' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { mediaType } = request.params as { mediaType: string };
+    if (mediaType !== 'movie' && mediaType !== 'tv') {
+      return reply.status(400).send({ error: 'Invalid mediaType' });
+    }
+    const query = request.query as Record<string, string>;
+    const params: Record<string, string> = {};
+    // Pass all query params through to TMDB discover
+    for (const [key, value] of Object.entries(query)) {
+      if (value) params[key] = value;
+    }
+    if (!params.page) params.page = '1';
+
+    const tmdbApi = getTmdbApi();
+    const { data } = await tmdbApi.get(`/discover/${mediaType}`, { params });
+    const lang = getLang(request);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], mediaType, lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
   // Genre list for movie or tv (used by the homepage query builder)
   app.get('/genres/:mediaType', {
     schema: {

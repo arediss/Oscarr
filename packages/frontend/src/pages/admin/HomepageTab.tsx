@@ -87,8 +87,14 @@ export function HomepageTab() {
   };
 
   const deleteSection = async (id: string) => {
-    setSections(prev => prev.filter(s => s.id !== id));
+    const updated = sections.filter(s => s.id !== id);
+    setSections(updated);
     setConfirmDeleteId(null);
+    try {
+      await api.put('/admin/homepage', { sections: updated });
+    } catch (err) {
+      console.error('Failed to save after delete:', err);
+    }
   };
 
   const addCustomSection = () => {

@@ -25,7 +25,13 @@ export function useHomepageLayout() {
 
   useEffect(() => {
     api.get('/app/homepage-layout')
-      .then(({ data }) => setSections(data))
+      .then(({ data }) => {
+        if (Array.isArray(data)) {
+          setSections(data);
+        } else {
+          setSections(null); // malformed response -> fallback
+        }
+      })
       .catch(() => setSections(null)) // fallback to null = use hardcoded default
       .finally(() => setLoading(false));
   }, []);

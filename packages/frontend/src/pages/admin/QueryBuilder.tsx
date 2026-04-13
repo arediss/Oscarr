@@ -25,11 +25,17 @@ interface Genre {
   name: string;
 }
 
-const SORT_OPTIONS = [
+const MOVIE_SORT_OPTIONS = [
   { value: 'popularity.desc', label: 'Popularity' },
   { value: 'vote_average.desc', label: 'Rating' },
   { value: 'primary_release_date.desc', label: 'Release date' },
   { value: 'revenue.desc', label: 'Revenue' },
+];
+
+const TV_SORT_OPTIONS = [
+  { value: 'popularity.desc', label: 'Popularity' },
+  { value: 'vote_average.desc', label: 'Rating' },
+  { value: 'first_air_date.desc', label: 'Air date' },
 ];
 
 const LANGUAGE_OPTIONS = [
@@ -79,7 +85,10 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
 
   const setMediaType = (mt: 'movie' | 'tv') => {
     // Reset genres when switching media type since IDs differ
-    onChange({ ...query, mediaType: mt, genres: [] });
+    // Also reset sortBy if current value isn't valid for the new media type
+    const validSorts = mt === 'tv' ? TV_SORT_OPTIONS : MOVIE_SORT_OPTIONS;
+    const sortStillValid = validSorts.some(o => o.value === query.sortBy);
+    onChange({ ...query, mediaType: mt, genres: [], sortBy: sortStillValid ? query.sortBy : 'popularity.desc' });
   };
 
   return (
@@ -224,7 +233,7 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
             onChange={e => onChange({ ...query, sortBy: e.target.value })}
             style={{ width: '100%' }}
           >
-            {SORT_OPTIONS.map(opt => (
+            {(query.mediaType === 'tv' ? TV_SORT_OPTIONS : MOVIE_SORT_OPTIONS).map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>

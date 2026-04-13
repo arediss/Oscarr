@@ -85,8 +85,14 @@ function BuiltinSection({ builtinKey, title, size }: { builtinKey: string; title
 function buildDiscoverUrl(query: NonNullable<HomepageSection['query']>): string {
   const params = new URLSearchParams();
   if (query.genres?.length) params.set('with_genres', query.genres.join(','));
-  if (query.yearGte) params.set('primary_release_date.gte', `${query.yearGte}-01-01`);
-  if (query.yearLte) params.set('primary_release_date.lte', `${query.yearLte}-12-31`);
+  if (query.yearGte) {
+    const field = query.mediaType === 'tv' ? 'first_air_date.gte' : 'primary_release_date.gte';
+    params.set(field, `${query.yearGte}-01-01`);
+  }
+  if (query.yearLte) {
+    const field = query.mediaType === 'tv' ? 'first_air_date.lte' : 'primary_release_date.lte';
+    params.set(field, `${query.yearLte}-12-31`);
+  }
   if (query.voteAverageGte) params.set('vote_average.gte', String(query.voteAverageGte));
   if (query.sortBy) params.set('sort_by', query.sortBy);
   if (query.language) params.set('with_original_language', query.language);

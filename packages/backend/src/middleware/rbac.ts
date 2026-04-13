@@ -54,6 +54,8 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'GET:/api/tmdb/collection/:id':                      { permission: AUTH },
   'GET:/api/tmdb/discover/:mediaType/genre/:genreId':  { permission: AUTH },
   'GET:/api/tmdb/genre-backdrops':                     { permission: AUTH },
+  'GET:/api/tmdb/genres/:mediaType':                   { permission: AUTH },
+  'GET:/api/tmdb/discover/:mediaType':                 { permission: AUTH },
 
   // ── Requests ──
   'GET:/api/requests/':                  { permission: 'requests.read', ownerScoped: true },
