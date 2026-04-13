@@ -14,7 +14,9 @@ export interface HomepageSection {
     genres?: number[];
     yearGte?: number;
     yearLte?: number;
+    releasedWithin?: string;
     voteAverageGte?: number;
+    voteCountGte?: number;
     sortBy?: string;
     language?: string;
   };

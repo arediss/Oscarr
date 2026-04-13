@@ -24,12 +24,15 @@ interface HomepageSection {
   enabled: boolean;
   size?: 'default' | 'large';
   builtinKey?: string;
+  endpoint?: string;
   query?: {
     mediaType?: string;
     genres?: number[];
     yearGte?: number;
     yearLte?: number;
+    releasedWithin?: string;
     voteAverageGte?: number;
+    voteCountGte?: number;
     sortBy?: string;
     language?: string;
     [key: string]: unknown;
