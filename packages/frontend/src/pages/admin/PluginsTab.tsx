@@ -5,17 +5,18 @@ import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, Chevron
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
+import type { PluginInfo } from '@/plugins/types';
 
-interface InstalledPlugin {
-  id: string;
-  name: string;
-  version: string;
-  description?: string;
-  author?: string;
-  enabled: boolean;
-  hasSettings: boolean;
-  hasFrontend: boolean;
-  error?: string;
+function isNewerVersion(remote: string, local: string): boolean {
+  const r = remote.split('.').map(Number);
+  const l = local.split('.').map(Number);
+  for (let i = 0; i < Math.max(r.length, l.length); i++) {
+    const rv = r[i] || 0;
+    const lv = l[i] || 0;
+    if (rv > lv) return true;
+    if (rv < lv) return false;
+  }
+  return false;
 }
 
 interface RegistryPlugin {
@@ -69,7 +70,7 @@ function PluginInitial({ name }: { name: string }) {
 export function PluginsTab() {
   const { t } = useTranslation();
   const [subTab, setSubTab] = useState<SubTab>('installed');
-  const [plugins, setPlugins] = useState<InstalledPlugin[]>([]);
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [registry, setRegistry] = useState<RegistryPlugin[]>([]);
   const [loading, setLoading] = useState(true);
   const [registryLoading, setRegistryLoading] = useState(false);
@@ -91,7 +92,12 @@ export function PluginsTab() {
       .finally(() => setRegistryLoading(false));
   }, []);
 
-  useEffect(() => { fetchPlugins(); fetchRegistry(); }, [fetchPlugins, fetchRegistry]);
+  useEffect(() => { fetchPlugins(); }, [fetchPlugins]);
+  useEffect(() => {
+    if (subTab === 'discover' && registry.length === 0 && !registryLoading) {
+      fetchRegistry();
+    }
+  }, [subTab, registry.length, registryLoading, fetchRegistry]);
 
   const handleToggle = async (id: string, enabled: boolean) => {
     setToggling(id);
@@ -113,7 +119,7 @@ export function PluginsTab() {
   // Count available updates
   const updatesAvailable = plugins.filter(p => {
     const rv = registryVersions.get(p.id);
-    return rv && rv.version !== p.version;
+    return rv && isNewerVersion(rv.version, p.version);
   }).length;
 
   if (loading) return <Spinner />;
@@ -174,7 +180,7 @@ export function PluginsTab() {
           ) : (
             plugins.map((plugin) => {
               const rv = registryVersions.get(plugin.id);
-              const hasUpdate = rv && rv.version !== plugin.version;
+              const hasUpdate = rv && isNewerVersion(rv.version, plugin.version);
               return (
                 <div key={plugin.id} className="card p-5 flex items-center gap-4">
                   <PluginInitial name={plugin.name} />
