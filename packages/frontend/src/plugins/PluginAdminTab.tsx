@@ -5,6 +5,7 @@ import api from '@/lib/api';
 import type { PluginSettings } from './types';
 import { loadPluginModule, hasLoaded, getCached, pluginFrontendUrl } from './pluginModuleCache';
 import type { ComponentType } from 'react';
+import { PluginErrorBoundary } from './PluginErrorBoundary';
 
 interface PluginAdminTabProps {
   pluginId: string;
@@ -77,7 +78,11 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
   }
 
   if (FrontendComp) {
-    return <FrontendComp />;
+    return (
+      <PluginErrorBoundary pluginId={pluginId}>
+        <FrontendComp />
+      </PluginErrorBoundary>
+    );
   }
 
   if (error && !settings) {

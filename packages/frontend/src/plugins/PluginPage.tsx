@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ComponentType } from 'react';
 import { loadPluginModule, hasLoaded, getCached, pluginFrontendUrl } from './pluginModuleCache';
+import { PluginErrorBoundary } from './PluginErrorBoundary';
 
 export function PluginPage() {
   const { pluginId } = useParams<{ pluginId: string }>();
@@ -60,5 +61,9 @@ export function PluginPage() {
       </div>
     );
   }
-  return <Component />;
+  return (
+    <PluginErrorBoundary pluginId={pluginId}>
+      <Component />
+    </PluginErrorBoundary>
+  );
 }
