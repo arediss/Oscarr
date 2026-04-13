@@ -1,0 +1,84 @@
+import type { FastifyBaseLogger } from 'fastify';
+import { prisma } from '../../utils/prisma.js';
+import { notificationRegistry } from '../../notifications/index.js';
+import type { NotificationPayload } from '../../notifications/types.js';
+import { sendUserNotification } from '../../services/userNotifications.js';
+import { getArrClient } from '../../providers/index.js';
+import {
+  registerRoutePermission as rbacRegisterRoute,
+  registerPluginPermission as rbacRegisterPermission,
+} from '../../middleware/rbac.js';
+import type { PluginContext, PluginManifest } from '../types.js';
+
+/**
+ * Dependencies injected by the engine so the factory stays decoupled
+ * from PluginEngine internals.
+ */
+export interface V1FactoryDeps {
+  logger: FastifyBaseLogger | null;
+  getCachedSettings(pluginId: string): Promise<Record<string, unknown>>;
+  setSettingsCache(pluginId: string, values: Record<string, unknown>): void;
+  makeFallbackLogger(pluginId: string): FastifyBaseLogger;
+}
+
+/**
+ * Frozen V1 context factory.
+ * This is a faithful extraction of the former `PluginEngine.createContext`
+ * private method -- no behaviour changes.
+ */
+export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): PluginContext {
+  const pluginId = manifest.id;
+  const log =
+    deps.logger?.child({ plugin: pluginId }) || deps.makeFallbackLogger(pluginId);
+
+  return {
+    log,
+    async getUser(userId: number) {
+      return prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, displayName: true, role: true },
+      });
+    },
+    async getAppSettings() {
+      const s = await prisma.appSettings.findUnique({ where: { id: 1 } });
+      return (s ?? {}) as Record<string, unknown>;
+    },
+    async getSetting(key: string) {
+      const settings = await deps.getCachedSettings(pluginId);
+      return settings[key];
+    },
+    async setSetting(key: string, value: unknown) {
+      const settings = await deps.getCachedSettings(pluginId);
+      settings[key] = value;
+      await prisma.pluginState.update({
+        where: { pluginId },
+        data: { settings: JSON.stringify(settings) },
+      });
+      deps.setSettingsCache(pluginId, settings);
+    },
+    async sendNotification(type: string, data: NotificationPayload) {
+      await notificationRegistry.send(type, data);
+    },
+    async sendUserNotification(userId: number, payload) {
+      await sendUserNotification(userId, payload);
+    },
+    notificationRegistry,
+    getArrClient: (serviceType: string) => getArrClient(serviceType),
+    async getServiceConfig(serviceType: string) {
+      const svc = await prisma.service.findFirst({ where: { type: serviceType } });
+      if (!svc) return null;
+      try {
+        const config = JSON.parse(svc.config);
+        return { url: config.url || config.baseUrl, apiKey: config.apiKey };
+      } catch {
+        return null;
+      }
+    },
+    registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }) {
+      rbacRegisterRoute(routeKey, rule);
+    },
+    registerPluginPermission(permission: string, description?: string) {
+      rbacRegisterPermission(permission, description);
+    },
+  };
+}

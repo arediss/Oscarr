@@ -2,15 +2,11 @@ import { join } from 'path';
 import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { notificationRegistry } from '../notifications/index.js';
-import type { NotificationPayload } from '../notifications/types.js';
-import { sendUserNotification } from '../services/userNotifications.js';
-import { getArrClient } from '../providers/index.js';
-import { registerRoutePermission as rbacRegisterRoute, registerPluginPermission as rbacRegisterPermission } from '../middleware/rbac.js';
 import { discoverPlugins } from './loader.js';
+import { createContext, type ContextFactoryDeps } from './context/index.js';
 import type {
   LoadedPlugin,
   LoadedUIContribution,
-  PluginContext,
   PluginGuardResult,
   PluginInfo,
   PluginManifest,
@@ -55,7 +51,7 @@ export class PluginEngine {
           throw new Error(`Plugin "${manifest.id}" does not export a register() function`);
         }
 
-        const ctx = this.createContext(manifest);
+        const ctx = createContext(manifest, this.getContextDeps());
         const registration: PluginRegistration = await mod.register(ctx);
 
         // Run onInstall ONLY on first load (tracked by DB flag)
@@ -97,7 +93,7 @@ export class PluginEngine {
 
       const prefix = plugin.manifest.hooks?.routes?.prefix || `/api/plugins/${id}`;
       try {
-        const ctx = this.createContext(plugin.manifest);
+        const ctx = createContext(plugin.manifest, this.getContextDeps());
         await app.register(
           async (instance) => {
             await plugin.registration.registerRoutes!(instance, ctx);
@@ -123,7 +119,7 @@ export class PluginEngine {
     for (const [id, plugin] of this.plugins) {
       if (!plugin.enabled || plugin.error || !plugin.registration.registerJobs) continue;
       try {
-        const ctx = this.createContext(plugin.manifest);
+        const ctx = createContext(plugin.manifest, this.getContextDeps());
         const jobs = plugin.registration.registerJobs(ctx);
         for (const [key, handler] of Object.entries(jobs)) {
           handlers[key] = handler;
@@ -221,7 +217,7 @@ export class PluginEngine {
     for (const [id, plugin] of this.plugins) {
       if (!plugin.enabled || plugin.error || !plugin.registration.registerGuards) continue;
       try {
-        const ctx = this.createContext(plugin.manifest);
+        const ctx = createContext(plugin.manifest, this.getContextDeps());
         const guards = plugin.registration.registerGuards(ctx);
         const guard = guards[guardName];
         if (!guard) continue;
@@ -246,60 +242,14 @@ export class PluginEngine {
     return values;
   }
 
-  private createContext(manifest: PluginManifest): PluginContext {
-    const pluginId = manifest.id;
-    const engine = this;
-    const log = this.logger?.child({ plugin: pluginId }) || this.makeFallbackLogger(pluginId);
-
+  private getContextDeps(): ContextFactoryDeps {
     return {
-      log,
-      async getUser(userId: number) {
-        return prisma.user.findUnique({
-          where: { id: userId },
-          select: { id: true, email: true, displayName: true, role: true },
-        });
+      logger: this.logger,
+      getCachedSettings: (pluginId: string) => this.getCachedSettings(pluginId),
+      setSettingsCache: (pluginId: string, values: Record<string, unknown>) => {
+        this.settingsCache.set(pluginId, values);
       },
-      async getAppSettings() {
-        const s = await prisma.appSettings.findUnique({ where: { id: 1 } });
-        return (s ?? {}) as Record<string, unknown>;
-      },
-      async getSetting(key: string) {
-        const settings = await engine.getCachedSettings(pluginId);
-        return settings[key];
-      },
-      async setSetting(key: string, value: unknown) {
-        const settings = await engine.getCachedSettings(pluginId);
-        settings[key] = value;
-        await prisma.pluginState.update({
-          where: { pluginId },
-          data: { settings: JSON.stringify(settings) },
-        });
-        engine.settingsCache.set(pluginId, settings);
-      },
-      async sendNotification(type: string, data: NotificationPayload) {
-        await notificationRegistry.send(type, data);
-      },
-      async sendUserNotification(userId: number, payload) {
-        await sendUserNotification(userId, payload);
-      },
-      notificationRegistry,
-      getArrClient: (serviceType: string) => getArrClient(serviceType),
-      async getServiceConfig(serviceType: string) {
-        const svc = await prisma.service.findFirst({ where: { type: serviceType } });
-        if (!svc) return null;
-        try {
-          const config = JSON.parse(svc.config);
-          return { url: config.url || config.baseUrl, apiKey: config.apiKey };
-        } catch {
-          return null;
-        }
-      },
-      registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }) {
-        rbacRegisterRoute(routeKey, rule);
-      },
-      registerPluginPermission(permission: string, description?: string) {
-        rbacRegisterPermission(permission, description);
-      },
+      makeFallbackLogger: (pluginId: string) => this.makeFallbackLogger(pluginId),
     };
   }
 
