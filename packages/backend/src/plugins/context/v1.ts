@@ -28,22 +28,29 @@ function createCapturingLogger(
 ): FastifyBaseLogger {
   const child = baseLogger.child({ plugin: pluginId });
 
-  const capture = (level: string, args: unknown[]) => {
-    const msg = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
-    // Fire-and-forget — don't block plugin execution
+  const capture = (level: string, msg: string) => {
     prisma.pluginLog.create({
-      data: { pluginId, level, message: msg.slice(0, 2000) },
-    }).catch(() => {});
+      data: { pluginId, level, message: String(msg).slice(0, 2000) },
+    }).catch(() => {}); // Fire-and-forget
   };
 
-  // Wrap the log methods
-  const origInfo = child.info.bind(child);
-  const origWarn = child.warn.bind(child);
-  const origError = child.error.bind(child);
+  // Wrap log methods — use function() + apply() to preserve Pino's overloaded signatures
+  const origInfo = child.info;
+  const origWarn = child.warn;
+  const origError = child.error;
 
-  child.info = ((...args: any[]) => { capture('info', args); return origInfo(...args); }) as any;
-  child.warn = ((...args: any[]) => { capture('warn', args); return origWarn(...args); }) as any;
-  child.error = ((...args: any[]) => { capture('error', args); return origError(...args); }) as any;
+  child.info = function (this: any, ...args: any[]) {
+    capture('info', typeof args[0] === 'string' ? args[0] : args[1] || '');
+    return origInfo.apply(this, args as any);
+  } as typeof child.info;
+  child.warn = function (this: any, ...args: any[]) {
+    capture('warn', typeof args[0] === 'string' ? args[0] : args[1] || '');
+    return origWarn.apply(this, args as any);
+  } as typeof child.warn;
+  child.error = function (this: any, ...args: any[]) {
+    capture('error', typeof args[0] === 'string' ? args[0] : args[1] || '');
+    return origError.apply(this, args as any);
+  } as typeof child.error;
 
   return child;
 }
