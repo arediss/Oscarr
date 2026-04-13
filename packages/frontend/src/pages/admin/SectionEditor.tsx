@@ -128,13 +128,7 @@ export function SectionEditor({ section, onSave, onClose }: SectionEditorProps) 
 
   return (
     <div
-      className="fixed inset-0 z-50 animate-fade-in"
-      style={{
-        background: 'rgba(0,0,0,0.7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
     >
       <div
