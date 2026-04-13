@@ -294,7 +294,7 @@ function DynamicHomePage({ sections }: { sections: HomepageSection[] }) {
                 <CustomSection
                   key={section.id}
                   query={section.query}
-                  title={section.title}
+                  title={t(section.title, section.title)}
                   size={section.size}
                 />
               );
@@ -304,7 +304,7 @@ function DynamicHomePage({ sections }: { sections: HomepageSection[] }) {
                 <BuiltinSection
                   key={section.id}
                   builtinKey={section.builtinKey}
-                  title={section.title}
+                  title={t(section.title, section.title)}
                   size={section.size}
                 />
               );
