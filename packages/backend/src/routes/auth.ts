@@ -4,6 +4,7 @@ import { logEvent } from '../utils/logEvent.js';
 import { registerEmail, loginEmail } from '../auth/providers/email.js';
 import { getAuthProviders, getAuthProvider, getAuthProviderConfigs } from '../providers/index.js';
 import type { AuthHelpers } from '../providers/types.js';
+import { getPermissionsForRole } from '../middleware/rbac.js';
 
 function buildHelpers(app: FastifyInstance): AuthHelpers {
   return {
@@ -262,7 +263,8 @@ export async function authRoutes(app: FastifyInstance) {
       },
     });
     if (!user) return reply.status(404).send({ error: 'User not found' });
-    return reply.send(user);
+    const permissions = getPermissionsForRole(user.role);
+    return reply.send({ ...user, permissions });
   });
 
   app.post('/logout', async (_request, reply) => {
