@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Search } from 'lucide-react';
@@ -9,16 +9,16 @@ import type { TmdbMedia } from '@/types';
 export default function SearchPage() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
-  const [totalResults, setTotalResults] = useState(0);
+  const totalResultsRef = useRef(0);
 
   const query = searchParams.get('q') || '';
 
   const { data: results, loading } = useTmdbList<TmdbMedia>(
     query ? `/tmdb/search?q=${encodeURIComponent(query)}` : null,
-    [query],
+    query,
     {
       transform: (data) => {
-        setTotalResults(data.total_results ?? 0);
+        totalResultsRef.current = data.total_results ?? 0;
         return (data.results as (TmdbMedia & { media_type: string })[]).filter(
           (r) => r.media_type === 'movie' || r.media_type === 'tv',
         );
@@ -31,7 +31,7 @@ export default function SearchPage() {
       {query && (
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-ndp-text">
-            {loading ? t('search.searching') : t('search.result', { count: totalResults, query })}
+            {loading ? t('search.searching') : t('search.result', { count: totalResultsRef.current, query })}
           </h2>
         </div>
       )}

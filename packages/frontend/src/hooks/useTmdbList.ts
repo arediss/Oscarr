@@ -15,7 +15,7 @@ interface UseTmdbListResult<T> {
 
 export function useTmdbList<T = any>(
   endpoint: string | null,
-  deps: unknown[] = [],
+  key: string = '',
   options: UseTmdbListOptions = {}
 ): UseTmdbListResult<T> {
   const [data, setData] = useState<T[]>([]);
@@ -44,7 +44,7 @@ export function useTmdbList<T = any>(
     } finally {
       setLoading(false);
     }
-  }, [endpoint, ...deps]);
+  }, [endpoint, key]);
 
   useEffect(() => {
     const controller = new AbortController();

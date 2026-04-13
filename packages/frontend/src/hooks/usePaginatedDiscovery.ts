@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, type RefObject } from 'react';
 import api from '@/lib/api';
 import type { TmdbMedia } from '@/types';
-import type { DiscoverFilters } from '@/utils/buildDiscoverParams';
+import { buildDiscoverParams, type DiscoverFilters } from '@/utils/buildDiscoverParams';
 
 const MAX_PAGES = 20;
 
@@ -47,10 +47,14 @@ export function usePaginatedDiscovery({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Derive a stable string key from only the API-relevant filter params so that
+  // client-only toggles like hideRequested don't trigger a network refetch.
+  const filterParams = buildDiscoverParams(filters);
+
   const seenIds = useRef(new Set<number>());
   const abortRef = useRef<AbortController | null>(null);
   const prevRouteKeyRef = useRef(routeKey);
-  const filtersRef = useRef(filters);
+  const filtersRef = useRef(filterParams);
 
   // Keep refs in sync for use inside callbacks that close over stale state
   const buildUrlRef = useRef(buildUrl);
@@ -73,8 +77,8 @@ export function usePaginatedDiscovery({
 
     // Skip the filter-triggered effect when it's really a route change that
     // already set filters via the parent (mirrors CategoryPage guard logic).
-    if (!isRouteChange && filtersRef.current === filters) return;
-    filtersRef.current = filters;
+    if (!isRouteChange && filtersRef.current === filterParams) return;
+    filtersRef.current = filterParams;
 
     // Cancel any in-flight request
     abortRef.current?.abort();
@@ -117,15 +121,23 @@ export function usePaginatedDiscovery({
       });
 
     return () => controller.abort();
-  }, [routeKey, filters]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [routeKey, filterParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load next page
   const loadMore = useCallback(async () => {
     if (loadingMore || page >= totalPages) return;
+
+    // Cancel any in-flight loadMore request and create a new controller
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoadingMore(true);
     const nextPage = page + 1;
     try {
-      const { data } = await api.get(buildUrlRef.current(nextPage));
+      const { data } = await api.get(buildUrlRef.current(nextPage), {
+        signal: controller.signal,
+      });
       const transform = mapResultRef.current;
       const mapped = transform
         ? data.results.map((r: TmdbMedia) => transform(r))
@@ -134,11 +146,19 @@ export function usePaginatedDiscovery({
       setResults((prev) => [...prev, ...items]);
       setPage(nextPage);
     } catch (err: any) {
-      console.error('Failed to load more:', err);
+      if (!controller.signal.aborted) {
+        console.error('Failed to load more:', err);
+      }
     } finally {
-      setLoadingMore(false);
+      if (!controller.signal.aborted) {
+        setLoadingMore(false);
+      }
     }
   }, [loadingMore, page, totalPages]);
+
+  // Stable ref for loadMore so the observer effect doesn't re-subscribe every page
+  const loadMoreRef = useRef(loadMore);
+  loadMoreRef.current = loadMore;
 
   // Infinite scroll via IntersectionObserver
   useEffect(() => {
@@ -146,13 +166,13 @@ export function usePaginatedDiscovery({
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) loadMore();
+        if (entries[0].isIntersecting) loadMoreRef.current();
       },
       { rootMargin: '400px' },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [loadMore, sentinelRef]);
+  }, [sentinelRef]);
 
   return { results, loading, loadingMore, transitioning, page, totalPages, error };
 }

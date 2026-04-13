@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 
-interface CalendarItem {
+export interface CalendarItem {
   type: 'movie' | 'episode';
   title: string;
   episodeTitle?: string;
@@ -27,13 +27,19 @@ export function useCalendar(days: number = 30): UseCalendarReturn {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
     api
-      .get(`/services/calendar?days=${days}`)
-      .then(({ data }) => setItems(data))
-      .catch((err) => setError(err))
-      .finally(() => setLoading(false));
+      .get(`/services/calendar?days=${days}`, { signal: controller.signal })
+      .then(({ data }) => setItems(data || []))
+      .catch((err) => {
+        if (!controller.signal.aborted) setError(err.message || 'Failed to load calendar');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [days]);
 
   return { items, loading, error };

@@ -12,7 +12,7 @@ import { useTmdbList } from '@/hooks/useTmdbList';
 
 export default function HomePage() {
   const { t } = useTranslation();
-  const { data: recentlyAdded, loading: loadingRecent } = useTmdbList<TmdbMedia>('/media/recent?limit=20', [], {
+  const { data: recentlyAdded, loading: loadingRecent } = useTmdbList<TmdbMedia>('/media/recent?limit=20', '', {
     transform: (d) => (d || []).map(dbMediaToTmdbShape),
   });
   const { data: trending } = useTmdbList<TmdbMedia>('/tmdb/trending');
