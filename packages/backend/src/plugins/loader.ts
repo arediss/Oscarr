@@ -1,11 +1,15 @@
-import { readdir, readFile, stat } from 'fs/promises';
+import { readdir, readFile, stat, access } from 'fs/promises';
 import { join, resolve, dirname } from 'path';
-import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import type { PluginManifest } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PLUGINS_DIR = resolve(__dirname, '../../../plugins');
+
+/** Resolve the plugins directory. Supports OSCARR_PLUGINS_DIR env var. */
+function getPluginsDir(): string {
+  if (process.env.OSCARR_PLUGINS_DIR) return resolve(process.env.OSCARR_PLUGINS_DIR);
+  return resolve(__dirname, '../../../plugins');
+}
 
 export interface DiscoveredPlugin {
   dir: string;
@@ -19,33 +23,69 @@ function validateManifest(data: unknown, dir: string): PluginManifest {
   if (!m.version || typeof m.version !== 'string') throw new Error(`Missing or invalid "version" in ${dir}`);
   if (m.apiVersion !== 'v1') throw new Error(`Unsupported apiVersion "${m.apiVersion}" in ${dir} (expected "v1")`);
   if (!m.entry || typeof m.entry !== 'string') throw new Error(`Missing or invalid "entry" in ${dir}`);
+
+  // Validate hooks shape if present
+  if (m.hooks !== undefined && (typeof m.hooks !== 'object' || m.hooks === null)) {
+    throw new Error(`Invalid "hooks" in ${dir}: must be an object`);
+  }
+  const hooks = m.hooks as Record<string, unknown> | undefined;
+  if (hooks?.routes !== undefined) {
+    if (typeof hooks.routes !== 'object' || hooks.routes === null || typeof (hooks.routes as any).prefix !== 'string') {
+      throw new Error(`Invalid "hooks.routes" in ${dir}: must be { prefix: string }`);
+    }
+  }
+  if (hooks?.jobs !== undefined && !Array.isArray(hooks.jobs)) {
+    throw new Error(`Invalid "hooks.jobs" in ${dir}: must be an array`);
+  }
+  if (hooks?.ui !== undefined && !Array.isArray(hooks.ui)) {
+    throw new Error(`Invalid "hooks.ui" in ${dir}: must be an array`);
+  }
+  if (hooks?.features !== undefined && (typeof hooks.features !== 'object' || hooks.features === null)) {
+    throw new Error(`Invalid "hooks.features" in ${dir}: must be an object`);
+  }
+
+  // Validate settings shape if present
+  if (m.settings !== undefined && !Array.isArray(m.settings)) {
+    throw new Error(`Invalid "settings" in ${dir}: must be an array`);
+  }
+
   return data as PluginManifest;
 }
 
 export async function discoverPlugins(): Promise<DiscoveredPlugin[]> {
-  if (!existsSync(PLUGINS_DIR)) return [];
+  const pluginsDir = getPluginsDir();
 
-  const entries = await readdir(PLUGINS_DIR, { withFileTypes: true });
+  try {
+    await access(pluginsDir);
+  } catch {
+    return []; // Directory doesn't exist — no plugins
+  }
+
+  const entries = await readdir(pluginsDir, { withFileTypes: true });
   const plugins: DiscoveredPlugin[] = [];
 
   for (const entry of entries) {
-    // Follow symlinks: isDirectory() returns false for symlinks, so stat the resolved path
-    const entryPath = join(PLUGINS_DIR, entry.name);
-    const entryStat = await stat(entryPath); // stat follows symlinks, lstat doesn't
+    if (entry.name.startsWith('.')) continue; // Skip hidden files/dirs
+
+    // Follow symlinks: stat() follows symlinks, isDirectory() doesn't for symlink entries
+    const entryPath = join(pluginsDir, entry.name);
+    const entryStat = await stat(entryPath);
     if (!entryStat.isDirectory()) continue;
 
-    const dir = join(PLUGINS_DIR, entry.name);
-    const manifestPath = join(dir, 'manifest.json');
-
-    if (!existsSync(manifestPath)) continue;
+    const manifestPath = join(entryPath, 'manifest.json');
+    try {
+      await access(manifestPath);
+    } catch {
+      continue; // No manifest.json — skip
+    }
 
     try {
       const raw = await readFile(manifestPath, 'utf-8');
       const data = JSON.parse(raw);
-      const manifest = validateManifest(data, dir);
-      plugins.push({ dir, manifest });
+      const manifest = validateManifest(data, entryPath);
+      plugins.push({ dir: entryPath, manifest });
     } catch (err) {
-      console.error(`[PluginLoader] Failed to load manifest from ${dir}:`, err);
+      console.error(`[PluginLoader] Failed to load manifest from ${entryPath}:`, err);
     }
   }
 
