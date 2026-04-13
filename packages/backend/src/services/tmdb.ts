@@ -54,7 +54,7 @@ function toTmdbLocale(lang: string): string {
   return LANG_TO_LOCALE[lang] || 'en-US';
 }
 
-function getTmdbApi(lang = DEFAULT_LANG) {
+export function getTmdbApi(lang = DEFAULT_LANG) {
   return axios.create({
     baseURL: TMDB_BASE,
     headers: {

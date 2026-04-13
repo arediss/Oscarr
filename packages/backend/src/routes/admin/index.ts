@@ -13,6 +13,7 @@ import { rolesRoutes } from './roles.js';
 import { keywordsRoutes } from './keywords.js';
 import { blacklistRoutes } from './blacklist.js';
 import { backupRoutes } from './backup.js';
+import { homepageRoutes } from './homepage.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   await settingsRoutes(app);
@@ -29,6 +30,7 @@ export async function adminRoutes(app: FastifyInstance) {
   await keywordsRoutes(app);
   await blacklistRoutes(app);
   await backupRoutes(app);
+  await homepageRoutes(app);
 
   // Graceful restart — used by "Reload plugins" in admin UI
   app.post('/restart', async (_request, reply) => {

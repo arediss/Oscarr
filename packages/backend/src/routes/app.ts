@@ -7,6 +7,7 @@ import { prisma } from '../utils/prisma.js';
 import { pluginEngine } from '../plugins/engine.js';
 import { getArrClient } from '../providers/index.js';
 import { getServiceConfig } from '../utils/services.js';
+import { getHomepageLayout } from './admin/homepage.js';
 
 const APP_VERSION = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../../../../package.json'), 'utf-8')
@@ -134,5 +135,10 @@ export async function appRoutes(app: FastifyInstance) {
       nsfwBlurEnabled: settings?.nsfwBlurEnabled ?? true,
       ...pluginFeatures,
     };
+  });
+
+  // Get homepage layout (public — needed before auth)
+  app.get('/homepage-layout', async () => {
+    return getHomepageLayout();
   });
 }

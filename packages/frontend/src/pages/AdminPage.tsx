@@ -11,6 +11,7 @@ import {
   RefreshCw,
   ScrollText,
   Plug,
+  LayoutDashboard,
   ExternalLink,
   CheckCircle,
   type LucideIcon,
@@ -32,11 +33,13 @@ import { JobsTab } from './admin/JobsTab';
 import { LogsTab } from './admin/LogsTab';
 import { PluginsTab } from './admin/PluginsTab';
 import { RolesTab } from './admin/RolesTab';
+import { HomepageTab } from './admin/HomepageTab';
 
 type Tab = 'users' | 'services' | 'media' | 'support' | 'notifications' | 'jobs' | 'logs' | 'general' | (string & {});
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'general', label: 'admin.tab.general', icon: Settings },
+  { id: 'homepage', label: 'admin.tab.homepage', icon: LayoutDashboard },
   { id: 'users', label: 'admin.tab.users', icon: Users },
   { id: 'roles', label: 'admin.tab.roles', icon: Shield },
   { id: 'services', label: 'admin.tab.services', icon: Server },
@@ -177,6 +180,7 @@ export default function AdminPage() {
         {/* Content */}
         <main className="flex-1 min-w-0 md:pl-8" key={activeTab}>
           {activeTab === 'general' && <GeneralTab />}
+          {activeTab === 'homepage' && <HomepageTab />}
           {activeTab === 'users' && <UsersTab />}
           {activeTab === 'roles' && <RolesTab />}
           {activeTab === 'services' && <ServicesTab />}

@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { getCached, setCache } from '../utils/cache.js';
 import {
   getTrending,
   getPopularMovies,
@@ -16,6 +17,7 @@ import {
   getCollection,
   getGenreBackdrops,
   isMatureRating,
+  getTmdbApi,
 } from '../services/tmdb.js';
 import { trackKeywordsFromDetails } from '../services/sync/keywordSync.js';
 import { prisma } from '../utils/prisma.js';
@@ -171,6 +173,61 @@ export async function tmdbRoutes(app: FastifyInstance) {
     return { ...data, nsfwTmdbIds };
   });
 
+  app.get('/movies/now_playing', {
+    schema: { querystring: pageQuerySchema },
+  }, async (request) => {
+    const { page } = request.query as { page?: string };
+    const lang = getLang(request);
+    const tmdb = getTmdbApi();
+    const { data } = await tmdb.get(`/movie/now_playing`, { params: { page: parsePage(page), language: lang, region: lang.split('-')[0]?.toUpperCase() || 'US' } });
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'movie', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
+  app.get('/movies/top_rated', {
+    schema: { querystring: pageQuerySchema },
+  }, async (request) => {
+    const { page } = request.query as { page?: string };
+    const lang = getLang(request);
+    const tmdb = getTmdbApi();
+    const { data } = await tmdb.get(`/movie/top_rated`, { params: { page: parsePage(page), language: lang } });
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'movie', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
+  app.get('/tv/top_rated', {
+    schema: { querystring: pageQuerySchema },
+  }, async (request) => {
+    const { page } = request.query as { page?: string };
+    const lang = getLang(request);
+    const tmdb = getTmdbApi();
+    const { data } = await tmdb.get(`/tv/top_rated`, { params: { page: parsePage(page), language: lang } });
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'tv', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
+  app.get('/tv/airing_today', {
+    schema: { querystring: pageQuerySchema },
+  }, async (request) => {
+    const { page } = request.query as { page?: string };
+    const lang = getLang(request);
+    const tmdb = getTmdbApi();
+    const { data } = await tmdb.get(`/tv/airing_today`, { params: { page: parsePage(page), language: lang } });
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'tv', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
+  app.get('/tv/on_the_air', {
+    schema: { querystring: pageQuerySchema },
+  }, async (request) => {
+    const { page } = request.query as { page?: string };
+    const lang = getLang(request);
+    const tmdb = getTmdbApi();
+    const { data } = await tmdb.get(`/tv/on_the_air`, { params: { page: parsePage(page), language: lang } });
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'tv', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
   app.get('/search', {
     schema: {
       querystring: {
@@ -316,5 +373,71 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   app.get('/genre-backdrops', async () => {
     return getGenreBackdrops();
+  });
+
+  // GET /discover/:mediaType — flat discover (for homepage custom sections)
+  app.get('/discover/:mediaType', {
+    schema: {
+      params: {
+        type: 'object' as const,
+        required: ['mediaType'],
+        properties: {
+          mediaType: { type: 'string', enum: ['movie', 'tv'], description: 'movie or tv' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { mediaType } = request.params as { mediaType: string };
+    if (mediaType !== 'movie' && mediaType !== 'tv') {
+      return reply.status(400).send({ error: 'Invalid mediaType' });
+    }
+    const query = request.query as Record<string, string>;
+    // Whitelist allowed TMDB discover params to prevent property injection
+    const ALLOWED_PARAMS = new Set([
+      'page', 'sort_by', 'with_genres', 'with_keywords', 'with_original_language',
+      'primary_release_date.gte', 'primary_release_date.lte',
+      'first_air_date.gte', 'first_air_date.lte',
+      'vote_average.gte', 'vote_count.gte', 'region', 'language',
+      'include_adult', 'include_video', 'year', 'first_air_date_year',
+    ]);
+    const params: Record<string, string> = {};
+    for (const [key, value] of Object.entries(query)) {
+      if (value && ALLOWED_PARAMS.has(key)) params[key] = value;
+    }
+    if (!params.page) params.page = '1';
+
+    // Static path — mediaType already validated above, but use ternary to satisfy CodeQL taint analysis
+    const discoverPath = mediaType === 'movie' ? '/discover/movie' : '/discover/tv';
+    const tmdbApi = getTmdbApi();
+    const { data } = await tmdbApi.get(discoverPath, { params });
+    const lang = getLang(request);
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], mediaType, lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
+  // Genre list for movie or tv (used by the homepage query builder)
+  app.get('/genres/:mediaType', {
+    schema: {
+      params: {
+        type: 'object' as const,
+        required: ['mediaType'],
+        properties: {
+          mediaType: { type: 'string', enum: ['movie', 'tv'], description: 'movie or tv' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { mediaType } = request.params as { mediaType: string };
+    if (mediaType !== 'movie' && mediaType !== 'tv') {
+      return reply.status(400).send({ error: 'Invalid mediaType' });
+    }
+    const lang = getLang(request);
+    const cacheKey = `genres:${mediaType}:${lang}`;
+    const cached = await getCached<{ genres: { id: number; name: string }[] }>(cacheKey);
+    if (cached) return cached;
+    const tmdb = getTmdbApi(lang);
+    const { data } = await tmdb.get(`/genre/${mediaType}/list`);
+    await setCache(cacheKey, data, 24);
+    return data;
   });
 }
