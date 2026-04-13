@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Save, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
@@ -15,9 +15,10 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
   const { t } = useTranslation();
   const url = pluginFrontendUrl(pluginId);
 
-  const [FrontendComp, setFrontendComp] = useState<ComponentType<any> | null>(getCached(url));
-  const [frontendLoading, setFrontendLoading] = useState(!hasLoaded(url));
-  const [frontendTried, setFrontendTried] = useState(hasLoaded(url));
+  // ALL hooks declared unconditionally at the top — no early returns before hooks
+  const [FrontendComp, setFrontendComp] = useState<ComponentType<any> | null>(() => getCached(url));
+  const [frontendLoading, setFrontendLoading] = useState(() => !hasLoaded(url));
+  const [frontendTried, setFrontendTried] = useState(() => hasLoaded(url));
 
   const [settings, setSettings] = useState<PluginSettings | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -54,7 +55,7 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
       .catch((err) => setError(err.response?.data?.error || t('plugin.load_error')));
   }, [pluginId, frontendTried, FrontendComp]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setSaving(true);
     setSaved(false);
     setError(null);
@@ -67,8 +68,11 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
     } finally {
       setSaving(false);
     }
-  };
+  }, [pluginId, values]);
 
+  // ── Single return — all branching in JSX ──────────────────────────
+
+  // Loading frontend
   if (frontendLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -77,6 +81,7 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
     );
   }
 
+  // Frontend loaded — render it
   if (FrontendComp) {
     return (
       <PluginErrorBoundary pluginId={pluginId}>
@@ -85,6 +90,7 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
     );
   }
 
+  // Fallback: settings form
   if (error && !settings) {
     return <div className="card p-6 text-center text-ndp-text-muted">{error}</div>;
   }
