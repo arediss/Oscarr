@@ -5,34 +5,49 @@ import { notificationRegistry } from '../notifications/index.js';
 import type { NotificationPayload } from '../notifications/types.js';
 import { sendUserNotification } from '../services/userNotifications.js';
 import { getArrClient } from '../providers/index.js';
+import { registerRoutePermission as rbacRegisterRoute, registerPluginPermission as rbacRegisterPermission } from '../middleware/rbac.js';
 import { discoverPlugins } from './loader.js';
 import type {
   LoadedPlugin,
+  LoadedUIContribution,
   PluginContext,
   PluginGuardResult,
   PluginInfo,
   PluginManifest,
   PluginRegistration,
-  UIContribution,
 } from './types.js';
 
 export class PluginEngine {
   private plugins = new Map<string, LoadedPlugin>();
+  private settingsCache = new Map<string, Record<string, unknown>>();
+  private logger: FastifyBaseLogger | null = null;
+
+  /** Call once after Fastify is ready to provide a structured logger. */
+  setLogger(logger: FastifyBaseLogger): void {
+    this.logger = logger;
+  }
+
+  private log(level: 'info' | 'warn' | 'error' | 'debug', msg: string): void {
+    if (this.logger) {
+      this.logger[level](msg);
+    } else {
+      const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+      fn(`[PluginEngine] ${msg}`);
+    }
+  }
 
   async loadAll(): Promise<void> {
     const discovered = await discoverPlugins();
-    console.log(`[PluginEngine] Discovered ${discovered.length} plugin(s)`);
+    this.log('info', `Discovered ${discovered.length} plugin(s)`);
 
     for (const { dir, manifest } of discovered) {
       try {
-        // Ensure PluginState row exists
         const state = await prisma.pluginState.upsert({
           where: { pluginId: manifest.id },
           update: {},
           create: { pluginId: manifest.id, enabled: true, settings: '{}' },
         });
 
-        // Import the plugin entry module
         const entryPath = join(dir, manifest.entry);
         const mod = await import(entryPath);
 
@@ -40,31 +55,28 @@ export class PluginEngine {
           throw new Error(`Plugin "${manifest.id}" does not export a register() function`);
         }
 
-        const ctx = this.createContext(manifest, this.createFallbackLogger());
+        const ctx = this.createContext(manifest);
         const registration: PluginRegistration = await mod.register(ctx);
 
-        // Run onInstall on first load
-        if (state.settings === '{}' && registration.onInstall) {
+        // Run onInstall ONLY on first load (tracked by DB flag)
+        if (!state.onInstallRan && registration.onInstall) {
           await registration.onInstall(ctx);
-          console.log(`[PluginEngine] Ran onInstall for "${manifest.id}"`);
+          await prisma.pluginState.update({
+            where: { pluginId: manifest.id },
+            data: { onInstallRan: true },
+          });
+          this.log('info', `Ran onInstall for "${manifest.id}"`);
         }
 
-        // Register notification providers from plugin
         if (registration.registerNotificationProviders) {
           registration.registerNotificationProviders(notificationRegistry);
-          console.log(`[PluginEngine] Registered notification providers for "${manifest.id}"`);
+          this.log('info', `Registered notification providers for "${manifest.id}"`);
         }
 
-        this.plugins.set(manifest.id, {
-          manifest,
-          registration,
-          dir,
-          enabled: state.enabled,
-        });
-
-        console.log(`[PluginEngine] Loaded "${manifest.id}" v${manifest.version} (${state.enabled ? 'enabled' : 'disabled'})`);
+        this.plugins.set(manifest.id, { manifest, registration, dir, enabled: state.enabled });
+        this.log('info', `Loaded "${manifest.id}" v${manifest.version} (${state.enabled ? 'enabled' : 'disabled'})`);
       } catch (err) {
-        console.error(`[PluginEngine] Failed to load plugin "${manifest.id}":`, err);
+        this.log('error', `Failed to load plugin "${manifest.id}": ${err}`);
         this.plugins.set(manifest.id, {
           manifest,
           registration: { manifest } as PluginRegistration,
@@ -77,23 +89,31 @@ export class PluginEngine {
   }
 
   async registerWithFastify(app: FastifyInstance): Promise<void> {
+    this.setLogger(app.log);
+
     for (const [id, plugin] of this.plugins) {
       if (!plugin.enabled || plugin.error) continue;
       if (!plugin.registration.registerRoutes) continue;
 
       const prefix = plugin.manifest.hooks?.routes?.prefix || `/api/plugins/${id}`;
       try {
-        const ctx = this.createContext(plugin.manifest, app.log);
+        const ctx = this.createContext(plugin.manifest);
         await app.register(
           async (instance) => {
             await plugin.registration.registerRoutes!(instance, ctx);
           },
           { prefix }
         );
-        console.log(`[PluginEngine] Registered routes for "${id}" at ${prefix}`);
+        this.log('info', `Registered routes for "${id}" at ${prefix}`);
       } catch (err) {
-        console.error(`[PluginEngine] Failed to register routes for "${id}":`, err);
+        this.log('error', `Failed to register routes for "${id}": ${err}`);
         plugin.error = `Route registration failed: ${err}`;
+        plugin.enabled = false;
+        // Persist disabled state so the UI reflects the failure
+        await prisma.pluginState.update({
+          where: { pluginId: id },
+          data: { enabled: false },
+        }).catch(() => {}); // best-effort
       }
     }
   }
@@ -103,13 +123,13 @@ export class PluginEngine {
     for (const [id, plugin] of this.plugins) {
       if (!plugin.enabled || plugin.error || !plugin.registration.registerJobs) continue;
       try {
-        const ctx = this.createContext(plugin.manifest, this.createFallbackLogger());
+        const ctx = this.createContext(plugin.manifest);
         const jobs = plugin.registration.registerJobs(ctx);
         for (const [key, handler] of Object.entries(jobs)) {
           handlers[key] = handler;
         }
       } catch (err) {
-        console.error(`[PluginEngine] Failed to get job handlers for "${id}":`, err);
+        this.log('error', `Failed to get job handlers for "${id}": ${err}`);
       }
     }
     return handlers;
@@ -126,8 +146,8 @@ export class PluginEngine {
     return defs;
   }
 
-  getUIContributions(hookPoint: string): (UIContribution & { pluginId: string })[] {
-    const contributions: (UIContribution & { pluginId: string })[] = [];
+  getUIContributions(hookPoint: string): LoadedUIContribution[] {
+    const contributions: LoadedUIContribution[] = [];
     for (const [id, plugin] of this.plugins) {
       if (!plugin.enabled || plugin.error) continue;
       for (const ui of plugin.manifest.hooks?.ui || []) {
@@ -175,15 +195,14 @@ export class PluginEngine {
       data: { enabled },
     });
     plugin.enabled = enabled;
+    this.settingsCache.delete(id);
   }
 
   async getSettings(id: string): Promise<{ schema: PluginManifest['settings']; values: Record<string, unknown> }> {
     const plugin = this.plugins.get(id);
     if (!plugin) throw new Error(`Plugin "${id}" not found`);
 
-    const state = await prisma.pluginState.findUnique({ where: { pluginId: id } });
-    const values = state ? JSON.parse(state.settings) : {};
-
+    const values = await this.getCachedSettings(id);
     return { schema: plugin.manifest.settings || [], values };
   }
 
@@ -195,45 +214,45 @@ export class PluginEngine {
       where: { pluginId: id },
       data: { settings: JSON.stringify(values) },
     });
+    this.settingsCache.set(id, values);
   }
 
-  /** Run all plugin guards for a given hook. Returns the first block result, or null if all pass. */
   async runGuards(guardName: string, userId: number): Promise<PluginGuardResult | null> {
     for (const [id, plugin] of this.plugins) {
       if (!plugin.enabled || plugin.error || !plugin.registration.registerGuards) continue;
       try {
-        const ctx = this.createContext(plugin.manifest, this.createFallbackLogger());
+        const ctx = this.createContext(plugin.manifest);
         const guards = plugin.registration.registerGuards(ctx);
         const guard = guards[guardName];
         if (!guard) continue;
         const result = await guard(userId);
         if (result?.blocked) return result;
       } catch (err) {
-        console.error(`[PluginEngine] Guard "${guardName}" failed for plugin "${id}":`, err);
+        this.log('error', `Guard "${guardName}" failed for plugin "${id}": ${err}`);
       }
     }
     return null;
   }
 
-  private createFallbackLogger(): FastifyBaseLogger {
-    const log = Object.assign((...args: unknown[]) => console.log(...args), {
-      info: (...args: unknown[]) => console.info('[Plugin]', ...args),
-      warn: (...args: unknown[]) => console.warn('[Plugin]', ...args),
-      error: (...args: unknown[]) => console.error('[Plugin]', ...args),
-      debug: (...args: unknown[]) => console.debug('[Plugin]', ...args),
-      fatal: (...args: unknown[]) => console.error('[Plugin:FATAL]', ...args),
-      trace: (...args: unknown[]) => console.debug('[Plugin:TRACE]', ...args),
-      silent: () => {},
-      child: () => log,
-      level: 'info',
-    });
-    return log as unknown as FastifyBaseLogger;
+  // ── Private helpers ───────────────────────────────────────────────
+
+  private async getCachedSettings(pluginId: string): Promise<Record<string, unknown>> {
+    const cached = this.settingsCache.get(pluginId);
+    if (cached) return cached;
+
+    const state = await prisma.pluginState.findUnique({ where: { pluginId } });
+    const values = state ? JSON.parse(state.settings) : {};
+    this.settingsCache.set(pluginId, values);
+    return values;
   }
 
-  private createContext(manifest: PluginManifest, logger: FastifyBaseLogger): PluginContext {
+  private createContext(manifest: PluginManifest): PluginContext {
     const pluginId = manifest.id;
+    const engine = this;
+    const log = this.logger?.child({ plugin: pluginId }) || this.makeFallbackLogger(pluginId);
+
     return {
-      log: logger.child({ plugin: pluginId }),
+      log,
       async getUser(userId: number) {
         return prisma.user.findUnique({
           where: { id: userId },
@@ -245,27 +264,25 @@ export class PluginEngine {
         return (s ?? {}) as Record<string, unknown>;
       },
       async getSetting(key: string) {
-        const state = await prisma.pluginState.findUnique({ where: { pluginId } });
-        if (!state) return undefined;
-        const settings = JSON.parse(state.settings);
+        const settings = await engine.getCachedSettings(pluginId);
         return settings[key];
       },
       async setSetting(key: string, value: unknown) {
-        const state = await prisma.pluginState.findUnique({ where: { pluginId } });
-        const settings = state ? JSON.parse(state.settings) : {};
+        const settings = await engine.getCachedSettings(pluginId);
         settings[key] = value;
         await prisma.pluginState.update({
           where: { pluginId },
           data: { settings: JSON.stringify(settings) },
         });
+        engine.settingsCache.set(pluginId, settings);
       },
       async sendNotification(type: string, data: NotificationPayload) {
         await notificationRegistry.send(type, data);
       },
-      async sendUserNotification(userId: number, payload: { type: string; title: string; message: string; metadata?: Record<string, unknown> }) {
+      async sendUserNotification(userId: number, payload) {
         await sendUserNotification(userId, payload);
       },
-      notificationRegistry: notificationRegistry,
+      notificationRegistry,
       getArrClient: (serviceType: string) => getArrClient(serviceType),
       async getServiceConfig(serviceType: string) {
         const svc = await prisma.service.findFirst({ where: { type: serviceType } });
@@ -277,9 +294,30 @@ export class PluginEngine {
           return null;
         }
       },
+      registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }) {
+        rbacRegisterRoute(routeKey, rule);
+      },
+      registerPluginPermission(permission: string, description?: string) {
+        rbacRegisterPermission(permission, description);
+      },
     };
+  }
+
+  private makeFallbackLogger(pluginId: string): FastifyBaseLogger {
+    const prefix = `[Plugin:${pluginId}]`;
+    const log = Object.assign((...args: unknown[]) => console.log(prefix, ...args), {
+      info: (...args: unknown[]) => console.info(prefix, ...args),
+      warn: (...args: unknown[]) => console.warn(prefix, ...args),
+      error: (...args: unknown[]) => console.error(prefix, ...args),
+      debug: (...args: unknown[]) => console.debug(prefix, ...args),
+      fatal: (...args: unknown[]) => console.error(`${prefix}[FATAL]`, ...args),
+      trace: (...args: unknown[]) => console.debug(`${prefix}[TRACE]`, ...args),
+      silent: () => {},
+      child: () => log,
+      level: 'info',
+    });
+    return log as unknown as FastifyBaseLogger;
   }
 }
 
-// Singleton
 export const pluginEngine = new PluginEngine();
