@@ -91,13 +91,9 @@ export async function discoverPlugins(): Promise<DiscoveredPlugin[]> {
     if (!entryStat.isDirectory()) continue;
 
     const manifestPath = join(entryPath, 'manifest.json');
-    try {
-      await access(manifestPath);
-    } catch {
-      continue; // No manifest.json — skip
-    }
 
     try {
+      // Read directly — if the file doesn't exist, readFile throws and we skip
       const raw = await readFile(manifestPath, 'utf-8');
       const data = JSON.parse(raw);
       const manifest = validateManifest(data, entryPath);

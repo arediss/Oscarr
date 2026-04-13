@@ -18,7 +18,7 @@ export class PluginErrorBoundary extends ReactComponent<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    console.warn(`[Plugin:${this.props.pluginId}] Frontend crashed:`, error.message);
+    console.warn('[Plugin] Frontend crashed:', this.props.pluginId, error.message);
   }
 
   render() {

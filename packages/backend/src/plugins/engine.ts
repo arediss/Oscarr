@@ -29,7 +29,7 @@ export class PluginEngine {
       this.logger[level](msg);
     } else {
       const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
-      fn(`[PluginEngine] ${msg}`);
+      fn('[PluginEngine]', String(msg));
     }
   }
 
