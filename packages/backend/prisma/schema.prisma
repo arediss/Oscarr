@@ -288,6 +288,7 @@ model PluginState {
   pluginId      String    @unique
   enabled       Boolean   @default(true)
   settings      String    @default("{}") // JSON blob for plugin-specific settings
+  onInstallRan  Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
