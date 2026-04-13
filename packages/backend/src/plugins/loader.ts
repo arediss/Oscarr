@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'fs/promises';
+import { readdir, readFile, stat } from 'fs/promises';
 import { join, resolve, dirname } from 'path';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -29,7 +29,10 @@ export async function discoverPlugins(): Promise<DiscoveredPlugin[]> {
   const plugins: DiscoveredPlugin[] = [];
 
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    // Follow symlinks: isDirectory() returns false for symlinks, so stat the resolved path
+    const entryPath = join(PLUGINS_DIR, entry.name);
+    const entryStat = await stat(entryPath); // stat follows symlinks, lstat doesn't
+    if (!entryStat.isDirectory()) continue;
 
     const dir = join(PLUGINS_DIR, entry.name);
     const manifestPath = join(dir, 'manifest.json');

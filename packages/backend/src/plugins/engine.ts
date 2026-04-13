@@ -267,6 +267,16 @@ export class PluginEngine {
       },
       notificationRegistry: notificationRegistry,
       getArrClient: (serviceType: string) => getArrClient(serviceType),
+      async getServiceConfig(serviceType: string) {
+        const svc = await prisma.service.findFirst({ where: { type: serviceType } });
+        if (!svc) return null;
+        try {
+          const config = JSON.parse(svc.config);
+          return { url: config.url || config.baseUrl, apiKey: config.apiKey };
+        } catch {
+          return null;
+        }
+      },
     };
   }
 }

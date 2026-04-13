@@ -104,11 +104,11 @@ export default function AdminPage() {
   );
 
   return (
-    <div className="max-w-[1800px] mx-auto px-4 sm:px-8 py-8">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Shield className="w-6 h-6 text-ndp-accent" />
-        <h1 className="text-2xl font-bold text-ndp-text">{t('admin.title')}</h1>
+    <div className="max-w-[1800px] mx-auto px-4 sm:px-8 py-6">
+      {/* Mobile: header + horizontal tabs */}
+      <div className="md:hidden flex items-center gap-3 mb-4">
+        <Shield className="w-5 h-5 text-ndp-accent" />
+        <h1 className="text-xl font-bold text-ndp-text">{t('admin.title')}</h1>
       </div>
 
       {/* Mobile: horizontal tabs */}
@@ -149,18 +149,23 @@ export default function AdminPage() {
         {/* Desktop: sidebar */}
         <aside className="hidden md:block w-56 flex-shrink-0">
           <nav className="sticky top-24 space-y-0.5">
+            <div className="flex items-center gap-2.5 px-3 mb-4">
+              <Shield className="w-5 h-5 text-ndp-accent flex-shrink-0" />
+              <h1 className="text-lg font-bold text-ndp-text">{t('admin.title')}</h1>
+            </div>
             {TABS.map(({ id, label, icon: Icon }) =>
               renderSidebarItem(id, t(label), <Icon className="w-4 h-4 flex-shrink-0" />)
             )}
 
             {pluginTabItems.length > 0 && (
-              <>
-                <div className="border-t border-white/5 my-3" />
-                <p className="text-[10px] text-ndp-text-dim uppercase tracking-wider px-3 mb-1 font-semibold">{t('admin.tab.plugins')}</p>
-                {pluginTabItems.map((tab) =>
-                  renderSidebarItem(tab.id, tab.label, <DynamicIcon name={tab.pluginIcon} className="w-4 h-4 flex-shrink-0" />, true)
-                )}
-              </>
+              <div className="mt-6 pt-5 border-t border-white/5 mx-1">
+                <p className="text-[10px] text-ndp-text-dim uppercase tracking-wider px-2 mb-3 font-semibold">{t('admin.tab.plugins')}</p>
+                <div className="space-y-0.5">
+                  {pluginTabItems.map((tab) =>
+                    renderSidebarItem(tab.id, tab.label, <DynamicIcon name={tab.pluginIcon} className="w-4 h-4 flex-shrink-0" />, true)
+                  )}
+                </div>
+              </div>
             )}
           </nav>
         </aside>

@@ -128,9 +128,10 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
 
 // ── Prefix-based fallback (first match wins — order matters) ────────────────
 const PREFIX_DEFAULTS: [string, RouteRule][] = [
-  ['/api/admin',  { permission: 'admin.*' }],
-  ['/api/setup',  { permission: PUBLIC }],    // setup has its own secret-based guards
-  ['/api/auth',   { permission: PUBLIC }],    // OAuth callback routes registered dynamically
+  ['/api/admin',    { permission: 'admin.*' }],
+  ['/api/plugins',  { permission: AUTH }],    // Plugin custom routes — any authenticated user
+  ['/api/setup',    { permission: PUBLIC }],  // setup has its own secret-based guards
+  ['/api/auth',     { permission: PUBLIC }],  // OAuth callback routes registered dynamically
   ['/api/webhooks', { permission: PUBLIC }],  // Auth via API key in handler
 ];
 

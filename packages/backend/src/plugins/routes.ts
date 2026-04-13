@@ -158,4 +158,66 @@ export async function pluginRoutes(app: FastifyInstance) {
   app.get('/features', async () => {
     return pluginEngine.getAllFeatureFlags();
   });
+
+  // ── Plugin Registry (Discover) ───────────────────────────────────
+
+  const REGISTRY_URL = 'https://raw.githubusercontent.com/arediss/Oscarr-Plugin-Registry/main/plugins.json';
+  let registryCache: { data: unknown; timestamp: number } | null = null;
+  const REGISTRY_TTL = 5 * 60 * 1000; // 5 minutes
+
+  app.get('/registry', async (_request, reply) => {
+    try {
+      const now = Date.now();
+      if (registryCache && now - registryCache.timestamp < REGISTRY_TTL) {
+        return registryCache.data;
+      }
+
+      // Fetch the plugin directory
+      const res = await fetch(REGISTRY_URL);
+      if (!res.ok) throw new Error(`Registry fetch failed: ${res.status}`);
+      const registry = await res.json() as { plugins: { repository: string; category?: string }[] };
+
+      // Fetch manifest.json from each plugin repo in parallel
+      const plugins = await Promise.allSettled(
+        registry.plugins.map(async (entry) => {
+          const manifestUrl = `https://raw.githubusercontent.com/${entry.repository}/main/manifest.json`;
+          const mRes = await fetch(manifestUrl);
+          if (!mRes.ok) return null;
+          const manifest = await mRes.json() as Record<string, unknown>;
+
+          // Fetch repo metadata (description, stars, etc.)
+          let repoMeta: Record<string, unknown> = {};
+          try {
+            const repoRes = await fetch(`https://api.github.com/repos/${entry.repository}`, {
+              headers: { 'Accept': 'application/vnd.github.v3+json' },
+            });
+            if (repoRes.ok) repoMeta = await repoRes.json() as Record<string, unknown>;
+          } catch { /* ignore */ }
+
+          return {
+            id: manifest.id,
+            name: manifest.name,
+            version: manifest.version,
+            apiVersion: manifest.apiVersion,
+            description: manifest.description || repoMeta.description || '',
+            author: manifest.author || '',
+            repository: entry.repository,
+            category: entry.category || 'utilities',
+            url: `https://github.com/${entry.repository}`,
+            stars: repoMeta.stargazers_count ?? 0,
+            updatedAt: repoMeta.pushed_at || null,
+          };
+        })
+      );
+
+      const result = plugins
+        .filter(p => p.status === 'fulfilled' && p.value !== null)
+        .map(p => (p as PromiseFulfilledResult<any>).value);
+
+      registryCache = { data: result, timestamp: now };
+      return result;
+    } catch (err) {
+      return reply.status(502).send({ error: 'Failed to fetch plugin registry' });
+    }
+  });
 }

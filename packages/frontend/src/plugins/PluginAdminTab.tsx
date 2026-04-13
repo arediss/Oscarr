@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Save, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
@@ -8,6 +8,8 @@ interface PluginAdminTabProps {
   pluginId: string;
 }
 
+const frontendCache = new Map<string, ComponentType<any> | null>();
+
 export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<PluginSettings | null>(null);
@@ -16,6 +18,33 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Try loading plugin frontend component
+  const [FrontendComponent, setFrontendComponent] = useState<ComponentType<any> | null>(
+    frontendCache.has(pluginId) ? frontendCache.get(pluginId)! : null
+  );
+  const [frontendLoading, setFrontendLoading] = useState(!frontendCache.has(pluginId));
+  const [frontendFailed, setFrontendFailed] = useState(false);
+
+  useEffect(() => {
+    if (frontendCache.has(pluginId)) {
+      setFrontendLoading(false);
+      return;
+    }
+
+    import(/* @vite-ignore */ `/api/plugins/${pluginId}/frontend/index.js`)
+      .then((mod) => {
+        const comp = mod.default || null;
+        frontendCache.set(pluginId, comp);
+        setFrontendComponent(() => comp);
+      })
+      .catch(() => {
+        frontendCache.set(pluginId, null);
+        setFrontendFailed(true);
+      })
+      .finally(() => setFrontendLoading(false));
+  }, [pluginId]);
+
+  // Load settings (for fallback settings UI)
   useEffect(() => {
     api.get<PluginSettings>(`/plugins/${pluginId}/settings`)
       .then(({ data }) => {
@@ -25,21 +54,20 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
       .catch((err) => setError(err.response?.data?.error || t('plugin.load_error')));
   }, [pluginId]);
 
-  const handleSave = async () => {
-    setSaving(true);
-    setSaved(false);
-    setError(null);
-    try {
-      await api.put(`/plugins/${pluginId}/settings`, values);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (err: any) {
-      setError(err.response?.data?.error || t('plugin.save_error'));
-    } finally {
-      setSaving(false);
-    }
-  };
+  // If frontend component loaded, render it instead of settings
+  if (frontendLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-ndp-accent" />
+      </div>
+    );
+  }
 
+  if (FrontendComponent) {
+    return <FrontendComponent />;
+  }
+
+  // Fallback: settings form (original behavior)
   if (error && !settings) {
     return (
       <div className="card p-6 text-center text-ndp-text-muted">
@@ -109,4 +137,19 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
       </button>
     </div>
   );
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    setError(null);
+    try {
+      await api.put(`/plugins/${pluginId}/settings`, values);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || t('plugin.save_error'));
+    } finally {
+      setSaving(false);
+    }
+  }
 }
