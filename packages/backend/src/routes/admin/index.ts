@@ -29,4 +29,11 @@ export async function adminRoutes(app: FastifyInstance) {
   await keywordsRoutes(app);
   await blacklistRoutes(app);
   await backupRoutes(app);
+
+  // Graceful restart — used by "Reload plugins" in admin UI
+  app.post('/restart', async (_request, reply) => {
+    reply.send({ ok: true, message: 'Server restarting...' });
+    // Delay exit so the HTTP response is sent first
+    setTimeout(() => process.exit(0), 500);
+  });
 }

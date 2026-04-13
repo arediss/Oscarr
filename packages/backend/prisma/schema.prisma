@@ -288,6 +288,7 @@ model PluginState {
   pluginId      String    @unique
   enabled       Boolean   @default(true)
   settings      String    @default("{}") // JSON blob for plugin-specific settings
+  onInstallRan  Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -325,4 +326,14 @@ model Patchnote {
   titleEn String
   titleFr String
   entries String   // JSON: [{ type: "feat"|"fix"|"perf", titleEn, titleFr, descEn?, descFr? }]
+}
+
+model PluginLog {
+  id        Int      @id @default(autoincrement())
+  pluginId  String
+  level     String   // "info" | "warn" | "error" | "debug"
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([pluginId, createdAt])
 }

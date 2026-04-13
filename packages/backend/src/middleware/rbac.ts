@@ -115,8 +115,10 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'GET:/api/plugins/:id/settings':       { permission: 'admin.plugins' },
   'PUT:/api/plugins/:id/settings':       { permission: 'admin.plugins' },
   'GET:/api/plugins/ui/:hookPoint':      { permission: AUTH },
+  'GET:/api/plugins/:id/logs':           { permission: 'admin.plugins' },
   'GET:/api/plugins/:id/frontend/*':     { permission: AUTH },
   'GET:/api/plugins/features':           { permission: PUBLIC },
+  'GET:/api/plugins/registry':           { permission: AUTH },  // Plugin discovery — any authenticated user
 
   // ── Admin RBAC routes ──
   'GET:/api/admin/roles':                { permission: 'admin.roles' },
@@ -124,13 +126,18 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'PUT:/api/admin/roles/:id':            { permission: 'admin.roles' },
   'DELETE:/api/admin/roles/:id':         { permission: 'admin.roles' },
   'GET:/api/admin/permissions':          { permission: 'admin.roles' },
+  'POST:/api/admin/restart':             { permission: 'admin.*' },
 };
 
 // ── Prefix-based fallback (first match wins — order matters) ────────────────
 const PREFIX_DEFAULTS: [string, RouteRule][] = [
-  ['/api/admin',  { permission: 'admin.*' }],
-  ['/api/setup',  { permission: PUBLIC }],    // setup has its own secret-based guards
-  ['/api/auth',   { permission: PUBLIC }],    // OAuth callback routes registered dynamically
+  ['/api/admin',    { permission: 'admin.*' }],
+  // Plugin custom routes fall through here (registered dynamically by plugins at /api/plugins/:pluginId/*).
+  // Any authenticated user can access. Plugins that need admin-only routes should use
+  // ctx.registerRoutePermission() to override specific routes.
+  ['/api/plugins',  { permission: AUTH }],
+  ['/api/setup',    { permission: PUBLIC }],  // setup has its own secret-based guards
+  ['/api/auth',     { permission: PUBLIC }],  // OAuth callback routes registered dynamically
   ['/api/webhooks', { permission: PUBLIC }],  // Auth via API key in handler
 ];
 

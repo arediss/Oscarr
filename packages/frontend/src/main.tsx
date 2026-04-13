@@ -9,9 +9,9 @@ import './i18n';
 import './index.css';
 
 // Expose React globally for plugin ESM modules (shim pattern)
-(window as any).React = React;
-(window as any).ReactDOM = ReactDOM;
-(window as any)._jsx_runtime = jsxRuntime;
+(window as any).__OSCARR_REACT__ = React;
+(window as any).__OSCARR_REACT_DOM__ = ReactDOM;
+(window as any).__OSCARR_JSX_RUNTIME__ = jsxRuntime;
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

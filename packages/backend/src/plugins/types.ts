@@ -43,18 +43,31 @@ export interface UIContribution {
   order?: number;
 }
 
+/** UIContribution enriched with the owning plugin's id (returned by engine) */
+export interface LoadedUIContribution extends UIContribution {
+  pluginId: string;
+}
+
 // ─── Plugin Context (V1 API passed to plugins) ──────────────────────
 
 export interface PluginContext {
+  log: FastifyBaseLogger;
   getUser(userId: number): Promise<{ id: number; email: string; displayName: string | null; role: string } | null>;
   getAppSettings(): Promise<Record<string, unknown>>;
-  log: FastifyBaseLogger;
   getSetting(key: string): Promise<unknown>;
   setSetting(key: string, value: unknown): Promise<void>;
   sendNotification(type: string, data: NotificationPayload): Promise<void>;
   sendUserNotification(userId: number, payload: { type: string; title: string; message: string; metadata?: Record<string, unknown> }): Promise<void>;
   notificationRegistry: NotificationRegistry;
   getArrClient(serviceType: string): Promise<ArrClient>;
+  getServiceConfig(serviceType: string): Promise<{ url: string; apiKey: string } | null>;
+  registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }): void;
+  registerPluginPermission(permission: string, description?: string): void;
+  events: {
+    on(event: string, handler: (data: unknown) => void | Promise<void>): void;
+    off(event: string, handler: (data: unknown) => void | Promise<void>): void;
+    emit(event: string, data: unknown): Promise<void>;
+  };
 }
 
 // ─── Plugin Registration (what register() returns) ──────────────────
@@ -73,6 +86,8 @@ export interface PluginRegistration {
   registerGuards?(ctx: PluginContext): Record<string, (userId: number) => Promise<PluginGuardResult | null>>;
   registerNotificationProviders?(registry: NotificationRegistry): void;
   onInstall?(ctx: PluginContext): Promise<void>;
+  onEnable?(ctx: PluginContext): Promise<void>;
+  onDisable?(ctx: PluginContext): Promise<void>;
 }
 
 // ─── Internal types ─────────────────────────────────────────────────
@@ -85,6 +100,7 @@ export interface LoadedPlugin {
   error?: string;
 }
 
+/** Public shape returned by getPluginList() — consumed by the frontend */
 export interface PluginInfo {
   id: string;
   name: string;

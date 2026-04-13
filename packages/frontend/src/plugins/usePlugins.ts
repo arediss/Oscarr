@@ -3,37 +3,53 @@ import api from '../lib/api';
 import type { PluginUIContribution } from './types';
 
 const cache = new Map<string, { data: PluginUIContribution[]; fetchedAt: number }>();
-const CACHE_TTL = 60_000; // 1 minute
+const CACHE_TTL = 60_000;
 
 export function usePluginUI(hookPoint: string) {
-  const [contributions, setContributions] = useState<PluginUIContribution[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = cache.get(hookPoint);
+  const hasFreshOnMount = !!cached && Date.now() - cached.fetchedAt < CACHE_TTL;
+
+  const [contributions, setContributions] = useState<PluginUIContribution[]>(hasFreshOnMount ? cached.data : []);
+  const [loading, setLoading] = useState(!hasFreshOnMount);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const cached = cache.get(hookPoint);
-    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
-      setContributions(cached.data);
+    // Re-check freshness inside the effect to avoid stale closure
+    const entry = cache.get(hookPoint);
+    if (entry && Date.now() - entry.fetchedAt < CACHE_TTL) {
+      setContributions(entry.data);
       setLoading(false);
       return;
     }
 
     let cancelled = false;
+    setLoading(true);
+    setError(null);
+
     api.get<PluginUIContribution[]>(`/plugins/ui/${hookPoint}`)
       .then((res) => {
         if (cancelled) return;
         cache.set(hookPoint, { data: res.data, fetchedAt: Date.now() });
         setContributions(res.data);
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
         setContributions([]);
+        setError(err.message || 'Failed to load plugin contributions');
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
   }, [hookPoint]);
 
-  return { contributions, loading };
+  return { contributions, loading, error };
+}
+
+/** Invalidate the UI contribution cache (e.g. after toggling a plugin). */
+export function invalidatePluginUICache(hookPoint?: string): void {
+  if (hookPoint) {
+    cache.delete(hookPoint);
+  } else {
+    cache.clear();
+  }
 }
