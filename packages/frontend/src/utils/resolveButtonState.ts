@@ -33,11 +33,14 @@ export function resolveButtonState(inputs: ButtonStateInputs): ButtonState {
   // Priority order matches the original ternary chain exactly
   if (isAvailable && !canRequestNewQuality) return 'available';
   if (isAvailable && canRequestNewQuality) return 'can_request_quality';
+  // Note: canRequestNewQuality is intentionally checked AFTER isDownloading/isUpcoming/isSearching
+  // to match the original behavior. A future improvement could allow quality requests during these states.
   if (isDownloading) return 'downloading';
   if (isUpcoming) return 'upcoming';
   if (isSearching) return 'searching';
   if (canRequestNewQuality) return 'can_request_quality';
-  if (userHasRequest && !canRequestNewQuality && !isPartiallyAvailable) return 'already_requested';
+  // canRequestNewQuality is always false here (already returned above if true)
+  if (userHasRequest && !isPartiallyAvailable) return 'already_requested';
   if (isPartiallyAvailable) {
     if (searchMissingState === 'searching') return 'partially_searching';
     if (searchMissingState === 'error') return 'partially_error';

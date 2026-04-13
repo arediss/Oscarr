@@ -10,7 +10,7 @@ interface ActionButtonProps {
   blacklistReason?: string;
   onRequest: () => void;
   onSearchMissing: () => void;
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }
 
 export default function ActionButton({
@@ -102,7 +102,7 @@ export default function ActionButton({
     case 'partially_error':
       return (
         <button disabled className="btn-danger flex items-center gap-2 cursor-default text-sm">
-          {searchMissingError}
+          {searchMissingError || t('common.error')}
         </button>
       );
 
