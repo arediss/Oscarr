@@ -5,10 +5,12 @@ import type { User } from '@/types';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (token: string, user: User) => void;
+  login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: boolean;
   hasAccess: boolean;
+  permissions: string[];
+  hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -16,13 +18,17 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [permissions, setPermissions] = useState<string[]>([]);
 
   const fetchUser = useCallback(async () => {
     try {
       const { data } = await api.get('/auth/me');
-      setUser(data);
+      const { permissions: perms = [], ...userData } = data;
+      setUser(userData);
+      setPermissions(perms);
     } catch {
       setUser(null);
+      setPermissions([]);
     } finally {
       setLoading(false);
     }
@@ -32,10 +38,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, [fetchUser]);
 
-  const login = (_token: string, userData: User) => {
+  const login = useCallback(async (_token: string, userData: User) => {
     // Token is now stored exclusively in httpOnly cookie by the backend
     setUser(userData);
-  };
+    // Fetch full user data including permissions
+    try {
+      const { data } = await api.get('/auth/me');
+      const { permissions: perms = [], ...rest } = data;
+      setUser(rest);
+      setPermissions(perms);
+    } catch {
+      // Fallback: user is set but permissions will be empty until next page load
+    }
+  }, []);
 
   const logout = async () => {
     try {
@@ -44,13 +59,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const isAdmin = user?.role === 'admin';
+  const hasPermission = useCallback((permission: string): boolean => {
+    if (permissions.length === 0) return false;
+    // Admin wildcard
+    if (permissions.includes('*')) return true;
+    // Exact match
+    if (permissions.includes(permission)) return true;
+    // Wildcard match: 'admin.*' matches 'admin.users', 'admin.roles', etc.
+    const parts = permission.split('.');
+    for (let i = parts.length - 1; i > 0; i--) {
+      const wildcard = parts.slice(0, i).join('.') + '.*';
+      if (permissions.includes(wildcard)) return true;
+    }
+    return false;
+  }, [permissions]);
+
+  const isAdmin = hasPermission('admin.*');
   const hasAccess = isAdmin || (user?.providers ?? []).length > 0;
 
   return (
     <AuthContext.Provider value={{
       user, loading, login, logout,
-      isAdmin, hasAccess,
+      isAdmin, hasAccess, permissions, hasPermission,
     }}>
       {children}
     </AuthContext.Provider>

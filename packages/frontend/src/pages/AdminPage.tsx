@@ -49,7 +49,7 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
 
 export default function AdminPage() {
   const { t } = useTranslation();
-  const { isAdmin } = useAuth();
+  const { user, hasPermission } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { contributions: pluginTabs } = usePluginUI('admin.tabs');
@@ -82,7 +82,8 @@ export default function AdminPage() {
     setSearchParams({ tab }, { replace: true });
   };
 
-  if (!isAdmin) { navigate('/'); return null; }
+  if (!user) return null; // still loading
+  if (!hasPermission('admin.*')) { navigate('/'); return null; }
 
   const activePluginTab = activeTab.startsWith('plugin:') ? activeTab.replace('plugin:', '') : null;
 

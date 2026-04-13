@@ -48,7 +48,7 @@ export default function LoginPage() {
     setError('');
     try {
       const { data } = await api.post(`/auth/${providerId}/login`, { username: credUsername, password: credPassword });
-      login('', data.user);
+      await login('', data.user);
       navigate('/', { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -64,7 +64,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', { email, password });
-      login('', data.user);
+      await login('', data.user);
       navigate('/', { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -84,7 +84,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/register', { email, password, displayName });
-      login('', data.user);
+      await login('', data.user);
       navigate('/', { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;

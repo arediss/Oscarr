@@ -171,6 +171,12 @@ export async function invalidateRoleCache(): Promise<void> {
   await loadRolesFromDb();
 }
 
+/** Return the permissions array for a given role name */
+export function getPermissionsForRole(roleName: string): string[] {
+  const permissions = roleCacheReady ? roleCache[roleName] : FALLBACK_ROLES[roleName];
+  return permissions ?? [];
+}
+
 // ── Permission descriptions (for admin UI) ─────────────────────────────────
 const PERMISSION_DESCRIPTIONS: Record<string, string> = {
   'admin.*':           'Full access to the admin panel',
