@@ -18,11 +18,13 @@ import {
   ChevronDown,
   Globe,
   Sparkles,
+  Bell,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import NotificationBell from '@/components/NotificationBell';
 import ChangelogModal from '@/components/ChangelogModal';
 import { useChangelogNotification } from '@/hooks/useChangelogNotification';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { PluginSlot } from '@/plugins/PluginSlot';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
 import { useFeatures } from '@/context/FeaturesContext';
@@ -50,6 +52,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [viewAsRole, setViewAsRole] = useState<string | null>(sessionStorage.getItem('view-as-role'));
   const [availableRoles, setAvailableRoles] = useState<{ name: string }[]>([]);
   const { features } = useFeatures();
+  const push = usePushNotifications();
   const avatarMenuRef = useRef<HTMLDivElement>(null);
 
   // Fetch incident banner
@@ -336,6 +339,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
                     {/* Plugin hook: avatar menu */}
                     <PluginSlot hookPoint="avatar.menu" context={{ user, isAdmin: hasPermission('admin.*'), hasPermission }} />
+
+                    {push.supported && (
+                      <button
+                        onClick={() => push.subscribed ? push.unsubscribe() : push.subscribe()}
+                        className="flex items-center gap-3 w-full px-4 py-2 text-sm text-ndp-text-muted hover:bg-white/5 transition-colors"
+                        disabled={push.loading}
+                      >
+                        <Bell className="w-4 h-4" />
+                        <span>{push.subscribed ? t('push.enabled', 'Notifications enabled') : t('push.enable', 'Enable notifications')}</span>
+                        {push.subscribed && <span className="ml-auto w-2 h-2 rounded-full bg-ndp-success" />}
+                      </button>
+                    )}
 
                     <button
                       onClick={handleLogout}

@@ -20,6 +20,7 @@ import { setupRoutes } from './routes/setup.js';
 import { appRoutes } from './routes/app.js';
 import { supportRoutes } from './routes/support.js';
 import { notificationRoutes } from './routes/notifications.js';
+import { pushRoutes } from './routes/push.js';
 import { rbacPlugin, getAccessTag } from './middleware/rbac.js';
 import { initScheduler } from './services/scheduler.js';
 import { initNotifications } from './notifications/index.js';
@@ -124,6 +125,7 @@ async function start() {
   await app.register(appRoutes, { prefix: '/api/app' });
   await app.register(supportRoutes, { prefix: '/api/support' });
   await app.register(notificationRoutes, { prefix: '/api/notifications' });
+  await app.register(pushRoutes, { prefix: '/api/push' });
   await app.register((await import('./routes/webhooks.js')).webhookRoutes, { prefix: '/api/webhooks' });
 
   // Initialize notification system (before plugins, so they can extend it)
