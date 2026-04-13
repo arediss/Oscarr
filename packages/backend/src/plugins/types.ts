@@ -43,12 +43,17 @@ export interface UIContribution {
   order?: number;
 }
 
+/** UIContribution enriched with the owning plugin's id (returned by engine) */
+export interface LoadedUIContribution extends UIContribution {
+  pluginId: string;
+}
+
 // ─── Plugin Context (V1 API passed to plugins) ──────────────────────
 
 export interface PluginContext {
+  log: FastifyBaseLogger;
   getUser(userId: number): Promise<{ id: number; email: string; displayName: string | null; role: string } | null>;
   getAppSettings(): Promise<Record<string, unknown>>;
-  log: FastifyBaseLogger;
   getSetting(key: string): Promise<unknown>;
   setSetting(key: string, value: unknown): Promise<void>;
   sendNotification(type: string, data: NotificationPayload): Promise<void>;
@@ -56,6 +61,8 @@ export interface PluginContext {
   notificationRegistry: NotificationRegistry;
   getArrClient(serviceType: string): Promise<ArrClient>;
   getServiceConfig(serviceType: string): Promise<{ url: string; apiKey: string } | null>;
+  registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }): void;
+  registerPluginPermission(permission: string, description?: string): void;
 }
 
 // ─── Plugin Registration (what register() returns) ──────────────────
@@ -86,6 +93,7 @@ export interface LoadedPlugin {
   error?: string;
 }
 
+/** Public shape returned by getPluginList() — consumed by the frontend */
 export interface PluginInfo {
   id: string;
   name: string;
