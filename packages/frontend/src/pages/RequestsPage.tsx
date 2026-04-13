@@ -80,11 +80,13 @@ export default function RequestsPage() {
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupResult, setCleanupResult] = useState<{ oscarr: number; service: number } | null>(null);
 
+  const canAccessAdmin = hasPermission('admin.*');
+
   useEffect(() => {
     api.get('/requests/stats').then(({ data }) => setStats(data)).catch(() => {});
     api.get('/app/quality-options').then(({ data }) => setQualityOptions(data)).catch(() => {});
-    if (hasPermission('admin.*')) api.get('/admin/users').then(({ data }) => setUsers(data.map((u: { id: number; displayName: string; email: string }) => ({ id: u.id, displayName: u.displayName || u.email })))).catch(() => {});
-  }, []);
+    if (canAccessAdmin) api.get('/admin/users').then(({ data }) => setUsers(data.map((u: { id: number; displayName: string; email: string }) => ({ id: u.id, displayName: u.displayName || u.email })))).catch(() => {});
+  }, [canAccessAdmin]);
 
   const fetchRequests = useCallback(async (pageNum: number, append = false) => {
     if (!append) setFiltering(true);

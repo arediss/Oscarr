@@ -58,11 +58,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Fetch roles for the "view as" selector
+  const canManageRoles = hasPermission('admin.roles');
+
   useEffect(() => {
-    if (hasPermission('admin.roles')) {
+    if (canManageRoles) {
       api.get('/admin/roles').then(({ data }) => setAvailableRoles(data)).catch(() => {});
     }
-  }, [hasPermission]);
+  }, [canManageRoles]);
 
   const startViewAs = (roleName: string) => {
     sessionStorage.setItem('view-as-role', roleName);
@@ -238,7 +240,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </button>
 
               {/* Plugin hook: header actions */}
-              <PluginSlot hookPoint="header.actions" context={{ user }} />
+              <PluginSlot hookPoint="header.actions" context={{ user, isAdmin: hasPermission('admin.*'), hasPermission }} />
 
               {/* Changelog notification */}
               {hasPermission('admin.*') && changelog.hasNew && (

@@ -5,7 +5,7 @@ import type { User } from '@/types';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (token: string, user: User) => void;
+  login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: boolean;
   hasAccess: boolean;
@@ -38,10 +38,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, [fetchUser]);
 
-  const login = (_token: string, userData: User) => {
+  const login = useCallback(async (_token: string, userData: User) => {
     // Token is now stored exclusively in httpOnly cookie by the backend
     setUser(userData);
-  };
+    // Fetch full user data including permissions
+    try {
+      const { data } = await api.get('/auth/me');
+      const { permissions: perms = [], ...rest } = data;
+      setUser(rest);
+      setPermissions(perms);
+    } catch {
+      // Fallback: user is set but permissions will be empty until next page load
+    }
+  }, []);
 
   const logout = async () => {
     try {
@@ -51,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const hasPermission = useCallback((permission: string): boolean => {
-    if (!user) return false;
+    if (permissions.length === 0) return false;
     // Admin wildcard
     if (permissions.includes('*')) return true;
     // Exact match
@@ -63,9 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (permissions.includes(wildcard)) return true;
     }
     return false;
-  }, [user, permissions]);
+  }, [permissions]);
 
-  const isAdmin = permissions.includes('*') || user?.role === 'admin';
+  const isAdmin = hasPermission('admin.*');
   const hasAccess = isAdmin || (user?.providers ?? []).length > 0;
 
   return (
