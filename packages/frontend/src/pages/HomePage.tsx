@@ -2,23 +2,25 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Info, Star } from 'lucide-react';
-import api from '@/lib/api';
 import { backdropUrl } from '@/lib/api';
 import MediaRow from '@/components/MediaRow';
 import { PluginSlot } from '@/plugins/PluginSlot';
 import GenreRow from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
 import { dbMediaToTmdbShape } from '@/utils/mediaMapper';
+import { useTmdbList } from '@/hooks/useTmdbList';
 
 export default function HomePage() {
   const { t } = useTranslation();
-  const [recentlyAdded, setRecentlyAdded] = useState<TmdbMedia[]>([]);
-  const [trending, setTrending] = useState<TmdbMedia[]>([]);
-  const [popularMovies, setPopularMovies] = useState<TmdbMedia[]>([]);
-  const [popularTv, setPopularTv] = useState<TmdbMedia[]>([]);
-  const [upcoming, setUpcoming] = useState<TmdbMedia[]>([]);
-  const [trendingAnime, setTrendingAnime] = useState<TmdbMedia[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: recentlyAdded, loading: loadingRecent } = useTmdbList<TmdbMedia>('/media/recent?limit=20', [], {
+    transform: (d) => (d || []).map(dbMediaToTmdbShape),
+  });
+  const { data: trending } = useTmdbList<TmdbMedia>('/tmdb/trending');
+  const { data: popularMovies } = useTmdbList<TmdbMedia>('/tmdb/movies/popular');
+  const { data: popularTv } = useTmdbList<TmdbMedia>('/tmdb/tv/popular');
+  const { data: upcoming } = useTmdbList<TmdbMedia>('/tmdb/movies/upcoming');
+  const { data: trendingAnime } = useTmdbList<TmdbMedia>('/tmdb/tv/trending-anime');
+  const loading = loadingRecent;
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroVisible, setHeroVisible] = useState(true);
   const prevHeroRef = useRef(0);
@@ -36,33 +38,6 @@ export default function HomePage() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [recentRes, trendingRes, moviesRes, tvRes, upcomingRes, animeRes] = await Promise.all([
-          api.get('/media/recent?limit=20'),
-          api.get('/tmdb/trending'),
-          api.get('/tmdb/movies/popular'),
-          api.get('/tmdb/tv/popular'),
-          api.get('/tmdb/movies/upcoming'),
-          api.get('/tmdb/tv/trending-anime'),
-        ]);
-        // Map DB media to TmdbMedia shape for MediaRow
-        setRecentlyAdded(recentRes.data.map(dbMediaToTmdbShape));
-        setTrending(trendingRes.data.results);
-        setPopularMovies(moviesRes.data.results);
-        setPopularTv(tvRes.data.results);
-        setUpcoming(upcomingRes.data.results);
-        setTrendingAnime(animeRes.data.results);
-      } catch (err) {
-        console.error('Failed to fetch homepage data', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
 
   // Auto-rotate hero with crossfade
   const advanceHero = useCallback(() => {
