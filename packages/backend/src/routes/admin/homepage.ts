@@ -81,7 +81,7 @@ export async function homepageRoutes(app: FastifyInstance) {
   });
 
   // POST /homepage/preview — Preview a TMDB discover query (returns results)
-  app.post('/homepage/preview', async (request) => {
+  app.post('/homepage/preview', async (request, reply) => {
     const query = request.body as {
       mediaType: 'movie' | 'tv';
       genres?: number[];
