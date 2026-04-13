@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { join, extname, resolve, sep, relative } from 'path';
 import { existsSync, createReadStream } from 'fs';
 import { pluginEngine } from './engine.js';
+import { prisma } from '../utils/prisma.js';
 
 // ── Registry cache (module scope) ───────────────────────────────────
 const REGISTRY_URL = 'https://raw.githubusercontent.com/arediss/Oscarr-Plugin-Registry/main/plugins.json';
@@ -131,6 +132,27 @@ export async function pluginRoutes(app: FastifyInstance) {
     reply.header('cache-control', process.env.NODE_ENV === 'production' ? 'public, max-age=3600' : 'no-cache');
     return reply.send(createReadStream(fullPath));
   });
+
+  // ── Plugin logs ─────────────────────────────────────────────────
+  app.get<{ Params: { id: string } }>(
+    '/:id/logs',
+    {
+      schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { limit = '100' } = request.query as Record<string, string>;
+      const plugin = pluginEngine.getPlugin(id);
+      if (!plugin) return reply.status(404).send({ error: 'Plugin not found' });
+
+      const logs = await prisma.pluginLog.findMany({
+        where: { pluginId: id },
+        orderBy: { createdAt: 'desc' },
+        take: Math.min(parseInt(limit), 500),
+      });
+      return logs;
+    }
+  );
 
   // ── Plugin registry (Discover) ──────────────────────────────────
   app.get('/registry', async (_request, reply) => {

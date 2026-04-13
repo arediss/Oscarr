@@ -327,3 +327,13 @@ model Patchnote {
   titleFr String
   entries String   // JSON: [{ type: "feat"|"fix"|"perf", titleEn, titleFr, descEn?, descFr? }]
 }
+
+model PluginLog {
+  id        Int      @id @default(autoincrement())
+  pluginId  String
+  level     String   // "info" | "warn" | "error" | "debug"
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([pluginId, createdAt])
+}

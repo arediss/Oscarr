@@ -22,6 +22,32 @@ export interface V1FactoryDeps {
   makeFallbackLogger(pluginId: string): FastifyBaseLogger;
 }
 
+function createCapturingLogger(
+  baseLogger: FastifyBaseLogger,
+  pluginId: string
+): FastifyBaseLogger {
+  const child = baseLogger.child({ plugin: pluginId });
+
+  const capture = (level: string, args: unknown[]) => {
+    const msg = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+    // Fire-and-forget — don't block plugin execution
+    prisma.pluginLog.create({
+      data: { pluginId, level, message: msg.slice(0, 2000) },
+    }).catch(() => {});
+  };
+
+  // Wrap the log methods
+  const origInfo = child.info.bind(child);
+  const origWarn = child.warn.bind(child);
+  const origError = child.error.bind(child);
+
+  child.info = ((...args: any[]) => { capture('info', args); return origInfo(...args); }) as any;
+  child.warn = ((...args: any[]) => { capture('warn', args); return origWarn(...args); }) as any;
+  child.error = ((...args: any[]) => { capture('error', args); return origError(...args); }) as any;
+
+  return child;
+}
+
 /**
  * Frozen V1 context factory.
  * This is a faithful extraction of the former `PluginEngine.createContext`
@@ -29,8 +55,9 @@ export interface V1FactoryDeps {
  */
 export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): PluginContext {
   const pluginId = manifest.id;
-  const log =
-    deps.logger?.child({ plugin: pluginId }) || deps.makeFallbackLogger(pluginId);
+  const log = deps.logger
+    ? createCapturingLogger(deps.logger, pluginId)
+    : deps.makeFallbackLogger(pluginId);
 
   return {
     log,
