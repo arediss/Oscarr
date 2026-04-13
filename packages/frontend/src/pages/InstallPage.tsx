@@ -184,9 +184,11 @@ export default function InstallPage() {
   const startPlexOAuth = (serviceId: string) => {
     setPlexPolling(serviceId);
     setError('');
+    // Open popup BEFORE the async call — Safari blocks window.open() after await
+    const authWindow = window.open('about:blank', 'PlexAuth', 'width=600,height=700');
     api.post('/auth/plex/pin').then(({ data }) => {
       const { pin, authUrl } = data;
-      window.open(authUrl, 'PlexAuth', 'width=600,height=700');
+      if (authWindow) authWindow.location.href = authUrl;
 
       let attempts = 0;
       if (pollRef.current) clearInterval(pollRef.current);

@@ -55,10 +55,12 @@ export function UsersTab() {
 
   const handleLinkPlex = async (userId: number) => {
     setLinkingUser(userId);
+    // Open popup BEFORE the async call — Safari blocks window.open() after await
+    const authWindow = window.open('about:blank', 'PlexAuth', 'width=600,height=700');
     try {
       const { data } = await api.post('/auth/plex/pin');
       const { pin, authUrl } = data;
-      window.open(authUrl, 'PlexAuth', 'width=600,height=700');
+      if (authWindow) authWindow.location.href = authUrl;
 
       let attempts = 0;
       if (pollRef.current) clearInterval(pollRef.current);
