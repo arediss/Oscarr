@@ -337,6 +337,7 @@
   "admin.homepage.min_rating": "Note minimum",
   "admin.homepage.sort_by": "Trier par",
   "admin.homepage.language": "Langue",
+  "admin.homepage.release_window": "Sorti depuis",
   "admin.homepage.preview": "Aperçu",
   "admin.homepage.preview_empty": "Ajustez les filtres ci-dessus pour voir un aperçu.",
 

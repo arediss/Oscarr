@@ -8,6 +8,7 @@ export interface DiscoverQuery {
   genres?: number[];
   yearGte?: number;
   yearLte?: number;
+  releasedWithin?: string; // 'last_30d' | 'last_90d' | 'last_6m' | 'last_1y' | ''
   voteAverageGte?: number;
   sortBy?: string;
   language?: string;
@@ -26,16 +27,31 @@ interface Genre {
 }
 
 const MOVIE_SORT_OPTIONS = [
-  { value: 'popularity.desc', label: 'Popularity' },
-  { value: 'vote_average.desc', label: 'Rating' },
-  { value: 'primary_release_date.desc', label: 'Release date' },
-  { value: 'revenue.desc', label: 'Revenue' },
+  { value: 'popularity.desc', label: 'Popularity ↓' },
+  { value: 'popularity.asc', label: 'Popularity ↑' },
+  { value: 'vote_average.desc', label: 'Rating ↓' },
+  { value: 'vote_average.asc', label: 'Rating ↑' },
+  { value: 'primary_release_date.desc', label: 'Release date ↓' },
+  { value: 'primary_release_date.asc', label: 'Release date ↑' },
+  { value: 'revenue.desc', label: 'Revenue ↓' },
+  { value: 'revenue.asc', label: 'Revenue ↑' },
 ];
 
 const TV_SORT_OPTIONS = [
-  { value: 'popularity.desc', label: 'Popularity' },
-  { value: 'vote_average.desc', label: 'Rating' },
-  { value: 'first_air_date.desc', label: 'Air date' },
+  { value: 'popularity.desc', label: 'Popularity ↓' },
+  { value: 'popularity.asc', label: 'Popularity ↑' },
+  { value: 'vote_average.desc', label: 'Rating ↓' },
+  { value: 'vote_average.asc', label: 'Rating ↑' },
+  { value: 'first_air_date.desc', label: 'Air date ↓' },
+  { value: 'first_air_date.asc', label: 'Air date ↑' },
+];
+
+const RELEASE_WINDOW_OPTIONS = [
+  { value: '', label: 'Any time' },
+  { value: 'last_30d', label: 'Last 30 days' },
+  { value: 'last_90d', label: 'Last 90 days' },
+  { value: 'last_6m', label: 'Last 6 months' },
+  { value: 'last_1y', label: 'Last year' },
 ];
 
 const LANGUAGE_OPTIONS = [
@@ -175,8 +191,27 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
         )}
       </div>
 
-      {/* Year range + Rating row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+      {/* Release window + Year range + Rating row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
+        <div>
+          <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+            {t('admin.homepage.release_window', 'Released within')}
+          </label>
+          <select
+            className="input"
+            value={query.releasedWithin || ''}
+            onChange={e => {
+              const val = e.target.value || undefined;
+              // Clear year fields when using a relative window
+              onChange({ ...query, releasedWithin: val, yearGte: val ? undefined : query.yearGte, yearLte: val ? undefined : query.yearLte });
+            }}
+            style={{ width: '100%' }}
+          >
+            {RELEASE_WINDOW_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
             {t('admin.homepage.year_from', 'Year from')}
@@ -186,8 +221,9 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
             type="number"
             placeholder="2020"
             value={query.yearGte ?? ''}
+            disabled={!!query.releasedWithin}
             onChange={e => onChange({ ...query, yearGte: e.target.value ? Number(e.target.value) : undefined })}
-            style={{ width: '100%' }}
+            style={{ width: '100%', opacity: query.releasedWithin ? 0.4 : 1 }}
           />
         </div>
         <div>
@@ -199,8 +235,9 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
             type="number"
             placeholder="2026"
             value={query.yearLte ?? ''}
+            disabled={!!query.releasedWithin}
             onChange={e => onChange({ ...query, yearLte: e.target.value ? Number(e.target.value) : undefined })}
-            style={{ width: '100%' }}
+            style={{ width: '100%', opacity: query.releasedWithin ? 0.4 : 1 }}
           />
         </div>
         <div>

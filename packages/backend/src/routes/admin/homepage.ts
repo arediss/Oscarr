@@ -87,6 +87,7 @@ export async function homepageRoutes(app: FastifyInstance) {
       genres?: number[];
       yearGte?: number;
       yearLte?: number;
+      releasedWithin?: string;
       voteAverageGte?: number;
       sortBy?: string;
       language?: string;
@@ -98,13 +99,27 @@ export async function homepageRoutes(app: FastifyInstance) {
     const params = new URLSearchParams();
     params.set('page', '1');
     if (query.genres?.length) params.set('with_genres', query.genres.join(','));
-    if (query.yearGte) {
-      const dateField = query.mediaType === 'movie' ? 'primary_release_date.gte' : 'first_air_date.gte';
-      params.set(dateField, `${query.yearGte}-01-01`);
-    }
-    if (query.yearLte) {
-      const dateField = query.mediaType === 'movie' ? 'primary_release_date.lte' : 'first_air_date.lte';
-      params.set(dateField, `${query.yearLte}-12-31`);
+
+    // Relative release window (last_30d, last_90d, last_6m, last_1y)
+    const dateGteField = query.mediaType === 'movie' ? 'primary_release_date.gte' : 'first_air_date.gte';
+    const dateLteField = query.mediaType === 'movie' ? 'primary_release_date.lte' : 'first_air_date.lte';
+
+    if (query.releasedWithin) {
+      const now = new Date();
+      const lte = now.toISOString().split('T')[0];
+      let gte: string;
+      switch (query.releasedWithin) {
+        case 'last_30d': gte = new Date(now.getTime() - 30 * 86400000).toISOString().split('T')[0]; break;
+        case 'last_90d': gte = new Date(now.getTime() - 90 * 86400000).toISOString().split('T')[0]; break;
+        case 'last_6m': gte = new Date(now.getTime() - 180 * 86400000).toISOString().split('T')[0]; break;
+        case 'last_1y': gte = new Date(now.getTime() - 365 * 86400000).toISOString().split('T')[0]; break;
+        default: gte = lte;
+      }
+      params.set(dateGteField, gte);
+      params.set(dateLteField, lte);
+    } else {
+      if (query.yearGte) params.set(dateGteField, `${query.yearGte}-01-01`);
+      if (query.yearLte) params.set(dateLteField, `${query.yearLte}-12-31`);
     }
     if (query.voteAverageGte) params.set('vote_average.gte', String(query.voteAverageGte));
     if (query.sortBy) params.set('sort_by', query.sortBy);
