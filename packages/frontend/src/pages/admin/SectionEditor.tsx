@@ -132,7 +132,7 @@ export function SectionEditor({ section, onSave, onClose }: SectionEditorProps) 
       onClick={onClose}
     >
       <div
-        className="bg-ndp-bg-card border border-white/10"
+        className="bg-ndp-surface border border-white/10"
         style={{
           maxWidth: 768,
           width: '100%',

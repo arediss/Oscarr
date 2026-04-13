@@ -247,7 +247,7 @@ export function HomepageTab() {
       {/* Delete confirmation modal */}
       {confirmDeleteId !== null && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in" onClick={() => setConfirmDeleteId(null)}>
-          <div className="bg-ndp-bg-card border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-ndp-surface border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-ndp-text">{t('admin.homepage.confirm_delete_title', 'Delete section?')}</h3>
             <p className="text-sm text-ndp-text-muted">{t('admin.homepage.confirm_delete_desc', 'This custom section will be removed from the homepage layout.')}</p>
             <div className="flex gap-2 justify-end">
@@ -261,7 +261,7 @@ export function HomepageTab() {
       {/* Reset confirmation modal */}
       {confirmReset && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in" onClick={() => setConfirmReset(false)}>
-          <div className="bg-ndp-bg-card border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-ndp-surface border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-ndp-text">{t('admin.homepage.confirm_reset_title', 'Reset to default?')}</h3>
             <p className="text-sm text-ndp-text-muted">{t('admin.homepage.confirm_reset_desc', 'This will replace your current layout with the default homepage sections.')}</p>
             <div className="flex gap-2 justify-end">
