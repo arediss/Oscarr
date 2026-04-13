@@ -1,3 +1,4 @@
+/** UI contribution from a plugin, enriched with pluginId by the engine */
 export interface PluginUIContribution {
   pluginId: string;
   hookPoint: string;
@@ -5,6 +6,7 @@ export interface PluginUIContribution {
   order?: number;
 }
 
+/** Public plugin info as returned by GET /api/plugins/ */
 export interface PluginInfo {
   id: string;
   name: string;

@@ -39,6 +39,8 @@ const DEFAULT_JOBS = [
 ];
 
 const activeTasks = new Map<string, ScheduledTask>();
+const pluginJobKeys = new Set<string>(); // Track which job keys belong to plugins
+let _pluginEngine: PluginEngine | null = null;
 
 async function seedJobs() {
   for (const job of DEFAULT_JOBS) {
@@ -53,6 +55,18 @@ async function seedJobs() {
 async function runJob(key: string) {
   const handler = JOB_HANDLERS[key];
   if (!handler) return;
+
+  // Guard: skip plugin jobs if their plugin is disabled
+  if (pluginJobKeys.has(key) && _pluginEngine) {
+    const pluginList = _pluginEngine.getPluginList();
+    const ownerPlugin = pluginList.find(p =>
+      _pluginEngine!.getPlugin(p.id)?.manifest.hooks?.jobs?.some(j => j.key === key)
+    );
+    if (ownerPlugin && !ownerPlugin.enabled) {
+      logEvent('debug', 'Job', `Skipping job "${sanitize(key)}" — plugin "${ownerPlugin.id}" is disabled`);
+      return;
+    }
+  }
 
   const wasFirstSync = !(await hasCompletedFirstSync());
 
@@ -134,11 +148,13 @@ async function startAllJobs() {
 export async function initScheduler(pluginEngine?: PluginEngine) {
   // Register plugin job handlers and seed their definitions
   if (pluginEngine) {
+    _pluginEngine = pluginEngine;
     const pluginHandlers = pluginEngine.getJobHandlers();
     Object.assign(JOB_HANDLERS, pluginHandlers);
 
     const pluginJobDefs = pluginEngine.getJobDefs();
     for (const job of pluginJobDefs) {
+      pluginJobKeys.add(job.key);
       await prisma.cronJob.upsert({
         where: { key: job.key },
         update: {},

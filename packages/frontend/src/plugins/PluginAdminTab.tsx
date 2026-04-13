@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Save, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
 import type { PluginSettings } from './types';
+import { loadPluginModule, hasLoaded, getCached, pluginFrontendUrl } from './pluginModuleCache';
+import type { ComponentType } from 'react';
+import { PluginErrorBoundary } from './PluginErrorBoundary';
 
 interface PluginAdminTabProps {
   pluginId: string;
@@ -10,22 +13,49 @@ interface PluginAdminTabProps {
 
 export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
   const { t } = useTranslation();
+  const url = pluginFrontendUrl(pluginId);
+
+  // ALL hooks declared unconditionally at the top — no early returns before hooks
+  const [FrontendComp, setFrontendComp] = useState<ComponentType<any> | null>(() => getCached(url));
+  const [frontendLoading, setFrontendLoading] = useState(() => !hasLoaded(url));
+  const [frontendTried, setFrontendTried] = useState(() => hasLoaded(url));
+
   const [settings, setSettings] = useState<PluginSettings | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Try loading frontend component
   useEffect(() => {
-    api.get<PluginSettings>(`/plugins/${pluginId}/settings`)
-      .then(({ data }) => {
-        setSettings(data);
-        setValues(data.values);
-      })
-      .catch((err) => setError(err.response?.data?.error || t('plugin.load_error')));
-  }, [pluginId]);
+    if (hasLoaded(url)) {
+      setFrontendComp(() => getCached(url));
+      setFrontendLoading(false);
+      setFrontendTried(true);
+      return;
+    }
 
-  const handleSave = async () => {
+    let cancelled = false;
+    setFrontendLoading(true);
+    loadPluginModule(url).then((comp) => {
+      if (cancelled) return;
+      setFrontendComp(() => comp);
+      setFrontendLoading(false);
+      setFrontendTried(true);
+    });
+    return () => { cancelled = true; };
+  }, [pluginId, url]);
+
+  // Load settings only if frontend failed or doesn't exist
+  useEffect(() => {
+    if (!frontendTried || FrontendComp) return;
+
+    api.get<PluginSettings>(`/plugins/${pluginId}/settings`)
+      .then(({ data }) => { setSettings(data); setValues(data.values); })
+      .catch((err) => setError(err.response?.data?.error || t('plugin.load_error')));
+  }, [pluginId, frontendTried, FrontendComp]);
+
+  const handleSave = useCallback(async () => {
     setSaving(true);
     setSaved(false);
     setError(null);
@@ -38,14 +68,31 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
     } finally {
       setSaving(false);
     }
-  };
+  }, [pluginId, values]);
 
-  if (error && !settings) {
+  // ── Single return — all branching in JSX ──────────────────────────
+
+  // Loading frontend
+  if (frontendLoading) {
     return (
-      <div className="card p-6 text-center text-ndp-text-muted">
-        {error}
+      <div className="flex justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-ndp-accent" />
       </div>
     );
+  }
+
+  // Frontend loaded — render it
+  if (FrontendComp) {
+    return (
+      <PluginErrorBoundary pluginId={pluginId}>
+        <FrontendComp />
+      </PluginErrorBoundary>
+    );
+  }
+
+  // Fallback: settings form
+  if (error && !settings) {
+    return <div className="card p-6 text-center text-ndp-text-muted">{error}</div>;
   }
 
   if (!settings) {
@@ -57,11 +104,7 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
   }
 
   if (!settings.schema || settings.schema.length === 0) {
-    return (
-      <div className="card p-6 text-center text-ndp-text-muted">
-        {t('plugin.no_settings')}
-      </div>
-    );
+    return <div className="card p-6 text-center text-ndp-text-muted">{t('plugin.no_settings')}</div>;
   }
 
   return (
@@ -75,22 +118,15 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
           {field.type === 'boolean' ? (
             <button
               onClick={() => setValues({ ...values, [field.key]: !values[field.key] })}
-              className={`relative w-12 h-6 rounded-full transition-colors ${
-                values[field.key] ? 'bg-ndp-accent' : 'bg-white/10'
-              }`}
+              className={`relative w-12 h-6 rounded-full transition-colors ${values[field.key] ? 'bg-ndp-accent' : 'bg-white/10'}`}
             >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-                values[field.key] ? 'translate-x-6' : ''
-              }`} />
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${values[field.key] ? 'translate-x-6' : ''}`} />
             </button>
           ) : (
             <input
               type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
               value={(values[field.key] as string | number) ?? field.default ?? ''}
-              onChange={(e) => setValues({
-                ...values,
-                [field.key]: field.type === 'number' ? Number(e.target.value) : e.target.value,
-              })}
+              onChange={(e) => setValues({ ...values, [field.key]: field.type === 'number' ? Number(e.target.value) : e.target.value })}
               className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-ndp-text focus:outline-none focus:ring-2 focus:ring-ndp-accent/40"
             />
           )}

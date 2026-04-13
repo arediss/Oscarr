@@ -1,11 +1,26 @@
-import * as Icons from 'lucide-react';
+import {
+  Film, Settings, Users, Shield, Server, Bell, RefreshCw, ScrollText, Plug,
+  ExternalLink, MessageSquare, Puzzle, BarChart3, Zap, Code, Palette, Bot,
+  Download, Package, Star, Loader2, BookOpen, Terminal, ChevronDown, ChevronUp,
+  Copy, Check, Power, Search, Trash2, Eye, EyeOff, Play, type LucideIcon,
+} from 'lucide-react';
 
-interface DynamicIconProps extends Icons.LucideProps {
+const ICON_MAP: Record<string, LucideIcon> = {
+  Film, Settings, Users, Shield, Server, Bell, RefreshCw, ScrollText, Plug,
+  ExternalLink, MessageSquare, Puzzle, BarChart3, Zap, Code, Palette, Bot,
+  Download, Package, Star, Loader2, BookOpen, Terminal, ChevronDown, ChevronUp,
+  Copy, Check, Power, Search, Trash2, Eye, EyeOff, Play,
+};
+
+interface DynamicIconProps {
   name: string;
+  className?: string;
 }
 
-export function DynamicIcon({ name, ...props }: DynamicIconProps) {
-  const Icon = (Icons as unknown as Record<string, Icons.LucideIcon>)[name];
-  if (!Icon) return null;
-  return <Icon {...props} />;
+export function DynamicIcon({ name, className }: DynamicIconProps) {
+  const Icon = ICON_MAP[name];
+  if (!Icon) {
+    return <Puzzle className={className} />;
+  }
+  return <Icon className={className} />;
 }
