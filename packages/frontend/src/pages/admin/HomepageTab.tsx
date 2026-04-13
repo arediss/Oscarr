@@ -204,6 +204,9 @@ export function HomepageTab() {
                     ) : (
                       <span className="text-[10px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded">Discover</span>
                     )}
+                    <span className="text-[10px] bg-white/5 text-ndp-text-dim px-1.5 py-0.5 rounded">
+                      {section.size === 'large' ? 'Large' : 'Default'}
+                    </span>
                   </div>
                   {section.type === 'custom' && section.endpoint && (
                     <p className="text-xs text-ndp-text-dim mt-1 font-mono opacity-60">GET {section.endpoint}</p>
