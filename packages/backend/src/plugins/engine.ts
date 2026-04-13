@@ -206,6 +206,9 @@ export class PluginEngine {
     const plugin = this.plugins.get(id);
     if (!plugin) throw new Error(`Plugin "${id}" not found`);
 
+    const validationError = this.validateSettings(plugin.manifest, values);
+    if (validationError) throw new Error(validationError);
+
     await prisma.pluginState.update({
       where: { pluginId: id },
       data: { settings: JSON.stringify(values) },
@@ -231,6 +234,33 @@ export class PluginEngine {
   }
 
   // ── Private helpers ───────────────────────────────────────────────
+
+  private validateSettings(manifest: PluginManifest, values: Record<string, unknown>): string | null {
+    const schema = manifest.settings || [];
+    for (const field of schema) {
+      const val = values[field.key];
+
+      if (field.required && (val === undefined || val === null || val === '')) {
+        return `Setting "${field.label}" is required`;
+      }
+
+      if (val === undefined || val === null || val === '') continue;
+
+      switch (field.type) {
+        case 'number':
+          if (typeof val !== 'number' || isNaN(val)) return `Setting "${field.label}" must be a number`;
+          break;
+        case 'boolean':
+          if (typeof val !== 'boolean') return `Setting "${field.label}" must be a boolean`;
+          break;
+        case 'string':
+        case 'password':
+          if (typeof val !== 'string') return `Setting "${field.label}" must be a string`;
+          break;
+      }
+    }
+    return null;
+  }
 
   private async getCachedSettings(pluginId: string): Promise<Record<string, unknown>> {
     const cached = this.settingsCache.get(pluginId);
