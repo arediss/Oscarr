@@ -94,6 +94,7 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'GET:/api/app/health':                 { permission: PUBLIC },  // Auth via API key, not JWT
   'GET:/api/app/quality-options':        { permission: AUTH },
   'GET:/api/app/features':               { permission: PUBLIC },
+  'GET:/api/app/homepage-layout':        { permission: PUBLIC },
 
   // ── Support ──
   'GET:/api/support/tickets':                   { permission: 'support.read', ownerScoped: true },
@@ -126,6 +127,9 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'PUT:/api/admin/roles/:id':            { permission: 'admin.roles' },
   'DELETE:/api/admin/roles/:id':         { permission: 'admin.roles' },
   'GET:/api/admin/permissions':          { permission: 'admin.roles' },
+  'GET:/api/admin/homepage':             { permission: 'admin.*' },
+  'PUT:/api/admin/homepage':             { permission: 'admin.*' },
+  'POST:/api/admin/homepage/preview':    { permission: 'admin.*' },
   'POST:/api/admin/restart':             { permission: 'admin.*' },
 };
 

@@ -167,6 +167,7 @@ model AppSettings {
   instanceLanguages     String    @default("[\"en\"]") // JSON array of ISO 639-1 codes, e.g. ["fr","en"]
   siteUrl               String?   // Public URL of the instance (e.g. https://oscarr.example.com) for notification links
   apiKey                String?   // API key for external access (health check, integrations)
+  homepageLayout        String?   // JSON array of HomepageSection configs
   updatedAt             DateTime  @updatedAt
 }
 
