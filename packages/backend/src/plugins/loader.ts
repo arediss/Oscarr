@@ -2,6 +2,7 @@ import { readdir, readFile, stat, access } from 'fs/promises';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import type { PluginManifest } from './types.js';
+import { isVersionSupported, getSupportedVersions } from './context/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -21,7 +22,11 @@ function validateManifest(data: unknown, dir: string): PluginManifest {
   if (!m.id || typeof m.id !== 'string') throw new Error(`Missing or invalid "id" in ${dir}`);
   if (!m.name || typeof m.name !== 'string') throw new Error(`Missing or invalid "name" in ${dir}`);
   if (!m.version || typeof m.version !== 'string') throw new Error(`Missing or invalid "version" in ${dir}`);
-  if (m.apiVersion !== 'v1') throw new Error(`Unsupported apiVersion "${m.apiVersion}" in ${dir} (expected "v1")`);
+  if (typeof m.apiVersion !== 'string' || !isVersionSupported(m.apiVersion)) {
+    throw new Error(
+      `Unsupported apiVersion "${m.apiVersion}" in ${dir}. Supported: ${getSupportedVersions().join(', ')}`
+    );
+  }
   if (!m.entry || typeof m.entry !== 'string') throw new Error(`Missing or invalid "entry" in ${dir}`);
 
   // Validate hooks shape if present
