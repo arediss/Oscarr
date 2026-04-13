@@ -4,16 +4,23 @@ import { GripVertical, Pencil, Trash2, Plus, RotateCcw, Save } from 'lucide-reac
 import api from '@/lib/api';
 import { AdminTabLayout } from './AdminTabLayout';
 import { Spinner } from './Spinner';
+import { SectionEditor } from './SectionEditor';
 
 interface HomepageSection {
   id: string;
   title: string;
   type: 'builtin' | 'custom';
   enabled: boolean;
+  size?: 'default' | 'large';
+  builtinKey?: string;
   query?: {
     mediaType?: string;
-    genres?: string[];
-    yearFrom?: number;
+    genres?: number[];
+    yearGte?: number;
+    yearLte?: number;
+    voteAverageGte?: number;
+    sortBy?: string;
+    language?: string;
     [key: string]: unknown;
   };
 }
@@ -22,8 +29,11 @@ function formatQueryPreview(query?: HomepageSection['query']): string {
   if (!query) return '';
   const parts: string[] = [];
   if (query.mediaType) parts.push(query.mediaType === 'movie' ? 'Movies' : 'Series');
-  if (query.genres?.length) parts.push(query.genres.join(', '));
-  if (query.yearFrom) parts.push(`${query.yearFrom}+`);
+  if (query.genres?.length) parts.push(`${query.genres.length} genre${query.genres.length > 1 ? 's' : ''}`);
+  if (query.yearGte && query.yearLte) parts.push(`${query.yearGte}–${query.yearLte}`);
+  else if (query.yearGte) parts.push(`${query.yearGte}+`);
+  else if (query.yearLte) parts.push(`until ${query.yearLte}`);
+  if (query.voteAverageGte) parts.push(`${query.voteAverageGte}+ rating`);
   return parts.join(' \u00b7 ');
 }
 
@@ -34,6 +44,7 @@ export function HomepageTab() {
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [editingSection, setEditingSection] = useState<HomepageSection | null | 'new'>(null);
 
   // Drag and drop reorder
   const dragItem = useRef<number | null>(null);
@@ -81,14 +92,7 @@ export function HomepageTab() {
   };
 
   const addCustomSection = () => {
-    const newSection: HomepageSection = {
-      id: `custom-${Date.now()}`,
-      title: 'New Section',
-      type: 'custom',
-      enabled: true,
-      query: { mediaType: 'movie', genres: [], },
-    };
-    setSections(prev => [...prev, newSection]);
+    setEditingSection('new');
   };
 
   const resetToDefault = async () => {
@@ -113,8 +117,24 @@ export function HomepageTab() {
   };
 
   const editSection = (id: string) => {
-    // Placeholder — SectionEditor modal comes in Task 3
-    console.log('Edit section', id);
+    const target = sections.find(s => s.id === id);
+    if (target) setEditingSection(target);
+  };
+
+  const handleSectionSave = async (updated: HomepageSection) => {
+    let next: HomepageSection[];
+    if (editingSection === 'new') {
+      next = [...sections, updated];
+    } else {
+      next = sections.map(s => s.id === updated.id ? updated : s);
+    }
+    setSections(next);
+    setEditingSection(null);
+    try {
+      await api.put('/admin/homepage', { sections: next });
+    } catch (err) {
+      console.error('Failed to save after section edit', err);
+    }
   };
 
   if (loading) return <Spinner />;
@@ -244,6 +264,14 @@ export function HomepageTab() {
             </div>
           </div>
         </div>
+      )}
+      {/* Section editor modal */}
+      {editingSection !== null && (
+        <SectionEditor
+          section={editingSection === 'new' ? null : editingSection}
+          onSave={handleSectionSave}
+          onClose={() => setEditingSection(null)}
+        />
       )}
     </AdminTabLayout>
   );

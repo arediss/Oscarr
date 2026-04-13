@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { getCached, setCache } from '../utils/cache.js';
 import {
   getTrending,
   getPopularMovies,
@@ -16,6 +17,7 @@ import {
   getCollection,
   getGenreBackdrops,
   isMatureRating,
+  getTmdbApi,
 } from '../services/tmdb.js';
 import { trackKeywordsFromDetails } from '../services/sync/keywordSync.js';
 import { prisma } from '../utils/prisma.js';
@@ -316,5 +318,31 @@ export async function tmdbRoutes(app: FastifyInstance) {
 
   app.get('/genre-backdrops', async () => {
     return getGenreBackdrops();
+  });
+
+  // Genre list for movie or tv (used by the homepage query builder)
+  app.get('/genres/:mediaType', {
+    schema: {
+      params: {
+        type: 'object' as const,
+        required: ['mediaType'],
+        properties: {
+          mediaType: { type: 'string', enum: ['movie', 'tv'], description: 'movie or tv' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { mediaType } = request.params as { mediaType: string };
+    if (mediaType !== 'movie' && mediaType !== 'tv') {
+      return reply.status(400).send({ error: 'Invalid mediaType' });
+    }
+    const lang = getLang(request);
+    const cacheKey = `genres:${mediaType}:${lang}`;
+    const cached = await getCached<{ genres: { id: number; name: string }[] }>(cacheKey);
+    if (cached) return cached;
+    const tmdb = getTmdbApi(lang);
+    const { data } = await tmdb.get(`/genre/${mediaType}/list`);
+    await setCache(cacheKey, data, 24);
+    return data;
   });
 }
