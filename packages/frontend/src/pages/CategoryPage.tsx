@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import MediaGrid from '@/components/MediaGrid';
 import FilterBar, { DEFAULT_FILTERS, type FilterValues } from '@/components/FilterBar';
 import { useMediaStatus } from '@/hooks/useMediaStatus';
+import { buildDiscoverParams } from '@/utils/buildDiscoverParams';
 import type { TmdbMedia } from '@/types';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -71,17 +72,12 @@ const SORT_OPTIONS_TV = [
 ];
 
 function buildFilterParams(f: FilterValues, cat: CategoryDef): string {
-  const params = new URLSearchParams();
-  if (f.sortBy && f.sortBy !== 'popularity.desc') params.set('sortBy', f.sortBy);
-  if (f.voteAverageGte > 0) params.set('voteAverageGte', String(f.voteAverageGte));
-  if (f.releaseYear != null) {
-    params.set('releaseDateGte', `${f.releaseYear}-01-01`);
-    params.set('releaseDateLte', `${f.releaseYear}-12-31`);
-  }
-  if (cat.originCountry) params.set('originCountry', cat.originCountry);
-  if (cat.keyword) params.set('keyword', String(cat.keyword));
-  const str = params.toString();
-  return str ? `&${str}` : '';
+  const base = buildDiscoverParams(f);
+  const extra = new URLSearchParams();
+  if (cat.originCountry) extra.set('originCountry', cat.originCountry);
+  if (cat.keyword) extra.set('keyword', String(cat.keyword));
+  const extraStr = extra.toString();
+  return base + (extraStr ? `&${extraStr}` : '');
 }
 
 export default function CategoryPage() {

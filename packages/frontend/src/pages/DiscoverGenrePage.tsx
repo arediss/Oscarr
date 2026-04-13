@@ -8,6 +8,7 @@ import MediaGrid from '@/components/MediaGrid';
 import FilterBar, { DEFAULT_FILTERS, type FilterValues } from '@/components/FilterBar';
 import { useMediaStatus } from '@/hooks/useMediaStatus';
 import { ALL_GENRES } from '@/components/GenreRow';
+import { buildDiscoverParams } from '@/utils/buildDiscoverParams';
 import type { TmdbMedia } from '@/types';
 
 const SORT_OPTIONS_MOVIE = [
@@ -24,17 +25,6 @@ const SORT_OPTIONS_TV = [
   { value: 'first_air_date.asc', labelKey: 'filter.sort_oldest' },
 ];
 
-function buildFilterParams(f: FilterValues): string {
-  const params = new URLSearchParams();
-  if (f.sortBy && f.sortBy !== 'popularity.desc') params.set('sortBy', f.sortBy);
-  if (f.voteAverageGte > 0) params.set('voteAverageGte', String(f.voteAverageGte));
-  if (f.releaseYear != null) {
-    params.set('releaseDateGte', `${f.releaseYear}-01-01`);
-    params.set('releaseDateLte', `${f.releaseYear}-12-31`);
-  }
-  const str = params.toString();
-  return str ? `&${str}` : '';
-}
 
 export default function DiscoverGenrePage() {
   const { t } = useTranslation();
@@ -87,7 +77,7 @@ export default function DiscoverGenrePage() {
     }
     setPage(1);
     seenIds.current.clear();
-    const fp = buildFilterParams(filters);
+    const fp = buildDiscoverParams(filters);
 
     api.get(`/tmdb/discover/${mediaType}/genre/${genreId}?page=1${fp}`).then(({ data }) => {
       setResults(dedup(data.results.map((r: TmdbMedia) => ({ ...r, media_type: mediaType }))));
@@ -101,7 +91,7 @@ export default function DiscoverGenrePage() {
     if (loadingMore || page >= totalPages) return;
     setLoadingMore(true);
     const nextPage = page + 1;
-    const fp = buildFilterParams(filters);
+    const fp = buildDiscoverParams(filters);
     try {
       const { data } = await api.get(`/tmdb/discover/${mediaType}/genre/${genreId}?page=${nextPage}${fp}`);
       const items = dedup(data.results.map((r: TmdbMedia) => ({ ...r, media_type: mediaType })));
