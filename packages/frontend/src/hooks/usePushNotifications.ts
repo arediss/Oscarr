@@ -60,7 +60,7 @@ export function usePushNotifications() {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(data.key),
+        applicationServerKey: urlBase64ToUint8Array(data.key).buffer as ArrayBuffer,
       });
 
       // Send to backend
