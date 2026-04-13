@@ -58,7 +58,7 @@ const FILTER_TABS = [
 
 export default function RequestsPage() {
   const { t } = useTranslation();
-  const { isAdmin } = useAuth();
+  const { hasPermission } = useAuth();
   const [requests, setRequests] = useState<MediaRequest[]>([]);
   const [stats, setStats] = useState<RequestStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,7 +83,7 @@ export default function RequestsPage() {
   useEffect(() => {
     api.get('/requests/stats').then(({ data }) => setStats(data)).catch(() => {});
     api.get('/app/quality-options').then(({ data }) => setQualityOptions(data)).catch(() => {});
-    if (isAdmin) api.get('/admin/users').then(({ data }) => setUsers(data.map((u: { id: number; displayName: string; email: string }) => ({ id: u.id, displayName: u.displayName || u.email })))).catch(() => {});
+    if (hasPermission('admin.*')) api.get('/admin/users').then(({ data }) => setUsers(data.map((u: { id: number; displayName: string; email: string }) => ({ id: u.id, displayName: u.displayName || u.email })))).catch(() => {});
   }, []);
 
   const fetchRequests = useCallback(async (pageNum: number, append = false) => {
@@ -174,7 +174,7 @@ export default function RequestsPage() {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold text-ndp-text">{t('requests.title')}</h1>
-          {isAdmin && stats && (stats.available > 0 || stats.approved > 0 || stats.declined > 0) && (
+          {hasPermission('admin.danger') && stats && (stats.available > 0 || stats.approved > 0 || stats.declined > 0) && (
             <button
               onClick={() => { setShowCleanup(true); setCleanupActions({}); setCleanupResult(null); }}
               className="text-xs text-ndp-text-dim hover:text-ndp-text flex items-center gap-1.5 hover:bg-white/5 px-3 py-1.5 rounded-lg transition-colors"
@@ -215,8 +215,8 @@ export default function RequestsPage() {
             })}
           </div>
 
-          {/* Advanced filters (admin only) */}
-          {isAdmin && (
+          {/* Advanced filters */}
+          {hasPermission('requests.approve') && (
             <RequestFilters
               filterUser={filterUser} setFilterUser={setFilterUser}
               filterMediaType={filterMediaType} setFilterMediaType={setFilterMediaType}
@@ -258,7 +258,7 @@ export default function RequestsPage() {
                       </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                         {pendingRequests.map((req, index) => (
-                          <RequestCard key={req.id} request={req} isAdmin={isAdmin} actionLoading={actionLoading} onAction={handleAction} onDelete={handleDelete} qualityOptions={qualityOptions} index={index} />
+                          <RequestCard key={req.id} request={req} canApprove={hasPermission('requests.approve')} canDecline={hasPermission('requests.decline')} actionLoading={actionLoading} onAction={handleAction} onDelete={handleDelete} qualityOptions={qualityOptions} index={index} />
                         ))}
                       </div>
                     </div>
@@ -273,7 +273,7 @@ export default function RequestsPage() {
                       )}
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                         {otherRequests.map((req, index) => (
-                          <RequestCard key={req.id} request={req} isAdmin={isAdmin} actionLoading={actionLoading} onAction={handleAction} onDelete={handleDelete} qualityOptions={qualityOptions} index={index} />
+                          <RequestCard key={req.id} request={req} canApprove={hasPermission('requests.approve')} canDecline={hasPermission('requests.decline')} actionLoading={actionLoading} onAction={handleAction} onDelete={handleDelete} qualityOptions={qualityOptions} index={index} />
                         ))}
                       </div>
                     </div>
@@ -391,7 +391,8 @@ export default function RequestsPage() {
 
 function RequestCard({
   request: req,
-  isAdmin,
+  canApprove,
+  canDecline,
   actionLoading,
   onAction,
   onDelete,
@@ -399,7 +400,8 @@ function RequestCard({
   index,
 }: {
   request: MediaRequest;
-  isAdmin: boolean;
+  canApprove: boolean;
+  canDecline?: boolean;
   actionLoading: number | null;
   onAction: (id: number, action: 'approve' | 'decline', qualityOptionId?: number) => void;
   onDelete: (id: number) => void;
@@ -523,7 +525,7 @@ function RequestCard({
       {/* Bottom action bar */}
       {isPending && (
         <div className="absolute bottom-2 left-2 right-[108px] z-10 flex items-center bg-white/[0.03] backdrop-blur-2xl border border-white/[0.07] rounded-xl" onClick={(e) => e.preventDefault()}>
-          {isAdmin ? (
+          {canApprove ? (
             <>
               <button
                 onClick={(e) => { e.preventDefault(); onAction(req.id, 'approve', selectedQuality); }}
@@ -533,15 +535,19 @@ function RequestCard({
                 {actionLoading === req.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
                 {t('requests.approve')}
               </button>
-              <div className="w-px h-5 bg-white/10" />
-              <button
-                onClick={(e) => { e.preventDefault(); onAction(req.id, 'decline'); }}
-                disabled={actionLoading === req.id}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-ndp-danger hover:bg-ndp-danger/10 transition-colors text-xs font-medium"
-              >
-                <XCircle className="w-3.5 h-3.5" />
-                {t('requests.decline')}
-              </button>
+              {canDecline && (
+                <>
+                  <div className="w-px h-5 bg-white/10" />
+                  <button
+                    onClick={(e) => { e.preventDefault(); onAction(req.id, 'decline'); }}
+                    disabled={actionLoading === req.id}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 text-ndp-danger hover:bg-ndp-danger/10 transition-colors text-xs font-medium"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    {t('requests.decline')}
+                  </button>
+                </>
+              )}
               <div className="w-px h-5 bg-white/10" />
               <button
                 onClick={(e) => {

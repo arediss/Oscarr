@@ -37,7 +37,7 @@ interface TicketMsg {
 
 export default function MessagesPage() {
   const { t } = useTranslation();
-  const { user, isAdmin } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<TicketMsg[]>([]);
@@ -218,7 +218,7 @@ export default function MessagesPage() {
                       <p className="text-sm font-medium text-ndp-text truncate">{ticket.subject}</p>
                       <span className="text-[10px] text-ndp-text-dim flex-shrink-0">{formatTime(ticket.createdAt)}</span>
                     </div>
-                    {isAdmin && (
+                    {hasPermission('support.manage') && (
                       <p className="text-[11px] text-ndp-accent mt-0.5">{ticket.user.displayName}</p>
                     )}
                     {ticket.lastMessage && (
@@ -242,10 +242,10 @@ export default function MessagesPage() {
                 <p className="text-sm font-semibold text-ndp-text truncate">{activeTicket.subject}</p>
                 <p className="text-[11px] text-ndp-text-dim">
                   {activeTicket.status === 'open' ? t('messages.open') : t('messages.closed')}
-                  {isAdmin && ` · ${activeTicket.user.displayName}`}
+                  {hasPermission('support.manage') && ` · ${activeTicket.user.displayName}`}
                 </p>
               </div>
-              {isAdmin && (
+              {hasPermission('support.manage') && (
                 <button
                   onClick={() => toggleTicketStatus(activeTicket)}
                   className={clsx('text-xs px-3 py-1 rounded-lg transition-colors',

@@ -36,7 +36,7 @@ const ALL_NAV = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -57,12 +57,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     api.get('/app/banner').then(({ data }) => setBanner(data.banner)).catch(() => {});
   }, []);
 
-  // Fetch roles for the "view as" selector (admin only)
+  // Fetch roles for the "view as" selector
   useEffect(() => {
-    if (isAdmin) {
+    if (hasPermission('admin.roles')) {
       api.get('/admin/roles').then(({ data }) => setAvailableRoles(data)).catch(() => {});
     }
-  }, [isAdmin]);
+  }, [hasPermission]);
 
   const startViewAs = (roleName: string) => {
     sessionStorage.setItem('view-as-role', roleName);
@@ -241,7 +241,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <PluginSlot hookPoint="header.actions" context={{ user }} />
 
               {/* Changelog notification */}
-              {isAdmin && changelog.hasNew && (
+              {hasPermission('admin.*') && changelog.hasNew && (
                 <button
                   onClick={() => { setChangelogOpen(true); changelog.dismiss(); }}
                   className="relative p-2 rounded-xl hover:bg-white/5 transition-colors"
@@ -287,33 +287,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       <p className="text-xs text-ndp-text-dim truncate">{user?.email}</p>
                     </div>
 
-                    {isAdmin && (
-                      <>
-                        <Link
-                          to="/admin"
-                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ndp-text-muted hover:text-ndp-accent hover:bg-white/5 transition-colors"
-                        >
-                          <Shield className="w-4 h-4" />
-                          {t('nav.admin')}
-                        </Link>
+                    {hasPermission('admin.*') && (
+                      <Link
+                        to="/admin"
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ndp-text-muted hover:text-ndp-accent hover:bg-white/5 transition-colors"
+                      >
+                        <Shield className="w-4 h-4" />
+                        {t('nav.admin')}
+                      </Link>
+                    )}
 
-                        {/* View as role selector */}
-                        <div className="px-4 py-2 border-t border-white/5">
-                          <div className="flex items-center gap-2.5">
-                            <Eye className="w-4 h-4 text-ndp-text-dim flex-shrink-0" />
-                            <select
-                              value={viewAsRole || ''}
-                              onChange={(e) => e.target.value ? startViewAs(e.target.value) : stopViewAs()}
-                              className="flex-1 bg-white/5 border border-white/10 rounded-lg text-sm text-ndp-text px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500/40 cursor-pointer appearance-none"
-                            >
-                              <option value="">{t('admin.view_as.off', 'View as role...')}</option>
-                              {availableRoles.filter(r => r.name !== 'admin').map(r => (
-                                <option key={r.name} value={r.name}>{r.name}</option>
-                              ))}
-                            </select>
-                          </div>
+                    {hasPermission('admin.roles') && (
+                      <div className="px-4 py-2 border-t border-white/5">
+                        <div className="flex items-center gap-2.5">
+                          <Eye className="w-4 h-4 text-ndp-text-dim flex-shrink-0" />
+                          <select
+                            value={viewAsRole || ''}
+                            onChange={(e) => e.target.value ? startViewAs(e.target.value) : stopViewAs()}
+                            className="flex-1 bg-white/5 border border-white/10 rounded-lg text-sm text-ndp-text px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500/40 cursor-pointer appearance-none"
+                          >
+                            <option value="">{t('admin.view_as.off', 'View as role...')}</option>
+                            {availableRoles.filter(r => r.name !== 'admin').map(r => (
+                              <option key={r.name} value={r.name}>{r.name}</option>
+                            ))}
+                          </select>
                         </div>
-                      </>
+                      </div>
                     )}
 
                     <div className="px-4 py-2.5 border-t border-white/5">
@@ -334,7 +333,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </div>
 
                     {/* Plugin hook: avatar menu */}
-                    <PluginSlot hookPoint="avatar.menu" context={{ user, isAdmin }} />
+                    <PluginSlot hookPoint="avatar.menu" context={{ user, isAdmin: hasPermission('admin.*'), hasPermission }} />
 
                     <button
                       onClick={handleLogout}
@@ -411,7 +410,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                 )}
               />
-              {isAdmin && (
+              {hasPermission('admin.*') && (
                 <Link
                   to="/admin"
                   onClick={() => setMobileMenuOpen(false)}
