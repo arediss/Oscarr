@@ -108,6 +108,7 @@ function buildDiscoverUrl(query: NonNullable<HomepageSection['query']>): string 
   }
 
   if (query.voteAverageGte) params.set('vote_average.gte', String(query.voteAverageGte));
+  if (query.voteCountGte) params.set('vote_count.gte', String(query.voteCountGte));
   if (query.sortBy) params.set('sort_by', query.sortBy);
   if (query.language) params.set('with_original_language', query.language);
   const qs = params.toString();

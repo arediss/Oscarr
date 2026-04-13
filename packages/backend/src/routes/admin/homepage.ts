@@ -89,6 +89,7 @@ export async function homepageRoutes(app: FastifyInstance) {
       yearLte?: number;
       releasedWithin?: string;
       voteAverageGte?: number;
+      voteCountGte?: number;
       sortBy?: string;
       language?: string;
       keywords?: string;
@@ -122,6 +123,7 @@ export async function homepageRoutes(app: FastifyInstance) {
       if (query.yearLte) params.set(dateLteField, `${query.yearLte}-12-31`);
     }
     if (query.voteAverageGte) params.set('vote_average.gte', String(query.voteAverageGte));
+    if (query.voteCountGte) params.set('vote_count.gte', String(query.voteCountGte));
     if (query.sortBy) params.set('sort_by', query.sortBy);
     if (query.language) params.set('with_original_language', query.language);
     if (query.keywords) params.set('with_keywords', query.keywords);

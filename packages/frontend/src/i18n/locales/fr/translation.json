@@ -335,6 +335,7 @@
   "admin.homepage.year_from": "Année min",
   "admin.homepage.year_to": "Année max",
   "admin.homepage.min_rating": "Note minimum",
+  "admin.homepage.min_votes": "Votes minimum",
   "admin.homepage.sort_by": "Trier par",
   "admin.homepage.language": "Langue",
   "admin.homepage.release_window": "Sorti depuis",

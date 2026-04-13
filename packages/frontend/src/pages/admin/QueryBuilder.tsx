@@ -10,6 +10,7 @@ export interface DiscoverQuery {
   yearLte?: number;
   releasedWithin?: string; // 'last_30d' | 'last_90d' | 'last_6m' | 'last_1y' | ''
   voteAverageGte?: number;
+  voteCountGte?: number;
   sortBy?: string;
   language?: string;
 }
@@ -191,8 +192,8 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
         )}
       </div>
 
-      {/* Release window + Year range + Rating row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
+      {/* Release window + Year range + Rating + Votes row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 12 }}>
         <div>
           <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
             {t('admin.homepage.release_window', 'Released within')}
@@ -253,6 +254,21 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
             placeholder="0"
             value={query.voteAverageGte ?? ''}
             onChange={e => onChange({ ...query, voteAverageGte: e.target.value ? Number(e.target.value) : undefined })}
+            style={{ width: '100%' }}
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+            {t('admin.homepage.min_votes', 'Min. votes')}
+          </label>
+          <input
+            className="input"
+            type="number"
+            min={0}
+            step={10}
+            placeholder="0"
+            value={query.voteCountGte ?? ''}
+            onChange={e => onChange({ ...query, voteCountGte: e.target.value ? Number(e.target.value) : undefined })}
             style={{ width: '100%' }}
           />
         </div>
