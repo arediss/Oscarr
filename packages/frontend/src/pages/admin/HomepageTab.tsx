@@ -199,11 +199,16 @@ export function HomepageTab() {
                     <span className="text-sm font-semibold text-ndp-text">{t(section.title, section.title)}</span>
                     {section.type === 'builtin' ? (
                       <span className="text-[10px] bg-ndp-accent/10 text-ndp-accent px-1.5 py-0.5 rounded">Builtin</span>
+                    ) : section.endpoint ? (
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded">Endpoint</span>
                     ) : (
-                      <span className="text-[10px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded">Custom</span>
+                      <span className="text-[10px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded">Discover</span>
                     )}
                   </div>
-                  {section.type === 'custom' && queryPreview && (
+                  {section.type === 'custom' && section.endpoint && (
+                    <p className="text-xs text-ndp-text-dim mt-1 font-mono opacity-60">GET {section.endpoint}</p>
+                  )}
+                  {section.type === 'custom' && !section.endpoint && queryPreview && (
                     <p className="text-xs text-ndp-text-dim mt-1">{queryPreview}</p>
                   )}
                   {section.type === 'builtin' && section.builtinKey && (

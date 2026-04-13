@@ -121,6 +121,11 @@ function CustomSection({ query, title, size }: { query: NonNullable<HomepageSect
   return <MediaRow title={title} media={data} loading={loading} size={size} />;
 }
 
+function EndpointSection({ endpoint, title, size }: { endpoint: string; title: string; size?: 'default' | 'large' }) {
+  const { data, loading } = useTmdbList<TmdbMedia>(endpoint);
+  return <MediaRow title={title} media={data} loading={loading} size={size} />;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Hero carousel — identical rendering to original                   */
 /* ------------------------------------------------------------------ */
@@ -305,6 +310,16 @@ function DynamicHomePage({ sections }: { sections: HomepageSection[] }) {
           {enabledSections.map(section => {
             if (section.builtinKey === 'hero') return null; /* rendered above */
             if (section.builtinKey === 'genres') return <GenreRow key={section.id} />;
+            if (section.type === 'custom' && section.endpoint) {
+              return (
+                <EndpointSection
+                  key={section.id}
+                  endpoint={section.endpoint}
+                  title={t(section.title, section.title)}
+                  size={section.size}
+                />
+              );
+            }
             if (section.type === 'custom' && section.query) {
               return (
                 <CustomSection

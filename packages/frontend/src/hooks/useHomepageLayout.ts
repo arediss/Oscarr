@@ -8,6 +8,7 @@ export interface HomepageSection {
   title: string;
   size?: 'default' | 'large';
   builtinKey?: string;
+  endpoint?: string;
   query?: {
     mediaType: 'movie' | 'tv';
     genres?: number[];

@@ -173,6 +173,61 @@ export async function tmdbRoutes(app: FastifyInstance) {
     return { ...data, nsfwTmdbIds };
   });
 
+  app.get('/movies/now_playing', {
+    schema: { querystring: pageQuerySchema },
+  }, async (request) => {
+    const { page } = request.query as { page?: string };
+    const lang = getLang(request);
+    const tmdb = getTmdbApi();
+    const { data } = await tmdb.get(`/movie/now_playing`, { params: { page: parsePage(page), language: lang, region: lang.split('-')[0]?.toUpperCase() || 'US' } });
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'movie', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
+  app.get('/movies/top_rated', {
+    schema: { querystring: pageQuerySchema },
+  }, async (request) => {
+    const { page } = request.query as { page?: string };
+    const lang = getLang(request);
+    const tmdb = getTmdbApi();
+    const { data } = await tmdb.get(`/movie/top_rated`, { params: { page: parsePage(page), language: lang } });
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'movie', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
+  app.get('/tv/top_rated', {
+    schema: { querystring: pageQuerySchema },
+  }, async (request) => {
+    const { page } = request.query as { page?: string };
+    const lang = getLang(request);
+    const tmdb = getTmdbApi();
+    const { data } = await tmdb.get(`/tv/top_rated`, { params: { page: parsePage(page), language: lang } });
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'tv', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
+  app.get('/tv/airing_today', {
+    schema: { querystring: pageQuerySchema },
+  }, async (request) => {
+    const { page } = request.query as { page?: string };
+    const lang = getLang(request);
+    const tmdb = getTmdbApi();
+    const { data } = await tmdb.get(`/tv/airing_today`, { params: { page: parsePage(page), language: lang } });
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'tv', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
+  app.get('/tv/on_the_air', {
+    schema: { querystring: pageQuerySchema },
+  }, async (request) => {
+    const { page } = request.query as { page?: string };
+    const lang = getLang(request);
+    const tmdb = getTmdbApi();
+    const { data } = await tmdb.get(`/tv/on_the_air`, { params: { page: parsePage(page), language: lang } });
+    const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], 'tv', lang).catch(() => []);
+    return { ...data, nsfwTmdbIds };
+  });
+
   app.get('/search', {
     schema: {
       querystring: {

@@ -340,6 +340,10 @@
   "admin.homepage.language": "Langue",
   "admin.homepage.release_window": "Sorti depuis",
   "admin.homepage.preview": "Aperçu",
+  "admin.homepage.source": "Source de données",
+  "admin.homepage.mode_discover": "Discover",
+  "admin.homepage.mode_endpoint": "Endpoint",
+  "admin.homepage.endpoint_url": "Endpoint API",
   "admin.homepage.preview_empty": "Ajustez les filtres ci-dessus pour voir un aperçu.",
 
   "home.genres": "Explorer par genre",
