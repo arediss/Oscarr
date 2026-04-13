@@ -67,9 +67,9 @@ export default function AdminPage() {
 
   const pluginTabItems = useMemo(() =>
     pluginTabs.map((c) => ({
-      id: `plugin:${c.pluginId}` as string,
-      label: c.props.label as string,
-      pluginIcon: c.props.icon as string,
+      id: `plugin:${c.pluginId}`,
+      label: typeof c.props.label === 'string' ? c.props.label : c.pluginId,
+      pluginIcon: typeof c.props.icon === 'string' ? c.props.icon : 'Puzzle',
     })),
     [pluginTabs]
   );

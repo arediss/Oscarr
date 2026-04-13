@@ -18,7 +18,7 @@ export async function loadPluginModule(url: string): Promise<ComponentType<any> 
     cache.set(url, { component, loadedAt: Date.now() });
     return component;
   } catch {
-    cache.set(url, { component: null, loadedAt: Date.now() });
+    // Don't cache failures — allow retry on next call
     return null;
   }
 }

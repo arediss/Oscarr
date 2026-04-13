@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, ChevronDown, ChevronUp, BookOpen, Copy, Check, RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
+import { invalidatePluginUICache } from '@/plugins/usePlugins';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import type { PluginInfo } from '@/plugins/types';
@@ -130,6 +131,7 @@ export function PluginsTab() {
     try {
       await api.put(`/plugins/${id}/toggle`, { enabled });
       setPlugins(prev => prev.map(p => p.id === id ? { ...p, enabled } : p));
+      invalidatePluginUICache(); // Refresh plugin UI contributions (sidebar, hooks)
     } catch { /* ignore */ }
     setToggling(null);
   };

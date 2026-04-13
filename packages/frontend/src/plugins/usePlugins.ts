@@ -7,14 +7,20 @@ const CACHE_TTL = 60_000;
 
 export function usePluginUI(hookPoint: string) {
   const cached = cache.get(hookPoint);
-  const hasFresh = cached && Date.now() - cached.fetchedAt < CACHE_TTL;
+  const hasFreshOnMount = !!cached && Date.now() - cached.fetchedAt < CACHE_TTL;
 
-  const [contributions, setContributions] = useState<PluginUIContribution[]>(hasFresh ? cached.data : []);
-  const [loading, setLoading] = useState(!hasFresh);
+  const [contributions, setContributions] = useState<PluginUIContribution[]>(hasFreshOnMount ? cached.data : []);
+  const [loading, setLoading] = useState(!hasFreshOnMount);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (hasFresh) return;
+    // Re-check freshness inside the effect to avoid stale closure
+    const entry = cache.get(hookPoint);
+    if (entry && Date.now() - entry.fetchedAt < CACHE_TTL) {
+      setContributions(entry.data);
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
     setLoading(true);

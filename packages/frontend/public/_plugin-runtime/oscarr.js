@@ -1,7 +1,7 @@
 /**
  * Oscarr Plugin SDK
  * Lightweight helpers for plugin developers.
- * Import with: import { api, apiPost, formatSize, showToast } from '@oscarr/sdk';
+ * Import with: import { api, apiPost, apiPut, apiDelete, formatSize, formatDate, formatRelative, storageGet, storageSet } from '@oscarr/sdk';
  */
 
 // ── API helpers ─────────────────────────────────────────────────────
