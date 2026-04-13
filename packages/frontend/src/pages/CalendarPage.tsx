@@ -1,25 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Calendar, Film, Tv, CheckCircle, Loader2, LayoutGrid, List } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
-import api from '@/lib/api';
 import { posterUrl } from '@/lib/api';
 import { localizedDate, localizedTime } from '@/i18n/formatters';
-
-interface CalendarItem {
-  type: 'movie' | 'episode';
-  title: string;
-  episodeTitle?: string;
-  season?: number;
-  episode?: number;
-  date: string;
-  tmdbId?: number;
-  tvdbId?: number;
-  poster: string | null;
-  hasFile?: boolean;
-  episodeCount?: number;
-}
+import { useCalendar } from '@/hooks/useCalendar';
+import type { CalendarItem } from '@/hooks/useCalendar';
 
 type ViewMode = 'grid' | 'list';
 
@@ -42,17 +29,8 @@ function getStoredView(): ViewMode {
 
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
-  const [items, setItems] = useState<CalendarItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items, loading } = useCalendar(30);
   const [view, setView] = useState<ViewMode>(getStoredView);
-
-  useEffect(() => {
-    setLoading(true);
-    api.get('/services/calendar?days=30')
-      .then(({ data }) => setItems(data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
 
   const switchView = (v: ViewMode) => {
     setView(v);

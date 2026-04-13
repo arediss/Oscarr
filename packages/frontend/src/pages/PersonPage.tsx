@@ -16,10 +16,15 @@ export default function PersonPage() {
   const [showFullBio, setShowFullBio] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setPerson(null);
     setShowFullBio(false);
-    api.get(`/tmdb/person/${id}`).then(({ data }) => setPerson(data)).catch(() => {}).finally(() => setLoading(false));
+    api.get(`/tmdb/person/${id}`, { signal: controller.signal })
+      .then(({ data }) => setPerson(data))
+      .catch((err) => { if (err.name !== 'CanceledError') console.error('Person fetch failed:', err); })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
   }, [id]);
 
   const [showAllFilmo, setShowAllFilmo] = useState(false);
