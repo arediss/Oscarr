@@ -1,47 +1,41 @@
 import { useParams } from 'react-router-dom';
-import { useState, useEffect, type ComponentType } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-
-const pageCache = new Map<string, ComponentType<any> | null>();
+import type { ComponentType } from 'react';
+import { loadPluginModule, hasLoaded, getCached, pluginFrontendUrl } from './pluginModuleCache';
 
 export function PluginPage() {
   const { pluginId } = useParams<{ pluginId: string }>();
   const { t } = useTranslation();
-  const [Component, setComponent] = useState<ComponentType<any> | null>(
-    pluginId && pageCache.has(pluginId) ? pageCache.get(pluginId)! : null
-  );
-  const [loading, setLoading] = useState(!pageCache.has(pluginId || ''));
+
+  const url = pluginId ? pluginFrontendUrl(pluginId) : '';
+  const [Component, setComponent] = useState<ComponentType<any> | null>(url ? getCached(url) : null);
+  const [loading, setLoading] = useState(url ? !hasLoaded(url) : false);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (!pluginId || pageCache.has(pluginId)) return;
+    if (!url) return;
+    if (hasLoaded(url)) {
+      setComponent(() => getCached(url));
+      setError(!getCached(url) && hasLoaded(url));
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
-
-    import(/* @vite-ignore */ `/api/plugins/${pluginId}/frontend/index.js`)
-      .then((mod) => {
-        if (cancelled) return;
-        const comp = mod.default || null;
-        pageCache.set(pluginId, comp);
-        setComponent(() => comp);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        pageCache.set(pluginId, null);
-        setError(true);
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-
+    setLoading(true);
+    loadPluginModule(url).then((comp) => {
+      if (cancelled) return;
+      setComponent(() => comp);
+      setError(!comp);
+      setLoading(false);
+    });
     return () => { cancelled = true; };
-  }, [pluginId]);
+  }, [url]);
 
   if (!pluginId) {
-    return (
-      <div className="flex items-center justify-center h-64 text-ndp-text-muted">
-        {t('plugin.not_found')}
-      </div>
-    );
+    return <div className="flex items-center justify-center h-64 text-ndp-text-muted">{t('plugin.not_found')}</div>;
   }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -49,14 +43,22 @@ export function PluginPage() {
       </div>
     );
   }
-
   if (error || !Component) {
     return (
-      <div className="flex items-center justify-center h-64 text-ndp-text-muted">
-        {t('plugin.frontend_unavailable', { pluginId })}
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <p className="text-ndp-text-muted">{t('plugin.frontend_unavailable', { pluginId })}</p>
+        <button
+          onClick={() => {
+            setError(false);
+            setLoading(true);
+            loadPluginModule(url).then(c => { setComponent(() => c); setError(!c); setLoading(false); });
+          }}
+          className="text-sm text-ndp-accent hover:underline"
+        >
+          Retry
+        </button>
       </div>
     );
   }
-
   return <Component />;
 }
