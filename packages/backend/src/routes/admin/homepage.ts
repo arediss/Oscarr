@@ -129,12 +129,13 @@ export async function homepageRoutes(app: FastifyInstance) {
     if (query.keywords) params.set('with_keywords', query.keywords);
     if (query.region) params.set('region', query.region);
 
-    // Validate mediaType to prevent SSRF via path injection
-    if (query.mediaType !== 'movie' && query.mediaType !== 'tv') {
+    // Use a static path — no user input in the URL (prevents SSRF / CodeQL alert)
+    const discoverPath = query.mediaType === 'movie' ? '/discover/movie' : query.mediaType === 'tv' ? '/discover/tv' : null;
+    if (!discoverPath) {
       return reply.status(400).send({ error: 'Invalid mediaType' });
     }
     const api = getTmdbApi();
-    const { data } = await api.get(`/discover/${query.mediaType}`, { params: Object.fromEntries(params) });
+    const { data } = await api.get(discoverPath, { params: Object.fromEntries(params) });
     return data;
   });
 }

@@ -406,8 +406,10 @@ export async function tmdbRoutes(app: FastifyInstance) {
     }
     if (!params.page) params.page = '1';
 
+    // Static path — mediaType already validated above, but use ternary to satisfy CodeQL taint analysis
+    const discoverPath = mediaType === 'movie' ? '/discover/movie' : '/discover/tv';
     const tmdbApi = getTmdbApi();
-    const { data } = await tmdbApi.get(`/discover/${mediaType}`, { params });
+    const { data } = await tmdbApi.get(discoverPath, { params });
     const lang = getLang(request);
     const nsfwTmdbIds = await flagNsfwFromDb(data.results || [], mediaType, lang).catch(() => []);
     return { ...data, nsfwTmdbIds };
