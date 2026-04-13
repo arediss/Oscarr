@@ -146,8 +146,13 @@ export class RadarrClient implements ArrClient {
     const inCinemas = movie.inCinemas ? new Date(movie.inCinemas) : null;
     const releaseDate = movie.releaseDate ? new Date(movie.releaseDate) : null;
 
-    const effectiveRelease = digitalRelease || physicalRelease || releaseDate || inCinemas;
-    if (effectiveRelease && effectiveRelease > now) {
+    // A movie is "upcoming" only if ALL known release dates are in the future.
+    // If it's already in cinemas, it's not upcoming — it's searching (for digital release).
+    const earliestRelease = [inCinemas, digitalRelease, physicalRelease, releaseDate]
+      .filter((d): d is Date => d !== null)
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+
+    if (earliestRelease && earliestRelease > now) {
       return 'upcoming';
     }
     return 'searching';
