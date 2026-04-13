@@ -1,4 +1,4 @@
-const R = window.React;
+const R = window.__OSCARR_REACT__;
 export default R;
 export const {
   useState, useEffect, useCallback, useMemo, useRef, useContext,
@@ -6,4 +6,5 @@ export const {
   lazy, Suspense, startTransition, useId, useReducer,
   useLayoutEffect, useImperativeHandle, useDebugValue,
   useSyncExternalStore, useTransition, useDeferredValue,
+  useInsertionEffect,
 } = R;
