@@ -557,10 +557,13 @@ Plugin state (enabled flag + settings) is stored in the `PluginState` table:
 
 ```prisma
 model PluginState {
-  id        Int     @id @default(autoincrement())
-  pluginId  String  @unique
-  enabled   Boolean @default(true)
-  settings  String  @default("{}")  // JSON blob
+  id            Int       @id @default(autoincrement())
+  pluginId      String    @unique
+  enabled       Boolean   @default(true)
+  settings      String    @default("{}")  // JSON blob for plugin-specific settings
+  onInstallRan  Boolean   @default(false) // Tracks whether onInstall() has been executed
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 ```
 
