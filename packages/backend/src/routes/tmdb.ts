@@ -392,10 +392,17 @@ export async function tmdbRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'Invalid mediaType' });
     }
     const query = request.query as Record<string, string>;
+    // Whitelist allowed TMDB discover params to prevent property injection
+    const ALLOWED_PARAMS = new Set([
+      'page', 'sort_by', 'with_genres', 'with_keywords', 'with_original_language',
+      'primary_release_date.gte', 'primary_release_date.lte',
+      'first_air_date.gte', 'first_air_date.lte',
+      'vote_average.gte', 'vote_count.gte', 'region', 'language',
+      'include_adult', 'include_video', 'year', 'first_air_date_year',
+    ]);
     const params: Record<string, string> = {};
-    // Pass all query params through to TMDB discover
     for (const [key, value] of Object.entries(query)) {
-      if (value) params[key] = value;
+      if (value && ALLOWED_PARAMS.has(key)) params[key] = value;
     }
     if (!params.page) params.page = '1';
 
