@@ -1,6 +1,6 @@
 # Plugin Development Guide
 
-Oscarr supports plugins for extending functionality without modifying the core. Plugins can add backend routes, scheduled jobs, admin UI tabs, navigation items, full pages, and feature flags.
+Oscarr supports plugins for extending functionality without modifying the core. Plugins can add backend routes, scheduled jobs, admin UI tabs, navigation items, full pages, feature flags, guards, custom permissions, and event-driven workflows.
 
 ## Getting started
 
@@ -17,6 +17,15 @@ packages/plugins/
     frontend/              # Optional
       index.tsx             # Frontend page component
 ```
+
+### Plugin discovery
+
+On startup, Oscarr scans `packages/plugins/` for directories with a `manifest.json`. You can override the scan directory with the `OSCARR_PLUGINS_DIR` environment variable.
+
+- Follows symlinks (useful for dev workflows: `ln -s /path/to/plugin packages/plugins/name`)
+- Skips hidden directories (starting with `.`)
+- Validates manifests thoroughly: required fields, hooks shape, settings shape
+- Validates `apiVersion` against supported versions (currently only `"v1"`)
 
 ### manifest.json
 
@@ -50,7 +59,7 @@ packages/plugins/
     }
   ],
   "hooks": {
-    "routes": true,
+    "routes": { "prefix": "/api/plugins/my-plugin" },
     "jobs": [
       {
         "key": "my_job",
@@ -83,6 +92,8 @@ packages/plugins/
   }
 }
 ```
+
+> **Note:** `hooks.routes` is now an object `{ "prefix": "/api/plugins/my-plugin" }`, not just `true`. This gives plugins explicit control over their route prefix.
 
 ### Entry point
 
@@ -125,6 +136,16 @@ export function register(ctx: PluginContext): PluginRegistration {
       ctx.log.info('Plugin installed for the first time');
       await ctx.setSetting('installDate', new Date().toISOString());
     },
+
+    // Optional: run when plugin is enabled
+    async onEnable(ctx) {
+      ctx.log.info('Plugin enabled');
+    },
+
+    // Optional: run when plugin is disabled
+    async onDisable(ctx) {
+      ctx.log.info('Plugin disabled — cleaning up');
+    },
   };
 }
 ```
@@ -138,10 +159,16 @@ The context object provides access to Oscarr's core functionality:
 | `ctx.log` | Fastify logger instance (child logger with plugin context) |
 | `ctx.getUser(userId)` | Get a user by ID. Returns `{ id, email, displayName, role }` or `null` |
 | `ctx.getAppSettings()` | Get all app settings as `Record<string, unknown>` |
-| `ctx.getSetting(key)` | Get a plugin-specific setting value |
-| `ctx.setSetting(key, value)` | Set a plugin-specific setting value |
+| `ctx.getSetting(key)` | Get a plugin-specific setting value (cached in memory) |
+| `ctx.setSetting(key, value)` | Set a plugin-specific setting value (persists to DB + updates cache) |
 | `ctx.sendNotification(type, data)` | Send a system notification (Discord, Telegram, Email) |
 | `ctx.sendUserNotification(userId, payload)` | Send an in-app notification to a specific user |
+| `ctx.notificationRegistry` | Access to the notification registry |
+| `ctx.getArrClient(serviceType)` | Get an existing Arr client (Sonarr, Radarr, etc.) |
+| `ctx.getServiceConfig(serviceType)` | Get service config `{ url, apiKey }` or `null` for direct API access |
+| `ctx.registerRoutePermission(routeKey, rule)` | Register an RBAC rule for a route |
+| `ctx.registerPluginPermission(permission, description?)` | Declare a custom permission |
+| `ctx.events` | Event bus — see [Events](#events) |
 
 ### sendNotification
 
@@ -168,9 +195,57 @@ await ctx.sendUserNotification(userId, {
 });
 ```
 
+### getServiceConfig
+
+Get the URL and API key for a connected service, useful for direct API calls:
+
+```typescript
+const radarr = await ctx.getServiceConfig('radarr');
+if (radarr) {
+  const res = await fetch(`${radarr.url}/api/v3/movie?apikey=${radarr.apiKey}`);
+  const movies = await res.json();
+}
+```
+
+### registerRoutePermission / registerPluginPermission
+
+Register RBAC rules directly from the plugin context (see [Permissions & RBAC](#permissions--rbac) for full details):
+
+```typescript
+export function register(ctx: PluginContext): PluginRegistration {
+  ctx.registerPluginPermission('myplugin.access', 'Access My Plugin features');
+  ctx.registerRoutePermission('GET:/api/plugins/my-plugin/data', { permission: 'myplugin.access' });
+
+  return {
+    manifest: require('./manifest.json'),
+    // ...
+  };
+}
+```
+
+## Events
+
+The context object provides an in-process event bus for decoupled communication between plugins and the core:
+
+```typescript
+// Subscribe to events
+ctx.events.on('media.requested', async (data) => {
+  ctx.log.info(`New request: ${data.title}`);
+  await ctx.sendNotification('custom_request', data);
+});
+
+// Unsubscribe
+ctx.events.off('media.requested', handler);
+
+// Emit custom events
+ctx.events.emit('myplugin.sync_complete', { count: 42 });
+```
+
+> **Note:** The event bus is in-process only. Events are not persisted and will not survive a server restart.
+
 ## Backend routes
 
-Routes registered by plugins are automatically prefixed with the plugin's route prefix (default: `/api/plugins/<pluginId>`).
+Routes registered by plugins are automatically prefixed with the route prefix defined in `hooks.routes.prefix` (e.g. `/api/plugins/my-plugin`).
 
 All plugin routes require authentication by default (handled by the RBAC middleware). You can register custom permissions for your routes — see [Permissions & RBAC](#permissions--rbac).
 
@@ -184,6 +259,10 @@ async registerRoutes(app, ctx) {
   });
 }
 ```
+
+### Error handling for routes
+
+If route registration fails (e.g. a syntax error or invalid schema), the plugin is automatically disabled and the error is persisted to the database. This prevents a broken plugin from taking down the server.
 
 ## Scheduled jobs
 
@@ -207,6 +286,12 @@ Jobs appear in the admin Jobs & Sync tab where admins can:
 - View last run status and duration
 - Manually trigger the job
 - Change the cron schedule
+
+### Job lifecycle
+
+- Jobs **stop automatically** when a plugin is disabled
+- Jobs **resume** when the plugin is re-enabled
+- A runtime guard prevents disabled-plugin jobs from executing even on race conditions
 
 ## UI contributions
 
@@ -267,6 +352,10 @@ export default function MediaActions({ context }: HookComponentProps) {
 }
 ```
 
+### Error boundary
+
+Plugin frontend components are wrapped in an error boundary. If a plugin component crashes, the rest of the app continues to work. The error boundary shows the plugin name, the error message, and a "Try again" button.
+
 ### Navigation item
 
 ```json
@@ -285,7 +374,7 @@ Icons use [Lucide React](https://lucide.dev/icons/) icon names.
 
 ### Admin tab
 
-Plugins with settings automatically get an admin tab. You can also add custom tabs:
+Plugins with settings automatically get an admin tab. Plugins with a `frontend` entry render their custom component in the admin tab instead of the default settings form. You can also add custom tabs:
 
 ```json
 {
@@ -297,6 +386,42 @@ Plugins with settings automatically get an admin tab. You can also add custom ta
 }
 ```
 
+## Frontend SDK (`@oscarr/sdk`)
+
+Plugins can import helpers from the SDK instead of reaching into the main app bundle:
+
+```javascript
+import { api, apiPost, apiPut, apiDelete, formatSize, formatDate, formatRelative, storageGet, storageSet } from '@oscarr/sdk';
+```
+
+### API helpers
+
+| Function | Description |
+|----------|-------------|
+| `api(path)` | GET request with auth, returns JSON |
+| `apiPost(path, body)` | POST with auth + JSON body |
+| `apiPut(path, body)` | PUT with auth + JSON body |
+| `apiDelete(path)` | DELETE with auth |
+
+### Formatting helpers
+
+| Function | Description |
+|----------|-------------|
+| `formatSize(bytes)` | Format bytes to human-readable string (e.g. `"1.5 GB"`) |
+| `formatDate(dateStr)` | Format date string to localized date |
+| `formatRelative(dateStr)` | Format date string to relative time (e.g. `"2h ago"`) |
+
+### Namespaced storage
+
+| Function | Description |
+|----------|-------------|
+| `storageGet(pluginId, key, fallback)` | Read from namespaced localStorage |
+| `storageSet(pluginId, key, value)` | Write to namespaced localStorage |
+
+### Shared React
+
+React is shared via import map. Plugins import `react`, `react-dom`, and `react/jsx-runtime` normally — the host provides them at runtime. No need to bundle React in your plugin.
+
 ## Frontend pages
 
 Plugins can provide a full-page React component at `/p/:pluginId`:
@@ -304,14 +429,13 @@ Plugins can provide a full-page React component at `/p/:pluginId`:
 ```tsx
 // packages/plugins/my-plugin/frontend/index.tsx
 import { useState, useEffect } from 'react';
+import { api } from '@oscarr/sdk';
 
 export default function MyPluginPage() {
   const [data, setData] = useState(null);
 
   useEffect(() => {
-    fetch('/api/plugins/my-plugin/stats')
-      .then(res => res.json())
-      .then(setData);
+    api('/api/plugins/my-plugin/stats').then(setData);
   }, []);
 
   return (
@@ -323,7 +447,7 @@ export default function MyPluginPage() {
 }
 ```
 
-The frontend component is lazy-loaded by Oscarr's router. It has access to all Tailwind CSS classes and Oscarr's design system (e.g. `text-ndp-text`, `card`, `btn-primary`).
+The frontend component is lazy-loaded via ESM by Oscarr's router. It has access to all Tailwind CSS classes and Oscarr's design system (e.g. `text-ndp-text`, `card`, `btn-primary`).
 
 ## Settings
 
@@ -379,9 +503,11 @@ const apiUrl = await ctx.getSetting('apiUrl') as string;
 await ctx.setSetting('lastRun', new Date().toISOString());
 ```
 
+Settings are validated on save: required fields are checked and types are enforced (string, number, boolean, password). Settings are cached in memory and the cache is invalidated on update or plugin toggle.
+
 Settings are stored as a JSON blob in the `PluginState` table and managed via:
 - `GET /api/plugins/:id/settings` — get schema + current values
-- `PUT /api/plugins/:id/settings` — update values
+- `PUT /api/plugins/:id/settings` — update values (validated)
 
 ## Feature flags
 
@@ -409,19 +535,21 @@ if (features.myPluginEnabled) {
 
 ## Plugin lifecycle
 
-1. **Discovery**: On startup, Oscarr scans `packages/plugins/` for directories with a `manifest.json`
+1. **Discovery**: On startup, Oscarr scans the plugins directory for directories with a `manifest.json`
 2. **Validation**: Manifest must have `id`, `name`, `version`, `entry`, and `apiVersion: "v1"`
 3. **Loading**: Entry module is dynamically imported, `register(ctx)` is called
-4. **Install**: On first load, `onInstall(ctx)` is called (if defined)
-5. **Route registration**: Plugin routes are registered with Fastify
-6. **Job registration**: Plugin jobs are registered with the scheduler
-7. **Runtime**: Plugin is active — routes serve requests, jobs run on schedule
+4. **Install**: On first load, `onInstall(ctx)` is called if defined (tracked by DB flag `onInstallRan`, never re-fires)
+5. **Enable**: `onEnable(ctx)` is called if defined (best-effort, does not block the toggle)
+6. **Route registration**: Plugin routes are registered with Fastify
+7. **Job registration**: Plugin jobs are registered with the scheduler
+8. **Runtime**: Plugin is active — routes serve requests, jobs run on schedule
 
 ### Enable/disable
 
 Plugins can be enabled or disabled from the admin panel without restarting:
 - `PUT /api/plugins/:id/toggle` with `{ enabled: boolean }`
 - Disabled plugins' routes still exist but their jobs don't run
+- `onEnable(ctx)` is called when a plugin is enabled, `onDisable(ctx)` when disabled (both best-effort)
 
 ### Plugin state persistence
 
@@ -435,6 +563,16 @@ model PluginState {
   settings  String  @default("{}")  // JSON blob
 }
 ```
+
+## Plugin logs
+
+All plugin log output (`info`, `warn`, `error`) is captured to the `PluginLog` database table. Logs can be retrieved via the API:
+
+```
+GET /api/plugins/:id/logs?limit=100
+```
+
+The `limit` parameter accepts values up to 500 (default: 100).
 
 ## API reference
 
@@ -450,7 +588,7 @@ model PluginState {
 | `entry` | string | Yes | Path to compiled entry point |
 | `frontend` | string | No | Path to frontend component |
 | `settings` | PluginSettingDef[] | No | Settings schema |
-| `hooks.routes` | boolean | No | Whether plugin registers routes |
+| `hooks.routes` | `{ prefix: string }` | No | Route prefix object |
 | `hooks.jobs` | PluginJobDef[] | No | Scheduled job definitions |
 | `hooks.ui` | UIContribution[] | No | UI hook contributions |
 | `hooks.features` | Record<string, boolean> | No | Feature flags |
@@ -463,7 +601,10 @@ model PluginState {
 | `registerRoutes(app, ctx)` | No | Register Fastify routes |
 | `registerJobs(ctx)` | No | Return job handlers |
 | `registerGuards(ctx)` | No | Return guard handlers (see [Guards](#guards)) |
-| `onInstall(ctx)` | No | Run once on first install |
+| `registerNotificationProviders(registry)` | No | Register notification providers |
+| `onInstall(ctx)` | No | Run once on first install (tracked by DB flag, never re-fires) |
+| `onEnable(ctx)` | No | Run when plugin is enabled (best-effort) |
+| `onDisable(ctx)` | No | Run when plugin is disabled (best-effort) |
 
 ## Guards
 
@@ -508,19 +649,17 @@ Oscarr uses a centralized RBAC (Role-Based Access Control) middleware. Roles and
 
 ### Registering custom permissions
 
-Declare new permissions so admins can assign them to roles:
+Declare new permissions so admins can assign them to roles. Use the context methods provided to your `register` function:
 
 ```typescript
-import { registerPluginPermission, registerRoutePermission } from '../../../backend/src/middleware/rbac.js';
-
 export function register(ctx: PluginContext): PluginRegistration {
   // 1. Declare the permission (appears in admin role editor)
-  registerPluginPermission('myplugin.access', 'Access My Plugin features');
-  registerPluginPermission('myplugin.admin', 'Manage My Plugin settings');
+  ctx.registerPluginPermission('myplugin.access', 'Access My Plugin features');
+  ctx.registerPluginPermission('myplugin.admin', 'Manage My Plugin settings');
 
   // 2. Protect your routes with these permissions
-  registerRoutePermission('GET:/api/plugins/my-plugin/data', { permission: 'myplugin.access' });
-  registerRoutePermission('PUT:/api/plugins/my-plugin/config', { permission: 'myplugin.admin' });
+  ctx.registerRoutePermission('GET:/api/plugins/my-plugin/data', { permission: 'myplugin.access' });
+  ctx.registerRoutePermission('PUT:/api/plugins/my-plugin/config', { permission: 'myplugin.admin' });
 
   return {
     manifest: require('./manifest.json'),
@@ -529,10 +668,12 @@ export function register(ctx: PluginContext): PluginRegistration {
 }
 ```
 
+> **Deprecated:** The old pattern of importing `registerPluginPermission` and `registerRoutePermission` directly from `rbac.js` still works but is deprecated. Use `ctx.registerRoutePermission()` and `ctx.registerPluginPermission()` instead.
+
 ### How it works
 
-1. **Plugin registers permissions** via `registerPluginPermission(key, description)` — these appear in the admin Roles tab with a "plugin" badge
-2. **Plugin protects routes** via `registerRoutePermission(routeKey, rule)` — the RBAC middleware enforces the permission
+1. **Plugin registers permissions** via `ctx.registerPluginPermission(key, description)` — these appear in the admin Roles tab with a "plugin" badge
+2. **Plugin protects routes** via `ctx.registerRoutePermission(routeKey, rule)` — the RBAC middleware enforces the permission
 3. **Admin assigns permissions** to roles from the admin panel — users with matching roles get access
 
 ### Route rule format
@@ -541,12 +682,12 @@ The `registerRoutePermission` key is `METHOD:/full/path` matching Fastify's para
 
 ```typescript
 // Exact route
-registerRoutePermission('GET:/api/plugins/my-plugin/stats', {
+ctx.registerRoutePermission('GET:/api/plugins/my-plugin/stats', {
   permission: 'myplugin.access',
 });
 
 // Owner-scoped route (non-admin users only see their own data)
-registerRoutePermission('GET:/api/plugins/my-plugin/history', {
+ctx.registerRoutePermission('GET:/api/plugins/my-plugin/history', {
   permission: 'myplugin.access',
   ownerScoped: true,
 });
@@ -589,9 +730,19 @@ app.get('/history', async (request) => {
 
 Admins can create custom roles (e.g. "moderator") with any combination of permissions from the Roles tab.
 
+## Admin UI
+
+The admin panel provides several tools for managing plugins:
+
+- **Installed tab**: Toggle plugins on/off, view version info, detect available updates
+- **Discover tab**: Browse community plugins from the GitHub registry
+- **Reload plugins button**: Triggers a graceful server restart to discover newly added or removed plugins
+- **Plugin with frontend**: Renders the plugin's custom component in the admin tab instead of the default settings form
+
 ## Current limitations
 
 - Plugins cannot modify the database schema (no Prisma migrations)
-- Plugin frontend components are lazy-loaded and cannot import from the main app bundle
-- No plugin dependency system
-- No hot-reload — server restart required after adding/removing plugins
+- Plugin frontend components are lazy-loaded via ESM and cannot import from the main app bundle (use `@oscarr/sdk` instead)
+- No plugin dependency system (no way to declare that plugin A requires plugin B)
+- Adding/removing plugins requires a server restart (use "Reload plugins" button in admin)
+- The event bus is in-process only (no persistence, no cross-restart delivery)
