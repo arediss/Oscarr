@@ -98,10 +98,12 @@ export default function LoginPage() {
     if (providerId === 'plex') {
       setLoading(true);
       setError('');
+      // Open popup BEFORE the async call — Safari blocks window.open() after await
+      const authWindow = window.open('about:blank', 'PlexAuth', 'width=600,height=700');
       try {
         const { data } = await api.post('/auth/plex/pin');
         const { pin, authUrl } = data;
-        const authWindow = window.open(authUrl, 'PlexAuth', 'width=600,height=700');
+        if (authWindow) authWindow.location.href = authUrl;
 
         setPolling(true);
         let attempts = 0;
