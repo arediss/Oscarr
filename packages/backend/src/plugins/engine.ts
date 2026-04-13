@@ -186,6 +186,19 @@ export class PluginEngine {
     const plugin = this.plugins.get(id);
     if (!plugin) throw new Error(`Plugin "${id}" not found`);
 
+    // Call lifecycle hook before persisting (best-effort, don't block toggle)
+    try {
+      if (enabled && plugin.registration.onEnable) {
+        const ctx = createContext(plugin.manifest, this.getContextDeps());
+        await plugin.registration.onEnable(ctx);
+      } else if (!enabled && plugin.registration.onDisable) {
+        const ctx = createContext(plugin.manifest, this.getContextDeps());
+        await plugin.registration.onDisable(ctx);
+      }
+    } catch (err) {
+      this.log('error', `Lifecycle hook ${enabled ? 'onEnable' : 'onDisable'} failed for "${id}": ${err}`);
+    }
+
     await prisma.pluginState.update({
       where: { pluginId: id },
       data: { enabled },

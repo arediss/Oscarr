@@ -81,6 +81,8 @@ export interface PluginRegistration {
   registerGuards?(ctx: PluginContext): Record<string, (userId: number) => Promise<PluginGuardResult | null>>;
   registerNotificationProviders?(registry: NotificationRegistry): void;
   onInstall?(ctx: PluginContext): Promise<void>;
+  onEnable?(ctx: PluginContext): Promise<void>;
+  onDisable?(ctx: PluginContext): Promise<void>;
 }
 
 // ─── Internal types ─────────────────────────────────────────────────
