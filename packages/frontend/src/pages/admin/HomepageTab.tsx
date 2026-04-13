@@ -185,7 +185,7 @@ export function HomepageTab() {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-ndp-text">{section.title}</span>
+                    <span className="text-sm font-semibold text-ndp-text">{t(section.title, section.title)}</span>
                     {section.type === 'builtin' ? (
                       <span className="text-[10px] bg-ndp-accent/10 text-ndp-accent px-1.5 py-0.5 rounded">Builtin</span>
                     ) : (

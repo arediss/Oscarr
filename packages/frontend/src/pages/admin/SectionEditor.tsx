@@ -134,7 +134,7 @@ export function SectionEditor({ section, onSave, onClose }: SectionEditorProps) 
       <div
         className="bg-ndp-surface border border-white/10"
         style={{
-          maxWidth: 768,
+          maxWidth: 1024,
           width: '100%',
           maxHeight: '90vh',
           margin: '0 16px',
