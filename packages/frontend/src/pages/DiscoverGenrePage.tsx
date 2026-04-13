@@ -3,10 +3,10 @@ import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
-import api from '@/lib/api';
 import MediaGrid from '@/components/MediaGrid';
 import FilterBar, { DEFAULT_FILTERS, type FilterValues } from '@/components/FilterBar';
 import { useMediaStatus } from '@/hooks/useMediaStatus';
+import { usePaginatedDiscovery } from '@/hooks/usePaginatedDiscovery';
 import { ALL_GENRES } from '@/components/GenreRow';
 import { buildDiscoverParams } from '@/utils/buildDiscoverParams';
 import type { TmdbMedia } from '@/types';
@@ -25,96 +25,54 @@ const SORT_OPTIONS_TV = [
   { value: 'first_air_date.asc', labelKey: 'filter.sort_oldest' },
 ];
 
-
 export default function DiscoverGenrePage() {
   const { t } = useTranslation();
   const { mediaType, genreId } = useParams<{ mediaType: string; genreId: string }>();
-  const [results, setResults] = useState<TmdbMedia[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [transitioning, setTransitioning] = useState(false);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState<FilterValues>({ ...DEFAULT_FILTERS });
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const seenIds = useRef(new Set<number>());
 
   const gid = parseInt(genreId || '0');
   const genre = ALL_GENRES.find((g) => g.id === gid && g.mediaType === mediaType);
   const genreName = genre ? t(genre.nameKey) : t('genre.unknown');
 
+  // Reset filters when the route changes
+  useEffect(() => {
+    setFilters({ ...DEFAULT_FILTERS });
+  }, [mediaType, genreId]);
+
+  const buildUrl = useCallback(
+    (page: number) => {
+      const fp = buildDiscoverParams(filters);
+      return `/tmdb/discover/${mediaType}/genre/${genreId}?page=${page}${fp}`;
+    },
+    [mediaType, genreId, filters],
+  );
+
+  const mapResult = useCallback(
+    (r: TmdbMedia): TmdbMedia => ({ ...r, media_type: mediaType }),
+    [mediaType],
+  );
+
+  const { results, loading, loadingMore, transitioning, page, totalPages } =
+    usePaginatedDiscovery({
+      buildUrl,
+      filters,
+      sentinelRef,
+      routeKey: `${mediaType}:${genreId}`,
+      mapResult,
+    });
+
+  // Client-side "hide requested" filter (only one that needs status data)
   const statuses = useMediaStatus(results);
-  const filteredResults = useMemo(() => {
+  const displayResults = useMemo(() => {
     if (!filters.hideRequested) return results;
-    return results.filter(item => {
+    return results.filter((item) => {
       const type = item.media_type || (item.title ? 'movie' : 'tv');
       const key = `${type}:${item.id}`;
       if (!(key in statuses)) return false;
       return statuses[key].status === 'unknown';
     });
   }, [results, filters.hideRequested, statuses]);
-
-  function dedup(items: TmdbMedia[]): TmdbMedia[] {
-    return items.filter((item) => {
-      if (seenIds.current.has(item.id)) return false;
-      seenIds.current.add(item.id);
-      return true;
-    });
-  }
-
-  const prevRouteRef = useRef(`${mediaType}:${genreId}`);
-
-  useEffect(() => {
-    const routeKey = `${mediaType}:${genreId}`;
-    const isRouteChange = prevRouteRef.current !== routeKey;
-    prevRouteRef.current = routeKey;
-
-    if (isRouteChange) {
-      setResults([]);
-      setLoading(true);
-    } else {
-      setTransitioning(true);
-    }
-    setPage(1);
-    seenIds.current.clear();
-    const fp = buildDiscoverParams(filters);
-
-    api.get(`/tmdb/discover/${mediaType}/genre/${genreId}?page=1${fp}`).then(({ data }) => {
-      setResults(dedup(data.results.map((r: TmdbMedia) => ({ ...r, media_type: mediaType }))));
-      setTotalPages(data.total_pages);
-    }).catch((err) => {
-      console.error('Failed to discover:', err);
-    }).finally(() => { setLoading(false); setTransitioning(false); });
-  }, [mediaType, genreId, filters]);
-
-  const loadMore = useCallback(async () => {
-    if (loadingMore || page >= totalPages) return;
-    setLoadingMore(true);
-    const nextPage = page + 1;
-    const fp = buildDiscoverParams(filters);
-    try {
-      const { data } = await api.get(`/tmdb/discover/${mediaType}/genre/${genreId}?page=${nextPage}${fp}`);
-      const items = dedup(data.results.map((r: TmdbMedia) => ({ ...r, media_type: mediaType })));
-      setResults((prev) => [...prev, ...items]);
-      setPage(nextPage);
-    } catch (err) {
-      console.error('Failed to load more:', err);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [loadingMore, page, totalPages, mediaType, genreId, filters]);
-
-  // Infinite scroll
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting) loadMore(); },
-      { rootMargin: '400px' }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [loadMore]);
 
   return (
     <div className="max-w-[1800px] mx-auto px-4 sm:px-8 pt-4 pb-16">
@@ -132,7 +90,7 @@ export default function DiscoverGenrePage() {
       />
 
       <div className={clsx('transition-opacity duration-300', transitioning && 'opacity-40 pointer-events-none')}>
-        <MediaGrid media={filteredResults} loading={loading} />
+        <MediaGrid media={displayResults} loading={loading} />
       </div>
 
       {!loading && page < totalPages && (
