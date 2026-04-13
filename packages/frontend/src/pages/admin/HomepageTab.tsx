@@ -278,6 +278,7 @@ export function HomepageTab() {
                   )}
                 </div>
               </div>
+              </div>
               {/* Drop indicator line — shows below the hovered item */}
               {isOver && dragIndex !== null && dragIndex < index && (
                 <div style={{ height: 3, background: 'var(--color-ndp-accent, #6366f1)', borderRadius: 2, margin: '2px 0' }} />
