@@ -6,6 +6,17 @@ import { AdminTabLayout } from './AdminTabLayout';
 import { Spinner } from './Spinner';
 import { SectionEditor } from './SectionEditor';
 
+const BUILTIN_ENDPOINTS: Record<string, string> = {
+  hero: 'TMDB Trending → Hero carousel',
+  recently_added: 'GET /media/recent',
+  trending: 'GET /tmdb/trending',
+  popular_movies: 'GET /tmdb/movies/popular',
+  popular_tv: 'GET /tmdb/tv/popular',
+  trending_anime: 'GET /tmdb/tv/trending-anime',
+  genres: 'TMDB Genres → Genre cards',
+  upcoming: 'GET /tmdb/movies/upcoming',
+};
+
 interface HomepageSection {
   id: string;
   title: string;
@@ -194,6 +205,9 @@ export function HomepageTab() {
                   </div>
                   {section.type === 'custom' && queryPreview && (
                     <p className="text-xs text-ndp-text-dim mt-1">{queryPreview}</p>
+                  )}
+                  {section.type === 'builtin' && section.builtinKey && (
+                    <p className="text-xs text-ndp-text-dim mt-1 font-mono opacity-60">{BUILTIN_ENDPOINTS[section.builtinKey] || section.builtinKey}</p>
                   )}
                 </div>
 
