@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { notificationRegistry } from '../notifications/index.js';
 import { discoverPlugins } from './loader.js';
+import { updateJobSchedule } from '../services/scheduler.js';
 import { createContext, type ContextFactoryDeps } from './context/index.js';
 import type {
   LoadedPlugin,
@@ -205,6 +206,20 @@ export class PluginEngine {
     });
     plugin.enabled = enabled;
     this.settingsCache.delete(id);
+
+    // Stop or restart plugin cron jobs
+    const jobDefs = plugin.manifest.hooks?.jobs || [];
+    for (const job of jobDefs) {
+      try {
+        const dbJob = await prisma.cronJob.findUnique({ where: { key: job.key } });
+        if (dbJob) {
+          await updateJobSchedule(job.key, dbJob.cronExpression, enabled && dbJob.enabled);
+          this.log('info', `${enabled ? 'Resumed' : 'Stopped'} job "${job.key}" for plugin "${id}"`);
+        }
+      } catch (err) {
+        this.log('error', `Failed to ${enabled ? 'resume' : 'stop'} job "${job.key}" for plugin "${id}": ${err}`);
+      }
+    }
   }
 
   async getSettings(id: string): Promise<{ schema: PluginManifest['settings']; values: Record<string, unknown> }> {
