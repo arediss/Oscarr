@@ -14,12 +14,12 @@ export function getDefaultLayout() {
   return [
     { id: 'hero', type: 'builtin', enabled: true, title: 'Hero', builtinKey: 'hero' },
     { id: 'recently_added', type: 'builtin', enabled: true, title: 'home.recently_added', builtinKey: 'recently_added' },
-    { id: 'trending', type: 'builtin', enabled: true, title: 'home.trending', builtinKey: 'trending', size: 'large' },
+    { id: 'trending', type: 'builtin', enabled: true, title: 'home.trending_week', builtinKey: 'trending', size: 'large' },
     { id: 'popular_movies', type: 'builtin', enabled: true, title: 'home.popular_movies', builtinKey: 'popular_movies' },
-    { id: 'popular_tv', type: 'builtin', enabled: true, title: 'home.popular_tv', builtinKey: 'popular_tv' },
+    { id: 'popular_tv', type: 'builtin', enabled: true, title: 'home.popular_series', builtinKey: 'popular_tv' },
     { id: 'trending_anime', type: 'builtin', enabled: true, title: 'home.trending_anime', builtinKey: 'trending_anime' },
     { id: 'genres', type: 'builtin', enabled: true, title: 'home.genres', builtinKey: 'genres' },
-    { id: 'upcoming', type: 'builtin', enabled: true, title: 'home.upcoming', builtinKey: 'upcoming' },
+    { id: 'upcoming', type: 'builtin', enabled: true, title: 'home.coming_soon', builtinKey: 'upcoming' },
   ];
 }
 
