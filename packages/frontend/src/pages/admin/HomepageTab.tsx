@@ -75,14 +75,25 @@ export function HomepageTab() {
     load();
   }, []);
 
-  const handleDragStart = (index: number) => { dragItem.current = index; };
-  const handleDragEnter = (index: number) => { dragOverItem.current = index; };
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (index: number) => { dragItem.current = index; setDragIndex(index); };
+  const handleDragEnter = (index: number) => { dragOverItem.current = index; setDragOverIndex(index); };
   const handleDragEnd = async () => {
-    if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) return;
+    if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      dragItem.current = null;
+      dragOverItem.current = null;
+      return;
+    }
     const reordered = [...sections];
     const [dragged] = reordered.splice(dragItem.current, 1);
     reordered.splice(dragOverItem.current, 0, dragged);
     setSections(reordered);
+    setDragIndex(null);
+    setDragOverIndex(null);
     dragItem.current = null;
     dragOverItem.current = null;
     // Auto-save on reorder
@@ -178,19 +189,31 @@ export function HomepageTab() {
         {t('admin.homepage.help', 'Drag sections to reorder. Toggle visibility or add custom sections.')}
       </p>
 
-      <div className="space-y-3">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
         {sections.map((section, index) => {
           const queryPreview = formatQueryPreview(section.query);
+          const isDragging = dragIndex === index;
+          const isOver = dragOverIndex === index && dragIndex !== null && dragIndex !== index;
           return (
-            <div
-              key={section.id}
-              className={`card cursor-grab active:cursor-grabbing transition-opacity ${!section.enabled ? 'opacity-40' : ''}`}
-              draggable
-              onDragStart={() => handleDragStart(index)}
-              onDragEnter={() => handleDragEnter(index)}
-              onDragEnd={handleDragEnd}
-              onDragOver={(e) => e.preventDefault()}
-            >
+            <div key={section.id}>
+              {/* Drop indicator line — shows above the hovered item */}
+              {isOver && dragIndex !== null && dragIndex > index && (
+                <div style={{ height: 3, background: 'var(--color-ndp-accent, #6366f1)', borderRadius: 2, margin: '2px 0' }} />
+              )}
+              <div
+                className={`card cursor-grab active:cursor-grabbing transition-all ${!section.enabled ? 'opacity-40' : ''}`}
+                style={{
+                  opacity: isDragging ? 0.4 : undefined,
+                  transform: isDragging ? 'scale(0.98)' : undefined,
+                  borderColor: isOver ? 'var(--color-ndp-accent, #6366f1)' : undefined,
+                  marginBottom: 12,
+                }}
+                draggable
+                onDragStart={() => handleDragStart(index)}
+                onDragEnter={() => handleDragEnter(index)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => e.preventDefault()}
+              >
               <div className="flex items-center gap-3 p-4">
                 <GripVertical className="w-4 h-4 text-ndp-text-dim flex-shrink-0" />
 
@@ -255,6 +278,10 @@ export function HomepageTab() {
                   )}
                 </div>
               </div>
+              {/* Drop indicator line — shows below the hovered item */}
+              {isOver && dragIndex !== null && dragIndex < index && (
+                <div style={{ height: 3, background: 'var(--color-ndp-accent, #6366f1)', borderRadius: 2, margin: '2px 0' }} />
+              )}
             </div>
           );
         })}
