@@ -669,5 +669,23 @@
   "requests.filter_all_qualities": "Toutes les qualités",
 
   "push.enabled": "Notifications activées",
-  "push.enable": "Activer les notifications"
+  "push.enable": "Activer les notifications",
+
+  "admin.roles.title": "Rôles",
+  "admin.roles.create": "Nouveau rôle",
+  "admin.roles.edit": "Modifier le rôle",
+  "admin.roles.name": "Nom",
+  "admin.roles.permissions": "Permissions",
+  "admin.roles.all_permissions": "Toutes les permissions",
+  "admin.roles.permission_count_one": "{{count}} permission",
+  "admin.roles.permission_count_other": "{{count}} permissions",
+  "admin.roles.system": "Système",
+  "admin.roles.default": "Par défaut",
+  "admin.roles.set_default": "Définir par défaut",
+  "admin.roles.confirm_delete": "Voulez-vous vraiment supprimer le rôle « {{name}} » ?",
+  "admin.roles.in_use_title": "Rôle encore utilisé",
+  "admin.roles.in_use_desc_one": "{{count}} utilisateur possède encore le rôle « {{name}} ». Choisissez un rôle vers lequel les migrer avant la suppression.",
+  "admin.roles.in_use_desc_other": "{{count}} utilisateurs possèdent encore le rôle « {{name}} ». Choisissez un rôle vers lequel les migrer avant la suppression.",
+  "admin.roles.reassign_to": "Migrer les utilisateurs vers",
+  "admin.roles.migrate_and_delete": "Migrer et supprimer"
 }
