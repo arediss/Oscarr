@@ -9,7 +9,8 @@ export interface User {
   email: string;
   displayName: string | null;
   avatar: string | null;
-  role: 'admin' | 'user';
+  /** Role name — 'admin'/'user' are the built-in system roles; admins can create custom roles at runtime. */
+  role: string;
   providers?: UserProviderInfo[];
   createdAt?: string;
 }
