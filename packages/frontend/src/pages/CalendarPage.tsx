@@ -229,7 +229,7 @@ function ListView({ days, grouped, todayKey, t }: {
 
 function CompactCard({ item }: { item: CalendarItem }) {
   const poster = extractPosterPath(item.poster);
-  const link = item.tmdbId
+  const link = item.tmdbId && item.tmdbId > 0
     ? item.type === 'movie' ? `/movie/${item.tmdbId}` : `/tv/${item.tmdbId}`
     : null;
   const isEpisode = item.type === 'episode';
@@ -269,7 +269,7 @@ function CompactCard({ item }: { item: CalendarItem }) {
 function PosterCard({ item }: { item: CalendarItem }) {
   const { t } = useTranslation();
   const poster = extractPosterPath(item.poster);
-  const link = item.tmdbId
+  const link = item.tmdbId && item.tmdbId > 0
     ? item.type === 'movie' ? `/movie/${item.tmdbId}` : `/tv/${item.tmdbId}`
     : null;
   const isEpisode = item.type === 'episode';
