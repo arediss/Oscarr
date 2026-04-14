@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Users, Loader2, CheckCircle, RefreshCw, Trash2, Link } from 'lucide-react';
+import { Users, Loader2, CheckCircle, RefreshCw, Trash2, Link, ChevronDown } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -348,16 +348,31 @@ function RoleBadgeDropdown({ user, roles, disabled, loading, onSelect }: {
     setOpen(!open);
   };
 
+  // Intentionally different visual from provider pills so admins see this as
+  // an interactive control (rounded-lg + border + chevron), not just a label.
+  // Fixed min-width + justify-between keeps the column aligned across rows
+  // regardless of role name length or state (loading/disabled).
   const badgeClasses = clsx(
-    'text-[10px] px-2 py-0.5 rounded-full font-semibold capitalize inline-flex items-center gap-1 transition-colors',
-    user.role === 'admin' ? 'bg-ndp-accent/10 text-ndp-accent' : 'bg-white/5 text-ndp-text-dim',
-    disabled ? 'cursor-default' : 'hover:ring-1 hover:ring-white/20 cursor-pointer',
+    'text-[10px] px-2 py-1 rounded-lg font-semibold capitalize inline-flex items-center gap-1.5 justify-between min-w-[78px] transition-all border',
+    user.role === 'admin'
+      ? 'bg-ndp-accent/10 text-ndp-accent border-ndp-accent/20'
+      : 'bg-white/5 text-ndp-text-muted border-white/10',
+    disabled
+      ? 'opacity-60 cursor-default'
+      : 'hover:bg-white/10 hover:border-white/20 cursor-pointer',
   );
 
   return (
     <>
       <button ref={btnRef} onClick={toggle} disabled={disabled || loading} className={badgeClasses}>
-        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : user.role}
+        <span>{loading ? <Loader2 className="w-3 h-3 animate-spin" /> : user.role}</span>
+        <ChevronDown
+          className={clsx(
+            'w-3 h-3 transition-transform shrink-0',
+            disabled ? 'opacity-0' : 'opacity-70',
+            open && 'rotate-180',
+          )}
+        />
       </button>
       {open && createPortal(
         <div
