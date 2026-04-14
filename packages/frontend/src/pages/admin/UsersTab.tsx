@@ -11,6 +11,8 @@ import { AdminTabLayout } from './AdminTabLayout';
 
 type UserSort = 'username' | 'date' | 'role';
 
+interface Role { id: number; name: string; position: number }
+
 export function UsersTab() {
   const { t } = useTranslation();
   const { user: currentUser } = useAuth();
@@ -27,6 +29,8 @@ export function UsersTab() {
   const [linkPassword, setLinkPassword] = useState('');
   const [linkError, setLinkError] = useState('');
   const [authProviders, setAuthProviders] = useState<{ id: string; label: string; type: string }[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [updatingRoleFor, setUpdatingRoleFor] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -48,6 +52,19 @@ export function UsersTab() {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
   useEffect(() => { api.get('/auth/providers').then(({ data }) => setAuthProviders(data)).catch(() => {}); }, []);
+  useEffect(() => { api.get('/admin/roles').then(({ data }) => setRoles(data)).catch(() => {}); }, []);
+
+  const handleChangeRole = async (userId: number, newRole: string) => {
+    setUpdatingRoleFor(userId);
+    try {
+      await api.put(`/admin/users/${userId}/role`, { role: newRole });
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    } catch (err) {
+      console.error('Failed to change role:', err);
+    } finally {
+      setUpdatingRoleFor(null);
+    }
+  };
 
   useEffect(() => {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -165,10 +182,13 @@ export function UsersTab() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-ndp-text">{u.displayName || u.email}</span>
-                    <span className={clsx(
-                      'text-[10px] px-2 py-0.5 rounded-full font-semibold capitalize',
-                      u.role === 'admin' ? 'bg-ndp-accent/10 text-ndp-accent' : 'bg-white/5 text-ndp-text-dim'
-                    )}>{u.role}</span>
+                    <RoleBadgeDropdown
+                      user={u}
+                      roles={roles}
+                      disabled={u.id === currentUser?.id || roles.length === 0}
+                      loading={updatingRoleFor === u.id}
+                      onSelect={(role) => handleChangeRole(u.id, role)}
+                    />
                   </div>
                   <span className="text-xs text-ndp-text-dim mt-0.5 block">{u.email}</span>
                 </div>
@@ -288,6 +308,78 @@ export function UsersTab() {
         document.body,
       )}
     </AdminTabLayout>
+  );
+}
+
+// ─── Role Badge Dropdown ───────────────────────────────────────────
+
+function RoleBadgeDropdown({ user, roles, disabled, loading, onSelect }: {
+  user: AdminUser;
+  roles: Role[];
+  disabled: boolean;
+  loading: boolean;
+  onSelect: (role: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node) && !btnRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const toggle = () => {
+    if (disabled || loading) return;
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen(!open);
+  };
+
+  const badgeClasses = clsx(
+    'text-[10px] px-2 py-0.5 rounded-full font-semibold capitalize inline-flex items-center gap-1 transition-colors',
+    user.role === 'admin' ? 'bg-ndp-accent/10 text-ndp-accent' : 'bg-white/5 text-ndp-text-dim',
+    disabled ? 'cursor-default' : 'hover:ring-1 hover:ring-white/20 cursor-pointer',
+  );
+
+  return (
+    <>
+      <button ref={btnRef} onClick={toggle} disabled={disabled || loading} className={badgeClasses}>
+        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : user.role}
+      </button>
+      {open && createPortal(
+        <div
+          ref={dropRef}
+          className="fixed z-[9999] bg-ndp-surface border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden min-w-[160px]"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          {roles.map(r => {
+            const active = r.name === user.role;
+            return (
+              <button
+                key={r.id}
+                onClick={() => { setOpen(false); if (!active) onSelect(r.name); }}
+                className={clsx(
+                  'w-full flex items-center justify-between gap-2 px-3 py-2 text-xs transition-colors capitalize',
+                  active ? 'text-ndp-accent bg-ndp-accent/5 font-semibold' : 'text-ndp-text-muted hover:bg-white/5',
+                )}
+              >
+                <span>{r.name}</span>
+                {active && <CheckCircle className="w-3 h-3" />}
+              </button>
+            );
+          })}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
