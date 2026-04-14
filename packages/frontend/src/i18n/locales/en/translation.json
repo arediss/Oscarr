@@ -669,5 +669,23 @@
   "requests.filter_all_qualities": "All qualities",
 
   "push.enabled": "Notifications enabled",
-  "push.enable": "Enable notifications"
+  "push.enable": "Enable notifications",
+
+  "admin.roles.title": "Roles",
+  "admin.roles.create": "New role",
+  "admin.roles.edit": "Edit role",
+  "admin.roles.name": "Name",
+  "admin.roles.permissions": "Permissions",
+  "admin.roles.all_permissions": "All permissions",
+  "admin.roles.permission_count_one": "{{count}} permission",
+  "admin.roles.permission_count_other": "{{count}} permissions",
+  "admin.roles.system": "System",
+  "admin.roles.default": "Default",
+  "admin.roles.set_default": "Set as default",
+  "admin.roles.confirm_delete": "Are you sure you want to delete the role \"{{name}}\"?",
+  "admin.roles.in_use_title": "Role still in use",
+  "admin.roles.in_use_desc_one": "{{count}} user still has the role \"{{name}}\". Pick a role to migrate them to before deleting.",
+  "admin.roles.in_use_desc_other": "{{count}} users still have the role \"{{name}}\". Pick a role to migrate them to before deleting.",
+  "admin.roles.reassign_to": "Migrate users to",
+  "admin.roles.migrate_and_delete": "Migrate & delete"
 }

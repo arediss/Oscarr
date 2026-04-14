@@ -43,6 +43,10 @@ export function RolesTab() {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Role | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // When the backend reports the role is in use, we switch the same modal
+  // into a "migrate users then delete" flow instead of failing silently.
+  const [deleteBlocker, setDeleteBlocker] = useState<{ userCount: number } | null>(null);
+  const [reassignTo, setReassignTo] = useState<string>('');
 
   // Edit form state
   const [formName, setFormName] = useState('');
@@ -116,15 +120,31 @@ export function RolesTab() {
     }
   };
 
-  const handleDelete = async () => {
+  const closeDeleteModal = () => {
+    setConfirmDelete(null);
+    setDeleteBlocker(null);
+    setReassignTo('');
+  };
+
+  const handleDelete = async (opts?: { reassignTo?: string }) => {
     if (!confirmDelete) return;
     setDeleting(true);
     try {
-      await api.delete(`/admin/roles/${confirmDelete.id}`);
-      setConfirmDelete(null);
+      await api.delete(`/admin/roles/${confirmDelete.id}`, opts?.reassignTo ? { params: { reassignTo: opts.reassignTo } } : undefined);
+      closeDeleteModal();
       await fetchData();
     } catch (err) {
-      console.error('Failed to delete role:', err);
+      const resp = (err as { response?: { status?: number; data?: { error?: string; userCount?: number } } }).response;
+      if (resp?.status === 409 && resp.data?.error === 'ROLE_IN_USE') {
+        setDeleteBlocker({ userCount: resp.data.userCount ?? 0 });
+        // Default the migration target to the system "default" role if any,
+        // else the first non-self role.
+        const fallback = roles.find(r => r.isDefault && r.id !== confirmDelete.id)
+          ?? roles.find(r => r.id !== confirmDelete.id);
+        setReassignTo(fallback?.name ?? '');
+      } else {
+        console.error('Failed to delete role:', err);
+      }
     } finally {
       setDeleting(false);
     }
@@ -195,7 +215,8 @@ export function RolesTab() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {!role.isDefault && (
+                  {/* Never offer wildcard roles as default — would grant new users full admin. */}
+                  {!role.isDefault && !isAll && (
                     <button
                       onClick={() => handleSetDefault(role)}
                       className="text-xs px-2.5 py-1 rounded-lg text-ndp-text-dim hover:text-ndp-success hover:bg-ndp-success/10 transition-colors"
@@ -338,27 +359,70 @@ export function RolesTab() {
         document.body
       )}
 
-      {/* Delete confirmation */}
+      {/* Delete confirmation — switches to a "migrate then delete" flow when
+          the backend reports the role is still assigned to users. */}
       {confirmDelete && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="card p-6 max-w-sm w-full mx-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-ndp-text mb-2">{t('admin.danger.confirm_title')}</h3>
-            <p className="text-sm text-ndp-text-muted mb-6">
-              {t('admin.roles.confirm_delete', 'Are you sure you want to delete the role "{{name}}"?', { name: confirmDelete.name })}
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm flex-1">
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="btn-danger text-sm flex-1 flex items-center justify-center gap-2"
-              >
-                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                {t('common.delete', 'Delete')}
-              </button>
-            </div>
+            {deleteBlocker ? (
+              <>
+                <h3 className="text-lg font-bold text-ndp-text mb-2">
+                  {t('admin.roles.in_use_title', 'Role still in use')}
+                </h3>
+                <p className="text-sm text-ndp-text-muted mb-1">
+                  {t('admin.roles.in_use_desc', '{{count}} user(s) still have the role "{{name}}". Pick a role to migrate them to before deleting.', { count: deleteBlocker.userCount, name: confirmDelete.name })}
+                </p>
+                <label className="text-xs text-ndp-text-dim mt-4 mb-1.5 block font-medium">
+                  {t('admin.roles.reassign_to', 'Migrate users to')}
+                </label>
+                <select
+                  value={reassignTo}
+                  onChange={(e) => setReassignTo(e.target.value)}
+                  className="input w-full text-sm capitalize mb-6"
+                >
+                  {roles
+                    .filter(r => r.id !== confirmDelete.id)
+                    .map(r => (
+                      <option key={r.id} value={r.name}>
+                        {r.name}{r.isDefault ? ` — ${t('admin.roles.default', 'Default')}` : ''}
+                      </option>
+                    ))}
+                </select>
+                <div className="flex gap-3">
+                  <button onClick={closeDeleteModal} className="btn-secondary text-sm flex-1">
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    onClick={() => handleDelete({ reassignTo })}
+                    disabled={deleting || !reassignTo}
+                    className="btn-danger text-sm flex-1 flex items-center justify-center gap-2"
+                  >
+                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    {t('admin.roles.migrate_and_delete', 'Migrate & delete')}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-bold text-ndp-text mb-2">{t('admin.danger.confirm_title')}</h3>
+                <p className="text-sm text-ndp-text-muted mb-6">
+                  {t('admin.roles.confirm_delete', 'Are you sure you want to delete the role "{{name}}"?', { name: confirmDelete.name })}
+                </p>
+                <div className="flex gap-3">
+                  <button onClick={closeDeleteModal} className="btn-secondary text-sm flex-1">
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    onClick={() => handleDelete()}
+                    disabled={deleting}
+                    className="btn-danger text-sm flex-1 flex items-center justify-center gap-2"
+                  >
+                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    {t('common.delete', 'Delete')}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>,
         document.body

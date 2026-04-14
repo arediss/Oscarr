@@ -106,13 +106,19 @@ export async function rolesRoutes(app: FastifyInstance) {
     return updated;
   });
 
-  // Delete a role
+  // Delete a role (optionally reassigning any users currently holding it via ?reassignTo=<roleName>)
   app.delete('/roles/:id', {
     schema: {
       params: {
         type: 'object',
         required: ['id'],
         properties: { id: { type: 'string' } },
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          reassignTo: { type: 'string', description: 'Name of the role users holding this one should be moved to' },
+        },
       },
     },
   }, async (request, reply) => {
@@ -123,10 +129,32 @@ export async function rolesRoutes(app: FastifyInstance) {
     if (!role) return reply.status(404).send({ error: 'Role not found' });
     if (role.isSystem) return reply.status(400).send({ error: 'Cannot delete a system role' });
 
-    // Check if any users still have this role
+    const { reassignTo } = (request.query as { reassignTo?: string }) ?? {};
     const usersWithRole = await prisma.user.count({ where: { role: role.name } });
+
     if (usersWithRole > 0) {
-      return reply.status(400).send({ error: `${usersWithRole} user(s) still have this role. Reassign them first.` });
+      // Surface a structured 409 so the UI can offer a migration path instead
+      // of silently failing with a free-text 400 error.
+      if (!reassignTo) {
+        return reply.status(409).send({
+          error: 'ROLE_IN_USE',
+          userCount: usersWithRole,
+          message: `${usersWithRole} user(s) still have this role. Reassign them first.`,
+        });
+      }
+      if (reassignTo === role.name) {
+        return reply.status(400).send({ error: 'reassignTo cannot be the role being deleted' });
+      }
+      const target = await prisma.role.findUnique({ where: { name: reassignTo } });
+      if (!target) return reply.status(400).send({ error: `Target role "${reassignTo}" not found` });
+
+      await prisma.$transaction([
+        prisma.user.updateMany({ where: { role: role.name }, data: { role: target.name } }),
+        prisma.role.delete({ where: { id: roleId } }),
+      ]);
+      await invalidateRoleCache();
+      logEvent('info', 'Admin', `Role deleted: ${role.name} (${usersWithRole} user(s) reassigned to ${target.name})`);
+      return { ok: true, reassigned: usersWithRole };
     }
 
     await prisma.role.delete({ where: { id: roleId } });
