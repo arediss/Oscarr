@@ -180,19 +180,11 @@ export function UsersTab() {
               <div className="flex items-center gap-4 p-4">
                 {u.avatar ? <img src={u.avatar} alt="" className="w-10 h-10 rounded-full" /> : <div className="w-10 h-10 rounded-full bg-ndp-accent/20 flex items-center justify-center text-ndp-accent font-bold">{(u.displayName || u.email)[0].toUpperCase()}</div>}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-ndp-text">{u.displayName || u.email}</span>
-                    <RoleBadgeDropdown
-                      user={u}
-                      roles={roles}
-                      disabled={u.id === currentUser?.id || roles.length === 0}
-                      loading={updatingRoleFor === u.id}
-                      onSelect={(role) => handleChangeRole(u.id, role)}
-                    />
-                  </div>
+                  <span className="text-sm font-semibold text-ndp-text">{u.displayName || u.email}</span>
                   <span className="text-xs text-ndp-text-dim mt-0.5 block">{u.email}</span>
                 </div>
-                <div className="flex items-center gap-4 flex-shrink-0">
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  {/* Group 1 — provider badges + request count */}
                   <span className="text-xs text-ndp-text-dim tabular-nums">{u.requestCount} {t('requests.title').toLowerCase()}</span>
                   {(u.providers || []).map((p) => (
                     <span key={p.provider} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
@@ -217,16 +209,29 @@ export function UsersTab() {
                       setLinkUsername(''); setLinkPassword(''); setLinkError('');
                     }}
                   />
-                  {u.id !== currentUser?.id && (
-                    <button
-                      onClick={() => setConfirmDeleteUser(u.id)}
-                      disabled={deletingUser === u.id}
-                      className="p-1.5 rounded-lg text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors"
-                      title={t('admin.danger.delete_user')}
-                    >
-                      {deletingUser === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                    </button>
-                  )}
+
+                  <span className="h-5 w-px bg-white/10" aria-hidden />
+
+                  {/* Group 2 — role */}
+                  <RoleBadgeDropdown
+                    user={u}
+                    roles={roles}
+                    disabled={u.id === currentUser?.id || roles.length === 0}
+                    loading={updatingRoleFor === u.id}
+                    onSelect={(role) => handleChangeRole(u.id, role)}
+                  />
+
+                  <span className="h-5 w-px bg-white/10" aria-hidden />
+
+                  {/* Group 3 — delete (always visible, disabled for self) */}
+                  <button
+                    onClick={() => setConfirmDeleteUser(u.id)}
+                    disabled={u.id === currentUser?.id || deletingUser === u.id}
+                    className="p-1.5 rounded-lg text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors disabled:opacity-30 disabled:hover:text-ndp-text-dim disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                    title={t('admin.danger.delete_user')}
+                  >
+                    {deletingUser === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
               </div>
             </div>
