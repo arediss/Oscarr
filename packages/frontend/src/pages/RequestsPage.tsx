@@ -430,7 +430,10 @@ function RequestCard({
   const [resolvingCtx, setResolvingCtx] = useState(false);
   const download = useDownloadForMedia(req.media?.tmdbId, req.mediaType);
   const status = STATUS_CONFIG[req.status] || STATUS_CONFIG.pending;
-  const mediaLink = `/${req.mediaType}/${req.media?.tmdbId}`;
+  // Media synced from *arr webhooks without a TMDB match are stored with a
+  // negative tmdbId — don't turn the card into a broken link in that case.
+  const hasValidTmdbId = !!req.media?.tmdbId && req.media.tmdbId > 0;
+  const mediaLink = hasValidTmdbId ? `/${req.mediaType}/${req.media!.tmdbId}` : '#';
   const year = req.media?.releaseDate?.slice(0, 4);
   const backdrop = req.media?.backdropPath;
   const isPending = req.status === 'pending';
@@ -438,6 +441,7 @@ function RequestCard({
   return (
     <Link
       to={mediaLink}
+      onClick={hasValidTmdbId ? undefined : (e) => e.preventDefault()}
       className="group relative rounded-2xl overflow-hidden h-[160px] flex transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-black/40 animate-fade-in border border-white/5"
       style={{ animationDelay: `${Math.min(index * 50, 400)}ms`, animationFillMode: 'backwards' }}
     >
