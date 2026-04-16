@@ -18,7 +18,7 @@ export async function plexCheckPin(pinId: number): Promise<string | null> {
   return checkPlexPin(pinId, PLEX_CLIENT_ID);
 }
 
-async function getPlexToken(adminUserId?: number): Promise<string | null> {
+export async function getPlexToken(adminUserId?: number): Promise<string | null> {
   const plexService = await prisma.service.findFirst({
     where: { type: 'plex', enabled: true },
   });

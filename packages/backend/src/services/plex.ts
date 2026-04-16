@@ -66,6 +66,8 @@ export interface PlexSharedUser {
   username: string;
   email: string;
   thumb: string;
+  /** Plex share ID (the <SharedServer id="..." /> attribute) — needed to DELETE the share. */
+  shareId?: number;
 }
 
 /**
@@ -102,6 +104,7 @@ export async function getSharedServerUsers(adminToken: string, machineId: string
     if (!userId || seen.has(userId)) continue;
     seen.add(userId);
 
+    const shareIdRaw = parseInt(attr('id'), 10);
     users.push({
       id: userId,
       uuid: '',
@@ -109,10 +112,33 @@ export async function getSharedServerUsers(adminToken: string, machineId: string
       username: attr('username'),
       email: attr('email'),
       thumb: '',
+      shareId: Number.isFinite(shareIdRaw) && shareIdRaw > 0 ? shareIdRaw : undefined,
     });
   }
 
   return users;
+}
+
+/**
+ * Remove a user's shared access to a Plex server.
+ * Uses the admin token to DELETE the corresponding <SharedServer> entry.
+ */
+export async function removeSharedServer(
+  adminToken: string,
+  machineId: string,
+  shareId: number
+): Promise<void> {
+  await axios.delete(
+    `https://plex.tv/api/servers/${encodeURIComponent(machineId)}/shared_servers/${encodeURIComponent(String(shareId))}`,
+    {
+      headers: {
+        'X-Plex-Token': adminToken,
+        'X-Plex-Client-Identifier': 'oscarr-client',
+        'X-Plex-Product': 'Oscarr',
+        'X-Plex-Version': '1.0.0',
+      },
+    }
+  );
 }
 
 /**
