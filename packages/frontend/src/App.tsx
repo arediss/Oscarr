@@ -4,6 +4,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useFeatures } from '@/context/FeaturesContext';
 import Layout from '@/components/Layout';
+import AdminLayout from '@/components/layouts/AdminLayout';
 import HomePage from '@/pages/HomePage';
 import LoginPage from '@/pages/LoginPage';
 import InstallPage from '@/pages/InstallPage';
@@ -96,6 +97,16 @@ export default function App() {
       <Route path="/install" element={<InstallPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
+        path="/admin/*"
+        element={
+          <ProtectedRoute>
+            <AdminLayout>
+              <AdminPage />
+            </AdminLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/*"
         element={
           <ProtectedRoute>
@@ -119,9 +130,6 @@ export default function App() {
 
                   {/* Plugin pages */}
                   <Route path="/p/:pluginId/*" element={<PluginPage />} />
-
-                  {/* Admin only */}
-                  <Route path="/admin" element={<AdminPage />} />
                 </Routes>
               </PageTransition>
             </Layout>
