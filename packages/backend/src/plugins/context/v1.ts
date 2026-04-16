@@ -82,6 +82,9 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       if (!role) throw new Error(`Role "${roleName}" does not exist`);
       await prisma.user.update({ where: { id: userId }, data: { role: roleName } });
     },
+    async setUserDisabled(userId: number, disabled: boolean) {
+      await prisma.user.update({ where: { id: userId }, data: { disabled } });
+    },
     async issueAuthToken(userId: number) {
       const user = await prisma.user.findUnique({
         where: { id: userId },

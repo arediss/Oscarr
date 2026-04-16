@@ -46,6 +46,7 @@ export function GeneralTab() {
   const [siteName, setSiteName] = useState('Oscarr');
   const [siteUrl, setSiteUrl] = useState('');
   const [instanceLanguage, setInstanceLanguage] = useState('en');
+  const [disabledLoginMode, setDisabledLoginMode] = useState<'block' | 'friendly'>('friendly');
   const [bannerText, setBannerText] = useState('');
   const [loading, setLoading] = useState(true);
   const [versionInfo, setVersionInfo] = useState<{ current: string; latest?: string; updateAvailable?: boolean; releaseUrl?: string } | null>(null);
@@ -74,6 +75,7 @@ export function GeneralTab() {
           siteName: data.siteName ?? 'Oscarr',
           siteUrl: data.siteUrl ?? '',
           instanceLanguage: data.instanceLanguages?.[0] ?? 'en',
+          disabledLoginMode: (data.disabledLoginMode === 'block' ? 'block' : 'friendly') as 'block' | 'friendly',
         };
         setAutoApproveRequests(vals.autoApproveRequests);
         setRegistrationEnabled(vals.registrationEnabled);
@@ -85,6 +87,7 @@ export function GeneralTab() {
         setSiteName(vals.siteName);
         setSiteUrl(vals.siteUrl);
         setInstanceLanguage(vals.instanceLanguage);
+        setDisabledLoginMode(vals.disabledLoginMode);
         initialValues.current = { ...vals, bannerText: initialValues.current.bannerText ?? '' };
         return data;
       }),
@@ -99,9 +102,9 @@ export function GeneralTab() {
 
   const currentValues = useMemo(() => ({
     autoApproveRequests, registrationEnabled, requestsEnabled, nsfwBlurEnabled, supportEnabled,
-    calendarEnabled, missingSearchCooldownMin, siteName, siteUrl, instanceLanguage, bannerText,
+    calendarEnabled, missingSearchCooldownMin, siteName, siteUrl, instanceLanguage, disabledLoginMode, bannerText,
   }), [autoApproveRequests, registrationEnabled, requestsEnabled, nsfwBlurEnabled, supportEnabled,
-    calendarEnabled, missingSearchCooldownMin, siteName, siteUrl, instanceLanguage, bannerText]);
+    calendarEnabled, missingSearchCooldownMin, siteName, siteUrl, instanceLanguage, disabledLoginMode, bannerText]);
 
   const hasChanges = !loading && Object.keys(initialValues.current).length > 0 &&
     Object.entries(currentValues).some(([k, v]) => initialValues.current[k] !== v);
@@ -118,6 +121,7 @@ export function GeneralTab() {
     setSiteName(iv.siteName as string);
     setSiteUrl(iv.siteUrl as string);
     setInstanceLanguage(iv.instanceLanguage as string);
+    setDisabledLoginMode(iv.disabledLoginMode as 'block' | 'friendly');
     setBannerText(iv.bannerText as string);
   };
 
@@ -136,6 +140,7 @@ export function GeneralTab() {
           siteName: siteName.trim() || 'Oscarr',
           siteUrl: siteUrl.trim() || '',
           instanceLanguages: [instanceLanguage],
+          disabledLoginMode,
         }),
         api.put('/admin/banner', { banner: bannerText.trim() || null }),
       ]);
@@ -371,6 +376,46 @@ export function GeneralTab() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Disabled accounts login behavior */}
+      <div className="mt-8">
+        <h2 className="text-lg font-semibold text-ndp-text mb-2">Disabled accounts</h2>
+        <p className="text-xs text-ndp-text-dim mb-4">
+          Choose how the login screen responds when a user marked as disabled tries to sign in.
+        </p>
+        <div className="card p-4 space-y-2">
+          <label className="flex items-start gap-3 p-2 rounded-lg cursor-pointer hover:bg-white/5 transition-colors">
+            <input
+              type="radio"
+              name="disabledLoginMode"
+              checked={disabledLoginMode === 'friendly'}
+              onChange={() => setDisabledLoginMode('friendly')}
+              className="mt-0.5"
+            />
+            <div>
+              <p className="text-sm font-medium text-ndp-text">Friendly message</p>
+              <p className="text-xs text-ndp-text-dim mt-0.5">
+                Login rejected with an explicit message telling the user their account is disabled.
+              </p>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 p-2 rounded-lg cursor-pointer hover:bg-white/5 transition-colors">
+            <input
+              type="radio"
+              name="disabledLoginMode"
+              checked={disabledLoginMode === 'block'}
+              onChange={() => setDisabledLoginMode('block')}
+              className="mt-0.5"
+            />
+            <div>
+              <p className="text-sm font-medium text-ndp-text">Silent block</p>
+              <p className="text-xs text-ndp-text-dim mt-0.5">
+                Login rejected with a generic "Invalid credentials" error. The user has no indication their account was disabled.
+              </p>
+            </div>
+          </label>
         </div>
       </div>
 
