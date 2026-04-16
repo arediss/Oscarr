@@ -83,6 +83,12 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       await prisma.user.update({ where: { id: userId }, data: { role: roleName } });
     },
     async setUserDisabled(userId: number, disabled: boolean) {
+      if (disabled) {
+        const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+        if (target?.role === 'admin') {
+          throw new Error(`Refusing to disable user ${userId}: admins cannot be disabled from plugin code`);
+        }
+      }
       await prisma.user.update({ where: { id: userId }, data: { disabled } });
     },
     async issueAuthToken(userId: number) {
