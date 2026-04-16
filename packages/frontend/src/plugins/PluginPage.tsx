@@ -10,7 +10,7 @@ export function PluginPage() {
   const { t } = useTranslation();
 
   const url = pluginId ? pluginFrontendUrl(pluginId) : '';
-  const [Component, setComponent] = useState<ComponentType<any> | null>(url ? getCached(url) : null);
+  const [Component, setComponent] = useState<ComponentType<any> | null>(() => (url ? getCached(url) : null));
   const [loading, setLoading] = useState(url ? !hasLoaded(url) : false);
   const [error, setError] = useState(false);
 
