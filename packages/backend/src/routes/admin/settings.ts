@@ -76,6 +76,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           siteName: { type: 'string', description: 'Custom site name' },
           siteUrl: { type: 'string', description: 'Public URL of the instance for notification links' },
           instanceLanguages: { type: 'array', items: { type: 'string' }, description: 'Instance languages (ISO 639-1 codes)' },
+          disabledLoginMode: { type: 'string', enum: ['block', 'friendly'], description: 'How disabled accounts are rejected at login' },
         },
       },
     },
@@ -98,6 +99,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       siteName?: string;
       siteUrl?: string;
       instanceLanguages?: string[];
+      disabledLoginMode?: 'block' | 'friendly';
     };
 
     const settings = await prisma.appSettings.upsert({
@@ -119,6 +121,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         siteName: body.siteName ?? undefined,
         siteUrl: body.siteUrl !== undefined ? (body.siteUrl?.trim() || null) : undefined,
         instanceLanguages: body.instanceLanguages ? JSON.stringify(body.instanceLanguages) : undefined,
+        disabledLoginMode: body.disabledLoginMode ?? undefined,
       },
       create: {
         id: 1,
@@ -136,6 +139,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         calendarEnabled: body.calendarEnabled,
         siteName: body.siteName,
         instanceLanguages: body.instanceLanguages ? JSON.stringify(body.instanceLanguages) : undefined,
+        disabledLoginMode: body.disabledLoginMode,
         updatedAt: new Date(),
       },
     });
