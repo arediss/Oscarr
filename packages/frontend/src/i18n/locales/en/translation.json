@@ -51,6 +51,7 @@
   "nav.support": "Support",
   "nav.admin": "Administration",
   "nav.logout": "Sign out",
+  "nav.open_menu": "Open menu",
 
   "status.pending": "Pending",
   "status.approved": "Approved",
@@ -547,6 +548,8 @@
   "requests.matched_rule": "Matched rule",
   "requests.series_type": "Series type",
   "requests.custom_path": "Custom path...",
+  "admin.back_to_app": "Back to Oscarr",
+  "admin.open_menu": "Open admin menu",
   "admin.tab.blacklist": "Blacklist",
   "admin.blacklist.title": "Blacklist",
   "admin.blacklist.add": "Block a media",

@@ -15,7 +15,11 @@ function timeAgo(dateStr: string, t: (key: string) => string): string {
   return `${days}d`;
 }
 
-export default function NotificationBell() {
+interface NotificationBellProps {
+  dropdownDirection?: 'below' | 'above';
+}
+
+export default function NotificationBell({ dropdownDirection = 'below' }: NotificationBellProps = {}) {
   const { t } = useTranslation();
   const { notifications, unreadCount, markAsRead, markAllRead, dismiss } = useNotifications();
   const [open, setOpen] = useState(false);
@@ -62,7 +66,10 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 card shadow-2xl shadow-black/50 border border-white/10 animate-fade-in overflow-hidden">
+        <div className={clsx(
+          'absolute right-0 w-80 sm:w-96 card shadow-2xl shadow-black/50 border border-white/10 animate-fade-in overflow-hidden',
+          dropdownDirection === 'below' ? 'top-full mt-2' : 'bottom-full mb-2'
+        )}>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
             <h3 className="text-sm font-semibold text-ndp-text">{t('notifications.title')}</h3>
