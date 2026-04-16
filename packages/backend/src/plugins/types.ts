@@ -55,7 +55,7 @@ export interface PluginContext {
   getUser(userId: number): Promise<{ id: number; email: string; displayName: string | null; role: string } | null>;
   /** Assign a role to a user. Throws if the role doesn't exist. */
   setUserRole(userId: number, roleName: string): Promise<void>;
-  /** Enable or disable an Oscarr user. Disabled users are rejected at login per AppSettings.disabledLoginMode (friendly message vs silent block). */
+  /** Enable or disable an Oscarr user. Disabled users are rejected at login per AppSettings.disabledLoginMode (friendly message vs silent block). Admins cannot be disabled via this method — throws if you try, to protect the server owner from accidental lockout. */
   setUserDisabled(userId: number, disabled: boolean): Promise<void>;
   /** Mint an auth JWT for the given user. Caller is responsible for delivering it (cookie, response body, etc.). */
   issueAuthToken(userId: number): Promise<string>;

@@ -160,7 +160,7 @@ const plexAuth: AuthProvider = {
     const machineId = await resolveMachineId();
     if (!machineId) throw new Error('NO_MACHINE_ID');
     const { syncPlexUsers } = await import('./sync.js');
-    return syncPlexUsers(token, machineId);
+    return syncPlexUsers(token, machineId, adminUserId);
   },
 };
 

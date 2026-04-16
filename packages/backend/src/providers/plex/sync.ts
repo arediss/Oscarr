@@ -10,9 +10,14 @@ import type { SyncResult } from '../types.js';
  * - Users with a linked Plex provider still present in shared_servers → disabled=false
  * - Users with a linked Plex provider absent from shared_servers → disabled=true
  * - Shared users with no matching Oscarr account → returned as pendingImports
- * - Users without a Plex provider are untouched (they may be Jellyfin/email/etc.)
+ * - Users without a Plex provider are untouched (Jellyfin / email / etc.)
+ * - Admin users are NEVER disabled by sync: the Plex server owner is not listed
+ *   in their own shared_servers (that endpoint returns people the server is
+ *   shared WITH, not the owner), so syncing would otherwise kick the admin out
+ *   of their own instance. Admins are still re-enabled by sync if the flag was
+ *   flipped by some other code path.
  */
-export async function syncPlexUsers(token: string, machineId: string): Promise<SyncResult> {
+export async function syncPlexUsers(token: string, machineId: string, callerAdminUserId?: number): Promise<SyncResult> {
   const sharedUsers = await getSharedServerUsers(token, machineId);
   const plexIdsInShares = new Set(sharedUsers.map((u) => String(u.id)));
 
@@ -21,7 +26,7 @@ export async function syncPlexUsers(token: string, machineId: string): Promise<S
     select: {
       userId: true,
       providerId: true,
-      user: { select: { id: true, disabled: true, displayName: true, email: true } },
+      user: { select: { id: true, disabled: true, displayName: true, email: true, role: true } },
     },
   });
 
@@ -36,13 +41,16 @@ export async function syncPlexUsers(token: string, machineId: string): Promise<S
     if (!link.providerId) continue;
     const stillShared = plexIdsInShares.has(link.providerId);
     const currentlyDisabled = link.user.disabled;
+    const isAdmin = link.user.role === 'admin';
+    const isCaller = callerAdminUserId !== undefined && link.userId === callerAdminUserId;
+    const protectedFromDisable = isAdmin || isCaller;
 
     if (stillShared && currentlyDisabled) {
       await prisma.user.update({ where: { id: link.userId }, data: { disabled: false } });
       invalidateUserStateCache(link.userId);
       logEvent('info', 'PlexSync', `Re-enabled ${link.user.displayName || link.user.email} (still on Plex)`);
       enabled++;
-    } else if (!stillShared && !currentlyDisabled) {
+    } else if (!stillShared && !currentlyDisabled && !protectedFromDisable) {
       await prisma.user.update({ where: { id: link.userId }, data: { disabled: true } });
       invalidateUserStateCache(link.userId);
       logEvent('info', 'PlexSync', `Disabled ${link.user.displayName || link.user.email} (no longer on Plex)`);
