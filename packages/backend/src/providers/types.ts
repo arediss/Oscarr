@@ -177,12 +177,26 @@ export interface AuthHelpers {
   }>;
 }
 
+export interface SyncPendingImport {
+  providerId: string;
+  providerUsername?: string | null;
+  providerEmail?: string | null;
+}
+
+export interface SyncResult {
+  enabled: number;    // users re-enabled because they're back on the provider
+  disabled: number;   // users disabled because they're no longer on the provider
+  pendingImports: SyncPendingImport[]; // provider users with no matching Oscarr account
+}
+
 export interface AuthProvider {
   config: AuthProviderConfig;
   registerRoutes(app: FastifyInstance, helpers: AuthHelpers): Promise<void>;
   linkAccount?(pinId: number, userId: number): Promise<{ providerUsername: string }>;
   linkAccountByCredentials?(username: string, password: string, userId: number): Promise<{ providerUsername: string }>;
   importUsers?(adminUserId: number): Promise<{ imported: number; skipped: number; total: number }>;
+  /** Reconcile local Oscarr users with the provider's authoritative list. Disables users who aren't on the provider anymore, re-enables returning ones, and reports unmatched provider entries for admin-confirmed import. */
+  syncUsers?(adminUserId: number): Promise<SyncResult>;
   getToken?(adminUserId: number): Promise<string | null>;
 }
 
