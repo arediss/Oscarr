@@ -128,6 +128,22 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
         return null;
       }
     },
+    async getServiceConfigRaw(serviceType: string) {
+      const svc = await prisma.service.findFirst({ where: { type: serviceType } });
+      if (!svc) return null;
+      try {
+        return JSON.parse(svc.config) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    },
+    async getUserProviders(userId: number) {
+      const providers = await prisma.userProvider.findMany({
+        where: { userId },
+        select: { provider: true, providerId: true, providerUsername: true, providerEmail: true },
+      });
+      return providers;
+    },
     registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }) {
       rbacRegisterRoute(routeKey, rule);
     },

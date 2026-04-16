@@ -67,6 +67,10 @@ export interface PluginContext {
   notificationRegistry: NotificationRegistry;
   getArrClient(serviceType: string): Promise<ArrClient>;
   getServiceConfig(serviceType: string): Promise<{ url: string; apiKey: string } | null>;
+  /** Returns the full raw JSON config of a configured service (whatever fields the provider chose to store). Use when you need more than the common url/apiKey subset. */
+  getServiceConfigRaw(serviceType: string): Promise<Record<string, unknown> | null>;
+  /** Returns the external auth providers linked to an Oscarr user (identity info only — no tokens). */
+  getUserProviders(userId: number): Promise<Array<{ provider: string; providerId: string | null; providerUsername: string | null; providerEmail: string | null }>>;
   registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }): void;
   registerPluginPermission(permission: string, description?: string): void;
   events: {
