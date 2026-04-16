@@ -53,6 +53,10 @@ export interface LoadedUIContribution extends UIContribution {
 export interface PluginContext {
   log: FastifyBaseLogger;
   getUser(userId: number): Promise<{ id: number; email: string; displayName: string | null; role: string } | null>;
+  /** Assign a role to a user. Throws if the role doesn't exist. */
+  setUserRole(userId: number, roleName: string): Promise<void>;
+  /** Returns the plugin's dedicated data folder (creates it if missing). Absolute path under {backendRoot}/data/plugins/{pluginId}/. */
+  getPluginDataDir(): Promise<string>;
   getAppSettings(): Promise<Record<string, unknown>>;
   getSetting(key: string): Promise<unknown>;
   setSetting(key: string, value: unknown): Promise<void>;
