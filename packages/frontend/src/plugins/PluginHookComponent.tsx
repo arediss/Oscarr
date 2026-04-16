@@ -23,8 +23,8 @@ class PluginErrorBoundary extends ReactComponent<{ children: React.ReactNode }, 
 
 export function PluginHookComponent({ pluginId, hookPoint, context, contribution }: Props) {
   const url = pluginHookUrl(pluginId, hookPoint);
-  const [Comp, setComp] = useState<React.ComponentType<any> | null>(getCached(url));
-  const [ready, setReady] = useState(hasLoaded(url));
+  const [Comp, setComp] = useState<React.ComponentType<any> | null>(() => getCached(url));
+  const [ready, setReady] = useState(() => hasLoaded(url));
 
   useEffect(() => {
     if (hasLoaded(url)) {
