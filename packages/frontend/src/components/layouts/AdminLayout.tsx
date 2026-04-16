@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { ArrowLeft, Menu, X, Shield } from 'lucide-react';
+import { ArrowLeft, Menu, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { ADMIN_TABS } from '@/pages/admin/tabsConfig';
@@ -96,12 +96,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </Link>
       </div>
 
-      <div className="flex items-center gap-2.5 px-6 pt-2 pb-3">
-        <Shield className="w-5 h-5 text-ndp-accent flex-shrink-0" />
-        <h1 className="text-lg font-bold text-ndp-text">{t('admin.title')}</h1>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto px-3 space-y-0.5 pb-4">
+      <nav className="flex-1 overflow-y-auto px-3 pt-2 space-y-0.5 pb-4">
         {ADMIN_TABS.map(({ id, label, icon: Icon }) =>
           renderTabButton(id, t(label), <Icon className="w-4 h-4 flex-shrink-0" />)
         )}
