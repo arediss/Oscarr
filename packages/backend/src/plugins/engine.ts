@@ -18,6 +18,7 @@ export class PluginEngine {
   private plugins = new Map<string, LoadedPlugin>();
   private settingsCache = new Map<string, Record<string, unknown>>();
   private logger: FastifyBaseLogger | null = null;
+  private app: FastifyInstance | null = null;
 
   /** Call once after Fastify is ready to provide a structured logger. */
   setLogger(logger: FastifyBaseLogger): void {
@@ -87,6 +88,7 @@ export class PluginEngine {
 
   async registerWithFastify(app: FastifyInstance): Promise<void> {
     this.setLogger(app.log);
+    this.app = app;
 
     for (const [id, plugin] of this.plugins) {
       if (!plugin.enabled || plugin.error) continue;
@@ -308,6 +310,10 @@ export class PluginEngine {
         this.settingsCache.set(pluginId, values);
       },
       makeFallbackLogger: (pluginId: string) => this.makeFallbackLogger(pluginId),
+      signAuthToken: (payload) => {
+        if (!this.app) throw new Error('Plugin engine not yet registered with Fastify — cannot issue auth tokens');
+        return this.app.jwt.sign(payload, { expiresIn: '24h' });
+      },
     };
   }
 
