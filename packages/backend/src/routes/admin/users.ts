@@ -43,6 +43,37 @@ export async function usersRoutes(app: FastifyInstance) {
     }
   });
 
+  // Sync users with a provider — disables users no longer on the provider,
+  // re-enables returning ones, and reports unmatched provider entries for
+  // admin review.
+  app.post('/users/sync/:provider', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['provider'],
+        properties: { provider: { type: 'string', description: 'Provider ID (e.g. "plex")' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { provider: providerId } = request.params as { provider: string };
+    const authProvider = getAuthProvider(providerId);
+    if (!authProvider?.syncUsers) {
+      return reply.status(400).send({ error: `Provider "${providerId}" does not support user sync.` });
+    }
+    const adminUser = request.user as { id: number };
+    try {
+      return await authProvider.syncUsers(adminUser.id);
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg === 'NO_TOKEN') return reply.status(400).send({ error: `No ${providerId} token found. Configure the service in settings.` });
+      if (msg === 'NO_MACHINE_ID') return reply.status(400).send({ error: `No ${providerId} server configured.` });
+      const safeProviderId = providerId.replace(/[\r\n\t]/g, '');
+      console.error('Failed to sync %s users:', safeProviderId, err);
+      logEvent('error', 'User', `${safeProviderId} sync failed: ${String(err)}`);
+      return reply.status(502).send({ error: `Unable to sync ${providerId} users` });
+    }
+  });
+
   // Link a provider to a user (admin only)
   app.post('/users/:id/link-provider', {
     schema: {
