@@ -51,6 +51,7 @@
   "nav.support": "Support",
   "nav.admin": "Administration",
   "nav.logout": "Déconnexion",
+  "nav.open_menu": "Ouvrir le menu",
 
   "status.pending": "En attente",
   "status.approved": "Approuvé",
@@ -547,6 +548,8 @@
   "requests.matched_rule": "Règle appliquée",
   "requests.series_type": "Type de série",
   "requests.custom_path": "Chemin personnalisé...",
+  "admin.back_to_app": "Retour Oscarr",
+  "admin.open_menu": "Ouvrir le menu admin",
   "admin.tab.blacklist": "Liste noire",
   "admin.blacklist.title": "Liste noire",
   "admin.blacklist.add": "Bloquer un média",
