@@ -323,7 +323,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               dropdownDirection="above"
             />
           </div>
-          <NotificationBell />
+          <NotificationBell dropdownDirection="above" />
         </div>
       </aside>
 
