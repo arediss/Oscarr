@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { pluginEventBus } from '../eventBus.js';
 import { prisma } from '../../utils/prisma.js';
+import { getPluginDataDir } from '../../utils/dataPath.js';
 import { notificationRegistry } from '../../notifications/index.js';
 import type { NotificationPayload } from '../../notifications/types.js';
 import { sendUserNotification } from '../../services/userNotifications.js';
@@ -73,6 +74,14 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
         where: { id: userId },
         select: { id: true, email: true, displayName: true, role: true },
       });
+    },
+    async setUserRole(userId: number, roleName: string) {
+      const role = await prisma.role.findUnique({ where: { name: roleName } });
+      if (!role) throw new Error(`Role "${roleName}" does not exist`);
+      await prisma.user.update({ where: { id: userId }, data: { role: roleName } });
+    },
+    getPluginDataDir() {
+      return getPluginDataDir(pluginId);
     },
     async getAppSettings() {
       const s = await prisma.appSettings.findUnique({ where: { id: 1 } });
