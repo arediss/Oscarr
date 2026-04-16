@@ -55,6 +55,8 @@ export interface PluginContext {
   getUser(userId: number): Promise<{ id: number; email: string; displayName: string | null; role: string } | null>;
   /** Assign a role to a user. Throws if the role doesn't exist. */
   setUserRole(userId: number, roleName: string): Promise<void>;
+  /** Mint an auth JWT for the given user. Caller is responsible for delivering it (cookie, response body, etc.). */
+  issueAuthToken(userId: number): Promise<string>;
   /** Returns the plugin's dedicated data folder (creates it if missing). Absolute path under {backendRoot}/data/plugins/{pluginId}/. */
   getPluginDataDir(): Promise<string>;
   getAppSettings(): Promise<Record<string, unknown>>;
