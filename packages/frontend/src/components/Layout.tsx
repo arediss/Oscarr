@@ -36,7 +36,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, hasPermission } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [banner, setBanner] = useState<string | null>(null);
@@ -45,6 +45,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [viewAsRole, setViewAsRoleState] = useState<string | null>(sessionStorage.getItem('view-as-role'));
   const { features } = useFeatures();
+  const [scrolled, setScrolled] = useState(false);
 
   const setViewAsRole = (role: string | null) => {
     if (role) sessionStorage.setItem('view-as-role', role);
@@ -71,14 +72,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setDrawerOpen(false);
     }
   };
 
   useEffect(() => {
-    setMobileMenuOpen(false);
+    setDrawerOpen(false);
   }, [location.pathname]);
-
-  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -93,7 +93,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-ndp-bg">
-      {/* Incident banner */}
       {hasBanner && (
         <div className="fixed top-0 left-0 right-0 z-[60] bg-ndp-warning/90 backdrop-blur-sm text-black px-4 py-2 flex items-center justify-center gap-3">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
@@ -104,7 +103,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* View as role banner */}
       {viewAsRole && (
         <div className={clsx(
           'fixed left-0 right-0 z-[59] bg-purple-600/90 backdrop-blur-sm text-white px-4 py-2 flex items-center justify-center gap-3',
@@ -124,18 +122,48 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
+      {/* Mobile header */}
       <nav
         className={clsx(
-          'fixed left-0 right-0 z-50 transition-[background-color,backdrop-filter] duration-300',
-          scrolled ? 'bg-ndp-surface/80 backdrop-blur-xl' : 'bg-transparent',
+          'md:hidden fixed left-0 right-0 z-50 transition-[background-color,backdrop-filter] duration-300',
+          scrolled ? 'bg-ndp-surface/80 backdrop-blur-xl' : 'bg-transparent'
+        )}
+        style={{ top: `${topOffset * 4}px` }}
+      >
+        <div className="px-4 h-16 flex items-center gap-3">
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg hover:bg-white/5 transition-colors flex-shrink-0"
+            aria-label={t('nav.open_menu', 'Open menu')}
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <form onSubmit={handleSearch} className="flex-1 min-w-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ndp-text-dim" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('search.placeholder_short')}
+                className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-ndp-text placeholder-ndp-text-dim focus:outline-none focus:ring-2 focus:ring-ndp-accent/40"
+              />
+            </div>
+          </form>
+        </div>
+      </nav>
+
+      {/* Desktop header */}
+      <nav
+        className={clsx(
+          'hidden md:block fixed left-0 right-0 z-50 transition-[background-color,backdrop-filter] duration-300',
+          scrolled ? 'bg-ndp-surface/80 backdrop-blur-xl' : 'bg-transparent'
         )}
         style={{ top: `${topOffset * 4}px` }}
       >
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6">
           <div className="relative flex items-center justify-between h-16">
-
-            {/* Left: Nav */}
-            <div className="hidden md:flex items-center gap-0.5 relative z-10">
+            <div className="flex items-center gap-0.5 relative z-10">
               {navItems.map(({ path, labelKey, icon: Icon }) => (
                 <Link
                   key={path}
@@ -171,8 +199,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               />
             </div>
 
-            {/* Center: Search bar - absolutely centered on the page */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none hidden sm:flex">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <form onSubmit={handleSearch} className="w-full max-w-lg px-4 pointer-events-auto">
                 <div className="relative">
                   <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ndp-text-dim" />
@@ -187,20 +214,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </form>
             </div>
 
-            {/* Right: Avatar dropdown */}
             <div className="flex items-center gap-2 flex-shrink-0 relative z-10">
-              {/* Mobile search */}
-              <button
-                onClick={() => navigate('/search')}
-                className="sm:hidden p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg hover:bg-white/5 transition-colors"
-              >
-                <Search className="w-5 h-5" />
-              </button>
-
-              {/* Plugin hook: header actions */}
               <PluginSlot hookPoint="header.actions" context={{ user, isAdmin: hasPermission('admin.*'), hasPermission }} />
 
-              {/* Changelog notification */}
               {hasPermission('admin.*') && changelog.hasNew && (
                 <button
                   onClick={() => { setChangelogOpen(true); changelog.dismiss(); }}
@@ -212,94 +228,104 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </button>
               )}
 
-              {/* Notification bell */}
               <NotificationBell />
 
               <UserCluster viewAsRole={viewAsRole} onViewAsRoleChange={setViewAsRole} />
-
-              {/* Mobile hamburger */}
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg"
-              >
-                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
             </div>
           </div>
         </div>
-
-        {/* Mobile menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-white/5 bg-ndp-surface/95 backdrop-blur-xl animate-slide-up">
-            <div className="px-4 pt-3">
-              <form onSubmit={(e) => { handleSearch(e); setMobileMenuOpen(false); }}>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ndp-text-dim" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={t('search.placeholder_short')}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-ndp-text placeholder-ndp-text-dim focus:outline-none focus:ring-2 focus:ring-ndp-accent/40"
-                  />
-                </div>
-              </form>
-            </div>
-            <div className="px-4 py-3 space-y-1">
-              {navItems.map(({ path, labelKey, icon: Icon }) => (
-                <Link
-                  key={path}
-                  to={path}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={clsx(
-                    'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
-                    location.pathname === path
-                      ? 'bg-ndp-accent/10 text-ndp-accent'
-                      : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
-                  )}
-                >
-                  <Icon className="w-5 h-5" />
-                  {t(labelKey)}
-                </Link>
-              ))}
-              <PluginSlot
-                hookPoint="nav"
-                renderItem={(c) => (
-                  <Link
-                    key={c.pluginId}
-                    to={c.props.path as string}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={clsx(
-                      'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
-                      location.pathname.startsWith(c.props.path as string)
-                        ? 'bg-ndp-accent/10 text-ndp-accent'
-                        : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
-                    )}
-                  >
-                    <DynamicIcon name={c.props.icon as string} className="w-5 h-5" />
-                    {c.props.label as string}
-                  </Link>
-                )}
-              />
-              {hasPermission('admin.*') && (
-                <Link
-                  to="/admin"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={clsx(
-                    'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
-                    location.pathname === '/admin'
-                      ? 'bg-ndp-accent/10 text-ndp-accent'
-                      : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
-                  )}
-                >
-                  <Shield className="w-5 h-5" />
-                  Admin
-                </Link>
-              )}
-            </div>
-          </div>
-        )}
       </nav>
+
+      <div
+        className={clsx(
+          'md:hidden fixed inset-0 z-[55] bg-black/60 backdrop-blur-sm transition-opacity duration-300',
+          drawerOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        )}
+        onClick={() => setDrawerOpen(false)}
+        aria-hidden={!drawerOpen}
+      />
+      <aside
+        className={clsx(
+          'md:hidden fixed left-0 top-0 bottom-0 z-[56] w-72 bg-ndp-surface border-r border-white/5 transform transition-transform duration-300 flex flex-col',
+          drawerOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+        aria-hidden={!drawerOpen}
+      >
+        <div className="flex items-center justify-between px-4 h-14 border-b border-white/5 flex-shrink-0">
+          <span className="text-base font-bold text-ndp-text">Oscarr</span>
+          <button
+            onClick={() => setDrawerOpen(false)}
+            className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+            aria-label={t('common.close', 'Close')}
+          >
+            <X className="w-4 h-4 text-ndp-text-muted" />
+          </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
+          {navItems.map(({ path, labelKey, icon: Icon }) => (
+            <Link
+              key={path}
+              to={path}
+              onClick={() => setDrawerOpen(false)}
+              className={clsx(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                location.pathname === path
+                  ? 'bg-ndp-accent/10 text-ndp-accent'
+                  : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
+              )}
+            >
+              <Icon className="w-5 h-5 flex-shrink-0" />
+              <span className="truncate">{t(labelKey)}</span>
+            </Link>
+          ))}
+          <PluginSlot
+            hookPoint="nav"
+            renderItem={(c) => (
+              <Link
+                key={c.pluginId}
+                to={c.props.path as string}
+                onClick={() => setDrawerOpen(false)}
+                className={clsx(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  location.pathname.startsWith(c.props.path as string)
+                    ? 'bg-ndp-accent/10 text-ndp-accent'
+                    : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
+                )}
+              >
+                <DynamicIcon name={c.props.icon as string} className="w-5 h-5 flex-shrink-0" />
+                <span className="truncate">{c.props.label as string}</span>
+              </Link>
+            )}
+          />
+
+          {hasPermission('admin.*') && (
+            <>
+              <div className="h-px bg-white/5 my-2" />
+              <Link
+                to="/admin"
+                onClick={() => setDrawerOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-ndp-text-muted hover:text-ndp-accent hover:bg-white/5 transition-colors"
+              >
+                <Shield className="w-5 h-5 flex-shrink-0" />
+                <span className="truncate">{t('nav.admin')}</span>
+              </Link>
+            </>
+          )}
+        </nav>
+
+        <div className="border-t border-white/5 p-2 flex items-center gap-2 flex-shrink-0">
+          <div className="flex-1 min-w-0">
+            <UserCluster
+              viewAsRole={viewAsRole}
+              onViewAsRoleChange={setViewAsRole}
+              variant="expanded"
+              dropdownDirection="above"
+            />
+          </div>
+          <NotificationBell />
+        </div>
+      </aside>
 
       <main
         className="min-h-screen"

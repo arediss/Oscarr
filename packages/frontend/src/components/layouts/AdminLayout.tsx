@@ -117,8 +117,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         )}
       </nav>
 
-      <div className="border-t border-white/5 p-3 flex items-center justify-between gap-2">
-        <UserCluster viewAsRole={viewAsRole} onViewAsRoleChange={setViewAsRole} />
+      <div className="border-t border-white/5 p-2 flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <UserCluster
+            viewAsRole={viewAsRole}
+            onViewAsRoleChange={setViewAsRole}
+            variant="expanded"
+            dropdownDirection="above"
+          />
+        </div>
         <NotificationBell />
       </div>
     </div>

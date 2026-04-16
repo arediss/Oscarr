@@ -12,9 +12,16 @@ import { PluginSlot } from '@/plugins/PluginSlot';
 interface UserClusterProps {
   viewAsRole: string | null;
   onViewAsRoleChange: (role: string | null) => void;
+  variant?: 'compact' | 'expanded';
+  dropdownDirection?: 'below' | 'above';
 }
 
-export function UserCluster({ viewAsRole, onViewAsRoleChange }: UserClusterProps) {
+export function UserCluster({
+  viewAsRole,
+  onViewAsRoleChange,
+  variant = 'compact',
+  dropdownDirection = 'below',
+}: UserClusterProps) {
   const { t } = useTranslation();
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
@@ -45,31 +52,50 @@ export function UserCluster({ viewAsRole, onViewAsRoleChange }: UserClusterProps
     navigate('/login');
   };
 
+  const avatarEl = user?.avatar ? (
+    <img
+      src={user.avatar}
+      alt={user.displayName || ''}
+      className="w-8 h-8 rounded-full ring-2 ring-white/10 flex-shrink-0"
+    />
+  ) : (
+    <div className="w-8 h-8 rounded-full bg-ndp-accent/20 flex items-center justify-center text-ndp-accent text-sm font-bold flex-shrink-0">
+      {(user?.displayName || user?.email || '?')[0].toUpperCase()}
+    </div>
+  );
+
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 p-1 rounded-xl hover:bg-white/5 transition-colors"
+        className={clsx(
+          'flex items-center gap-2 rounded-xl hover:bg-white/5 transition-colors text-left',
+          variant === 'expanded' ? 'p-2 w-full' : 'p-1'
+        )}
       >
-        {user?.avatar ? (
-          <img
-            src={user.avatar}
-            alt={user.displayName || ''}
-            className="w-8 h-8 rounded-full ring-2 ring-white/10"
-          />
-        ) : (
-          <div className="w-8 h-8 rounded-full bg-ndp-accent/20 flex items-center justify-center text-ndp-accent text-sm font-bold">
-            {(user?.displayName || user?.email || '?')[0].toUpperCase()}
+        {avatarEl}
+        {variant === 'expanded' && (
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-ndp-text truncate">
+              {user?.displayName || user?.email}
+            </p>
+            {user?.role && (
+              <p className="text-xs text-ndp-text-dim truncate">{user.role}</p>
+            )}
           </div>
         )}
         <ChevronDown className={clsx(
-          'w-3.5 h-3.5 text-ndp-text-dim transition-transform hidden sm:block',
-          open && 'rotate-180'
+          'w-3.5 h-3.5 text-ndp-text-dim transition-transform flex-shrink-0',
+          variant === 'compact' && 'hidden sm:block',
+          open && (dropdownDirection === 'above' ? '-rotate-180' : 'rotate-180')
         )} />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-56 card shadow-2xl shadow-black/50 border border-white/10 animate-fade-in py-1">
+        <div className={clsx(
+          'absolute w-56 card shadow-2xl shadow-black/50 border border-white/10 animate-fade-in py-1',
+          dropdownDirection === 'below' ? 'right-0 top-full mt-2' : 'left-0 bottom-full mb-2'
+        )}>
           <div className="px-4 py-3 border-b border-white/5">
             <p className="text-sm font-semibold text-ndp-text truncate">{user?.displayName || user?.email}</p>
             <p className="text-xs text-ndp-text-dim truncate">{user?.email}</p>
