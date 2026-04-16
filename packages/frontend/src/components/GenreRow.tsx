@@ -109,7 +109,7 @@ function GenreRow() {
   };
 
   return (
-    <section className="relative group/row" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 160px' }}>
+    <section className="relative group/row">
       <h2 className="text-xl font-bold text-ndp-text mb-4 px-4 sm:px-8">{t('genre.title')}</h2>
 
       <div className="relative">
@@ -128,7 +128,7 @@ function GenreRow() {
 
         <div
           ref={scrollRef}
-          className="flex gap-3 overflow-x-auto px-4 sm:px-8 py-2 -my-2"
+          className="flex gap-3 overflow-x-auto px-4 sm:px-8 py-12 -my-12"
           style={{ scrollbarWidth: 'none' }}
         >
           {ALL_GENRES.map((genre) => {

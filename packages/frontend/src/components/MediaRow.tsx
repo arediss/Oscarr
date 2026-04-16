@@ -32,7 +32,7 @@ function MediaRow({ title, media, loading, href, size = 'default' }: MediaRowPro
   };
 
   return (
-    <section className="relative group/row" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 300px' }}>
+    <section className="relative group/row">
       <div className="flex items-center gap-2 mb-4 px-4 sm:px-8">
         <h2 className="text-xl font-bold text-ndp-text">{title}</h2>
         {href && (
@@ -62,8 +62,8 @@ function MediaRow({ title, media, loading, href, size = 'default' }: MediaRowPro
 
         <div
           ref={scrollRef}
-          className="flex gap-3 overflow-x-auto px-4 sm:px-8 py-4 -my-4"
-          style={{ scrollbarWidth: 'none', overflowY: 'visible', clipPath: 'inset(-100px 0)' }}
+          className="flex gap-3 overflow-x-auto px-4 sm:px-8 py-12 -my-12"
+          style={{ scrollbarWidth: 'none' }}
         >
           {loading
             ? Array.from({ length: 8 }).map((_, i) => (
