@@ -21,6 +21,8 @@ export interface V1FactoryDeps {
   getCachedSettings(pluginId: string): Promise<Record<string, unknown>>;
   setSettingsCache(pluginId: string, values: Record<string, unknown>): void;
   makeFallbackLogger(pluginId: string): FastifyBaseLogger;
+  /** Signs a JWT payload using the app's JWT secret. Available only after the engine is registered with Fastify. */
+  signAuthToken(payload: { id: number; email: string; role: string }): string;
 }
 
 function createCapturingLogger(
@@ -79,6 +81,14 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       const role = await prisma.role.findUnique({ where: { name: roleName } });
       if (!role) throw new Error(`Role "${roleName}" does not exist`);
       await prisma.user.update({ where: { id: userId }, data: { role: roleName } });
+    },
+    async issueAuthToken(userId: number) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, role: true },
+      });
+      if (!user) throw new Error(`User ${userId} not found`);
+      return deps.signAuthToken({ id: user.id, email: user.email, role: user.role });
     },
     getPluginDataDir() {
       return getPluginDataDir(pluginId);
