@@ -1,7 +1,6 @@
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import i18n from '@/i18n';
 import { AlertTriangle, X as XIcon, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -11,23 +10,19 @@ import {
   Film,
   MessageSquare,
   Calendar,
-  LogOut,
   Menu,
   X,
   Shield,
-  ChevronDown,
-  Globe,
   Sparkles,
-  Bell,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import NotificationBell from '@/components/NotificationBell';
 import ChangelogModal from '@/components/ChangelogModal';
 import { useChangelogNotification } from '@/hooks/useChangelogNotification';
-import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { PluginSlot } from '@/plugins/PluginSlot';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
 import { useFeatures } from '@/context/FeaturesContext';
+import { UserCluster } from '@/components/nav/UserCluster';
 
 const ALL_NAV = [
   { path: '/', labelKey: 'nav.home', icon: Home, feature: null },
@@ -38,52 +33,31 @@ const ALL_NAV = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
-  const { user, logout, hasPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [banner, setBanner] = useState<string | null>(null);
   const changelog = useChangelogNotification();
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [viewAsRole, setViewAsRole] = useState<string | null>(sessionStorage.getItem('view-as-role'));
-  const [availableRoles, setAvailableRoles] = useState<{ name: string }[]>([]);
+  const [viewAsRole, setViewAsRoleState] = useState<string | null>(sessionStorage.getItem('view-as-role'));
   const { features } = useFeatures();
-  const push = usePushNotifications();
-  const avatarMenuRef = useRef<HTMLDivElement>(null);
 
-  // Fetch incident banner
+  const setViewAsRole = (role: string | null) => {
+    if (role) sessionStorage.setItem('view-as-role', role);
+    else sessionStorage.removeItem('view-as-role');
+    setViewAsRoleState(role);
+  };
+
   useEffect(() => {
     api.get('/app/banner').then(({ data }) => setBanner(data.banner)).catch(() => {});
   }, []);
 
-  // Fetch roles for the "view as" selector
-  const canManageRoles = hasPermission('admin.roles');
-
-  useEffect(() => {
-    if (canManageRoles) {
-      api.get('/admin/roles').then(({ data }) => setAvailableRoles(data)).catch(() => {});
-    }
-  }, [canManageRoles]);
-
-  const startViewAs = (roleName: string) => {
-    sessionStorage.setItem('view-as-role', roleName);
-    setViewAsRole(roleName);
-    setAvatarMenuOpen(false);
-  };
-
-  const stopViewAs = () => {
-    sessionStorage.removeItem('view-as-role');
-    setViewAsRole(null);
-  };
-
-  // Filter nav items based on feature flags (admins see everything)
   const navItems = ALL_NAV.filter(({ feature }) => !feature || features[feature]);
 
-  // Sync search input with URL query param when on /search
   useEffect(() => {
     if (location.pathname === '/search') {
       const q = searchParams.get('q') || '';
@@ -93,12 +67,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
   }, [location.pathname, searchParams]);
 
-  const handleLogout = async () => {
-    setAvatarMenuOpen(false);
-    await logout();
-    navigate('/login');
-  };
-
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -106,20 +74,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Close avatar menu on outside click
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (avatarMenuRef.current && !avatarMenuRef.current.contains(e.target as Node)) {
-        setAvatarMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  // Close avatar menu on route change
-  useEffect(() => {
-    setAvatarMenuOpen(false);
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
@@ -160,7 +115,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {t('admin.view_as.active', 'Viewing as "{{role}}"', { role: viewAsRole })}
           </p>
           <button
-            onClick={stopViewAs}
+            onClick={() => setViewAsRole(null)}
             className="flex items-center gap-1.5 px-2.5 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
           >
             <EyeOff className="w-3 h-3" />
@@ -260,108 +215,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               {/* Notification bell */}
               <NotificationBell />
 
-              {/* Avatar with dropdown */}
-              <div className="relative" ref={avatarMenuRef}>
-                <button
-                  onClick={() => setAvatarMenuOpen(!avatarMenuOpen)}
-                  className="flex items-center gap-2 p-1 rounded-xl hover:bg-white/5 transition-colors"
-                >
-                  {user?.avatar ? (
-                    <img
-                      src={user.avatar}
-                      alt={user.displayName || ''}
-                      className="w-8 h-8 rounded-full ring-2 ring-white/10"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-ndp-accent/20 flex items-center justify-center text-ndp-accent text-sm font-bold">
-                      {(user?.displayName || user?.email || '?')[0].toUpperCase()}
-                    </div>
-                  )}
-                  <ChevronDown className={clsx(
-                    'w-3.5 h-3.5 text-ndp-text-dim transition-transform hidden sm:block',
-                    avatarMenuOpen && 'rotate-180'
-                  )} />
-                </button>
-
-                {/* Dropdown menu */}
-                {avatarMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-56 card shadow-2xl shadow-black/50 border border-white/10 animate-fade-in py-1">
-                    {/* User info */}
-                    <div className="px-4 py-3 border-b border-white/5">
-                      <p className="text-sm font-semibold text-ndp-text truncate">{user?.displayName || user?.email}</p>
-                      <p className="text-xs text-ndp-text-dim truncate">{user?.email}</p>
-                    </div>
-
-                    {hasPermission('admin.*') && (
-                      <Link
-                        to="/admin"
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ndp-text-muted hover:text-ndp-accent hover:bg-white/5 transition-colors"
-                      >
-                        <Shield className="w-4 h-4" />
-                        {t('nav.admin')}
-                      </Link>
-                    )}
-
-                    {hasPermission('admin.roles') && (
-                      <div className="px-4 py-2 border-t border-white/5">
-                        <div className="flex items-center gap-2.5">
-                          <Eye className="w-4 h-4 text-ndp-text-dim flex-shrink-0" />
-                          <select
-                            value={viewAsRole || ''}
-                            onChange={(e) => e.target.value ? startViewAs(e.target.value) : stopViewAs()}
-                            className="flex-1 bg-white/5 border border-white/10 rounded-lg text-sm text-ndp-text px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500/40 cursor-pointer appearance-none"
-                          >
-                            <option value="">{t('admin.view_as.off', 'View as role...')}</option>
-                            {availableRoles.filter(r => r.name !== 'admin').map(r => (
-                              <option key={r.name} value={r.name}>{r.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="px-4 py-2.5 border-t border-white/5">
-                      <div className="flex items-center gap-2.5">
-                        <Globe className="w-4 h-4 text-ndp-text-dim flex-shrink-0" />
-                        <select
-                          value={i18n.language.split('-')[0]}
-                          onChange={(e) => i18n.changeLanguage(e.target.value)}
-                          className="flex-1 bg-white/5 border border-white/10 rounded-lg text-sm text-ndp-text px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-ndp-accent/40 cursor-pointer appearance-none"
-                        >
-                          {Object.keys(i18n.options.resources || {}).map((code) => (
-                            <option key={code} value={code}>
-                              {new Intl.DisplayNames([code], { type: 'language' }).of(code)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Plugin hook: avatar menu */}
-                    <PluginSlot hookPoint="avatar.menu" context={{ user, isAdmin: hasPermission('admin.*'), hasPermission }} />
-
-                    {push.supported && (
-                      <button
-                        onClick={() => push.subscribed ? push.unsubscribe() : push.subscribe()}
-                        className="flex items-center gap-3 w-full px-4 py-2 text-sm text-ndp-text-muted hover:bg-white/5 transition-colors"
-                        disabled={push.loading}
-                      >
-                        <Bell className="w-4 h-4" />
-                        <span>{push.subscribed ? t('push.enabled', 'Notifications enabled') : t('push.enable', 'Enable notifications')}</span>
-                        {push.subscribed && <span className="ml-auto w-2 h-2 rounded-full bg-ndp-success" />}
-                      </button>
-                    )}
-
-                    <button
-                      onClick={handleLogout}
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ndp-text-muted hover:text-ndp-danger hover:bg-white/5 transition-colors w-full text-left"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      {t('nav.logout')}
-                    </button>
-                  </div>
-                )}
-              </div>
+              <UserCluster viewAsRole={viewAsRole} onViewAsRoleChange={setViewAsRole} />
 
               {/* Mobile hamburger */}
               <button
