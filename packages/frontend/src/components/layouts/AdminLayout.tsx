@@ -121,7 +121,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             dropdownDirection="above"
           />
         </div>
-        <NotificationBell />
+        <NotificationBell dropdownDirection="above" />
       </div>
     </div>
   );
