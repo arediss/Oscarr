@@ -3,6 +3,7 @@ import { prisma } from '../../utils/prisma.js';
 import { getAuthProvider } from '../../providers/index.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { parseId } from '../../utils/params.js';
+import { invalidateUserStateCache } from '../../middleware/rbac.js';
 
 export async function usersRoutes(app: FastifyInstance) {
   // === USER MANAGEMENT ===
@@ -103,6 +104,7 @@ export async function usersRoutes(app: FastifyInstance) {
         displayName: true,
         avatar: true,
         role: true,
+        disabled: true,
         createdAt: true,
         providers: { select: { provider: true, providerUsername: true, providerEmail: true } },
         _count: { select: { requests: true } },
@@ -154,6 +156,42 @@ export async function usersRoutes(app: FastifyInstance) {
     });
 
     logEvent('info', 'User', `${user.displayName} role changed to ${role}`);
+    return user;
+  });
+
+  app.put('/users/:id/disabled', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', description: 'User ID' } },
+      },
+      body: {
+        type: 'object',
+        required: ['disabled'],
+        properties: { disabled: { type: 'boolean' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const userId = parseId(id);
+    if (!userId) return reply.status(400).send({ error: 'Invalid ID' });
+
+    const { disabled } = request.body as { disabled: boolean };
+
+    const requester = (request as unknown as { user?: { id: number } }).user;
+    if (requester?.id === userId && disabled) {
+      return reply.status(400).send({ error: 'You cannot disable your own account' });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { disabled },
+      select: { id: true, displayName: true, email: true, disabled: true },
+    });
+    invalidateUserStateCache(userId);
+
+    logEvent('info', 'User', `${user.displayName || user.email} ${disabled ? 'disabled' : 'enabled'}`);
     return user;
   });
 }

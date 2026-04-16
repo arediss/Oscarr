@@ -11,6 +11,7 @@ export interface User {
   avatar: string | null;
   /** Role name — 'admin'/'user' are the built-in system roles; admins can create custom roles at runtime. */
   role: string;
+  disabled?: boolean;
   providers?: UserProviderInfo[];
   createdAt?: string;
 }

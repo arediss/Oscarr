@@ -1,21 +1,34 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 
-// ── Fresh role lookup (cached 30s per user) ─────────────────────────────────
-const _roleCache = new Map<number, { role: string; at: number }>();
-const ROLE_CACHE_TTL = 30_000;
+// ── Fresh user state lookup (cached 30s per user) ───────────────────────────
+const _userStateCache = new Map<number, { role: string; disabled: boolean; at: number }>();
+const USER_STATE_CACHE_TTL = 30_000;
 
-async function getFreshUserRole(userId: number, jwtRole: string): Promise<string> {
-  const cached = _roleCache.get(userId);
-  if (cached && Date.now() - cached.at < ROLE_CACHE_TTL) return cached.role;
-  try {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
-    const role = user?.role ?? jwtRole;
-    _roleCache.set(userId, { role, at: Date.now() });
-    return role;
-  } catch {
-    return jwtRole; // fallback to JWT role on DB error
+async function getFreshUserState(
+  userId: number,
+  jwtRole: string
+): Promise<{ role: string; disabled: boolean }> {
+  const cached = _userStateCache.get(userId);
+  if (cached && Date.now() - cached.at < USER_STATE_CACHE_TTL) {
+    return { role: cached.role, disabled: cached.disabled };
   }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, disabled: true },
+    });
+    const state = { role: user?.role ?? jwtRole, disabled: user?.disabled ?? false };
+    _userStateCache.set(userId, { ...state, at: Date.now() });
+    return state;
+  } catch {
+    return { role: jwtRole, disabled: false };
+  }
+}
+
+export function invalidateUserStateCache(userId?: number): void {
+  if (userId === undefined) _userStateCache.clear();
+  else _userStateCache.delete(userId);
 }
 
 // ── Special permission markers ───────────────────────────────────────────────
@@ -342,12 +355,16 @@ export function rbacPlugin(app: FastifyInstance): void {
       return reply.status(401).send({ error: 'Unauthorized' });
     }
 
+    // Fetch fresh state (role + disabled) — cached 30s
+    const jwtUser = request.user as { id: number; role: string };
+    const { role: freshRole, disabled } = await getFreshUserState(jwtUser.id, jwtUser.role);
+
+    if (disabled) {
+      return reply.status(403).send({ error: 'ACCOUNT_DISABLED' });
+    }
+
     // Any authenticated user is enough
     if (rule.permission === AUTH) return;
-
-    // Check role-based permission — fetch fresh role from DB (cached 30s)
-    const jwtUser = request.user as { id: number; role: string };
-    const freshRole = await getFreshUserRole(jwtUser.id, jwtUser.role);
 
     // "View as role" simulation — admin only, never applies to admin routes
     const viewAsRole = request.headers['x-view-as-role'] as string | undefined;

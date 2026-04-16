@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Users, Loader2, CheckCircle, RefreshCw, Trash2, Link, ChevronDown } from 'lucide-react';
+import { Users, Loader2, CheckCircle, RefreshCw, Trash2, Link, ChevronDown, UserX, UserCheck } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -31,6 +31,7 @@ export function UsersTab() {
   const [authProviders, setAuthProviders] = useState<{ id: string; label: string; type: string }[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [updatingRoleFor, setUpdatingRoleFor] = useState<number | null>(null);
+  const [togglingDisabledFor, setTogglingDisabledFor] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -63,6 +64,18 @@ export function UsersTab() {
       console.error('Failed to change role:', err);
     } finally {
       setUpdatingRoleFor(null);
+    }
+  };
+
+  const handleToggleDisabled = async (userId: number, disabled: boolean) => {
+    setTogglingDisabledFor(userId);
+    try {
+      await api.put(`/admin/users/${userId}/disabled`, { disabled });
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, disabled } : u));
+    } catch (err) {
+      console.error('Failed to toggle disabled:', err);
+    } finally {
+      setTogglingDisabledFor(null);
     }
   };
 
@@ -176,11 +189,18 @@ export function UsersTab() {
       )}
       <div className="space-y-3">
         {sortedUsers.map((u) => (
-            <div key={u.id} className="card">
+            <div key={u.id} className={clsx('card transition-opacity', u.disabled && 'opacity-50')}>
               <div className="flex items-center gap-4 p-4">
                 {u.avatar ? <img src={u.avatar} alt="" className="w-10 h-10 rounded-full" /> : <div className="w-10 h-10 rounded-full bg-ndp-accent/20 flex items-center justify-center text-ndp-accent font-bold">{(u.displayName || u.email)[0].toUpperCase()}</div>}
                 <div className="flex-1 min-w-0">
-                  <span className="text-sm font-semibold text-ndp-text">{u.displayName || u.email}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-ndp-text">{u.displayName || u.email}</span>
+                    {u.disabled && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-ndp-danger/10 text-ndp-danger">
+                        Disabled
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-ndp-text-dim mt-0.5 block">{u.email}</span>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
@@ -223,7 +243,28 @@ export function UsersTab() {
 
                   <span className="h-5 w-px bg-white/10" aria-hidden />
 
-                  {/* Group 3 — delete (always visible, disabled for self) */}
+                  {/* Group 3a — toggle disabled (never available for self) */}
+                  <button
+                    onClick={() => handleToggleDisabled(u.id, !u.disabled)}
+                    disabled={u.id === currentUser?.id || togglingDisabledFor === u.id}
+                    className={clsx(
+                      'p-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed',
+                      u.disabled
+                        ? 'text-ndp-success hover:bg-ndp-success/10'
+                        : 'text-ndp-text-dim hover:text-ndp-warning hover:bg-ndp-warning/10'
+                    )}
+                    title={u.disabled ? 'Re-enable account' : 'Disable account'}
+                  >
+                    {togglingDisabledFor === u.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : u.disabled ? (
+                      <UserCheck className="w-3.5 h-3.5" />
+                    ) : (
+                      <UserX className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+
+                  {/* Group 3b — delete (always visible, disabled for self) */}
                   <button
                     onClick={() => setConfirmDeleteUser(u.id)}
                     disabled={u.id === currentUser?.id || deletingUser === u.id}
