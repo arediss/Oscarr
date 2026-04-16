@@ -15,6 +15,18 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
       });
       if (!user) return reply.status(500).send({ error: 'User not found after auth' });
 
+      if (user.disabled) {
+        const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+        const mode = appSettings?.disabledLoginMode ?? 'friendly';
+        if (mode === 'friendly') {
+          return reply.status(403).send({
+            error: 'Your account has been disabled. Contact an administrator to restore access.',
+            code: 'ACCOUNT_DISABLED',
+          });
+        }
+        return reply.status(401).send({ error: 'Invalid credentials' });
+      }
+
       const token = app.jwt.sign(
         { id: user.id, email: user.email, role: user.role },
         { expiresIn: '24h' }
