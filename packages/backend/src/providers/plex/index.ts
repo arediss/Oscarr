@@ -149,20 +149,33 @@ const plexAuth: AuthProvider = {
   async importUsers(adminUserId) {
     const token = await getPlexToken(adminUserId);
     if (!token) throw new Error('NO_TOKEN');
-    // Check AppSettings first, then fallback to Plex service config
-    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-    let machineId = settings?.plexMachineId;
-    if (!machineId) {
-      const plexService = await prisma.service.findFirst({ where: { type: 'plex', enabled: true } });
-      if (plexService) {
-        const cfg = JSON.parse(plexService.config) as Record<string, string>;
-        machineId = cfg.machineId || null;
-      }
-    }
+    const machineId = await resolveMachineId();
     if (!machineId) throw new Error('NO_MACHINE_ID');
     return importPlexUsers(token, machineId);
   },
+
+  async syncUsers(adminUserId) {
+    const token = await getPlexToken(adminUserId);
+    if (!token) throw new Error('NO_TOKEN');
+    const machineId = await resolveMachineId();
+    if (!machineId) throw new Error('NO_MACHINE_ID');
+    const { syncPlexUsers } = await import('./sync.js');
+    return syncPlexUsers(token, machineId);
+  },
 };
+
+async function resolveMachineId(): Promise<string | null> {
+  const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+  if (settings?.plexMachineId) return settings.plexMachineId;
+  const plexService = await prisma.service.findFirst({ where: { type: 'plex', enabled: true } });
+  if (plexService) {
+    try {
+      const cfg = JSON.parse(plexService.config) as Record<string, string>;
+      return cfg.machineId || null;
+    } catch { /* ignore */ }
+  }
+  return null;
+}
 
 // ─── Unified Provider ───────────────────────────────────────────────
 

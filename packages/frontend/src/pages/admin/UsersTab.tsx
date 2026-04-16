@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Users, Loader2, CheckCircle, RefreshCw, Trash2, Link, ChevronDown, UserX, UserCheck } from 'lucide-react';
+import { Users, Loader2, CheckCircle, RefreshCw, Trash2, Link, ChevronDown, UserX, UserCheck, RefreshCcw, Download } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -32,6 +32,8 @@ export function UsersTab() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [updatingRoleFor, setUpdatingRoleFor] = useState<number | null>(null);
   const [togglingDisabledFor, setTogglingDisabledFor] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ enabled: number; disabled: number; pendingImports: Array<{ providerId: string; providerUsername?: string | null; providerEmail?: string | null }> } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -147,6 +149,16 @@ export function UsersTab() {
     finally { setImporting(false); }
   };
 
+  const handleSync = async (providerId: string) => {
+    setSyncing(true); setSyncResult(null);
+    try {
+      const { data } = await api.post(`/admin/users/sync/${providerId}`);
+      setSyncResult(data);
+      fetchUsers();
+    } catch (err) { console.error('Sync failed:', err); }
+    finally { setSyncing(false); }
+  };
+
   if (loading) return <Spinner />;
 
   const sortedUsers = [...users].sort((a, b) => {
@@ -159,12 +171,18 @@ export function UsersTab() {
     <AdminTabLayout
       title={t('admin.users.count', { count: users.length })}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {authProviders.filter(p => p.id !== 'email').map(p => (
-            <button key={p.id} onClick={() => handleImport(p.id)} disabled={importing} className="btn-primary flex items-center gap-2 text-sm">
-              {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-              {t('admin.users.import_provider', { provider: p.label })}
-            </button>
+            <div key={p.id} className="flex items-center gap-1.5">
+              <button onClick={() => handleSync(p.id)} disabled={syncing} className="btn-secondary flex items-center gap-2 text-sm">
+                {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
+                Sync {p.label}
+              </button>
+              <button onClick={() => handleImport(p.id)} disabled={importing} className="btn-primary flex items-center gap-2 text-sm">
+                {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                {t('admin.users.import_provider', { provider: p.label })}
+              </button>
+            </div>
           ))}
           <button onClick={fetchUsers} className="btn-secondary flex items-center gap-2 text-sm"><RefreshCw className="w-4 h-4" /> {t('common.refresh')}</button>
         </div>
@@ -179,6 +197,34 @@ export function UsersTab() {
         ))}
       </div>
 
+      {syncResult && (
+        <div className="p-3 bg-ndp-accent/5 border border-ndp-accent/20 rounded-xl mb-4 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <RefreshCcw className="w-5 h-5 text-ndp-accent flex-shrink-0" />
+            <p className="text-sm text-ndp-text-muted">
+              Sync complete: {syncResult.enabled} re-enabled · {syncResult.disabled} disabled
+              {syncResult.pendingImports.length > 0 && ` · ${syncResult.pendingImports.length} on provider without Oscarr account`}
+            </p>
+            <button onClick={() => setSyncResult(null)} className="ml-auto text-xs text-ndp-text-dim hover:text-ndp-text">×</button>
+          </div>
+          {syncResult.pendingImports.length > 0 && (
+            <div className="mt-3 pl-8 space-y-1">
+              <p className="text-xs text-ndp-text-dim">Found on provider but not in Oscarr — click "Import" to pull them in:</p>
+              <ul className="text-xs text-ndp-text-muted space-y-0.5">
+                {syncResult.pendingImports.slice(0, 10).map((p) => (
+                  <li key={p.providerId}>
+                    · {p.providerUsername || p.providerEmail || p.providerId}
+                    {p.providerEmail && p.providerUsername && <span className="text-ndp-text-dim"> ({p.providerEmail})</span>}
+                  </li>
+                ))}
+                {syncResult.pendingImports.length > 10 && (
+                  <li className="text-ndp-text-dim">… and {syncResult.pendingImports.length - 10} more</li>
+                )}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
       {importResult && (
         <div className="p-3 bg-ndp-success/5 border border-ndp-success/20 rounded-xl mb-4 animate-fade-in flex items-center gap-3">
           <CheckCircle className="w-5 h-5 text-ndp-success flex-shrink-0" />
