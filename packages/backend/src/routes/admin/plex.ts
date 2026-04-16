@@ -1,0 +1,79 @@
+import type { FastifyInstance } from 'fastify';
+import { prisma } from '../../utils/prisma.js';
+import { logEvent } from '../../utils/logEvent.js';
+import { parseId } from '../../utils/params.js';
+import { getPlexToken } from '../../providers/plex/index.js';
+import { getSharedServerUsers, removeSharedServer } from '../../services/plex.js';
+
+export async function plexAdminRoutes(app: FastifyInstance) {
+  app.delete('/plex/shared/:userId', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['userId'],
+        properties: { userId: { type: 'string', description: 'Oscarr user ID' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    const targetId = parseId(userId);
+    if (!targetId) return reply.status(400).send({ error: 'Invalid userId' });
+
+    const requester = (request as unknown as { user?: { id: number } }).user;
+    if (!requester?.id) return reply.status(401).send({ error: 'Unauthenticated' });
+
+    const token = await getPlexToken(requester.id);
+    if (!token) return reply.status(400).send({ error: 'No Plex admin token available' });
+
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    let machineId = settings?.plexMachineId;
+    if (!machineId) {
+      const plexService = await prisma.service.findFirst({ where: { type: 'plex', enabled: true } });
+      if (plexService) {
+        try {
+          const cfg = JSON.parse(plexService.config) as Record<string, string>;
+          machineId = cfg.machineId || null;
+        } catch { /* ignore */ }
+      }
+    }
+    if (!machineId) return reply.status(400).send({ error: 'No Plex machine ID configured' });
+
+    const plexProvider = await prisma.userProvider.findUnique({
+      where: { userId_provider: { userId: targetId, provider: 'plex' } },
+    });
+    if (!plexProvider?.providerId) {
+      return reply.status(404).send({ error: 'Target user has no Plex account linked' });
+    }
+
+    const targetPlexId = parseInt(plexProvider.providerId, 10);
+    if (!Number.isFinite(targetPlexId)) {
+      return reply.status(500).send({ error: 'Target Plex user ID is malformed' });
+    }
+
+    let sharedUsers;
+    try {
+      sharedUsers = await getSharedServerUsers(token, machineId);
+    } catch (err) {
+      logEvent('error', 'Plex', `Failed to list shared servers: ${String(err)}`);
+      return reply.status(502).send({ error: 'Unable to query Plex shared servers' });
+    }
+
+    const match = sharedUsers.find((u) => u.id === targetPlexId);
+    if (!match) {
+      return reply.status(404).send({ error: 'User is not currently shared with this server' });
+    }
+    if (!match.shareId) {
+      return reply.status(500).send({ error: 'Could not resolve share ID from Plex response' });
+    }
+
+    try {
+      await removeSharedServer(token, machineId, match.shareId);
+    } catch (err) {
+      logEvent('error', 'Plex', `Failed to remove shared server ${match.shareId}: ${String(err)}`);
+      return reply.status(502).send({ error: 'Plex rejected the unshare request' });
+    }
+
+    logEvent('info', 'Plex', `Admin #${requester.id} unshared Plex access for user #${targetId} (Plex userID ${targetPlexId})`);
+    return { ok: true };
+  });
+}
