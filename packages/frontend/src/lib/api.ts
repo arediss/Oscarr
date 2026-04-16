@@ -57,7 +57,11 @@ api.interceptors.response.use(
   (error) => {
     // 401 handling is done by AuthContext + InstallGuard, not here
     if (error.response?.status === 403) {
-      showErrorToast(i18n.t('common.forbidden', 'Access denied'));
+      const translated = i18n.t('common.forbidden', 'Access denied');
+      showErrorToast(translated);
+      if (error.response.data?.error === 'Forbidden') {
+        error.response.data.error = translated;
+      }
     }
     return Promise.reject(error);
   }
