@@ -175,7 +175,7 @@ export async function pluginRoutes(app: FastifyInstance) {
 
       const res = await fetchWithTimeout(REGISTRY_URL, { headers });
       if (!res.ok) throw new Error(`Registry fetch failed: ${res.status}`);
-      const registry = await res.json() as { plugins: { repository: string; category?: string }[] };
+      const registry = await res.json() as { plugins: { repository: string; category?: string; tags?: string[] }[] };
 
       // Validate repository format before fetching
       const validRepo = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
@@ -209,6 +209,7 @@ export async function pluginRoutes(app: FastifyInstance) {
             author: manifest.author || '',
             repository: entry.repository,
             category: entry.category || 'utilities',
+            tags: Array.isArray(entry.tags) ? entry.tags.filter((t): t is string => typeof t === 'string') : [],
             url: `https://github.com/${entry.repository}`,
             stars: repoMeta.stargazers_count ?? 0,
             updatedAt: repoMeta.pushed_at || null,

@@ -29,6 +29,7 @@ interface RegistryPlugin {
   author: string;
   repository: string;
   category: string;
+  tags?: string[];
   url: string;
   stars: number;
   updatedAt: string | null;
@@ -41,9 +42,22 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
   notifications: { label: 'Notifications', color: 'bg-amber-500/15 text-amber-400' },
   automation: { label: 'Automation', color: 'bg-cyan-500/15 text-cyan-400' },
   'requests-workflow': { label: 'Requests', color: 'bg-pink-500/15 text-pink-400' },
+  subscriptions: { label: 'Subscriptions', color: 'bg-fuchsia-500/15 text-fuchsia-400' },
   'ui-themes': { label: 'Themes', color: 'bg-purple-500/15 text-purple-400' },
   analytics: { label: 'Analytics', color: 'bg-emerald-500/15 text-emerald-400' },
   utilities: { label: 'Utilities', color: 'bg-slate-500/15 text-slate-400' },
+};
+
+const TAG_CONFIG: Record<string, { label: string; color: string }> = {
+  plex: { label: 'Plex', color: 'bg-[#e5a00d]/15 text-[#e5a00d]' },
+  jellyfin: { label: 'Jellyfin', color: 'bg-violet-500/15 text-violet-400' },
+  emby: { label: 'Emby', color: 'bg-green-500/15 text-green-400' },
+  discord: { label: 'Discord', color: 'bg-indigo-500/15 text-indigo-400' },
+  telegram: { label: 'Telegram', color: 'bg-sky-500/15 text-sky-400' },
+  matrix: { label: 'Matrix', color: 'bg-teal-500/15 text-teal-400' },
+  slack: { label: 'Slack', color: 'bg-rose-500/15 text-rose-400' },
+  radarr: { label: 'Radarr', color: 'bg-yellow-500/15 text-yellow-400' },
+  sonarr: { label: 'Sonarr', color: 'bg-blue-500/15 text-blue-400' },
 };
 
 function CopyButton({ text }: { text: string }) {
@@ -361,6 +375,14 @@ export function PluginsTab() {
                             <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', cat.color)}>
                               {cat.label}
                             </span>
+                            {plugin.tags?.map((tag) => {
+                              const tagCfg = TAG_CONFIG[tag] || { label: tag, color: 'bg-white/5 text-ndp-text-dim' };
+                              return (
+                                <span key={tag} className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', tagCfg.color)}>
+                                  {tagCfg.label}
+                                </span>
+                              );
+                            })}
                             {isInstalled && (
                               <span className="text-xs px-2 py-0.5 rounded-full bg-ndp-success/15 text-ndp-success font-medium">
                                 Installed
