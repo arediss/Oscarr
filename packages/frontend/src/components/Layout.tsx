@@ -92,7 +92,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const topOffset = (hasBanner ? 10 : 0) + (hasViewAsBanner ? 10 : 0);
 
   return (
-    <div className="min-h-screen bg-ndp-bg">
+    <div className="min-h-dvh bg-ndp-bg">
       {hasBanner && (
         <div className="fixed top-0 left-0 right-0 z-[60] bg-ndp-warning/90 backdrop-blur-sm text-black px-4 py-2 flex items-center justify-center gap-3">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
@@ -328,7 +328,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main
-        className="min-h-screen"
+        className="min-h-dvh"
         style={location.pathname === '/' ? undefined : { paddingTop: `${64 + topOffset * 4}px` }}
       >
         {children}

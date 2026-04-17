@@ -47,7 +47,7 @@ export default function PersonPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-dvh flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-ndp-accent animate-spin" />
       </div>
     );
@@ -55,7 +55,7 @@ export default function PersonPage() {
 
   if (!person) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-dvh flex items-center justify-center">
         <p className="text-ndp-text-muted">{t('media.not_found')}</p>
       </div>
     );
@@ -68,7 +68,7 @@ export default function PersonPage() {
   const bioTruncated = person.biography && person.biography.length > 400 && !showFullBio;
 
   return (
-    <div className="min-h-screen bg-ndp-bg">
+    <div className="min-h-dvh bg-ndp-bg">
       {/* Back button - same style as media detail */}
       <button onClick={() => navigate(-1)} className="fixed top-20 left-4 sm:left-8 z-20 p-2 glass rounded-xl hover:bg-white/10 transition-colors">
         <ArrowLeft className="w-5 h-5 text-white" />
