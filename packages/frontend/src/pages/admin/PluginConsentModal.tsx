@@ -125,26 +125,21 @@ export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: 
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 px-6 pt-4 pb-6 flex-shrink-0">
-          <p className="text-[11px] text-ndp-text-dim leading-relaxed">
-            Enforced at runtime. Disable the plugin anytime to revoke.
-          </p>
-          <div className="flex gap-2 flex-shrink-0">
-            <button
-              onClick={() => !busy && onCancel()}
-              disabled={busy}
-              className="btn-secondary text-sm disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              disabled={busy}
-              className="btn-primary text-sm disabled:opacity-50"
-            >
-              {busy ? 'Enabling…' : 'Enable'}
-            </button>
-          </div>
+        <div className="flex gap-2 px-6 pt-4 pb-6 flex-shrink-0">
+          <button
+            onClick={() => !busy && onCancel()}
+            disabled={busy}
+            className="btn-secondary text-sm flex-1 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="btn-primary text-sm flex-1 disabled:opacity-50"
+          >
+            {busy ? 'Enabling…' : 'Enable'}
+          </button>
         </div>
       </div>
     </div>
