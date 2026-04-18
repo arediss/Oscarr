@@ -40,12 +40,16 @@ function validate(schema: AuthProviderField[] | undefined, config: Record<string
   if (!schema) return null;
   for (const field of schema) {
     const v = config[field.key];
-    if (field.required && (v === undefined || v === null || v === '')) {
-      return `Field "${field.label}" is required`;
+    if (v === undefined || v === null) {
+      if (field.required) return `Field "${field.label}" is required`;
+      continue;
     }
-    if (v !== undefined && v !== null && typeof v !== 'string') {
-      return `Field "${field.label}" must be a string`;
+    if (field.type === 'boolean') {
+      if (typeof v !== 'boolean') return `Field "${field.label}" must be a boolean`;
+      continue;
     }
+    if (typeof v !== 'string') return `Field "${field.label}" must be a string`;
+    if (field.required && v === '') return `Field "${field.label}" is required`;
   }
   return null;
 }
