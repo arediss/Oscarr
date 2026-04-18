@@ -138,16 +138,11 @@ function ProviderRow({
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-ndp-text truncate">{provider.label}</span>
             <span className="text-xs text-ndp-text-dim">
               {provider.type === 'oauth' ? 'OAuth 2.0' : 'Credentials'}
             </span>
-            {provider.config.allowSignup === true && !unavailable && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-ndp-accent/15 text-ndp-accent font-medium">
-                {t('admin.authProviders.signup_on')}
-              </span>
-            )}
           </div>
           {unavailable ? (
             <div className="flex items-center gap-1.5 mt-0.5 text-xs text-ndp-warning">
@@ -163,29 +158,39 @@ function ProviderRow({
           )}
         </div>
 
-        <div className="flex items-center gap-0.5 flex-shrink-0">
-          {hasSettings && (
-            <button
-              onClick={onEdit}
-              disabled={unavailable}
-              className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title={t('common.edit')}
-            >
-              <Pencil className="w-4 h-4" />
-            </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {provider.config.allowSignup === true && !unavailable && (
+            <>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-ndp-accent/15 text-ndp-accent font-medium whitespace-nowrap">
+                {t('admin.authProviders.signup_on')}
+              </span>
+              <div className="w-px h-5 bg-white/10" />
+            </>
           )}
-          <button
-            onClick={onToggle}
-            disabled={busy || unavailable}
-            className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title={provider.enabled ? t('common.disable') : t('common.enable')}
-          >
-            {busy ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Power className={clsx('w-4 h-4', provider.enabled && !unavailable && 'text-ndp-success')} />
+          <div className="flex items-center gap-0.5">
+            {hasSettings && (
+              <button
+                onClick={onEdit}
+                disabled={unavailable}
+                className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={t('common.edit')}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
             )}
-          </button>
+            <button
+              onClick={onToggle}
+              disabled={busy || unavailable}
+              className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={provider.enabled ? t('common.disable') : t('common.enable')}
+            >
+              {busy ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Power className={clsx('w-4 h-4', provider.enabled && !unavailable && 'text-ndp-success')} />
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
