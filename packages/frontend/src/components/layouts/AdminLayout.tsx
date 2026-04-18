@@ -132,7 +132,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {sidebarContent}
       </aside>
 
-      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-ndp-surface/95 backdrop-blur-xl border-b border-white/5 flex items-center h-14 px-3 gap-2">
+      <div
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-ndp-surface/95 backdrop-blur-xl border-t border-white/5 flex items-center h-14 px-3 gap-2"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
         <Link
           to="/"
           className="p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg hover:bg-white/5 transition-colors"
@@ -162,9 +165,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       />
       <aside
         className={clsx(
-          'md:hidden fixed left-0 top-0 bottom-0 z-50 w-72 bg-ndp-surface border-r border-white/5 transform transition-transform duration-300 flex flex-col',
-          drawerOpen ? 'translate-x-0' : '-translate-x-full'
+          'md:hidden fixed inset-x-0 bottom-0 top-0 z-50 bg-ndp-surface border-t border-white/5 transform transition-transform duration-300 flex flex-col',
+          drawerOpen ? 'translate-y-0' : 'translate-y-full'
         )}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         aria-hidden={!drawerOpen}
       >
         <button
@@ -177,7 +181,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {sidebarContent}
       </aside>
 
-      <main className="flex-1 min-w-0 pt-14 md:pt-0">{children}</main>
+      <main className="flex-1 min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
     </div>
   );
 }
