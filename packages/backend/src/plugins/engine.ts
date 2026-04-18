@@ -5,6 +5,7 @@ import { prisma } from '../utils/prisma.js';
 import { notificationRegistry } from '../notifications/index.js';
 import { discoverPlugins } from './loader.js';
 import { parseManifest } from './manifestSchema.js';
+import { checkCompat, type CompatResult } from './compat.js';
 import { updateJobSchedule } from '../services/scheduler.js';
 import { createContext, type ContextFactoryDeps } from './context/index.js';
 import type {
@@ -19,6 +20,7 @@ import type {
 export class PluginEngine {
   private plugins = new Map<string, LoadedPlugin>();
   private settingsCache = new Map<string, Record<string, unknown>>();
+  private compatCache = new Map<string, CompatResult>();
   private logger: FastifyBaseLogger | null = null;
   private app: FastifyInstance | null = null;
 
@@ -47,6 +49,12 @@ export class PluginEngine {
 
     if (this.plugins.has(manifest.id)) {
       throw new Error(`Plugin "${manifest.id}" is already loaded`);
+    }
+
+    const compat = checkCompat(manifest);
+    this.compatCache.set(manifest.id, compat);
+    if (compat.status === 'incompatible') {
+      throw new Error(`Plugin "${manifest.id}" is incompatible: ${compat.reason}`);
     }
 
     const state = await prisma.pluginState.upsert({
@@ -110,6 +118,20 @@ export class PluginEngine {
 
     for (const { dir, manifest } of discovered) {
       try {
+        const compat = checkCompat(manifest);
+        this.compatCache.set(manifest.id, compat);
+        if (compat.status === 'incompatible') {
+          this.log('warn', `Refusing to load "${manifest.id}": ${compat.reason}`);
+          this.plugins.set(manifest.id, {
+            manifest,
+            registration: { manifest } as PluginRegistration,
+            dir,
+            enabled: false,
+            error: compat.reason,
+          });
+          continue;
+        }
+
         const state = await prisma.pluginState.upsert({
           where: { pluginId: manifest.id },
           update: {},
@@ -248,6 +270,7 @@ export class PluginEngine {
       hasSettings: (p.manifest.settings?.length ?? 0) > 0,
       hasFrontend: !!p.manifest.frontend,
       error: p.error,
+      compat: this.compatCache.get(p.manifest.id),
     }));
   }
 

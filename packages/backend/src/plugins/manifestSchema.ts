@@ -59,6 +59,10 @@ export const pluginManifestSchema = z.object({
   author: z.string().optional(),
   entry: relativePath,
   frontend: relativePath.optional(),
+  engines: z.object({
+    oscarr: z.string().min(1),
+    testedAgainst: z.array(z.string().min(1)).optional(),
+  }).strict().optional(),
   services: z.array(z.string().min(1)).optional(),
   capabilities: z.array(capabilityEnum).optional(),
   capabilityReasons: z.record(capabilityEnum, z.string()).optional(),

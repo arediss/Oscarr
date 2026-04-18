@@ -33,6 +33,12 @@ export interface PluginManifest {
   author?: string;
   entry: string;
   frontend?: string;
+  /** Compatibility declaration. `oscarr` is a semver range the author claims to support;
+   *  `testedAgainst` lists Oscarr versions explicitly verified to work. Missing = 'unknown' status. */
+  engines?: {
+    oscarr: string;
+    testedAgainst?: string[];
+  };
   /** Services whose config the plugin is allowed to read via getServiceConfig / getServiceConfigRaw.
    *  Any service not listed here returns null and is logged. Empty / missing = no service access. */
   services?: string[];
@@ -150,4 +156,10 @@ export interface PluginInfo {
   hasSettings: boolean;
   hasFrontend: boolean;
   error?: string;
+  compat?: {
+    status: 'verified' | 'untested' | 'incompatible' | 'unknown';
+    range?: string;
+    oscarrVersion: string;
+    reason?: string;
+  };
 }
