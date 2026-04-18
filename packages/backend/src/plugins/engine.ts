@@ -1,8 +1,10 @@
 import { join } from 'path';
+import { readFile } from 'fs/promises';
 import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { notificationRegistry } from '../notifications/index.js';
 import { discoverPlugins } from './loader.js';
+import { parseManifest } from './manifestSchema.js';
 import { updateJobSchedule } from '../services/scheduler.js';
 import { createContext, type ContextFactoryDeps } from './context/index.js';
 import type {
@@ -32,6 +34,74 @@ export class PluginEngine {
       const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
       fn('[PluginEngine]', String(msg));
     }
+  }
+
+  /**
+   * Load a single plugin from its directory at runtime. Used by the install flow to avoid a full restart.
+   * If the app is already serving requests, the plugin's routes are registered on the fly via Fastify's
+   * post-boot `register()` (works because we encapsulate each plugin in its own sub-context).
+   */
+  async loadSingle(dir: string): Promise<LoadedPlugin> {
+    const raw = await readFile(join(dir, 'manifest.json'), 'utf-8');
+    const manifest = parseManifest(JSON.parse(raw), dir) as PluginManifest;
+
+    if (this.plugins.has(manifest.id)) {
+      throw new Error(`Plugin "${manifest.id}" is already loaded`);
+    }
+
+    const state = await prisma.pluginState.upsert({
+      where: { pluginId: manifest.id },
+      update: {},
+      create: { pluginId: manifest.id, enabled: true, settings: '{}' },
+    });
+
+    const entryPath = join(dir, manifest.entry);
+    const mod = await import(entryPath);
+    if (typeof mod.register !== 'function') {
+      throw new Error(`Plugin "${manifest.id}" does not export a register() function`);
+    }
+
+    const ctx = createContext(manifest, this.getContextDeps());
+    const registration: PluginRegistration = await mod.register(ctx);
+
+    if (!state.onInstallRan && registration.onInstall) {
+      await registration.onInstall(ctx);
+      await prisma.pluginState.update({
+        where: { pluginId: manifest.id },
+        data: { onInstallRan: true },
+      });
+      this.log('info', `Ran onInstall for "${manifest.id}"`);
+    }
+
+    if (registration.registerNotificationProviders) {
+      registration.registerNotificationProviders(notificationRegistry);
+    }
+
+    const loaded: LoadedPlugin = { manifest, registration, dir, enabled: state.enabled };
+    this.plugins.set(manifest.id, loaded);
+
+    // If the app is already running, register routes now — no restart needed.
+    if (this.app && state.enabled && registration.registerRoutes) {
+      const prefix = manifest.hooks?.routes?.prefix || `/api/plugins/${manifest.id}`;
+      try {
+        await this.app.register(
+          async (instance) => { await registration.registerRoutes!(instance, ctx); },
+          { prefix }
+        );
+        this.log('info', `Hot-registered routes for "${manifest.id}" at ${prefix}`);
+      } catch (err) {
+        this.log('error', `Route registration failed for "${manifest.id}": ${err}`);
+        loaded.error = `Route registration failed: ${err}`;
+        loaded.enabled = false;
+        await prisma.pluginState.update({
+          where: { pluginId: manifest.id },
+          data: { enabled: false },
+        }).catch(() => {});
+      }
+    }
+
+    this.log('info', `Loaded "${manifest.id}" v${manifest.version} via loadSingle`);
+    return loaded;
   }
 
   async loadAll(): Promise<void> {

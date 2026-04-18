@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, ChevronDown, ChevronUp, BookOpen, Copy, Check, RefreshCw } from 'lucide-react';
+import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, ChevronDown, ChevronUp, BookOpen, Copy, Check, RefreshCw, AlertTriangle } from 'lucide-react';
 import api from '@/lib/api';
 import { invalidatePluginUICache } from '@/plugins/usePlugins';
 import { Spinner } from './Spinner';
@@ -95,6 +95,28 @@ export function PluginsTab() {
   const [showHowTo, setShowHowTo] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
+  const [installing, setInstalling] = useState<string | null>(null);
+  const [installMessage, setInstallMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+  const handleInstall = async (entry: RegistryPlugin) => {
+    setInstalling(entry.id);
+    setInstallMessage(null);
+    // Default GitHub tarball of the repo's HEAD — assumes the plugin author committed dist/ to the tag.
+    // Future: resolve the registry entry's `downloadUrl` if present, or the latest release asset.
+    const url = `https://api.github.com/repos/${entry.repository}/tarball/HEAD`;
+    try {
+      const { data } = await api.post('/admin/plugins/install', { url });
+      setInstallMessage({ kind: 'success', text: `Installed ${data.plugin.name} v${data.plugin.version}` });
+      await fetchPlugins();
+      setSubTab('installed');
+    } catch (err) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? String((err as Error).message);
+      setInstallMessage({ kind: 'error', text: msg });
+    } finally {
+      setInstalling(null);
+      setTimeout(() => setInstallMessage(null), 6000);
+    }
+  };
 
   const handleRestart = async () => {
     setShowRestartConfirm(false);
@@ -322,6 +344,19 @@ export function PluginsTab() {
       {/* ═══ Discover tab ═══ */}
       {subTab === 'discover' && (
         <div className="space-y-5">
+          {installMessage && (
+            <div
+              className={clsx(
+                'card px-4 py-3 text-sm flex items-center gap-3',
+                installMessage.kind === 'success' && 'border-ndp-success/30 text-ndp-success',
+                installMessage.kind === 'error' && 'border-ndp-error/30 text-ndp-error'
+              )}
+            >
+              {installMessage.kind === 'success' ? <Check className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              <span>{installMessage.text}</span>
+            </div>
+          )}
+
           {registryLoading && (
             <div className="flex justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin text-ndp-accent" />
@@ -407,14 +442,32 @@ export function PluginsTab() {
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {!isInstalled && (
-                            <button
-                              onClick={() => setExpandedInstall(isExpanded ? null : plugin.id)}
-                              className="flex items-center gap-2 px-4 py-2 bg-ndp-accent hover:bg-ndp-accent/90 rounded-lg text-sm text-white font-medium transition-colors"
-                            >
-                              <Terminal className="w-4 h-4" />
-                              Install
-                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleInstall(plugin)}
+                                disabled={installing === plugin.id}
+                                className="flex items-center gap-2 px-4 py-2 bg-ndp-accent hover:bg-ndp-accent/90 disabled:opacity-50 rounded-lg text-sm text-white font-medium transition-colors"
+                              >
+                                {installing === plugin.id ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Installing…
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="w-4 h-4" />
+                                    Install
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => setExpandedInstall(isExpanded ? null : plugin.id)}
+                                className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-ndp-text-dim hover:text-ndp-text transition-colors"
+                                title="Manual install (advanced)"
+                              >
+                                <Terminal className="w-4 h-4" />
+                              </button>
+                            </>
                           )}
                           <a
                             href={plugin.url}

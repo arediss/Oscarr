@@ -7,7 +7,7 @@ import { parseManifest } from './manifestSchema.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Resolve the plugins directory. Supports OSCARR_PLUGINS_DIR env var. */
-function getPluginsDir(): string {
+export function getPluginsDir(): string {
   if (process.env.OSCARR_PLUGINS_DIR) return resolve(process.env.OSCARR_PLUGINS_DIR);
   return resolve(__dirname, '../../../plugins');
 }

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { join, extname, resolve, sep, relative } from 'path';
 import { existsSync, createReadStream } from 'fs';
 import { pluginEngine } from './engine.js';
+import { installPluginFromUrl } from './installer.js';
 import { prisma } from '../utils/prisma.js';
 
 // ── Registry cache (module scope) ───────────────────────────────────
@@ -18,6 +19,42 @@ export async function pluginRoutes(app: FastifyInstance) {
   app.get('/', async () => {
     return pluginEngine.getPluginList();
   });
+
+  // ── Install plugin from URL ─────────────────────────────────────
+  // Download a tar.gz, validate its manifest, drop it into the plugins dir,
+  // and hot-load it via engine.loadSingle() — no container restart needed.
+  app.post<{ Body: { url: string } }>(
+    '/install',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['url'],
+          properties: { url: { type: 'string', minLength: 1 } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { url } = request.body;
+      try {
+        const installed = await installPluginFromUrl(url);
+        const loaded = await pluginEngine.loadSingle(installed.dir);
+        return {
+          ok: true,
+          plugin: {
+            id: loaded.manifest.id,
+            name: loaded.manifest.name,
+            version: loaded.manifest.version,
+            enabled: loaded.enabled,
+            error: loaded.error,
+          },
+        };
+      } catch (err) {
+        request.log.error({ err, url }, '[plugins] Install failed');
+        return reply.status(400).send({ error: String((err as Error).message ?? err) });
+      }
+    }
+  );
 
   // ── Toggle plugin ───────────────────────────────────────────────
   app.put<{ Params: { id: string }; Body: { enabled: boolean } }>(
