@@ -26,6 +26,38 @@ export interface V1FactoryDeps {
   signAuthToken(payload: { id: number; email: string; role: string }): string;
 }
 
+// Rate-limit plugin log persistence per pluginId so a misbehaving plugin in a loop can't flood
+// PluginLog (exhaust disk / slow down the admin UI). The structured log via the parent Pino
+// child still fires — only the DB write is throttled.
+const LOG_RATE_WINDOW_MS = 10_000;
+const LOG_RATE_MAX = 100;
+const logRateCounters = new Map<string, { count: number; windowStart: number; droppedSinceSummary: number }>();
+
+function shouldPersistLog(pluginId: string): boolean {
+  const now = Date.now();
+  let c = logRateCounters.get(pluginId);
+  if (!c || now - c.windowStart > LOG_RATE_WINDOW_MS) {
+    c = { count: 0, windowStart: now, droppedSinceSummary: 0 };
+    logRateCounters.set(pluginId, c);
+  }
+  if (c.count < LOG_RATE_MAX) {
+    c.count++;
+    return true;
+  }
+  c.droppedSinceSummary++;
+  // On first overflow of the window, write one summary line so the admin sees what happened.
+  if (c.droppedSinceSummary === 1) {
+    prisma.pluginLog.create({
+      data: {
+        pluginId,
+        level: 'warn',
+        message: `[rate-limited] exceeded ${LOG_RATE_MAX} log lines in ${LOG_RATE_WINDOW_MS / 1000}s — further logs in this window are dropped`,
+      },
+    }).catch(() => {});
+  }
+  return false;
+}
+
 function createCapturingLogger(
   baseLogger: FastifyBaseLogger,
   pluginId: string
@@ -33,6 +65,7 @@ function createCapturingLogger(
   const child = baseLogger.child({ plugin: pluginId });
 
   const capture = (level: string, msg: string) => {
+    if (!shouldPersistLog(pluginId)) return;
     // Scrub secrets before persistence — PluginLog is exposed in the admin UI,
     // so a careless `ctx.log.info(config)` must not leak tokens/keys there.
     const scrubbed = scrubSecrets(String(msg)).slice(0, 2000);

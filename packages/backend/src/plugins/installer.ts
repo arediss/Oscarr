@@ -74,16 +74,24 @@ async function downloadToFile(url: string, destPath: string): Promise<void> {
 }
 
 // Manifest may live either at the archive root or inside a single top-level directory
-// (common for GitHub auto-generated source tarballs named `<repo>-<sha>/`). Look one level deep.
+// (common for GitHub auto-generated source tarballs named `<repo>-<sha>/`). Refuse if multiple
+// candidates exist — a legit plugin archive contains exactly one manifest, anything else is
+// either bogus or a deliberate attempt to hide a second plugin inside the tarball.
 async function findManifestRoot(extractedDir: string): Promise<string> {
   if (existsSync(join(extractedDir, 'manifest.json'))) return extractedDir;
   const entries = await readdir(extractedDir, { withFileTypes: true });
+  const candidates: string[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const candidate = join(extractedDir, entry.name);
-    if (existsSync(join(candidate, 'manifest.json'))) return candidate;
+    if (existsSync(join(extractedDir, entry.name, 'manifest.json'))) candidates.push(entry.name);
   }
-  throw new Error('No manifest.json found in the downloaded archive (looked at root + one level down)');
+  if (candidates.length === 0) {
+    throw new Error('No manifest.json found in the downloaded archive (looked at root + one level down)');
+  }
+  if (candidates.length > 1) {
+    throw new Error(`Archive contains multiple manifest.json files (${candidates.join(', ')}) — plugin archives must have exactly one`);
+  }
+  return join(extractedDir, candidates[0]);
 }
 
 export interface InstalledPlugin {
