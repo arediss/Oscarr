@@ -16,6 +16,137 @@ Install flow is also simpler — plugins ship a pre-built `dist/` in their GitHu
 
 See the [Migration guide](#migration-guide) at the bottom if you're updating a plugin from a pre-v0.6.3 Oscarr.
 
+## Quickstart
+
+Scaffold a plugin that boots, registers one route, and appears in the admin UI — about 5 minutes from an empty directory.
+
+### 1. Create the plugin directory
+
+Anywhere outside of Oscarr's source tree (so you can version it separately and later publish to its own GitHub repo):
+
+```bash
+mkdir -p ~/my-plugins/hello-oscarr/src
+cd ~/my-plugins/hello-oscarr
+```
+
+### 2. `package.json`
+
+```json
+{
+  "name": "oscarr-plugin-hello-oscarr",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "node build.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
+```
+
+Repo name convention: `oscarr-plugin-<id>` if you plan to publish — the registry picks up repos that match this pattern.
+
+### 3. `build.js`
+
+Oscarr loads your plugin as a single ESM bundle, so we build with esbuild. This file supports both one-shot (`npm run build`) and watch mode (`npm run dev`):
+
+```javascript
+import { build, context } from 'esbuild';
+import { builtinModules } from 'module';
+
+const config = {
+  entryPoints: ['src/index.ts'],
+  outfile: 'dist/index.js',
+  platform: 'node',
+  target: 'node20',
+  format: 'esm',
+  bundle: true,
+  sourcemap: true,
+  external: [...builtinModules, ...builtinModules.map(m => `node:${m}`), 'fastify'],
+  banner: { js: `import { createRequire } from 'module'; const require = createRequire(import.meta.url);` },
+  logLevel: 'info',
+};
+
+if (process.argv.includes('--watch')) {
+  const ctx = await context(config);
+  await ctx.watch();
+  console.log('Watching src/ …');
+} else {
+  await build(config);
+  console.log('Built → dist/index.js');
+}
+```
+
+### 4. `manifest.json`
+
+```json
+{
+  "id": "hello-oscarr",
+  "name": "Hello Oscarr",
+  "version": "0.1.0",
+  "apiVersion": "v1",
+  "entry": "dist/index.js",
+  "description": "A minimal example plugin.",
+  "author": "Your name",
+  "engines": {
+    "oscarr": ">=0.6.0 <1.0.0",
+    "testedAgainst": ["0.6.3"]
+  },
+  "capabilities": [],
+  "hooks": {
+    "routes": { "prefix": "/api/plugins/hello-oscarr" }
+  }
+}
+```
+
+No `capabilities` and no `services` means the plugin only gets `ctx.log`. Add buckets as you use gated methods (see [Capabilities](#capabilities)).
+
+### 5. `src/index.ts`
+
+```typescript
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import type { FastifyInstance } from 'fastify';
+
+interface PluginContext {
+  log: { info: (...args: unknown[]) => void };
+}
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const manifest = JSON.parse(readFileSync(join(__dirname, '..', 'manifest.json'), 'utf-8'));
+
+export function register(ctx: PluginContext) {
+  return {
+    manifest,
+    async registerRoutes(app: FastifyInstance) {
+      app.get('/hello', async () => ({ message: 'Hello from Oscarr!' }));
+      ctx.log.info('hello-oscarr routes registered');
+    },
+  };
+}
+```
+
+### 6. Build + install
+
+```bash
+npm install
+npm run build
+```
+
+Now symlink the plugin into your local Oscarr (see [Dev loop](#dev-loop) for why a symlink is better than copying):
+
+```bash
+ln -s ~/my-plugins/hello-oscarr ~/Oscarr/app/packages/plugins/hello-oscarr
+```
+
+Restart Oscarr once to discover it (hot-install from the UI only applies when pulling from the Discover tab). The plugin shows up in **Admin → Plugins → Installed** — toggle it on and hit `GET /api/plugins/hello-oscarr/hello` to verify.
+
 ## Getting started
 
 ### File structure
@@ -811,6 +942,30 @@ Plugins no longer require `git clone + npm install + npm run build + restart`. I
 3. Oscarr downloads the tarball, validates the manifest, drops it in `packages/plugins/<id>/`, and hot-loads the plugin. No restart.
 
 The `Install` button resolves the GitHub tarball of the plugin repo's HEAD. To install a plugin from an arbitrary URL, the admin UI exposes an "Install from URL" option (see the `POST /api/admin/plugins/install { url }` endpoint).
+
+## Dev loop
+
+Once the plugin is symlinked into `packages/plugins/`, the tightest iteration cycle is:
+
+1. Run `npm run dev` in your plugin dir — esbuild watches `src/` and rewrites `dist/index.js` on every save.
+2. In the Oscarr admin UI, toggle the plugin **off** then **on** to re-import the fresh bundle. The dispatcher drops the old router + ctx + RBAC state and rebuilds from the new module — no server restart needed.
+3. Watch logs via **Admin → Plugins → (your plugin) → Logs** (or tail the Oscarr server stdout). `ctx.log.info/warn/error` is persisted to the `PluginLog` table and scrubbed for secrets before display.
+
+> **Why symlink rather than copy:** the plugin loader follows symlinks so your source edits are picked up as soon as esbuild rewrites `dist/`. Copying would force a manual resync after every build.
+
+### Reset during dev
+
+Plugin state (settings + `onInstallRan` flag) lives in the `PluginState` table. To force a clean install — e.g. to re-run `onInstall` — delete the row:
+
+```sql
+DELETE FROM "PluginState" WHERE "pluginId" = 'hello-oscarr';
+```
+
+Then toggle the plugin off/on and `onInstall(ctx)` fires again.
+
+### Frontend-only changes
+
+If your plugin has a `frontend/` bundle, the browser caches it aggressively. After a rebuild, hard-refresh the admin page (Shift+Reload) or bump the plugin's `version` in `manifest.json` — Oscarr uses that in the module URL as a cache buster.
 
 ## Release workflow
 
