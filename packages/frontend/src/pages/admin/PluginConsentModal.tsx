@@ -90,28 +90,37 @@ export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: 
             </section>
           )}
 
-          {capabilities.length > 0 && (
+          {/* Always render the Capabilities section when the plugin declares anything at all,
+              so a plugin with only services doesn't land a blank gap between Services and the
+              footer — we show a positive "nothing else" note instead. */}
+          {(capabilities.length > 0 || services.length > 0) && (
             <section>
               <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-ndp-text-dim mb-2">
                 <Shield className="w-3 h-3" />
                 Capabilities
               </div>
-              <div className="space-y-1.5">
-                {capabilities.map((cap) => {
-                  const meta = CAPABILITY_META[cap];
-                  const risk = meta?.risk ?? 'low';
-                  const reason = reasons[cap];
-                  return (
-                    <CapabilityRow
-                      key={cap}
-                      label={meta?.label ?? cap}
-                      description={meta?.description}
-                      reason={reason}
-                      risk={risk}
-                    />
-                  );
-                })}
-              </div>
+              {capabilities.length > 0 ? (
+                <div className="space-y-1.5">
+                  {capabilities.map((cap) => {
+                    const meta = CAPABILITY_META[cap];
+                    const risk = meta?.risk ?? 'low';
+                    const reason = reasons[cap];
+                    return (
+                      <CapabilityRow
+                        key={cap}
+                        label={meta?.label ?? cap}
+                        description={meta?.description}
+                        reason={reason}
+                        risk={risk}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-ndp-text-muted">
+                  No additional capabilities — this plugin won't touch users, notifications, or Oscarr internals.
+                </p>
+              )}
             </section>
           )}
         </div>
