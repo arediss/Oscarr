@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
 import { useFeatures } from '@/context/FeaturesContext';
@@ -12,6 +12,7 @@ export default function LoginPage() {
   const { login, user } = useAuth();
   const { features } = useFeatures();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [providers, setProviders] = useState<AuthProviderConfig[]>([]);
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -31,6 +32,19 @@ export default function LoginPage() {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, []);
+
+  // OAuth providers redirect back to `/login?error=<TOKEN>` on failure (see Discord callback).
+  // Pick that up, translate, display — and strip the query param so a reload doesn't re-trigger.
+  useEffect(() => {
+    const raw = searchParams.get('error');
+    if (!raw) return;
+    const key = `login.errors.${raw}`;
+    const translated = t(key);
+    setError(translated === key ? raw : translated);
+    const next = new URLSearchParams(searchParams);
+    next.delete('error');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, t]);
 
   useEffect(() => {
     if (user) navigate('/', { replace: true });

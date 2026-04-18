@@ -6,12 +6,17 @@ import { getProviderConfig } from '../authSettings.js';
 const AUTHORIZE_URL = 'https://discord.com/oauth2/authorize';
 const TOKEN_URL = 'https://discord.com/api/oauth2/token';
 const USER_URL = 'https://discord.com/api/users/@me';
-const SCOPE = 'identify email';
+const GUILDS_URL = 'https://discord.com/api/users/@me/guilds';
+// `guilds` is always requested so admins can optionally gate login by guild membership.
+// Users see a "list of servers you're in" consent line — no secret-exchange, just a member check.
+const SCOPE = 'identify email guilds';
 
 interface DiscordConfig {
   clientId?: string;
   clientSecret?: string;
   redirectUri?: string;
+  /** Optional: when set, only users who are members of this Discord guild can log in / link. */
+  guildId?: string;
 }
 
 // Short-lived in-memory store for OAuth `state` → intent. Enough for interactive OAuth round-trips
@@ -29,12 +34,37 @@ function gcStates(): void {
   for (const [k, v] of stateStore) if (now - v.createdAt > STATE_TTL_MS) stateStore.delete(k);
 }
 
-async function getConfig(): Promise<Required<DiscordConfig>> {
+interface DiscordConfigResolved {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  guildId?: string; // optional — empty means no guild restriction
+}
+
+async function getConfig(): Promise<DiscordConfigResolved> {
   const cfg = (await getProviderConfig('discord')) as DiscordConfig;
   if (!cfg.clientId || !cfg.clientSecret || !cfg.redirectUri) {
     throw new Error('Discord OAuth is not fully configured');
   }
-  return cfg as Required<DiscordConfig>;
+  return {
+    clientId: cfg.clientId,
+    clientSecret: cfg.clientSecret,
+    redirectUri: cfg.redirectUri,
+    guildId: cfg.guildId || undefined,
+  };
+}
+
+/**
+ * When `guildId` is configured, call Discord's /users/@me/guilds with the user's access token
+ * and verify the id is in the list. Fail closed: any non-200 response from Discord, or any
+ * error, means the user is rejected. Without this closed-by-default stance an attacker who
+ * partially controls upstream could bypass the gate by triggering a 429 / 5xx.
+ */
+async function isGuildMember(accessToken: string, guildId: string): Promise<boolean> {
+  const res = await fetch(GUILDS_URL, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) return false;
+  const guilds = (await res.json()) as Array<{ id?: string }>;
+  return Array.isArray(guilds) && guilds.some((g) => g.id === guildId);
 }
 
 const discordAuth: AuthProvider = {
@@ -51,6 +81,13 @@ const discordAuth: AuthProvider = {
         type: 'url',
         required: true,
         help: "Paste this into your Discord application's OAuth2 settings — must match exactly.",
+      },
+      {
+        key: 'guildId',
+        label: 'Guild (Server) ID',
+        type: 'string',
+        required: false,
+        help: 'Optional — when set, only members of this Discord server can log in. Enable Developer Mode in Discord, right-click your server, Copy Server ID.',
       },
     ],
   },
@@ -123,6 +160,13 @@ const discordAuth: AuthProvider = {
           email?: string;
           global_name?: string;
         };
+
+        // Guild gate — applies to both login and link flows. Keeps Oscarr access scoped to a
+        // known community so random Discord users can't create accounts by hitting the button.
+        if (cfg.guildId) {
+          const member = await isGuildMember(tokenPayload.access_token, cfg.guildId).catch(() => false);
+          if (!member) return reply.redirect('/login?error=DISCORD_GUILD_DENIED');
+        }
 
         if (record.intent === 'link' && record.userId) {
           // Attach this Discord identity to the already-authenticated user.
