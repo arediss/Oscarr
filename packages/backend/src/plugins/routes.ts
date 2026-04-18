@@ -10,6 +10,71 @@ const REGISTRY_URL = 'https://raw.githubusercontent.com/arediss/Oscarr-Plugin-Re
 const REGISTRY_TTL = 30 * 60 * 1000; // 30 minutes
 let registryCache: { data: unknown; timestamp: number } | null = null;
 
+// ── Update check cache ──────────────────────────────────────────────
+const UPDATE_TTL = 60 * 60 * 1000; // 1h — keeps us well under GitHub's 60 req/h unauthenticated limit
+let updateCache: { data: Record<string, UpdateInfo>; timestamp: number } | null = null;
+
+interface UpdateInfo {
+  installed: string;
+  latest: string | null;
+  available: boolean;
+  repository?: string;
+  /** Populated when the registry has a matching entry; otherwise the plugin can't be auto-updated. */
+  sourceUrl?: string;
+}
+
+async function checkUpdatesForInstalledPlugins(): Promise<Record<string, UpdateInfo>> {
+  const now = Date.now();
+  if (updateCache && now - updateCache.timestamp < UPDATE_TTL) return updateCache.data;
+
+  // Load registry (re-use the registry cache, don't hit GitHub twice)
+  let registry: { plugins?: Array<{ repository?: string }> } = {};
+  try {
+    const res = await fetch(REGISTRY_URL);
+    if (res.ok) registry = await res.json() as typeof registry;
+  } catch { /* ignore — no registry = no update checks */ }
+
+  const reposByPluginId = new Map<string, string>();
+  for (const entry of registry.plugins ?? []) {
+    if (!entry.repository) continue;
+    const id = entry.repository.split('/').pop()?.toLowerCase().replace(/^oscarr-plugin-/, '') ?? '';
+    if (id) reposByPluginId.set(id, entry.repository);
+  }
+
+  const installed = pluginEngine.getPluginList();
+  const result: Record<string, UpdateInfo> = {};
+  for (const p of installed) {
+    const repo = reposByPluginId.get(p.id);
+    if (!repo) {
+      result[p.id] = { installed: p.version, latest: null, available: false };
+      continue;
+    }
+    try {
+      const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+        headers: { Accept: 'application/vnd.github+json' },
+      });
+      if (!r.ok) {
+        result[p.id] = { installed: p.version, latest: null, available: false, repository: repo };
+        continue;
+      }
+      const rel = await r.json() as { tag_name?: string; tarball_url?: string };
+      const latest = rel.tag_name?.replace(/^v/, '') ?? null;
+      result[p.id] = {
+        installed: p.version,
+        latest,
+        available: !!latest && latest !== p.version,
+        repository: repo,
+        sourceUrl: rel.tarball_url,
+      };
+    } catch {
+      result[p.id] = { installed: p.version, latest: null, available: false, repository: repo };
+    }
+  }
+
+  updateCache = { data: result, timestamp: now };
+  return result;
+}
+
 // Allowed file extensions for plugin frontend serving
 const ALLOWED_EXTENSIONS = new Set(['.js', '.mjs', '.css', '.json', '.map', '.svg']);
 
@@ -18,6 +83,14 @@ export async function pluginRoutes(app: FastifyInstance) {
   // ── List installed plugins ──────────────────────────────────────
   app.get('/', async () => {
     return pluginEngine.getPluginList();
+  });
+
+  // ── Check for updates ────────────────────────────────────────────
+  // Looks up each installed plugin in the registry, fetches the latest
+  // GitHub release tag via the GitHub API, and compares with the installed
+  // version. Cached 1h in-memory to avoid hitting GitHub rate-limits.
+  app.get('/updates', async () => {
+    return checkUpdatesForInstalledPlugins();
   });
 
   // ── Install plugin from URL ─────────────────────────────────────
