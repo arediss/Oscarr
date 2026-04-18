@@ -5,6 +5,25 @@ import type { ArrClient } from '../providers/types.js';
 
 // ─── Plugin Manifest (manifest.json) ────────────────────────────────
 
+export type PluginCapability =
+  | 'users:read'
+  | 'users:write'
+  | 'settings:plugin'
+  | 'settings:app'
+  | 'notifications'
+  | 'permissions'
+  | 'events';
+
+export const ALL_CAPABILITIES: readonly PluginCapability[] = [
+  'users:read',
+  'users:write',
+  'settings:plugin',
+  'settings:app',
+  'notifications',
+  'permissions',
+  'events',
+] as const;
+
 export interface PluginManifest {
   id: string;
   name: string;
@@ -17,6 +36,11 @@ export interface PluginManifest {
   /** Services whose config the plugin is allowed to read via getServiceConfig / getServiceConfigRaw.
    *  Any service not listed here returns null and is logged. Empty / missing = no service access. */
   services?: string[];
+  /** Capability buckets the plugin requests. Any ctx method outside the declared buckets throws at call
+   *  time. `log` and `services:*` are gated separately (log = always granted, services = via `services`). */
+  capabilities?: PluginCapability[];
+  /** Optional per-capability justification shown in the admin consent prompt on enable. */
+  capabilityReasons?: Partial<Record<PluginCapability, string>>;
   settings?: PluginSettingDef[];
   hooks?: {
     routes?: { prefix: string };

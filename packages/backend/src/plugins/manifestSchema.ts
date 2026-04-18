@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isVersionSupported, getSupportedVersions } from './context/index.js';
+import { ALL_CAPABILITIES } from './types.js';
 
 // Path guard for `entry` / `frontend`: no traversal, no absolute paths.
 // `manifest.json` lives at `<pluginDir>/manifest.json`; these fields must resolve inside `<pluginDir>`.
@@ -47,6 +48,8 @@ const hooks = z.object({
   features: z.record(z.boolean()).optional(),
 }).strict();
 
+const capabilityEnum = z.enum(ALL_CAPABILITIES as unknown as [string, ...string[]]);
+
 export const pluginManifestSchema = z.object({
   id: z.string().min(1).regex(/^[a-z0-9-]+$/, 'must be lowercase alphanumeric + dashes'),
   name: z.string().min(1),
@@ -57,6 +60,8 @@ export const pluginManifestSchema = z.object({
   entry: relativePath,
   frontend: relativePath.optional(),
   services: z.array(z.string().min(1)).optional(),
+  capabilities: z.array(capabilityEnum).optional(),
+  capabilityReasons: z.record(capabilityEnum, z.string()).optional(),
   settings: z.array(settingDef).optional(),
   hooks: hooks.optional(),
 }).strict();

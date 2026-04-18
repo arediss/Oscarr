@@ -11,7 +11,7 @@ import {
   registerRoutePermission as rbacRegisterRoute,
   registerPluginPermission as rbacRegisterPermission,
 } from '../../middleware/rbac.js';
-import type { PluginContext, PluginManifest } from '../types.js';
+import type { PluginCapability, PluginContext, PluginManifest } from '../types.js';
 
 /**
  * Dependencies injected by the engine so the factory stays decoupled
@@ -90,28 +90,53 @@ function checkServiceAccess(pluginId: string, allowedServices: string[] | undefi
   return true;
 }
 
+/**
+ * Capability enforcement — any ctx method covered by a capability throws at call time if the plugin
+ * didn't declare that capability in its manifest. We keep the method present on the returned object
+ * (rather than `undefined`) so the error message is actionable instead of "undefined is not a function".
+ * `log` is always granted (no sensitive access). Service methods are gated separately by L2 (services list).
+ */
+function requireCapability(
+  pluginId: string,
+  allowedCaps: ReadonlySet<PluginCapability>,
+  required: PluginCapability,
+  methodName: string
+): void {
+  if (!allowedCaps.has(required)) {
+    throw new Error(
+      `Plugin "${pluginId}" called ${methodName}() but didn't declare capability "${required}" in its manifest. ` +
+      `Add "${required}" to manifest.capabilities to grant access.`
+    );
+  }
+}
+
 export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): PluginContext {
   const pluginId = manifest.id;
   const log = deps.logger
     ? createCapturingLogger(deps.logger, pluginId)
     : deps.makeFallbackLogger(pluginId);
   const allowedServices = manifest.services;
+  const caps = new Set<PluginCapability>(manifest.capabilities ?? []);
   const aclLogger = deps.logger ?? log;
+  const req = (cap: PluginCapability, method: string) => requireCapability(pluginId, caps, cap, method);
 
   return {
     log,
     async getUser(userId: number) {
+      req('users:read', 'getUser');
       return prisma.user.findUnique({
         where: { id: userId },
         select: { id: true, email: true, displayName: true, role: true },
       });
     },
     async setUserRole(userId: number, roleName: string) {
+      req('users:write', 'setUserRole');
       const role = await prisma.role.findUnique({ where: { name: roleName } });
       if (!role) throw new Error(`Role "${roleName}" does not exist`);
       await prisma.user.update({ where: { id: userId }, data: { role: roleName } });
     },
     async setUserDisabled(userId: number, disabled: boolean) {
+      req('users:write', 'setUserDisabled');
       if (disabled) {
         const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
         if (target?.role === 'admin') {
@@ -121,6 +146,7 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       await prisma.user.update({ where: { id: userId }, data: { disabled } });
     },
     async issueAuthToken(userId: number) {
+      req('users:write', 'issueAuthToken');
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { id: true, email: true, role: true },
@@ -129,17 +155,21 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       return deps.signAuthToken({ id: user.id, email: user.email, role: user.role });
     },
     getPluginDataDir() {
+      req('settings:plugin', 'getPluginDataDir');
       return getPluginDataDir(pluginId);
     },
     async getAppSettings() {
+      req('settings:app', 'getAppSettings');
       const s = await prisma.appSettings.findUnique({ where: { id: 1 } });
       return (s ?? {}) as Record<string, unknown>;
     },
     async getSetting(key: string) {
+      req('settings:plugin', 'getSetting');
       const settings = await deps.getCachedSettings(pluginId);
       return settings[key];
     },
     async setSetting(key: string, value: unknown) {
+      req('settings:plugin', 'setSetting');
       const settings = await deps.getCachedSettings(pluginId);
       settings[key] = value;
       await prisma.pluginState.update({
@@ -149,9 +179,11 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       deps.setSettingsCache(pluginId, settings);
     },
     async sendNotification(type: string, data: NotificationPayload) {
+      req('notifications', 'sendNotification');
       await notificationRegistry.send(type, data);
     },
     async sendUserNotification(userId: number, payload) {
+      req('notifications', 'sendUserNotification');
       await sendUserNotification(userId, payload);
     },
     notificationRegistry,
@@ -183,6 +215,7 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       }
     },
     async getUserProviders(userId: number) {
+      req('users:read', 'getUserProviders');
       const providers = await prisma.userProvider.findMany({
         where: { userId },
         select: { provider: true, providerId: true, providerUsername: true, providerEmail: true },
@@ -190,15 +223,26 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       return providers;
     },
     registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }) {
+      req('permissions', 'registerRoutePermission');
       rbacRegisterRoute(routeKey, rule);
     },
     registerPluginPermission(permission: string, description?: string) {
+      req('permissions', 'registerPluginPermission');
       rbacRegisterPermission(permission, description);
     },
     events: {
-      on: (event, handler) => pluginEventBus.on(event, handler),
-      off: (event, handler) => pluginEventBus.off(event, handler),
-      emit: (event, data) => pluginEventBus.emit(event, data),
+      on: (event, handler) => {
+        req('events', 'events.on');
+        pluginEventBus.on(event, handler);
+      },
+      off: (event, handler) => {
+        req('events', 'events.off');
+        pluginEventBus.off(event, handler);
+      },
+      emit: (event, data) => {
+        req('events', 'events.emit');
+        return pluginEventBus.emit(event, data);
+      },
     },
   };
 }
