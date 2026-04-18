@@ -1,4 +1,4 @@
-import { X, Server, Users, Settings, Bell, Shield, Activity, Database } from 'lucide-react';
+import { X, Server, Shield, HelpCircle } from 'lucide-react';
 import type { PluginInfo } from '@/plugins/types';
 
 interface Props {
@@ -9,26 +9,26 @@ interface Props {
   onConfirm: () => void;
 }
 
-const CAPABILITY_META: Record<string, { label: string; description: string; icon: typeof Users; risk: 'low' | 'medium' | 'high' }> = {
-  'users:read':       { label: 'Read user profiles',       description: 'Look up user emails, display names, roles and linked providers.', icon: Users,    risk: 'medium' },
-  'users:write':      { label: 'Modify users',             description: 'Change roles, disable accounts and mint auth tokens.',            icon: Users,    risk: 'high' },
-  'settings:plugin':  { label: 'Plugin storage',           description: 'Read and write files in the plugin\'s data folder.',              icon: Database, risk: 'low' },
-  'settings:app':     { label: 'Read app settings',        description: 'Read Oscarr-wide settings (site name, feature flags, etc.).',     icon: Settings, risk: 'low' },
-  'notifications':    { label: 'Send notifications',       description: 'Send notifications to users through the registry.',                icon: Bell,     risk: 'medium' },
-  'permissions':      { label: 'Declare permissions',      description: 'Register RBAC permissions and route-level rules.',                 icon: Shield,   risk: 'medium' },
-  'events':           { label: 'Event bus',                description: 'Publish and subscribe to the cross-plugin event bus.',             icon: Activity, risk: 'low' },
+const CAPABILITY_META: Record<string, { label: string; description: string; risk: 'low' | 'medium' | 'high' }> = {
+  'users:read':      { label: 'Read user profiles', description: 'Look up user emails, display names, roles, and linked providers.',  risk: 'medium' },
+  'users:write':     { label: 'Modify users',       description: 'Change roles, disable accounts, and mint auth tokens.',             risk: 'high' },
+  'settings:plugin': { label: 'Plugin storage',     description: 'Read and write files in the plugin\'s own data folder.',            risk: 'low' },
+  'settings:app':    { label: 'Read app settings',  description: 'Read Oscarr-wide settings (site name, feature flags, …).',          risk: 'low' },
+  'notifications':   { label: 'Send notifications', description: 'Send notifications to users through the Oscarr registry.',          risk: 'medium' },
+  'permissions':     { label: 'Declare permissions',description: 'Register RBAC permissions and route-level access rules.',           risk: 'medium' },
+  'events':          { label: 'Event bus',          description: 'Publish to and subscribe on the cross-plugin event bus.',           risk: 'low' },
 };
 
 const RISK_DOT: Record<'low' | 'medium' | 'high', string> = {
-  low: 'bg-ndp-text-dim',
+  low:    'bg-ndp-text-dim',
   medium: 'bg-amber-400',
-  high: 'bg-ndp-danger',
+  high:   'bg-ndp-danger',
 };
 
 const RISK_LABEL: Record<'low' | 'medium' | 'high', string> = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high risk',
+  low:    'Low risk',
+  medium: 'Medium risk',
+  high:   'High risk — grants sensitive access',
 };
 
 export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: Props) {
@@ -66,8 +66,8 @@ export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: 
         <div className="flex-1 overflow-y-auto px-6 pb-2">
           {nothingToShow && (
             <p className="text-sm text-ndp-text-muted">
-              This plugin declares no services or capabilities. It can still add routes and UI contributions,
-              but doesn't request direct access to user data, services, or Oscarr internals.
+              This plugin declares no services or capabilities. It can still add routes and UI
+              contributions, but doesn't request direct access to user data, services, or Oscarr internals.
             </p>
           )}
 
@@ -96,42 +96,22 @@ export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: 
                 <Shield className="w-3 h-3" />
                 Capabilities
               </div>
-              <ul className="divide-y divide-white/5">
+              <div className="space-y-1.5">
                 {capabilities.map((cap) => {
                   const meta = CAPABILITY_META[cap];
-                  const Icon = meta?.icon ?? Shield;
                   const risk = meta?.risk ?? 'low';
                   const reason = reasons[cap];
                   return (
-                    <li key={cap} className="py-3 first:pt-0 last:pb-0">
-                      <div className="flex items-start gap-3">
-                        <Icon className="w-4 h-4 text-ndp-text-muted flex-shrink-0 mt-0.5" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-ndp-text">{meta?.label ?? cap}</span>
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${RISK_DOT[risk]}`}
-                              title={RISK_LABEL[risk]}
-                              aria-label={RISK_LABEL[risk]}
-                            />
-                          </div>
-                          {meta?.description && (
-                            <p className="text-xs text-ndp-text-dim mt-0.5 leading-relaxed">
-                              {meta.description}
-                            </p>
-                          )}
-                          {reason && (
-                            <p className="text-xs text-ndp-text-muted mt-1.5">
-                              <span className="text-ndp-text-dim">Why: </span>
-                              {reason}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </li>
+                    <CapabilityRow
+                      key={cap}
+                      label={meta?.label ?? cap}
+                      description={meta?.description}
+                      reason={reason}
+                      risk={risk}
+                    />
                   );
                 })}
-              </ul>
+              </div>
             </section>
           )}
         </div>
@@ -158,6 +138,54 @@ export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: 
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CapabilityRow({
+  label,
+  description,
+  reason,
+  risk,
+}: {
+  label: string;
+  description?: string;
+  reason?: string;
+  risk: 'low' | 'medium' | 'high';
+}) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.03]">
+      <span
+        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${RISK_DOT[risk]}`}
+        title={RISK_LABEL[risk]}
+        aria-label={RISK_LABEL[risk]}
+      />
+      <span className="text-sm text-ndp-text flex-1 min-w-0 truncate">{label}</span>
+      {(description || reason) && (
+        <div className="group relative flex-shrink-0">
+          <HelpCircle className="w-3.5 h-3.5 text-ndp-text-dim hover:text-ndp-text transition-colors cursor-help" />
+          <div
+            role="tooltip"
+            className="
+              absolute right-0 top-full mt-2 w-72 p-3
+              rounded-xl border border-white/10 bg-ndp-surface shadow-xl shadow-black/40
+              text-xs leading-relaxed
+              opacity-0 pointer-events-none
+              group-hover:opacity-100 group-hover:pointer-events-auto
+              transition-opacity duration-150
+              z-20
+            "
+          >
+            {description && <p className="text-ndp-text">{description}</p>}
+            {reason && (
+              <p className={description ? 'mt-2 text-ndp-text-muted' : 'text-ndp-text-muted'}>
+                <span className="text-ndp-text-dim">Why: </span>
+                {reason}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
