@@ -573,7 +573,7 @@ if (features.myPluginEnabled) {
 
 Plugins can be enabled or disabled from the admin panel without restarting:
 - `PUT /api/plugins/:id/toggle` with `{ enabled: boolean }`
-- Disabled plugins' routes still exist but their jobs don't run
+- Disabling drops the plugin's router from the dispatcher (requests 404 instantly), pauses its jobs, and clears its RBAC overrides. Re-enabling rebuilds everything from the plugin's `registerRoutes`.
 - `onEnable(ctx)` is called when a plugin is enabled, `onDisable(ctx)` when disabled (both best-effort)
 
 ### Plugin state persistence
@@ -696,7 +696,7 @@ export function register(ctx: PluginContext): PluginRegistration {
 }
 ```
 
-> **Deprecated:** The old pattern of importing `registerPluginPermission` and `registerRoutePermission` directly from `rbac.js` still works but is deprecated. Use `ctx.registerRoutePermission()` and `ctx.registerPluginPermission()` instead.
+> **Removed:** Importing `registerPluginPermission` / `registerRoutePermission` directly from `rbac.js` is no longer supported — the signatures now require a `pluginId` owner so cleanup on uninstall works. Always go through `ctx.*` so the engine can tear down your overrides when the plugin is disabled or uninstalled.
 
 ### How it works
 
@@ -706,7 +706,11 @@ export function register(ctx: PluginContext): PluginRegistration {
 
 ### Route rule format
 
-The `registerRoutePermission` key is `METHOD:/full/path` matching Fastify's parameterized URL:
+The `registerRoutePermission` key is `METHOD:/full/path` matching the dispatcher's
+URL for your sub-route. It **must** start with `/api/plugins/<your-plugin-id>/` — a
+plugin can only rewrite RBAC rules inside its own namespace. Anything else throws
+at call time (this is what prevents a plugin with the `permissions` capability
+from downgrading a core admin route).
 
 ```typescript
 // Exact route
@@ -762,9 +766,9 @@ Admins can create custom roles (e.g. "moderator") with any combination of permis
 
 The admin panel provides several tools for managing plugins:
 
-- **Installed tab**: Toggle plugins on/off, view version info, detect available updates
-- **Discover tab**: Browse community plugins from the GitHub registry
-- **Reload plugins button**: Triggers a graceful server restart to discover newly added or removed plugins
+- **Installed tab**: Toggle plugins on/off, view version info, detect available updates, uninstall (hot — no restart)
+- **Discover tab**: Browse community plugins from the GitHub registry and install with consent prompt
+- **Reload plugins button**: Graceful server restart — only needed to pick up plugins you dropped into `packages/plugins/` by hand. Installs and uninstalls from the UI are already live.
 - **Plugin with frontend**: Renders the plugin's custom component in the admin tab instead of the default settings form
 
 ## Capabilities
@@ -846,5 +850,5 @@ Without these, the plugin either fails to load (missing `engines` → compat sta
 - Plugins cannot modify the database schema (no Prisma migrations)
 - Plugin frontend components are lazy-loaded via ESM and cannot import from the main app bundle (use `@oscarr/sdk` instead)
 - No plugin dependency system (no way to declare that plugin A requires plugin B)
-- Uninstalling a plugin requires a server restart — Fastify can't dynamically unregister routes
+- Plugin modules stay in Node's ESM loader cache until process restart — a hot-uninstall drops routes + ctx + RBAC state but the module code itself only disappears on next boot
 - The event bus is in-process only (no persistence, no cross-restart delivery)
