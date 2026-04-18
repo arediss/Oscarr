@@ -80,7 +80,7 @@ const discordAuth: AuthProvider = {
         label: 'Redirect URI',
         type: 'url',
         required: true,
-        help: "Paste this into your Discord application's OAuth2 settings — must match exactly.",
+        help: "Must match one of the Redirect URIs registered in your Discord application's OAuth2 settings (character for character). Use the shown placeholder as the starting value — copy it into Discord and into this field.",
       },
       {
         key: 'guildId',

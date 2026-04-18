@@ -50,7 +50,7 @@ function validate(schema: AuthProviderField[] | undefined, config: Record<string
 }
 
 export async function authProvidersRoutes(app: FastifyInstance) {
-  app.get(PREFIX, async () => {
+  app.get(PREFIX, async (request) => {
     const providers = getAuthProviders();
     const [settings, services] = await Promise.all([
       listAllProviderSettings(),
@@ -61,16 +61,35 @@ export async function authProvidersRoutes(app: FastifyInstance) {
     // whether that Service exists AND is enabled. Lets the admin UI grey them out with a helpful
     // hint instead of pretending the toggle would actually enable a working login.
     const serviceEnabledByType = new Map(services.map((s) => [s.type, s.enabled]));
+
+    // Compute the public base URL Oscarr is being reached at, so we can suggest concrete callback
+    // paths in the admin UI. Trust x-forwarded-* first (reverse proxy setups) with request.protocol
+    // / request.hostname as fallback — those are Fastify-provided and already respect trustProxy.
+    const fwdProto = (request.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim();
+    const fwdHost = (request.headers['x-forwarded-host'] as string | undefined)?.split(',')[0]?.trim();
+    const proto = fwdProto || request.protocol;
+    const host = fwdHost || request.hostname;
+    const baseUrl = `${proto}://${host}`;
+
     return providers.map((p) => {
       const s = settingsById.get(p.config.id);
       const serviceAvailable = p.config.requiresService
         ? serviceEnabledByType.get(p.config.id) === true
         : true;
+      // Inject a dynamic placeholder for Discord's redirectUri so the admin sees the exact URL
+      // they need to register in Discord's OAuth2 settings without guessing. Keep provider-
+      // specific logic here rather than bloating the generic AuthProviderField shape.
+      const configSchema = (p.config.configSchema ?? []).map((field) => {
+        if (p.config.id === 'discord' && field.key === 'redirectUri') {
+          return { ...field, placeholder: `${baseUrl}/api/auth/discord/callback` };
+        }
+        return field;
+      });
       return {
         id: p.config.id,
         label: p.config.label,
         type: p.config.type,
-        configSchema: p.config.configSchema ?? [],
+        configSchema,
         requiresService: p.config.requiresService ?? false,
         serviceAvailable,
         enabled: s?.enabled ?? false,
