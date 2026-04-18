@@ -1,3 +1,5 @@
+import { useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Server, Shield, HelpCircle } from 'lucide-react';
 
 /** Shape shared by RegistryPlugin (pre-install) and PluginInfo (post-install). */
@@ -179,30 +181,72 @@ function CapabilityRow({
       />
       <span className="text-sm text-ndp-text flex-1 min-w-0 truncate">{label}</span>
       {(description || reason) && (
-        <div className="group relative flex-shrink-0">
-          <HelpCircle className="w-3.5 h-3.5 text-ndp-text-dim hover:text-ndp-text transition-colors cursor-help" />
-          <div
-            role="tooltip"
-            className="
-              absolute right-0 top-full mt-2 w-72 p-3
-              rounded-xl border border-white/10 bg-ndp-surface shadow-xl shadow-black/40
-              text-xs leading-relaxed
-              opacity-0 pointer-events-none
-              group-hover:opacity-100 group-hover:pointer-events-auto
-              transition-opacity duration-150
-              z-20
-            "
-          >
-            {description && <p className="text-ndp-text">{description}</p>}
-            {reason && (
-              <p className={description ? 'mt-2 text-ndp-text-muted' : 'text-ndp-text-muted'}>
-                <span className="text-ndp-text-dim">Why: </span>
-                {reason}
-              </p>
-            )}
-          </div>
-        </div>
+        <HoverTooltip
+          trigger={
+            <HelpCircle className="w-3.5 h-3.5 text-ndp-text-dim hover:text-ndp-text transition-colors cursor-help" />
+          }
+        >
+          {description && <p className="text-ndp-text">{description}</p>}
+          {reason && (
+            <p className={description ? 'mt-2 text-ndp-text-muted' : 'text-ndp-text-muted'}>
+              <span className="text-ndp-text-dim">Why: </span>
+              {reason}
+            </p>
+          )}
+        </HoverTooltip>
       )}
     </div>
+  );
+}
+
+/**
+ * Portals the tooltip to document.body so it can escape the modal's clipping.
+ * Positioned as fixed with coords derived from the trigger's getBoundingClientRect —
+ * keeps the "right-edge-aligned, below the trigger" anchor of the original, and
+ * clamps horizontally so tiny viewports don't push it off-screen.
+ */
+function HoverTooltip({ trigger, children }: { trigger: ReactNode; children: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const TOOLTIP_WIDTH = 288; // matches w-72
+  const MARGIN = 8;
+
+  const open = () => {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    const left = Math.max(
+      MARGIN,
+      Math.min(window.innerWidth - TOOLTIP_WIDTH - MARGIN, rect.right - TOOLTIP_WIDTH)
+    );
+    setPos({ top: rect.bottom + MARGIN, left });
+  };
+  const close = () => setPos(null);
+
+  return (
+    <>
+      <span
+        ref={ref}
+        onMouseEnter={open}
+        onMouseLeave={close}
+        onFocus={open}
+        onBlur={close}
+        tabIndex={0}
+        className="flex-shrink-0 outline-none"
+      >
+        {trigger}
+      </span>
+      {pos &&
+        createPortal(
+          <div
+            role="tooltip"
+            style={{ position: 'fixed', top: pos.top, left: pos.left, width: TOOLTIP_WIDTH }}
+            className="z-[60] p-3 rounded-xl border border-white/10 bg-ndp-surface shadow-xl shadow-black/40 text-xs leading-relaxed animate-fade-in"
+          >
+            {children}
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
