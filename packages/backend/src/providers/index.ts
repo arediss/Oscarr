@@ -5,9 +5,14 @@ import { radarrProvider } from './radarr/index.js';
 import { sonarrProvider } from './sonarr/index.js';
 import { qbittorrentProvider } from './qbittorrent/index.js';
 import { tautulliProvider } from './tautulli/index.js';
+import { emailProvider } from './email/index.js';
 import type { Provider, ServiceDefinition, AuthProvider, ArrClient } from './types.js';
 import { getServiceConfig } from '../utils/services.js';
-import { prisma } from '../utils/prisma.js';
+import { listAllProviderSettings } from './authSettings.js';
+
+// Auth-only providers (no matching media service) — filtered out of service queries so they
+// don't appear on the Services admin tab. Add here when introducing another auth-only provider.
+const AUTH_ONLY_PROVIDER_IDS = new Set(['email', 'discord']);
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Add new providers here — they auto-register everywhere
@@ -19,6 +24,7 @@ const ALL_PROVIDERS: Provider[] = [
   embyProvider,
   qbittorrentProvider,
   tautulliProvider,
+  emailProvider,
 ];
 
 // ─── Service queries ────────────────────────────────────────────────
@@ -28,12 +34,12 @@ export function getServiceDefinition(type: string): ServiceDefinition | undefine
 }
 
 export function getAllServiceDefinitions(): ServiceDefinition[] {
-  return ALL_PROVIDERS.map((p) => p.service);
+  return ALL_PROVIDERS.filter((p) => !AUTH_ONLY_PROVIDER_IDS.has(p.service.id)).map((p) => p.service);
 }
 
 /** Return schemas for the frontend (fields, icon, label — no test function) */
 export function getServiceSchemas() {
-  return ALL_PROVIDERS.map((p) => ({
+  return ALL_PROVIDERS.filter((p) => !AUTH_ONLY_PROVIDER_IDS.has(p.service.id)).map((p) => ({
     id: p.service.id,
     label: p.service.label,
     icon: p.service.icon,
@@ -53,14 +59,14 @@ export function getAuthProvider(id: string): AuthProvider | undefined {
 }
 
 export async function getAuthProviderConfigs() {
-  const enabledServices = await prisma.service.findMany({ where: { enabled: true }, select: { type: true } });
-  const enabledTypes = new Set(enabledServices.map(s => s.type));
-  return [
-    { id: 'email', label: 'Email', type: 'credentials' as const },
-    ...getAuthProviders()
-      .filter(p => enabledTypes.has(p.config.id))
-      .map(p => p.config),
-  ];
+  // Enablement now lives in AuthProviderSettings — decoupled from the Service table so
+  // auth-only providers (email, discord, …) and media-service providers (plex, jellyfin, emby)
+  // can be toggled independently.
+  const settings = await listAllProviderSettings();
+  const enabledIds = new Set(settings.filter((s) => s.enabled).map((s) => s.provider));
+  return getAuthProviders()
+    .filter((p) => enabledIds.has(p.config.id))
+    .map((p) => p.config);
 }
 
 // ─── Arr Client Factory & Caching ───────────────────────────────────

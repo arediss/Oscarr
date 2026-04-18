@@ -149,10 +149,22 @@ export interface ServiceDefinition {
 
 // ─── Auth Provider ──────────────────────────────────────────────────
 
+export interface AuthProviderField {
+  key: string;
+  label: string;
+  type: 'string' | 'password' | 'url';
+  required?: boolean;
+  placeholder?: string;
+  /** Optional human-readable help text shown under the input. */
+  help?: string;
+}
+
 export interface AuthProviderConfig {
   id: string;
   label: string;
   type: 'oauth' | 'credentials';
+  /** Fields the admin must configure (e.g. OAuth clientId/secret). Empty or missing = no admin config. */
+  configSchema?: AuthProviderField[];
 }
 
 export interface AuthHelpers {

@@ -74,7 +74,7 @@ async function importPlexUsers(plexToken: string, machineId: string) {
 // ─── Auth Provider ──────────────────────────────────────────────────
 
 const plexAuth: AuthProvider = {
-  config: { id: 'plex', label: 'Plex', type: 'oauth' },
+  config: { id: 'plex', label: 'Plex', type: 'oauth', configSchema: [] },
 
   async registerRoutes(app, helpers) {
     app.post('/plex/pin', async (_request, reply) => {

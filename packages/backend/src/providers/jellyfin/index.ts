@@ -53,7 +53,7 @@ async function getConfig(): Promise<{ url: string; apiKey: string } | null> {
 // ─── Auth Provider ─────────────────────────────────────────────────
 
 const jellyfinAuth: AuthProvider = {
-  config: { id: 'jellyfin', label: 'Jellyfin', type: 'credentials' },
+  config: { id: 'jellyfin', label: 'Jellyfin', type: 'credentials', configSchema: [] },
 
   async registerRoutes(app, helpers) {
     app.post('/jellyfin/login', {

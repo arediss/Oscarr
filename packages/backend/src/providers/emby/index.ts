@@ -53,7 +53,7 @@ async function getConfig(): Promise<{ url: string; apiKey: string } | null> {
 // ─── Auth Provider ─────────────────────────────────────────────────
 
 const embyAuth: AuthProvider = {
-  config: { id: 'emby', label: 'Emby', type: 'credentials' },
+  config: { id: 'emby', label: 'Emby', type: 'credentials', configSchema: [] },
 
   async registerRoutes(app, helpers) {
     app.post('/emby/login', {
