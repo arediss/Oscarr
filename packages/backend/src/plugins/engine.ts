@@ -42,23 +42,17 @@ export class PluginEngine {
   }
 
   /**
-   * Load a single plugin from its directory at runtime. Used by the install flow to avoid a full restart.
-   * If the app is already serving requests, the plugin's routes are registered on the fly via Fastify's
-   * post-boot `register()` (works because we encapsulate each plugin in its own sub-context).
-   *
-   * `defaultEnabled` controls the state when the plugin has never been seen before:
-   *  - `true` (boot-time discovery) — preserves the current UX where filesystem-present plugins load enabled
-   *  - `false` (runtime install) — gives the admin a chance to review capabilities before enabling
+   * Shared "load one plugin from disk" pipeline used by both loadAll (boot) and loadSingle (runtime install).
+   * Runs the compat check, upserts PluginState, dynamic-imports the entry, calls register(), runs onInstall
+   * if first-time, registers notification providers, and stores the LoadedPlugin in the map. Does NOT
+   * register Fastify routes — callers handle that themselves (boot path uses registerWithFastify, runtime
+   * install uses inline app.register). Throws on compat failure or register() error.
    */
-  async loadSingle(dir: string, opts: { defaultEnabled?: boolean } = {}): Promise<LoadedPlugin> {
-    const defaultEnabled = opts.defaultEnabled ?? true;
-    const raw = await readFile(join(dir, 'manifest.json'), 'utf-8');
-    const manifest = parseManifest(JSON.parse(raw), dir) as PluginManifest;
-
-    if (this.plugins.has(manifest.id)) {
-      throw new Error(`Plugin "${manifest.id}" is already loaded`);
-    }
-
+  private async _loadFromDisk(
+    dir: string,
+    manifest: PluginManifest,
+    opts: { defaultEnabled: boolean }
+  ): Promise<LoadedPlugin> {
     const compat = checkCompat(manifest);
     this.compatCache.set(manifest.id, compat);
     if (compat.status === 'incompatible') {
@@ -68,7 +62,7 @@ export class PluginEngine {
     const state = await prisma.pluginState.upsert({
       where: { pluginId: manifest.id },
       update: {},
-      create: { pluginId: manifest.id, enabled: defaultEnabled, settings: '{}' },
+      create: { pluginId: manifest.id, enabled: opts.defaultEnabled, settings: '{}' },
     });
 
     const entryPath = join(dir, manifest.entry);
@@ -95,38 +89,60 @@ export class PluginEngine {
 
     const loaded: LoadedPlugin = { manifest, registration, dir, enabled: state.enabled };
     this.plugins.set(manifest.id, loaded);
+    return loaded;
+  }
 
-    // If the app is already running, register routes now — no restart needed.
-    if (this.app && state.enabled && registration.registerRoutes) {
-      const prefix = manifest.hooks?.routes?.prefix || `/api/plugins/${manifest.id}`;
-      const pluginId = manifest.id;
-      const engine = this;
-      try {
-        await this.app.register(
-          async (instance) => {
-            // Guard — lets us "unmount" the plugin without Fastify support for route removal
-            // by short-circuiting before the real handlers run.
-            instance.addHook('preHandler', async (_req, reply) => {
-              if (engine.uninstalled.has(pluginId)) {
-                return reply.status(404).send({ error: 'Plugin has been uninstalled' });
-              }
-            });
-            await registration.registerRoutes!(instance, ctx);
-          },
-          { prefix }
-        );
-        this.log('info', `Hot-registered routes for "${manifest.id}" at ${prefix}`);
-      } catch (err) {
-        this.log('error', `Route registration failed for "${manifest.id}": ${err}`);
-        loaded.error = `Route registration failed: ${err}`;
-        loaded.enabled = false;
-        await prisma.pluginState.update({
-          where: { pluginId: manifest.id },
-          data: { enabled: false },
-        }).catch(() => {});
-      }
+  /** Register a plugin's routes against the live Fastify app with the uninstall guard. Used by both
+   *  loadSingle (hot-load) and registerWithFastify (boot). */
+  private async _registerRoutes(plugin: LoadedPlugin): Promise<void> {
+    if (!this.app || !plugin.registration.registerRoutes) return;
+    const { manifest, registration } = plugin;
+    const prefix = manifest.hooks?.routes?.prefix || `/api/plugins/${manifest.id}`;
+    const pluginId = manifest.id;
+    const engine = this;
+    try {
+      const ctx = createContext(manifest, this.getContextDeps());
+      await this.app.register(
+        async (instance) => {
+          // Uninstall guard — Fastify has no route unregister, so we short-circuit here instead.
+          instance.addHook('preHandler', async (_req, reply) => {
+            if (engine.uninstalled.has(pluginId)) {
+              return reply.status(404).send({ error: 'Plugin has been uninstalled' });
+            }
+          });
+          await registration.registerRoutes!(instance, ctx);
+        },
+        { prefix }
+      );
+      this.log('info', `Registered routes for "${manifest.id}" at ${prefix}`);
+    } catch (err) {
+      this.log('error', `Route registration failed for "${manifest.id}": ${err}`);
+      plugin.error = `Route registration failed: ${err}`;
+      plugin.enabled = false;
+      await prisma.pluginState.update({
+        where: { pluginId: manifest.id },
+        data: { enabled: false },
+      }).catch(() => {});
+    }
+  }
+
+  /**
+   * Load a single plugin from its directory at runtime. Used by the install flow to avoid a full restart.
+   *
+   * `defaultEnabled` controls the state when the plugin has never been seen before:
+   *  - `true` (boot-time discovery) — preserves the current UX where filesystem-present plugins load enabled
+   *  - `false` (runtime install) — gives the admin a chance to review capabilities before enabling
+   */
+  async loadSingle(dir: string, opts: { defaultEnabled?: boolean } = {}): Promise<LoadedPlugin> {
+    const raw = await readFile(join(dir, 'manifest.json'), 'utf-8');
+    const manifest = parseManifest(JSON.parse(raw), dir) as PluginManifest;
+
+    if (this.plugins.has(manifest.id)) {
+      throw new Error(`Plugin "${manifest.id}" is already loaded`);
     }
 
+    const loaded = await this._loadFromDisk(dir, manifest, { defaultEnabled: opts.defaultEnabled ?? true });
+    if (loaded.enabled) await this._registerRoutes(loaded);
     this.log('info', `Loaded "${manifest.id}" v${manifest.version} via loadSingle`);
     return loaded;
   }
@@ -137,53 +153,8 @@ export class PluginEngine {
 
     for (const { dir, manifest } of discovered) {
       try {
-        const compat = checkCompat(manifest);
-        this.compatCache.set(manifest.id, compat);
-        if (compat.status === 'incompatible') {
-          this.log('warn', `Refusing to load "${manifest.id}": ${compat.reason}`);
-          this.plugins.set(manifest.id, {
-            manifest,
-            registration: { manifest } as PluginRegistration,
-            dir,
-            enabled: false,
-            error: compat.reason,
-          });
-          continue;
-        }
-
-        const state = await prisma.pluginState.upsert({
-          where: { pluginId: manifest.id },
-          update: {},
-          create: { pluginId: manifest.id, enabled: true, settings: '{}' },
-        });
-
-        const entryPath = join(dir, manifest.entry);
-        const mod = await import(entryPath);
-
-        if (typeof mod.register !== 'function') {
-          throw new Error(`Plugin "${manifest.id}" does not export a register() function`);
-        }
-
-        const ctx = createContext(manifest, this.getContextDeps());
-        const registration: PluginRegistration = await mod.register(ctx);
-
-        // Run onInstall ONLY on first load (tracked by DB flag)
-        if (!state.onInstallRan && registration.onInstall) {
-          await registration.onInstall(ctx);
-          await prisma.pluginState.update({
-            where: { pluginId: manifest.id },
-            data: { onInstallRan: true },
-          });
-          this.log('info', `Ran onInstall for "${manifest.id}"`);
-        }
-
-        if (registration.registerNotificationProviders) {
-          registration.registerNotificationProviders(notificationRegistry);
-          this.log('info', `Registered notification providers for "${manifest.id}"`);
-        }
-
-        this.plugins.set(manifest.id, { manifest, registration, dir, enabled: state.enabled });
-        this.log('info', `Loaded "${manifest.id}" v${manifest.version} (${state.enabled ? 'enabled' : 'disabled'})`);
+        await this._loadFromDisk(dir, manifest, { defaultEnabled: true });
+        this.log('info', `Loaded "${manifest.id}" v${manifest.version}`);
       } catch (err) {
         this.log('error', `Failed to load plugin "${manifest.id}": ${err}`);
         this.plugins.set(manifest.id, {
@@ -201,38 +172,10 @@ export class PluginEngine {
     this.setLogger(app.log);
     this.app = app;
 
-    const engine = this;
-    for (const [id, plugin] of this.plugins) {
+    for (const plugin of this.plugins.values()) {
       if (!plugin.enabled || plugin.error) continue;
       if (!plugin.registration.registerRoutes) continue;
-
-      const prefix = plugin.manifest.hooks?.routes?.prefix || `/api/plugins/${id}`;
-      try {
-        const ctx = createContext(plugin.manifest, this.getContextDeps());
-        await app.register(
-          async (instance) => {
-            // Same 404-on-uninstall guard as loadSingle — keeps behaviour uniform across boot-loaded
-            // and hot-loaded plugins.
-            instance.addHook('preHandler', async (_req, reply) => {
-              if (engine.uninstalled.has(id)) {
-                return reply.status(404).send({ error: 'Plugin has been uninstalled' });
-              }
-            });
-            await plugin.registration.registerRoutes!(instance, ctx);
-          },
-          { prefix }
-        );
-        this.log('info', `Registered routes for "${id}" at ${prefix}`);
-      } catch (err) {
-        this.log('error', `Failed to register routes for "${id}": ${err}`);
-        plugin.error = `Route registration failed: ${err}`;
-        plugin.enabled = false;
-        // Persist disabled state so the UI reflects the failure
-        await prisma.pluginState.update({
-          where: { pluginId: id },
-          data: { enabled: false },
-        }).catch(() => {}); // best-effort
-      }
+      await this._registerRoutes(plugin);
     }
   }
 
