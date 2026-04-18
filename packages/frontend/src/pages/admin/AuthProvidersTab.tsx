@@ -159,10 +159,19 @@ function ProviderRow({
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {provider.config.allowSignup === true && !unavailable && (
+          {provider.configSchema.some(f => f.key === 'allowSignup') && !unavailable && (
             <>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-ndp-accent/15 text-ndp-accent font-medium whitespace-nowrap">
-                {t('admin.authProviders.signup_on')}
+              <span
+                className={clsx(
+                  'text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap',
+                  provider.config.allowSignup === true
+                    ? 'bg-ndp-success/15 text-ndp-success'
+                    : 'bg-white/5 text-ndp-text-dim'
+                )}
+              >
+                {provider.config.allowSignup === true
+                  ? t('admin.authProviders.signup_on')
+                  : t('admin.authProviders.signup_off')}
               </span>
               <div className="w-px h-5 bg-white/10" />
             </>
