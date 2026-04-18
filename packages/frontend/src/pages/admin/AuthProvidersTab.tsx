@@ -292,6 +292,17 @@ function ConfigField({
   value: string | boolean | undefined;
   onChange: (v: string | boolean) => void;
 }) {
+  const { t } = useTranslation();
+  // Localize known field keys when a translation exists; otherwise fall through to the English
+  // string declared by the provider. Keeps the backend free of i18n plumbing while letting us
+  // localize the commonly-shared fields (allowSignup, guildId, …).
+  const labelKey = `admin.authProviders.fields.${field.key}.label`;
+  const helpKey = `admin.authProviders.fields.${field.key}.help`;
+  const localizedLabel = t(labelKey);
+  const localizedHelp = t(helpKey);
+  const label = localizedLabel === labelKey ? field.label : localizedLabel;
+  const help = localizedHelp === helpKey ? field.help : localizedHelp;
+
   if (field.type === 'boolean') {
     // Resolve the effective value: stored boolean wins, else fall back to the declared default,
     // else false. Lets the admin see the right state even when they never changed anything.
@@ -320,8 +331,8 @@ function ConfigField({
           />
         </button>
         <div className="flex-1 min-w-0">
-          <span className="text-sm text-ndp-text">{field.label}</span>
-          {field.help && <p className="text-xs text-ndp-text-dim mt-0.5">{field.help}</p>}
+          <span className="text-sm text-ndp-text">{label}</span>
+          {help && <p className="text-xs text-ndp-text-dim mt-0.5">{help}</p>}
         </div>
       </div>
     );
@@ -336,7 +347,7 @@ function ConfigField({
   return (
     <label className="flex flex-col gap-1">
       <span className="text-xs text-ndp-text-dim">
-        {field.label}{field.required && ' *'}
+        {label}{field.required && ' *'}
       </span>
       <div className="flex gap-2">
         <input
@@ -363,7 +374,7 @@ function ConfigField({
           </button>
         )}
       </div>
-      {field.help && <p className="text-xs text-ndp-text-dim">{field.help}</p>}
+      {help && <p className="text-xs text-ndp-text-dim">{help}</p>}
     </label>
   );
 }

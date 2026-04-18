@@ -63,7 +63,7 @@ const jellyfinAuth: AuthProvider = {
         label: 'Allow new account creation',
         type: 'boolean',
         default: false,
-        help: 'Off by default — only users with an existing Oscarr account can log in via Jellyfin. Turn on to let any Jellyfin user auto-register on first login. Ignored when General → Registration is disabled (global kill-switch wins).',
+        help: 'Auto-create Oscarr users for new Jellyfin logins. Requires General → Registration on.',
       },
     ],
     requiresService: true,

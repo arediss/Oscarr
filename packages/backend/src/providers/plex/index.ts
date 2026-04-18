@@ -84,7 +84,7 @@ const plexAuth: AuthProvider = {
         label: 'Allow new account creation',
         type: 'boolean',
         default: false,
-        help: 'Off by default — only users with an existing Oscarr account (matching the Plex email) can log in. Turn on to let any Plex user auto-register on first login. Ignored when General → Registration is disabled (global kill-switch wins).',
+        help: 'Auto-create Oscarr users for new Plex logins. Requires General → Registration on.',
       },
     ],
   },
