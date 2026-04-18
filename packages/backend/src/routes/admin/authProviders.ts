@@ -7,7 +7,8 @@ import {
 } from '../../providers/authSettings.js';
 import type { AuthProviderField } from '../../providers/types.js';
 
-const PREFIX = '/api/admin/auth-providers';
+// adminRoutes is mounted with prefix '/api/admin', so paths here are relative.
+const PREFIX = '/auth-providers';
 
 /** Placeholder sent to the frontend for password-type fields with a stored value — keeps secrets server-side. */
 const MASK = '__MASKED__';
