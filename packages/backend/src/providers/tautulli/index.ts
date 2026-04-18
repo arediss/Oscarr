@@ -1,5 +1,8 @@
-import axios from 'axios';
 import type { Provider } from '../types.js';
+import { TautulliClient, createTautulliClient } from './client.js';
+
+export { TautulliClient, createTautulliClient };
+export * from './types.js';
 
 export const tautulliProvider: Provider = {
   service: {
@@ -12,11 +15,9 @@ export const tautulliProvider: Provider = {
       { key: 'apiKey', labelKey: 'common.api_key', type: 'password' },
     ],
     async test(config) {
-      const { data } = await axios.get(`${config.url}/api/v2`, {
-        params: { apikey: config.apiKey, cmd: 'arnold' },
-        timeout: 5000,
-      });
-      return { ok: true, version: data?.response?.data?.version };
+      const client = createTautulliClient({ url: String(config.url), apiKey: String(config.apiKey) });
+      const data = await client.ping();
+      return { ok: true, version: data?.version };
     },
   },
 };
