@@ -107,6 +107,12 @@ export interface PluginContext {
   getServiceConfigRaw(serviceType: string): Promise<Record<string, unknown> | null>;
   /** Returns the external auth providers linked to an Oscarr user (identity info only — no tokens). */
   getUserProviders(userId: number): Promise<Array<{ provider: string; providerId: string | null; providerUsername: string | null; providerEmail: string | null }>>;
+  /**
+   * Find the Oscarr user linked to a given external provider identity. Returns null if no
+   * UserProvider row matches. Useful for plugins that receive events from external systems
+   * (Discord bot webhooks, etc.) and need to resolve the Oscarr user behind an external ID.
+   */
+  findUserByProvider(provider: string, providerId: string): Promise<{ id: number; email: string; displayName: string | null; role: string } | null>;
   registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }): void;
   registerPluginPermission(permission: string, description?: string): void;
   events: {

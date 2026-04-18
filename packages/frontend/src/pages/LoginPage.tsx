@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
 import { useFeatures } from '@/context/FeaturesContext';
@@ -12,6 +12,7 @@ export default function LoginPage() {
   const { login, user } = useAuth();
   const { features } = useFeatures();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [providers, setProviders] = useState<AuthProviderConfig[]>([]);
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -32,6 +33,19 @@ export default function LoginPage() {
     };
   }, []);
 
+  // OAuth providers redirect back to `/login?error=<TOKEN>` on failure (see Discord callback).
+  // Pick that up, translate, display — and strip the query param so a reload doesn't re-trigger.
+  useEffect(() => {
+    const raw = searchParams.get('error');
+    if (!raw) return;
+    const key = `login.errors.${raw}`;
+    const translated = t(key);
+    setError(translated === key ? raw : translated);
+    const next = new URLSearchParams(searchParams);
+    next.delete('error');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, t]);
+
   useEffect(() => {
     if (user) navigate('/', { replace: true });
   }, [user, navigate]);
@@ -43,6 +57,15 @@ export default function LoginPage() {
   const [credUsername, setCredUsername] = useState('');
   const [credPassword, setCredPassword] = useState('');
 
+  // The backend returns specific tokens (INVALID_CREDENTIALS, EXTERNAL_ACCOUNT, …) that need
+  // to be translated before display. Plain English strings from other errors pass through.
+  const translateAuthError = (rawError: string | undefined): string => {
+    if (!rawError) return t('login.error');
+    const key = `login.errors.${rawError}`;
+    const translated = t(key);
+    return translated === key ? rawError : translated;
+  };
+
   const handleCredentialLogin = async (providerId: string) => {
     setLoading(true);
     setError('');
@@ -52,7 +75,7 @@ export default function LoginPage() {
       navigate('/', { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg || t('login.error'));
+      setError(translateAuthError(msg));
     } finally {
       setLoading(false);
     }
@@ -68,7 +91,7 @@ export default function LoginPage() {
       navigate('/', { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg || t('login.error'));
+      setError(translateAuthError(msg));
     } finally {
       setLoading(false);
     }
@@ -88,13 +111,20 @@ export default function LoginPage() {
       navigate('/', { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg || t('login.error'));
+      setError(translateAuthError(msg));
     } finally {
       setLoading(false);
     }
   };
 
   const handleOAuthLogin = async (providerId: string) => {
+    // Discord uses a full-page OAuth redirect (no popup + polling): the authorize endpoint
+    // sends the browser to discord.com, which redirects back to /api/auth/discord/callback
+    // where the backend sets the cookie and redirects home.
+    if (providerId === 'discord') {
+      window.location.href = '/api/auth/discord/authorize';
+      return;
+    }
     if (providerId === 'plex') {
       setLoading(true);
       setError('');
@@ -345,7 +375,7 @@ export default function LoginPage() {
               )}
 
               {/* Register link */}
-              {hasEmailProvider && features.registrationEnabled && (
+              {hasEmailProvider && providers.find(p => p.id === 'email')?.allowSignup && (
                 <p className="text-center text-sm text-ndp-text-dim mt-6">
                   <button onClick={() => { setMode('register'); setError(''); }} className="text-ndp-accent hover:underline">
                     {t('login.register_link')}

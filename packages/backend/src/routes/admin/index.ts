@@ -15,6 +15,7 @@ import { blacklistRoutes } from './blacklist.js';
 import { backupRoutes } from './backup.js';
 import { homepageRoutes } from './homepage.js';
 import { plexAdminRoutes } from './plex.js';
+import { authProvidersRoutes } from './authProviders.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   await settingsRoutes(app);
@@ -33,6 +34,7 @@ export async function adminRoutes(app: FastifyInstance) {
   await backupRoutes(app);
   await homepageRoutes(app);
   await plexAdminRoutes(app);
+  await authProvidersRoutes(app);
 
   // Graceful restart — used by "Reload plugins" in admin UI
   app.post('/restart', async (_request, reply) => {

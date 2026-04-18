@@ -162,6 +162,14 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
         select: { id: true, email: true, displayName: true, role: true },
       });
     },
+    async findUserByProvider(provider: string, providerId: string) {
+      req('users:read', 'findUserByProvider');
+      const link = await prisma.userProvider.findUnique({
+        where: { provider_providerId: { provider, providerId } },
+        include: { user: { select: { id: true, email: true, displayName: true, role: true } } },
+      });
+      return link?.user ?? null;
+    },
     async setUserRole(userId: number, roleName: string) {
       req('users:write', 'setUserRole');
       const role = await prisma.role.findUnique({ where: { name: roleName } });

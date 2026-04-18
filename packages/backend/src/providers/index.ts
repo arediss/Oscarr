@@ -5,12 +5,16 @@ import { radarrProvider } from './radarr/index.js';
 import { sonarrProvider } from './sonarr/index.js';
 import { qbittorrentProvider } from './qbittorrent/index.js';
 import { tautulliProvider } from './tautulli/index.js';
+import { emailProvider } from './email/index.js';
+import { discordProvider } from './discord/index.js';
 import type { Provider, ServiceDefinition, AuthProvider, ArrClient } from './types.js';
 import { getServiceConfig } from '../utils/services.js';
-import { prisma } from '../utils/prisma.js';
+import { getProviderSettings, listAllProviderSettings } from './authSettings.js';
 
 // ─── Provider Registry ──────────────────────────────────────────────
-// Add new providers here — they auto-register everywhere
+// Add new providers here — they auto-register everywhere. A provider may expose `service`,
+// `auth`, or both. Auth-only providers (email, discord) have no `service` field and are
+// naturally filtered out of the Services admin tab by `p.service` presence checks.
 const ALL_PROVIDERS: Provider[] = [
   radarrProvider,
   sonarrProvider,
@@ -19,21 +23,27 @@ const ALL_PROVIDERS: Provider[] = [
   embyProvider,
   qbittorrentProvider,
   tautulliProvider,
+  emailProvider,
+  discordProvider,
 ];
 
 // ─── Service queries ────────────────────────────────────────────────
 
 export function getServiceDefinition(type: string): ServiceDefinition | undefined {
-  return ALL_PROVIDERS.find((p) => p.service.id === type)?.service;
+  return ALL_PROVIDERS.find((p) => p.service?.id === type)?.service;
+}
+
+function hasService(p: Provider): p is Provider & { service: ServiceDefinition } {
+  return p.service !== undefined;
 }
 
 export function getAllServiceDefinitions(): ServiceDefinition[] {
-  return ALL_PROVIDERS.map((p) => p.service);
+  return ALL_PROVIDERS.filter(hasService).map((p) => p.service);
 }
 
 /** Return schemas for the frontend (fields, icon, label — no test function) */
 export function getServiceSchemas() {
-  return ALL_PROVIDERS.map((p) => ({
+  return ALL_PROVIDERS.filter(hasService).map((p) => ({
     id: p.service.id,
     label: p.service.label,
     icon: p.service.icon,
@@ -53,14 +63,33 @@ export function getAuthProvider(id: string): AuthProvider | undefined {
 }
 
 export async function getAuthProviderConfigs() {
-  const enabledServices = await prisma.service.findMany({ where: { enabled: true }, select: { type: true } });
-  const enabledTypes = new Set(enabledServices.map(s => s.type));
-  return [
-    { id: 'email', label: 'Email', type: 'credentials' as const },
-    ...getAuthProviders()
-      .filter(p => enabledTypes.has(p.config.id))
-      .map(p => p.config),
-  ];
+  // Enablement now lives in AuthProviderSettings — decoupled from the Service table so
+  // auth-only providers (email, discord, …) and media-service providers (plex, jellyfin, emby)
+  // can be toggled independently. Providers declaring `requiresService` (jellyfin, emby) are
+  // additionally filtered out when their matching Service row is missing or disabled, so the
+  // login page never offers a button that would 503 on click.
+  const authProviders = getAuthProviders();
+  // Ensure every declared auth provider has a settings row — upsert-on-read defends against
+  // the race where two concurrent calls both miss the row and both try to create it.
+  await Promise.all(authProviders.map((p) => getProviderSettings(p.config.id)));
+  const settings = await listAllProviderSettings();
+  const settingsById = new Map(settings.map((s) => [s.provider, s]));
+  const enabledIds = new Set(settings.filter((s) => s.enabled).map((s) => s.provider));
+  const { prisma } = await import('../utils/prisma.js');
+  const services = await prisma.service.findMany({ select: { type: true, enabled: true } });
+  const serviceEnabledByType = new Map(services.map((s) => [s.type, s.enabled]));
+  return getAuthProviders()
+    .filter((p) => {
+      if (!enabledIds.has(p.config.id)) return false;
+      if (p.config.requiresService && serviceEnabledByType.get(p.config.id) !== true) return false;
+      return true;
+    })
+    .map((p) => ({
+      ...p.config,
+      // Expose allowSignup so the login page can hide the "Create account" UI when email's
+      // signup is off, and so OAuth buttons can optionally signal "existing users only".
+      allowSignup: settingsById.get(p.config.id)?.config.allowSignup === true,
+    }));
 }
 
 // ─── Arr Client Factory & Caching ───────────────────────────────────

@@ -71,6 +71,10 @@ export default defineConfig({
         target: 'http://localhost:3456',
         changeOrigin: true,
         ws: true,
+        // Forward x-forwarded-* so the backend can resolve Oscarr's public URL correctly
+        // (e.g. OAuth callback URL must point at :5173 where the browser actually is, not
+        // at the proxy target :3456).
+        xfwd: true,
       },
     },
   },

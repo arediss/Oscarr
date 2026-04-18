@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { logEvent } from '../utils/logEvent.js';
-import { registerEmail, loginEmail } from '../auth/providers/email.js';
+import { registerEmail, loginEmail } from '../providers/email/index.js';
 import { getAuthProviders, getAuthProvider, getAuthProviderConfigs } from '../providers/index.js';
+import { getProviderConfig, isProviderEnabled } from '../providers/authSettings.js';
 import type { AuthHelpers } from '../providers/types.js';
 import { getPermissionsForRole } from '../middleware/rbac.js';
 
@@ -70,6 +71,16 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
       const isFirstUser = userCount === 0;
 
       if (!user) {
+        // Per-provider signup gate, secure-by-default: each AuthProvider has its own
+        // `allowSignup` toggle (including email). Admin opts-in explicitly per channel, no
+        // global master switch to reason about. Bootstrapping bypasses so a fresh install
+        // can create its first admin.
+        if (!isFirstUser) {
+          const providerCfg = await getProviderConfig(opts.provider);
+          if (providerCfg.allowSignup !== true) {
+            throw new Error('SIGNUP_NOT_ALLOWED');
+          }
+        }
         user = await prisma.user.create({
           data: {
             email: opts.email,
@@ -151,9 +162,16 @@ export async function authRoutes(app: FastifyInstance) {
     const isFirstUser = userCount === 0;
 
     if (!isFirstUser) {
-      const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-      if (!(settings?.registrationEnabled ?? true)) {
-        return reply.status(403).send({ error: 'Registration is disabled.' });
+      // Provider enablement: an admin who flips Email off should fully shut down email-based
+      // registration, not just hide the button on the login page.
+      if (!(await isProviderEnabled('email'))) {
+        return reply.status(403).send({ error: 'PROVIDER_DISABLED' });
+      }
+      // Email signup is gated by email's own allowSignup toggle (same per-provider model as
+      // Plex/Jellyfin/Emby/Discord). Admin manages it from Authentication → Email.
+      const emailCfg = await getProviderConfig('email');
+      if (emailCfg.allowSignup !== true) {
+        return reply.status(403).send({ error: 'SIGNUP_NOT_ALLOWED' });
       }
     }
 
@@ -193,6 +211,9 @@ export async function authRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
+    if (!(await isProviderEnabled('email'))) {
+      return reply.status(403).send({ error: 'PROVIDER_DISABLED' });
+    }
     const { email, password } = request.body as { email: string; password: string };
 
     try {
