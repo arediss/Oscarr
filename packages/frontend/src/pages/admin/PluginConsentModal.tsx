@@ -1,10 +1,21 @@
 import { X, Server, Shield, HelpCircle } from 'lucide-react';
-import type { PluginInfo } from '@/plugins/types';
+
+/** Shape shared by RegistryPlugin (pre-install) and PluginInfo (post-install). */
+export interface ConsentablePlugin {
+  name: string;
+  version: string;
+  author?: string;
+  services?: string[];
+  capabilities?: string[];
+  capabilityReasons?: Record<string, string>;
+}
 
 interface Props {
-  plugin: PluginInfo;
+  plugin: ConsentablePlugin | null;
   open: boolean;
   busy?: boolean;
+  /** What the primary action is — changes title + button copy. */
+  mode: 'install' | 'enable';
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -31,13 +42,17 @@ const RISK_LABEL: Record<'low' | 'medium' | 'high', string> = {
   high:   'High risk — grants sensitive access',
 };
 
-export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: Props) {
-  if (!open) return null;
+export function PluginConsentModal({ plugin, open, busy, mode, onCancel, onConfirm }: Props) {
+  if (!open || !plugin) return null;
 
   const services = plugin.services ?? [];
   const capabilities = plugin.capabilities ?? [];
   const reasons = plugin.capabilityReasons ?? {};
   const nothingToShow = services.length === 0 && capabilities.length === 0;
+  const isInstall = mode === 'install';
+  const title = isInstall ? `Install "${plugin.name}"?` : `Enable "${plugin.name}"?`;
+  const primaryLabel = isInstall ? 'Install' : 'Enable';
+  const busyLabel = isInstall ? 'Installing…' : 'Enabling…';
 
   return (
     <div
@@ -47,9 +62,7 @@ export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: 
       <div className="card w-full max-w-lg flex flex-col shadow-2xl shadow-black/50">
         <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 flex-shrink-0">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-ndp-text truncate">
-              Enable &quot;{plugin.name}&quot;?
-            </h2>
+            <h2 className="text-base font-semibold text-ndp-text truncate">{title}</h2>
             <p className="text-xs text-ndp-text-dim mt-0.5">
               v{plugin.version}{plugin.author ? ` · ${plugin.author}` : ''}
             </p>
@@ -138,7 +151,7 @@ export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: 
             disabled={busy}
             className="btn-primary text-sm flex-1 disabled:opacity-50"
           >
-            {busy ? 'Enabling…' : 'Enable'}
+            {busy ? busyLabel : primaryLabel}
           </button>
         </div>
       </div>

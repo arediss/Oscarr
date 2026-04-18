@@ -396,6 +396,13 @@ export async function pluginRoutes(app: FastifyInstance) {
             url: `https://github.com/${entry.repository}`,
             stars: repoMeta.stargazers_count ?? 0,
             updatedAt: repoMeta.pushed_at || null,
+            // Permission surface the plugin will request — surfaced pre-install so the admin can
+            // review what they're about to grant before Oscarr downloads any code.
+            services: Array.isArray(manifest.services) ? manifest.services : undefined,
+            capabilities: Array.isArray(manifest.capabilities) ? manifest.capabilities : undefined,
+            capabilityReasons: (manifest.capabilityReasons && typeof manifest.capabilityReasons === 'object')
+              ? manifest.capabilityReasons
+              : undefined,
           };
         })
       );

@@ -25,6 +25,9 @@ interface RegistryPlugin {
   url: string;
   stars: number;
   updatedAt: string | null;
+  services?: string[];
+  capabilities?: string[];
+  capabilityReasons?: Record<string, string>;
 }
 
 type SubTab = 'installed' | 'discover';
@@ -90,15 +93,22 @@ export function PluginsTab() {
   const [installing, setInstalling] = useState<string | null>(null);
   const [installMessage, setInstallMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
-  const handleInstall = async (entry: RegistryPlugin) => {
-    setInstalling(entry.id);
+  // Consent-first install: click Install → modal shows the manifest's services + capabilities →
+  // admin confirms → Oscarr actually downloads the tarball and stores the plugin (disabled by default).
+  const [installConsent, setInstallConsent] = useState<RegistryPlugin | null>(null);
+
+  const handleInstall = (entry: RegistryPlugin) => {
     setInstallMessage(null);
-    // Default GitHub tarball of the repo's HEAD — assumes the plugin author committed dist/ to the tag.
-    // Future: resolve the registry entry's `downloadUrl` if present, or the latest release asset.
+    setInstallConsent(entry);
+  };
+
+  const doInstall = async (entry: RegistryPlugin) => {
+    setInstalling(entry.id);
     const url = `https://api.github.com/repos/${entry.repository}/tarball/HEAD`;
     try {
       const { data } = await api.post('/plugins/install', { url });
-      setInstallMessage({ kind: 'success', text: `Installed ${data.plugin.name} v${data.plugin.version}` });
+      setInstallMessage({ kind: 'success', text: `Installed ${data.plugin.name} v${data.plugin.version} — toggle it on in Installed whenever you're ready` });
+      setInstallConsent(null);
       await fetchPlugins();
       setSubTab('installed');
     } catch (err) {
@@ -164,29 +174,16 @@ export function PluginsTab() {
     api.get('/plugins/updates').then(() => fetchPlugins()).catch(() => { /* best-effort */ });
   }, [subTab, fetchPlugins]);
 
-  const [consentFor, setConsentFor] = useState<PluginInfo | null>(null);
-
-  // Raw toggle — called directly by disable, or by enable after consent.
-  const applyToggle = async (id: string, enabled: boolean) => {
-    setToggling(id);
+  // Toggle is now friction-free — consent lives at install time (handleInstall), so flipping a
+  // plugin on/off post-install is just a DB flag change.
+  const handleToggle = async (plugin: PluginInfo) => {
+    setToggling(plugin.id);
     try {
-      await api.put(`/plugins/${id}/toggle`, { enabled });
-      setPlugins(prev => prev.map(p => p.id === id ? { ...p, enabled } : p));
-      invalidatePluginUICache(); // Refresh plugin UI contributions (sidebar, hooks)
+      await api.put(`/plugins/${plugin.id}/toggle`, { enabled: !plugin.enabled });
+      setPlugins(prev => prev.map(p => p.id === plugin.id ? { ...p, enabled: !plugin.enabled } : p));
+      invalidatePluginUICache();
     } catch { /* ignore */ }
     setToggling(null);
-  };
-
-  const handleToggle = (plugin: PluginInfo) => {
-    if (plugin.enabled) {
-      // Disabling never needs consent — strip permissions, go.
-      applyToggle(plugin.id, false);
-      return;
-    }
-    // Enabling: always show the consent prompt so the admin sees what the plugin is allowed to do.
-    // For plugins that declare nothing (no services, no capabilities), the modal still renders a
-    // short notice so there's no confusion about what's happening.
-    setConsentFor(plugin);
   };
 
   const [uninstalling, setUninstalling] = useState<string | null>(null);
@@ -657,16 +654,12 @@ export function PluginsTab() {
         </div>
       )}
       <PluginConsentModal
-        plugin={consentFor ?? { id: '', name: '', version: '', enabled: false, hasSettings: false, hasFrontend: false }}
-        open={!!consentFor}
-        busy={consentFor ? toggling === consentFor.id : false}
-        onCancel={() => setConsentFor(null)}
-        onConfirm={async () => {
-          if (!consentFor) return;
-          const target = consentFor;
-          setConsentFor(null);
-          await applyToggle(target.id, true);
-        }}
+        plugin={installConsent}
+        open={!!installConsent}
+        busy={installConsent ? installing === installConsent.id : false}
+        mode="install"
+        onCancel={() => setInstallConsent(null)}
+        onConfirm={() => installConsent && doInstall(installConsent)}
       />
     </AdminTabLayout>
   );
