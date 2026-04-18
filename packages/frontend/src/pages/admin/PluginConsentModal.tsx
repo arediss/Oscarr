@@ -77,14 +77,14 @@ export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: 
                 <Server className="w-3 h-3" />
                 Services
               </div>
-              <p className="text-sm text-ndp-text-muted mb-2">
-                Reads the config (URL, API key, tokens) of:
-              </p>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="space-y-1.5">
                 {services.map((s) => (
-                  <span key={s} className="text-xs px-2 py-0.5 rounded-md bg-ndp-accent/10 text-ndp-accent">
-                    {s}
-                  </span>
+                  <CapabilityRow
+                    key={s}
+                    label={s}
+                    description={`Reads the ${s} service config from Oscarr (URL, API key, tokens).`}
+                    risk="medium"
+                  />
                 ))}
               </div>
             </section>
