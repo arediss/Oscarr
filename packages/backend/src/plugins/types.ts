@@ -1,9 +1,29 @@
-import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
+import type { FastifyBaseLogger } from 'fastify';
 import type { NotificationRegistry } from '../notifications/registry.js';
 import type { NotificationPayload } from '../notifications/types.js';
 import type { ArrClient } from '../providers/types.js';
+import type { PluginRouter } from './router.js';
 
 // ─── Plugin Manifest (manifest.json) ────────────────────────────────
+
+export type PluginCapability =
+  | 'users:read'
+  | 'users:write'
+  | 'settings:plugin'
+  | 'settings:app'
+  | 'notifications'
+  | 'permissions'
+  | 'events';
+
+export const ALL_CAPABILITIES: readonly PluginCapability[] = [
+  'users:read',
+  'users:write',
+  'settings:plugin',
+  'settings:app',
+  'notifications',
+  'permissions',
+  'events',
+] as const;
 
 export interface PluginManifest {
   id: string;
@@ -14,6 +34,20 @@ export interface PluginManifest {
   author?: string;
   entry: string;
   frontend?: string;
+  /** Compatibility declaration. `oscarr` is a semver range the author claims to support;
+   *  `testedAgainst` lists Oscarr versions explicitly verified to work. Missing = 'unknown' status. */
+  engines?: {
+    oscarr: string;
+    testedAgainst?: string[];
+  };
+  /** Services whose config the plugin is allowed to read via getServiceConfig / getServiceConfigRaw.
+   *  Any service not listed here returns null and is logged. Empty / missing = no service access. */
+  services?: string[];
+  /** Capability buckets the plugin requests. Any ctx method outside the declared buckets throws at call
+   *  time. `log` and `services:*` are gated separately (log = always granted, services = via `services`). */
+  capabilities?: PluginCapability[];
+  /** Optional per-capability justification shown in the admin consent prompt on enable. */
+  capabilityReasons?: Partial<Record<PluginCapability, string>>;
   settings?: PluginSettingDef[];
   hooks?: {
     routes?: { prefix: string };
@@ -93,7 +127,7 @@ export interface PluginGuardResult {
 
 export interface PluginRegistration {
   manifest: PluginManifest;
-  registerRoutes?(app: FastifyInstance, ctx: PluginContext): Promise<void>;
+  registerRoutes?(app: PluginRouter, ctx: PluginContext): Promise<void>;
   registerJobs?(ctx: PluginContext): Record<string, () => Promise<unknown>>;
   registerGuards?(ctx: PluginContext): Record<string, (userId: number) => Promise<PluginGuardResult | null>>;
   registerNotificationProviders?(registry: NotificationRegistry): void;
@@ -123,4 +157,18 @@ export interface PluginInfo {
   hasSettings: boolean;
   hasFrontend: boolean;
   error?: string;
+  compat?: {
+    status: 'verified' | 'untested' | 'incompatible' | 'unknown';
+    range?: string;
+    oscarrVersion: string;
+    reason?: string;
+  };
+  /** Latest version seen by the last `/updates` check — populated from PluginState, null if never checked. */
+  latestVersion?: string | null;
+  lastUpdateCheck?: string | null;
+  updateAvailable?: boolean;
+  /** Surfaced from manifest so the admin UI can render the consent prompt before an enable. */
+  services?: string[];
+  capabilities?: string[];
+  capabilityReasons?: Partial<Record<string, string>>;
 }

@@ -2,6 +2,151 @@
 
 Oscarr supports plugins for extending functionality without modifying the core. Plugins can add backend routes, scheduled jobs, admin UI tabs, navigation items, full pages, feature flags, guards, custom permissions, and event-driven workflows.
 
+## What's new in the plugin engine (v0.6.3+)
+
+Plugins now declare their capabilities explicitly for security + predictability. Three new manifest fields:
+
+- **`engines.oscarr`** — semver range your plugin supports, e.g. `">=0.6.0 <1.0.0"`. Required. Plugins outside the range are refused at load time with a clear error.
+- **`engines.testedAgainst`** — list of Oscarr versions you've explicitly tested. Plugins get a green "Verified" badge when running on one of these; otherwise an amber "Untested" badge.
+- **`services`** — whitelist of service types (radarr / sonarr / plex / tautulli / …) whose config your plugin may read. Anything not listed returns `null` from `ctx.getServiceConfig*()`.
+- **`capabilities`** — whitelist of ctx method buckets your plugin calls. Any method outside the declared set throws at call time with a pointer at the missing entry. See the [Capabilities reference](#capabilities) section.
+- **`capabilityReasons`** — optional human-readable justification per capability, surfaced to admins when they enable the plugin.
+
+Install flow is also simpler — plugins ship a pre-built `dist/` in their GitHub release, and the admin UI's "Install" button downloads the tarball, hot-loads the plugin, and mounts its routes without a container restart.
+
+See the [Migration guide](#migration-guide) at the bottom if you're updating a plugin from a pre-v0.6.3 Oscarr.
+
+## Quickstart
+
+Scaffold a plugin that boots, registers one route, and appears in the admin UI — about 5 minutes from an empty directory.
+
+### 1. Create the plugin directory
+
+Anywhere outside of Oscarr's source tree (so you can version it separately and later publish to its own GitHub repo):
+
+```bash
+mkdir -p ~/my-plugins/hello-oscarr/src
+cd ~/my-plugins/hello-oscarr
+```
+
+### 2. `package.json`
+
+```json
+{
+  "name": "oscarr-plugin-hello-oscarr",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "node build.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
+```
+
+Repo name convention: `oscarr-plugin-<id>` if you plan to publish — the registry picks up repos that match this pattern.
+
+### 3. `build.js`
+
+Oscarr loads your plugin as a single ESM bundle, so we build with esbuild. This file supports both one-shot (`npm run build`) and watch mode (`npm run dev`):
+
+```javascript
+import { build, context } from 'esbuild';
+import { builtinModules } from 'module';
+
+const config = {
+  entryPoints: ['src/index.ts'],
+  outfile: 'dist/index.js',
+  platform: 'node',
+  target: 'node20',
+  format: 'esm',
+  bundle: true,
+  sourcemap: true,
+  external: [...builtinModules, ...builtinModules.map(m => `node:${m}`), 'fastify'],
+  banner: { js: `import { createRequire } from 'module'; const require = createRequire(import.meta.url);` },
+  logLevel: 'info',
+};
+
+if (process.argv.includes('--watch')) {
+  const ctx = await context(config);
+  await ctx.watch();
+  console.log('Watching src/ …');
+} else {
+  await build(config);
+  console.log('Built → dist/index.js');
+}
+```
+
+### 4. `manifest.json`
+
+```json
+{
+  "id": "hello-oscarr",
+  "name": "Hello Oscarr",
+  "version": "0.1.0",
+  "apiVersion": "v1",
+  "entry": "dist/index.js",
+  "description": "A minimal example plugin.",
+  "author": "Your name",
+  "engines": {
+    "oscarr": ">=0.6.0 <1.0.0",
+    "testedAgainst": ["0.6.3"]
+  },
+  "capabilities": [],
+  "hooks": {
+    "routes": { "prefix": "/api/plugins/hello-oscarr" }
+  }
+}
+```
+
+No `capabilities` and no `services` means the plugin only gets `ctx.log`. Add buckets as you use gated methods (see [Capabilities](#capabilities)).
+
+### 5. `src/index.ts`
+
+```typescript
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import type { FastifyInstance } from 'fastify';
+
+interface PluginContext {
+  log: { info: (...args: unknown[]) => void };
+}
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const manifest = JSON.parse(readFileSync(join(__dirname, '..', 'manifest.json'), 'utf-8'));
+
+export function register(ctx: PluginContext) {
+  return {
+    manifest,
+    async registerRoutes(app: FastifyInstance) {
+      app.get('/hello', async () => ({ message: 'Hello from Oscarr!' }));
+      ctx.log.info('hello-oscarr routes registered');
+    },
+  };
+}
+```
+
+### 6. Build + install
+
+```bash
+npm install
+npm run build
+```
+
+Now symlink the plugin into your local Oscarr (see [Dev loop](#dev-loop) for why a symlink is better than copying):
+
+```bash
+ln -s ~/my-plugins/hello-oscarr ~/Oscarr/app/packages/plugins/hello-oscarr
+```
+
+Restart Oscarr once to discover it (hot-install from the UI only applies when pulling from the Discover tab). The plugin shows up in **Admin → Plugins → Installed** — toggle it on and hit `GET /api/plugins/hello-oscarr/hello` to verify.
+
 ## Getting started
 
 ### File structure
@@ -36,8 +181,19 @@ On startup, Oscarr scans `packages/plugins/` for directories with a `manifest.js
   "version": "1.0.0",
   "apiVersion": "v1",
   "description": "A short description of what this plugin does",
+  "author": "Your Name",
   "entry": "dist/index.js",
   "frontend": "frontend/index.tsx",
+  "engines": {
+    "oscarr": ">=0.6.0 <1.0.0",
+    "testedAgainst": ["0.6.3"]
+  },
+  "services": ["radarr"],
+  "capabilities": ["settings:plugin", "permissions"],
+  "capabilityReasons": {
+    "settings:plugin": "Stores configuration per plugin.",
+    "permissions": "Registers admin-only permissions for the plugin's routes."
+  },
   "settings": [
     {
       "key": "webhookUrl",
@@ -548,7 +704,7 @@ if (features.myPluginEnabled) {
 
 Plugins can be enabled or disabled from the admin panel without restarting:
 - `PUT /api/plugins/:id/toggle` with `{ enabled: boolean }`
-- Disabled plugins' routes still exist but their jobs don't run
+- Disabling drops the plugin's router from the dispatcher (requests 404 instantly), pauses its jobs, and clears its RBAC overrides. Re-enabling rebuilds everything from the plugin's `registerRoutes`.
 - `onEnable(ctx)` is called when a plugin is enabled, `onDisable(ctx)` when disabled (both best-effort)
 
 ### Plugin state persistence
@@ -671,7 +827,7 @@ export function register(ctx: PluginContext): PluginRegistration {
 }
 ```
 
-> **Deprecated:** The old pattern of importing `registerPluginPermission` and `registerRoutePermission` directly from `rbac.js` still works but is deprecated. Use `ctx.registerRoutePermission()` and `ctx.registerPluginPermission()` instead.
+> **Removed:** Importing `registerPluginPermission` / `registerRoutePermission` directly from `rbac.js` is no longer supported — the signatures now require a `pluginId` owner so cleanup on uninstall works. Always go through `ctx.*` so the engine can tear down your overrides when the plugin is disabled or uninstalled.
 
 ### How it works
 
@@ -681,7 +837,11 @@ export function register(ctx: PluginContext): PluginRegistration {
 
 ### Route rule format
 
-The `registerRoutePermission` key is `METHOD:/full/path` matching Fastify's parameterized URL:
+The `registerRoutePermission` key is `METHOD:/full/path` matching the dispatcher's
+URL for your sub-route. It **must** start with `/api/plugins/<your-plugin-id>/` — a
+plugin can only rewrite RBAC rules inside its own namespace. Anything else throws
+at call time (this is what prevents a plugin with the `permissions` capability
+from downgrading a core admin route).
 
 ```typescript
 // Exact route
@@ -737,15 +897,113 @@ Admins can create custom roles (e.g. "moderator") with any combination of permis
 
 The admin panel provides several tools for managing plugins:
 
-- **Installed tab**: Toggle plugins on/off, view version info, detect available updates
-- **Discover tab**: Browse community plugins from the GitHub registry
-- **Reload plugins button**: Triggers a graceful server restart to discover newly added or removed plugins
+- **Installed tab**: Toggle plugins on/off, view version info, detect available updates, uninstall (hot — no restart)
+- **Discover tab**: Browse community plugins from the GitHub registry and install with consent prompt
+- **Reload plugins button**: Graceful server restart — only needed to pick up plugins you dropped into `packages/plugins/` by hand. Installs and uninstalls from the UI are already live.
 - **Plugin with frontend**: Renders the plugin's custom component in the admin tab instead of the default settings form
+
+## Capabilities
+
+Any ctx method outside of `log` and service-bound methods (`getServiceConfig*`, `getArrClient`) lives inside a capability bucket. Your plugin must list the buckets it uses in `manifest.capabilities`. Calling a method in an undeclared bucket throws a clear error pointing at the missing manifest entry.
+
+| Bucket              | ctx methods                                                      | When to declare it                            |
+|---------------------|------------------------------------------------------------------|-----------------------------------------------|
+| `users:read`        | `getUser`, `getUserProviders`                                    | Lookup user profile or their linked providers |
+| `users:write`       | `setUserRole`, `setUserDisabled`, `issueAuthToken`               | Change role, disable, impersonate             |
+| `settings:plugin`   | `getSetting`, `setSetting`, `getPluginDataDir`                   | Store plugin-scoped state or files            |
+| `settings:app`      | `getAppSettings`                                                 | Read Oscarr-wide settings (site name, etc.)   |
+| `notifications`     | `sendNotification`, `sendUserNotification`                       | Send alerts to users or notification channels |
+| `permissions`       | `registerRoutePermission`, `registerPluginPermission`            | Declare RBAC rules for the plugin's routes    |
+| `events`            | `events.on / off / emit`                                         | Use the cross-plugin event bus                |
+
+`log` and service methods are gated separately:
+- **`log`** is always available. Secrets are scrubbed from `ctx.log.*(msg)` calls before persistence to avoid leaking tokens into the admin-visible `PluginLog` table.
+- **Service methods** (`getServiceConfig`, `getServiceConfigRaw`, `getArrClient`) are gated by `manifest.services`. List any service type your plugin needs access to.
+
+### Declaring capability reasons
+
+Use `capabilityReasons` to explain *why* a plugin needs a sensitive capability. The admin sees this when enabling the plugin:
+
+```json
+{
+  "capabilities": ["users:write"],
+  "capabilityReasons": {
+    "users:write": "Downgrades a user's role when their subscription expires."
+  }
+}
+```
+
+## Install flow (for end users)
+
+Plugins no longer require `git clone + npm install + npm run build + restart`. Instead:
+
+1. The plugin author tags a release on GitHub with a pre-built `dist/` committed (or attached as a release asset).
+2. Admin opens **Admin → Plugins → Discover**, finds the plugin, clicks **Install**.
+3. Oscarr downloads the tarball, validates the manifest, drops it in `packages/plugins/<id>/`, and hot-loads the plugin. No restart.
+
+The `Install` button resolves the GitHub tarball of the plugin repo's HEAD. To install a plugin from an arbitrary URL, the admin UI exposes an "Install from URL" option (see the `POST /api/admin/plugins/install { url }` endpoint).
+
+## Dev loop
+
+Once the plugin is symlinked into `packages/plugins/`, the tightest iteration cycle is:
+
+1. Run `npm run dev` in your plugin dir — esbuild watches `src/` and rewrites `dist/index.js` on every save.
+2. In the Oscarr admin UI, toggle the plugin **off** then **on** to re-import the fresh bundle. The dispatcher drops the old router + ctx + RBAC state and rebuilds from the new module — no server restart needed.
+3. Watch logs via **Admin → Plugins → (your plugin) → Logs** (or tail the Oscarr server stdout). `ctx.log.info/warn/error` is persisted to the `PluginLog` table and scrubbed for secrets before display.
+
+> **Why symlink rather than copy:** the plugin loader follows symlinks so your source edits are picked up as soon as esbuild rewrites `dist/`. Copying would force a manual resync after every build.
+
+### Reset during dev
+
+Plugin state (settings + `onInstallRan` flag) lives in the `PluginState` table. To force a clean install — e.g. to re-run `onInstall` — delete the row:
+
+```sql
+DELETE FROM "PluginState" WHERE "pluginId" = 'hello-oscarr';
+```
+
+Then toggle the plugin off/on and `onInstall(ctx)` fires again.
+
+### Frontend-only changes
+
+If your plugin has a `frontend/` bundle, the browser caches it aggressively. After a rebuild, hard-refresh the admin page (Shift+Reload) or bump the plugin's `version` in `manifest.json` — Oscarr uses that in the module URL as a cache buster.
+
+## Release workflow
+
+When you tag a new release, commit the pre-built `dist/` directory so it lands in the GitHub source tarball. A minimal GitHub Actions workflow:
+
+```yaml
+name: release
+on:
+  push:
+    tags: ['v*']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci && npm run build
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "dist.tar.gz"
+          generateReleaseNotes: true
+```
+
+## Migration guide (pre-v0.6.3 → v0.6.3)
+
+Existing plugins need three additions to load under the new engine:
+
+1. **`engines.oscarr`** — declare the semver range of Oscarr versions you support. For a plugin that works today on 0.6.x: `{ "oscarr": ">=0.6.0 <1.0.0", "testedAgainst": ["0.6.3"] }`.
+2. **`services`** — if your plugin calls `ctx.getServiceConfig*()` or `ctx.getArrClient()`, list each service type. E.g. `["radarr"]` or `["plex", "tautulli"]`. Plugins that don't touch services skip this field entirely.
+3. **`capabilities`** — list the ctx method buckets you use (see the Capabilities table above). A plugin that only uses `ctx.log` needs no capabilities field — `log` is always granted.
+
+Without these, the plugin either fails to load (missing `engines` → compat status `unknown` but still loads) or throws at runtime when it calls a gated method.
 
 ## Current limitations
 
 - Plugins cannot modify the database schema (no Prisma migrations)
 - Plugin frontend components are lazy-loaded via ESM and cannot import from the main app bundle (use `@oscarr/sdk` instead)
 - No plugin dependency system (no way to declare that plugin A requires plugin B)
-- Adding/removing plugins requires a server restart (use "Reload plugins" button in admin)
+- Plugin modules stay in Node's ESM loader cache until process restart — a hot-uninstall drops routes + ctx + RBAC state but the module code itself only disappears on next boot
 - The event bus is in-process only (no persistence, no cross-restart delivery)

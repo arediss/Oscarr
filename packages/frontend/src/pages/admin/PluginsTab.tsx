@@ -1,24 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, ChevronDown, ChevronUp, BookOpen, Copy, Check, RefreshCw } from 'lucide-react';
+import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, BookOpen, Copy, Check, RefreshCw, AlertTriangle, Trash2, X } from 'lucide-react';
 import api from '@/lib/api';
 import { invalidatePluginUICache } from '@/plugins/usePlugins';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
+import { PluginConsentModal } from './PluginConsentModal';
 import type { PluginInfo } from '@/plugins/types';
 
-function isNewerVersion(remote: string, local: string): boolean {
-  const r = remote.split('.').map(Number);
-  const l = local.split('.').map(Number);
-  for (let i = 0; i < Math.max(r.length, l.length); i++) {
-    const rv = r[i] || 0;
-    const lv = l[i] || 0;
-    if (rv > lv) return true;
-    if (rv < lv) return false;
-  }
-  return false;
-}
+// `plugin.updateAvailable` + `plugin.latestVersion` come straight from the backend, which
+// runs a proper semver comparison against the registry cache. No hand-rolled version logic here.
 
 interface RegistryPlugin {
   id: string;
@@ -33,6 +25,9 @@ interface RegistryPlugin {
   url: string;
   stars: number;
   updatedAt: string | null;
+  services?: string[];
+  capabilities?: string[];
+  capabilityReasons?: Record<string, string>;
 }
 
 type SubTab = 'installed' | 'discover';
@@ -95,6 +90,35 @@ export function PluginsTab() {
   const [showHowTo, setShowHowTo] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
+  const [installing, setInstalling] = useState<string | null>(null);
+  const [installMessage, setInstallMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+  // Consent-first install: click Install → modal shows the manifest's services + capabilities →
+  // admin confirms → Oscarr actually downloads the tarball and stores the plugin (disabled by default).
+  const [installConsent, setInstallConsent] = useState<RegistryPlugin | null>(null);
+
+  const handleInstall = (entry: RegistryPlugin) => {
+    setInstallMessage(null);
+    setInstallConsent(entry);
+  };
+
+  const doInstall = async (entry: RegistryPlugin) => {
+    setInstalling(entry.id);
+    const url = `https://api.github.com/repos/${entry.repository}/tarball/HEAD`;
+    try {
+      const { data } = await api.post('/plugins/install', { url });
+      setInstallMessage({ kind: 'success', text: `Installed ${data.plugin.name} v${data.plugin.version} — toggle it on in Installed whenever you're ready` });
+      setInstallConsent(null);
+      await fetchPlugins();
+      setSubTab('installed');
+    } catch (err) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? String((err as Error).message);
+      setInstallMessage({ kind: 'error', text: msg });
+    } finally {
+      setInstalling(null);
+      setTimeout(() => setInstallMessage(null), 6000);
+    }
+  };
 
   const handleRestart = async () => {
     setShowRestartConfirm(false);
@@ -140,41 +164,91 @@ export function PluginsTab() {
     }
   }, [subTab, registry.length, registryLoading, fetchRegistry]);
 
-  const handleToggle = async (id: string, enabled: boolean) => {
-    setToggling(id);
+  // Kick an update-check once on first mount of the Installed tab so the
+  // latestVersion badges can populate without user action. Backend has its
+  // own 1h cache, so this is a no-op on subsequent mounts.
+  const updateCheckedRef = useRef(false);
+  useEffect(() => {
+    if (subTab !== 'installed' || updateCheckedRef.current) return;
+    updateCheckedRef.current = true;
+    api.get('/plugins/updates').then(() => fetchPlugins()).catch(() => { /* best-effort */ });
+  }, [subTab, fetchPlugins]);
+
+  // Toggle is now friction-free — consent lives at install time (handleInstall), so flipping a
+  // plugin on/off post-install is just a DB flag change.
+  const handleToggle = async (plugin: PluginInfo) => {
+    setToggling(plugin.id);
     try {
-      await api.put(`/plugins/${id}/toggle`, { enabled });
-      setPlugins(prev => prev.map(p => p.id === id ? { ...p, enabled } : p));
-      invalidatePluginUICache(); // Refresh plugin UI contributions (sidebar, hooks)
+      await api.put(`/plugins/${plugin.id}/toggle`, { enabled: !plugin.enabled });
+      setPlugins(prev => prev.map(p => p.id === plugin.id ? { ...p, enabled: !plugin.enabled } : p));
+      invalidatePluginUICache();
     } catch { /* ignore */ }
     setToggling(null);
   };
 
+  const [uninstalling, setUninstalling] = useState<string | null>(null);
+  const [uninstallConfirm, setUninstallConfirm] = useState<string | null>(null);
+
+  const handleUninstall = async (id: string) => {
+    setUninstalling(id);
+    setUninstallConfirm(null);
+    try {
+      await api.post(`/plugins/${id}/uninstall`);
+      await fetchPlugins();
+      invalidatePluginUICache();
+    } catch (err) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? String((err as Error).message);
+      setInstallMessage({ kind: 'error', text: `Uninstall failed: ${msg}` });
+      setTimeout(() => setInstallMessage(null), 6000);
+    }
+    setUninstalling(null);
+  };
+
   const installedIds = new Set(plugins.map(p => p.id));
 
-  // Build a map of registry versions for update detection
-  const registryVersions = new Map<string, { version: string; url: string; repository: string }>();
+  // Registry metadata (repo URL etc.) — used only for the "View update" link, not for version detection.
+  const registryRepos = new Map<string, { url: string; repository: string }>();
   for (const rp of registry) {
-    registryVersions.set(rp.id, { version: rp.version, url: rp.url, repository: rp.repository });
+    registryRepos.set(rp.id, { url: rp.url, repository: rp.repository });
   }
 
-  // Count available updates
-  const updatesAvailable = plugins.filter(p => {
-    const rv = registryVersions.get(p.id);
-    return rv && isNewerVersion(rv.version, p.version);
-  }).length;
+  // Update detection is authoritative from the backend (plugin.updateAvailable / plugin.latestVersion).
+  const updatesAvailable = plugins.filter((p) => p.updateAvailable).length;
 
   if (loading) return <Spinner />;
 
+  const headerActions = (
+    <>
+      <button
+        onClick={() => setShowHowTo(true)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors"
+        title="Plugin development guide"
+      >
+        <BookOpen className="w-4 h-4" />
+        <span className="hidden sm:inline">Docs</span>
+      </button>
+      <button
+        onClick={() => setShowRestartConfirm(true)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors"
+        title="Restart the server to pick up plugins dropped into packages/plugins by hand. Installs from Discover don't need this."
+      >
+        <RefreshCw className="w-4 h-4" />
+        <span className="hidden sm:inline">Reload</span>
+      </button>
+    </>
+  );
+
   return (
-    <AdminTabLayout title={t('admin.tab.plugins')} count={plugins.length}>
-      {/* Sub-tabs */}
-      <div className="flex gap-1 mb-6 bg-white/5 rounded-xl p-1 w-fit">
+    <AdminTabLayout title={t('admin.tab.plugins')} count={plugins.length} actions={headerActions}>
+      {/* Sub-tabs — underline style to stay consistent with MediaConfigTab. */}
+      <div className="flex gap-2 mb-6 border-b border-white/5 pb-3">
         <button
           onClick={() => setSubTab('installed')}
           className={clsx(
-            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
-            subTab === 'installed' ? 'bg-ndp-accent text-white' : 'text-ndp-text-muted hover:text-ndp-text'
+            'flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
+            subTab === 'installed'
+              ? 'bg-ndp-accent/10 text-ndp-accent'
+              : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
           )}
         >
           <Package className="w-4 h-4" />
@@ -182,7 +256,7 @@ export function PluginsTab() {
           {plugins.length > 0 && (
             <span className={clsx(
               'text-xs px-1.5 py-0.5 rounded-full',
-              subTab === 'installed' ? 'bg-white/20' : 'bg-white/10'
+              subTab === 'installed' ? 'bg-ndp-accent/15' : 'bg-white/10'
             )}>{plugins.length}</span>
           )}
           {updatesAvailable > 0 && (
@@ -194,19 +268,14 @@ export function PluginsTab() {
         <button
           onClick={() => setSubTab('discover')}
           className={clsx(
-            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
-            subTab === 'discover' ? 'bg-ndp-accent text-white' : 'text-ndp-text-muted hover:text-ndp-text'
+            'flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
+            subTab === 'discover'
+              ? 'bg-ndp-accent/10 text-ndp-accent'
+              : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
           )}
         >
           <Download className="w-4 h-4" />
           Discover
-        </button>
-        <button
-          onClick={() => setShowRestartConfirm(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-ndp-text-muted hover:text-ndp-text hover:bg-white/5 transition-all ml-auto"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Reload plugins
         </button>
       </div>
 
@@ -216,7 +285,8 @@ export function PluginsTab() {
           <div className="card p-6 max-w-md mx-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-ndp-text font-semibold mb-2">Reload plugins</h3>
             <p className="text-sm text-ndp-text-muted mb-4">
-              This will restart the Oscarr server to discover and load new plugins. The app will be unavailable for a few seconds.
+              Restarts Oscarr to discover plugins you added to <code className="text-ndp-text bg-black/30 px-1 py-0.5 rounded text-xs">packages/plugins</code> by hand.
+              Plugins installed from Discover are already live — you don't need this for those.
             </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowRestartConfirm(false)} className="px-4 py-2 text-sm text-ndp-text-dim hover:text-ndp-text transition-colors">
@@ -243,7 +313,7 @@ export function PluginsTab() {
 
       {/* ═══ Installed tab ═══ */}
       {subTab === 'installed' && (
-        <div className="space-y-3">
+        <>
           {plugins.length === 0 ? (
             <div className="card p-10 text-center">
               <Plug className="w-12 h-12 text-ndp-text-dim mx-auto mb-4 opacity-50" />
@@ -258,70 +328,150 @@ export function PluginsTab() {
               </button>
             </div>
           ) : (
-            plugins.map((plugin) => {
-              const rv = registryVersions.get(plugin.id);
-              const hasUpdate = rv && isNewerVersion(rv.version, plugin.version);
-              return (
-                <div key={plugin.id} className="card p-5 flex items-center gap-4">
-                  <PluginInitial name={plugin.name} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-semibold text-ndp-text">{plugin.name}</h3>
-                      <span className="text-xs text-ndp-text-dim">v{plugin.version}</span>
-                      {hasUpdate && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-ndp-accent/15 text-ndp-accent font-medium">
-                          v{rv.version} available
-                        </span>
-                      )}
-                      {plugin.error && (
-                        <span className="text-xs bg-ndp-danger/10 text-ndp-danger px-2 py-0.5 rounded-full">{t('common.error')}</span>
-                      )}
-                    </div>
-                    {plugin.description && (
-                      <p className="text-sm text-ndp-text-muted mt-0.5 line-clamp-1">{plugin.description}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {plugins.map((plugin) => {
+                const rv = registryRepos.get(plugin.id);
+                const hasUpdate = !!plugin.updateAvailable;
+                const hasError = !!plugin.error;
+                const isConfirming = uninstallConfirm === plugin.id;
+                return (
+                  <div
+                    key={plugin.id}
+                    className={clsx(
+                      'card p-5 flex flex-col gap-4 transition-colors',
+                      hasError && 'border-ndp-danger/30'
                     )}
-                    <div className="flex items-center gap-3 mt-0.5">
-                      {plugin.author && (
-                        <span className="text-xs text-ndp-text-dim">{t('common.by')} {plugin.author}</span>
-                      )}
-                      {hasUpdate && rv.url && (
+                  >
+                    {/* Header: avatar + name + version */}
+                    <div className="flex items-start gap-3">
+                      <PluginInitial name={plugin.name} />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-semibold text-ndp-text truncate">{plugin.name}</h3>
+                        <p className="text-xs text-ndp-text-dim mt-0.5">
+                          v{plugin.version}
+                          {plugin.author && <> · {plugin.author}</>}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Status badges */}
+                    {(hasUpdate || plugin.compat?.status === 'untested' || plugin.compat?.status === 'incompatible' || hasError) && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {hasUpdate && plugin.latestVersion && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-ndp-accent/15 text-ndp-accent font-medium">
+                            v{plugin.latestVersion} available
+                          </span>
+                        )}
+                        {plugin.compat?.status === 'untested' && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-medium" title={plugin.compat.reason}>
+                            Untested
+                          </span>
+                        )}
+                        {plugin.compat?.status === 'incompatible' && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-ndp-danger/15 text-ndp-danger font-medium" title={plugin.compat.reason}>
+                            Incompatible
+                          </span>
+                        )}
+                        {hasError && (
+                          <span className="text-xs bg-ndp-danger/10 text-ndp-danger px-2 py-0.5 rounded-full">
+                            {t('common.error')}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Description or error detail — fills to push footer down */}
+                    <div className="flex-1 min-h-[2.5rem]">
+                      {hasError ? (
+                        <p className="text-xs text-ndp-danger line-clamp-3">{plugin.error}</p>
+                      ) : plugin.description ? (
+                        <p className="text-sm text-ndp-text-muted line-clamp-2">{plugin.description}</p>
+                      ) : null}
+                      {hasUpdate && rv?.url && !hasError && (
                         <a
                           href={rv.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-ndp-accent hover:underline inline-flex items-center gap-1"
+                          className="text-xs text-ndp-accent hover:underline inline-flex items-center gap-1 mt-1.5"
                         >
                           View update <ExternalLink className="w-3 h-3" />
                         </a>
                       )}
                     </div>
-                    {plugin.error && (
-                      <p className="text-xs text-ndp-danger mt-1 line-clamp-2">{plugin.error}</p>
-                    )}
+
+                    {/* Footer: toggle + uninstall */}
+                    <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                      <button
+                        onClick={() => handleToggle(plugin)}
+                        disabled={toggling === plugin.id}
+                        className="flex items-center gap-2.5 text-xs font-medium text-ndp-text-dim hover:text-ndp-text transition-colors"
+                        title={plugin.enabled ? 'Disable' : 'Enable'}
+                      >
+                        <span
+                          className={clsx(
+                            'relative w-9 h-5 rounded-full transition-colors',
+                            plugin.enabled ? 'bg-ndp-accent' : 'bg-white/10'
+                          )}
+                        >
+                          <span
+                            className={clsx(
+                              'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform',
+                              plugin.enabled && 'translate-x-4'
+                            )}
+                          />
+                        </span>
+                        {plugin.enabled ? 'Enabled' : 'Disabled'}
+                      </button>
+                      {isConfirming ? (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleUninstall(plugin.id)}
+                            disabled={uninstalling === plugin.id}
+                            className="px-2.5 py-1 bg-ndp-danger hover:bg-ndp-danger/80 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-50"
+                          >
+                            {uninstalling === plugin.id ? 'Uninstalling…' : 'Confirm'}
+                          </button>
+                          <button
+                            onClick={() => setUninstallConfirm(null)}
+                            className="px-2.5 py-1 text-ndp-text-dim hover:text-ndp-text rounded-md text-xs font-medium transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setUninstallConfirm(plugin.id)}
+                          className="p-1.5 rounded-lg text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors"
+                          title="Uninstall"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <button
-                    onClick={() => handleToggle(plugin.id, !plugin.enabled)}
-                    disabled={toggling === plugin.id}
-                    className={clsx(
-                      'relative w-12 h-6 rounded-full transition-colors flex-shrink-0',
-                      plugin.enabled ? 'bg-ndp-accent' : 'bg-white/10'
-                    )}
-                  >
-                    <span className={clsx(
-                      'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform',
-                      plugin.enabled && 'translate-x-6'
-                    )} />
-                  </button>
-                </div>
-              );
-            })
+                );
+              })}
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {/* ═══ Discover tab ═══ */}
       {subTab === 'discover' && (
         <div className="space-y-5">
+          {installMessage && (
+            <div
+              className={clsx(
+                'card px-4 py-3 text-sm flex items-center gap-3',
+                installMessage.kind === 'success' && 'border-ndp-success/30 text-ndp-success',
+                installMessage.kind === 'error' && 'border-ndp-error/30 text-ndp-error'
+              )}
+            >
+              {installMessage.kind === 'success' ? <Check className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              <span>{installMessage.text}</span>
+            </div>
+          )}
+
           {registryLoading && (
             <div className="flex justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin text-ndp-accent" />
@@ -356,106 +506,113 @@ export function PluginsTab() {
                 </p>
               </div>
 
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {registry.map((plugin) => {
                   const isInstalled = installedIds.has(plugin.id);
                   const cat = CATEGORY_CONFIG[plugin.category] || { label: plugin.category, color: 'bg-white/5 text-ndp-text-dim' };
-                  const isExpanded = expandedInstall === plugin.id;
-                  const installCmd = `cd packages/plugins && git clone ${plugin.url}.git ${plugin.id}`;
-                  const npmCmd = `cd packages/plugins/${plugin.id} && npm install --production`;
 
                   return (
-                    <div key={plugin.id} className="card overflow-hidden">
-                      <div className="p-5 flex items-start gap-4">
+                    <div key={plugin.id} className="card p-5 flex flex-col gap-4">
+                      {/* Header: avatar + name + version */}
+                      <div className="flex items-start gap-3">
                         <PluginInitial name={plugin.name} />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-sm font-semibold text-ndp-text">{plugin.name}</h3>
-                            <span className="text-xs text-ndp-text-dim">v{plugin.version}</span>
-                            <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', cat.color)}>
-                              {cat.label}
-                            </span>
-                            {plugin.tags?.map((tag) => {
-                              const tagCfg = TAG_CONFIG[tag] || { label: tag, color: 'bg-white/5 text-ndp-text-dim' };
-                              return (
-                                <span key={tag} className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', tagCfg.color)}>
-                                  {tagCfg.label}
-                                </span>
-                              );
-                            })}
-                            {isInstalled && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-ndp-success/15 text-ndp-success font-medium">
-                                Installed
-                              </span>
-                            )}
-                          </div>
-                          {plugin.description && (
-                            <p className="text-sm text-ndp-text-muted mt-1.5">{plugin.description}</p>
-                          )}
-                          <div className="flex items-center gap-4 mt-2 text-xs text-ndp-text-dim">
-                            {plugin.author && <span>{t('common.by')} {plugin.author}</span>}
-                            {plugin.stars > 0 && (
-                              <span className="flex items-center gap-1">
-                                <Star className="w-3 h-3" />
-                                {plugin.stars}
-                              </span>
-                            )}
-                            {plugin.updatedAt && (
-                              <span>Updated {new Date(plugin.updatedAt).toLocaleDateString()}</span>
-                            )}
-                          </div>
+                          <h3 className="text-sm font-semibold text-ndp-text truncate">{plugin.name}</h3>
+                          <p className="text-xs text-ndp-text-dim mt-0.5">
+                            v{plugin.version}
+                            {plugin.author && <> · {plugin.author}</>}
+                          </p>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {!isInstalled && (
-                            <button
-                              onClick={() => setExpandedInstall(isExpanded ? null : plugin.id)}
-                              className="flex items-center gap-2 px-4 py-2 bg-ndp-accent hover:bg-ndp-accent/90 rounded-lg text-sm text-white font-medium transition-colors"
-                            >
-                              <Terminal className="w-4 h-4" />
-                              Install
-                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                            </button>
-                          )}
-                          <a
-                            href={plugin.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-ndp-text-dim hover:text-ndp-text transition-colors"
-                            title="View on GitHub"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        </div>
+                        <a
+                          href={plugin.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 -m-1.5 rounded-lg text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors flex-shrink-0"
+                          title="View on GitHub"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
                       </div>
 
-                      {/* Install instructions (expandable) */}
-                      {isExpanded && (
-                        <div className="border-t border-white/5 bg-white/[0.02] px-5 py-4 space-y-3">
-                          <p className="text-xs text-ndp-text-dim font-medium uppercase tracking-wider">Installation</p>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-ndp-text-dim w-4 text-center font-mono">1</span>
-                              <code className="flex-1 text-xs bg-black/30 rounded-lg px-3 py-2 text-ndp-text font-mono overflow-x-auto">
-                                {installCmd}
-                              </code>
-                              <CopyButton text={installCmd} />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-ndp-text-dim w-4 text-center font-mono">2</span>
-                              <code className="flex-1 text-xs bg-black/30 rounded-lg px-3 py-2 text-ndp-text font-mono overflow-x-auto">
-                                {npmCmd}
-                              </code>
-                              <CopyButton text={npmCmd} />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-ndp-text-dim w-4 text-center font-mono">3</span>
-                              <span className="flex-1 text-xs text-ndp-text-dim px-3 py-2">
-                                Restart Oscarr and enable the plugin in the Installed tab
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                      {/* Category + tags */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', cat.color)}>
+                          {cat.label}
+                        </span>
+                        {plugin.tags?.map((tag) => {
+                          const tagCfg = TAG_CONFIG[tag] || { label: tag, color: 'bg-white/5 text-ndp-text-dim' };
+                          return (
+                            <span key={tag} className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', tagCfg.color)}>
+                              {tagCfg.label}
+                            </span>
+                          );
+                        })}
+                        {isInstalled && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-ndp-success/15 text-ndp-success font-medium">
+                            Installed
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Description — fills to push footer down so actions align across the row */}
+                      <div className="flex-1 min-h-[2.5rem]">
+                        {plugin.description && (
+                          <p className="text-sm text-ndp-text-muted line-clamp-3">{plugin.description}</p>
+                        )}
+                      </div>
+
+                      {/* Meta */}
+                      <div className="flex items-center gap-3 text-xs text-ndp-text-dim">
+                        {plugin.stars > 0 && (
+                          <span className="flex items-center gap-1">
+                            <Star className="w-3 h-3" />
+                            {plugin.stars}
+                          </span>
+                        )}
+                        {plugin.updatedAt && (
+                          <span>Updated {new Date(plugin.updatedAt).toLocaleDateString()}</span>
+                        )}
+                      </div>
+
+                      {/* Footer: Install + advanced terminal */}
+                      <div className="flex items-center gap-2 pt-3 border-t border-white/5">
+                        {isInstalled ? (
+                          <button
+                            onClick={() => setSubTab('installed')}
+                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-ndp-text-muted transition-colors"
+                          >
+                            <Package className="w-4 h-4" />
+                            Manage
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleInstall(plugin)}
+                              disabled={installing === plugin.id}
+                              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-ndp-accent hover:bg-ndp-accent/90 disabled:opacity-50 rounded-lg text-sm text-white font-medium transition-colors"
+                            >
+                              {installing === plugin.id ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Installing…
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="w-4 h-4" />
+                                  Install
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => setExpandedInstall(plugin.id)}
+                              className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-ndp-text-dim hover:text-ndp-text transition-colors"
+                              title="Manual install (advanced)"
+                            >
+                              <Terminal className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -463,39 +620,110 @@ export function PluginsTab() {
             </>
           )}
 
-          {/* How to section */}
-          <div className="card overflow-hidden">
-            <button
-              onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <BookOpen className="w-5 h-5 text-ndp-accent" />
-                <span className="text-sm font-medium text-ndp-text">How to develop a plugin</span>
-              </div>
-              {showHowTo ? <ChevronUp className="w-4 h-4 text-ndp-text-dim" /> : <ChevronDown className="w-4 h-4 text-ndp-text-dim" />}
-            </button>
-            {showHowTo && (
-              <div className="border-t border-white/5 px-5 py-4 space-y-4 text-sm text-ndp-text-muted">
-                <p>
-                  Oscarr plugins are Node.js modules that extend the backend and/or frontend.
-                  Each plugin lives in its own folder under <code className="text-ndp-text bg-black/30 px-1.5 py-0.5 rounded text-xs">packages/plugins/</code>.
-                </p>
+        </div>
+      )}
+      <PluginConsentModal
+        plugin={installConsent}
+        open={!!installConsent}
+        busy={installConsent ? installing === installConsent.id : false}
+        mode="install"
+        onCancel={() => setInstallConsent(null)}
+        onConfirm={() => installConsent && doInstall(installConsent)}
+      />
 
-                <div>
-                  <p className="text-ndp-text font-medium mb-2">Minimal structure</p>
-                  <pre className="text-xs bg-black/30 rounded-lg px-4 py-3 text-ndp-text-dim overflow-x-auto">
+      {/* Manual install modal — replaces the inline expand so the discover grid stays intact. */}
+      {expandedInstall && (() => {
+        const plugin = registry.find((p) => p.id === expandedInstall);
+        if (!plugin) return null;
+        const installCmd = `cd packages/plugins && git clone ${plugin.url}.git ${plugin.id}`;
+        const npmCmd = `cd packages/plugins/${plugin.id} && npm install --production`;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setExpandedInstall(null); }}
+          >
+            <div className="card w-full max-w-lg shadow-2xl shadow-black/50">
+              <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4">
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-ndp-text">Manual install</h2>
+                  <p className="text-xs text-ndp-text-dim mt-0.5">{plugin.name} · v{plugin.version}</p>
+                </div>
+                <button
+                  onClick={() => setExpandedInstall(null)}
+                  className="p-1.5 -mt-1 -mr-1 rounded-lg text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="px-6 pb-6 space-y-2">
+                <p className="text-xs text-ndp-text-dim">
+                  Run these commands from your Oscarr checkout, then restart the server to discover and enable the plugin.
+                </p>
+                <div className="flex items-center gap-2 pt-2">
+                  <span className="text-xs text-ndp-text-dim w-4 text-center font-mono">1</span>
+                  <code className="flex-1 text-xs bg-black/30 rounded-lg px-3 py-2 text-ndp-text font-mono overflow-x-auto">
+                    {installCmd}
+                  </code>
+                  <CopyButton text={installCmd} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-ndp-text-dim w-4 text-center font-mono">2</span>
+                  <code className="flex-1 text-xs bg-black/30 rounded-lg px-3 py-2 text-ndp-text font-mono overflow-x-auto">
+                    {npmCmd}
+                  </code>
+                  <CopyButton text={npmCmd} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-ndp-text-dim w-4 text-center font-mono">3</span>
+                  <span className="flex-1 text-xs text-ndp-text-dim px-3 py-2">
+                    Click <span className="text-ndp-text">Reload plugins</span> to pick it up without a full restart.
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Plugin development docs — triggered from the Docs button in the header row. */}
+      {showHowTo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowHowTo(false); }}
+        >
+          <div className="card w-full max-w-xl shadow-2xl shadow-black/50 max-h-[85vh] flex flex-col">
+            <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 flex-shrink-0">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-ndp-text">Build a plugin</h2>
+                <p className="text-xs text-ndp-text-dim mt-0.5">Quick reference to get a plugin skeleton running.</p>
+              </div>
+              <button
+                onClick={() => setShowHowTo(false)}
+                className="p-1.5 -mt-1 -mr-1 rounded-lg text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors flex-shrink-0"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-6 pb-6 space-y-4 text-sm text-ndp-text-muted overflow-y-auto">
+              <p>
+                Oscarr plugins are Node.js modules that extend the backend and/or frontend.
+                Each one lives in its own folder under <code className="text-ndp-text bg-black/30 px-1.5 py-0.5 rounded text-xs">packages/plugins/</code>.
+              </p>
+              <div>
+                <p className="text-ndp-text font-medium mb-2 text-xs uppercase tracking-wider">Minimal structure</p>
+                <pre className="text-xs bg-black/30 rounded-lg px-4 py-3 text-ndp-text-dim overflow-x-auto">
 {`my-plugin/
 ├── manifest.json    # Plugin metadata
 ├── package.json     # Dependencies
 ├── index.js         # Entry point (register function)
 └── src/             # Your code`}
-                  </pre>
-                </div>
-
-                <div>
-                  <p className="text-ndp-text font-medium mb-2">manifest.json</p>
-                  <pre className="text-xs bg-black/30 rounded-lg px-4 py-3 text-ndp-text-dim overflow-x-auto">
+                </pre>
+              </div>
+              <div>
+                <p className="text-ndp-text font-medium mb-2 text-xs uppercase tracking-wider">manifest.json</p>
+                <pre className="text-xs bg-black/30 rounded-lg px-4 py-3 text-ndp-text-dim overflow-x-auto">
 {`{
   "id": "my-plugin",
   "name": "My Plugin",
@@ -505,31 +733,29 @@ export function PluginsTab() {
   "description": "What it does",
   "author": "Your name"
 }`}
-                  </pre>
-                </div>
-
-                <div className="flex items-center gap-3 pt-1">
-                  <a
-                    href="https://github.com/arediss/Oscarr/blob/main/docs/plugins.md"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-ndp-text transition-colors"
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    Full documentation
-                  </a>
-                  <a
-                    href="https://github.com/arediss/Oscarr-Plugin-Registry"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-ndp-text transition-colors"
-                  >
-                    <Download className="w-4 h-4" />
-                    Submit your plugin
-                  </a>
-                </div>
+                </pre>
               </div>
-            )}
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                <a
+                  href="https://github.com/arediss/Oscarr/blob/main/docs/plugins.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-ndp-text transition-colors"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  Full documentation
+                </a>
+                <a
+                  href="https://github.com/arediss/Oscarr-Plugin-Registry"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-ndp-text transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Submit your plugin
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       )}
