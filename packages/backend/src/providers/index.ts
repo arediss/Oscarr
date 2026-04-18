@@ -6,6 +6,7 @@ import { sonarrProvider } from './sonarr/index.js';
 import { qbittorrentProvider } from './qbittorrent/index.js';
 import { tautulliProvider } from './tautulli/index.js';
 import { emailProvider } from './email/index.js';
+import { discordProvider } from './discord/index.js';
 import type { Provider, ServiceDefinition, AuthProvider, ArrClient } from './types.js';
 import { getServiceConfig } from '../utils/services.js';
 import { listAllProviderSettings } from './authSettings.js';
@@ -25,6 +26,7 @@ const ALL_PROVIDERS: Provider[] = [
   qbittorrentProvider,
   tautulliProvider,
   emailProvider,
+  discordProvider,
 ];
 
 // ─── Service queries ────────────────────────────────────────────────
