@@ -6,6 +6,7 @@ import api from '@/lib/api';
 import { invalidatePluginUICache } from '@/plugins/usePlugins';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
+import { PluginConsentModal } from './PluginConsentModal';
 import type { PluginInfo } from '@/plugins/types';
 
 // `plugin.updateAvailable` + `plugin.latestVersion` come straight from the backend, which
@@ -96,7 +97,7 @@ export function PluginsTab() {
     // Future: resolve the registry entry's `downloadUrl` if present, or the latest release asset.
     const url = `https://api.github.com/repos/${entry.repository}/tarball/HEAD`;
     try {
-      const { data } = await api.post('/admin/plugins/install', { url });
+      const { data } = await api.post('/plugins/install', { url });
       setInstallMessage({ kind: 'success', text: `Installed ${data.plugin.name} v${data.plugin.version}` });
       await fetchPlugins();
       setSubTab('installed');
@@ -163,7 +164,10 @@ export function PluginsTab() {
     api.get('/plugins/updates').then(() => fetchPlugins()).catch(() => { /* best-effort */ });
   }, [subTab, fetchPlugins]);
 
-  const handleToggle = async (id: string, enabled: boolean) => {
+  const [consentFor, setConsentFor] = useState<PluginInfo | null>(null);
+
+  // Raw toggle — called directly by disable, or by enable after consent.
+  const applyToggle = async (id: string, enabled: boolean) => {
     setToggling(id);
     try {
       await api.put(`/plugins/${id}/toggle`, { enabled });
@@ -171,6 +175,18 @@ export function PluginsTab() {
       invalidatePluginUICache(); // Refresh plugin UI contributions (sidebar, hooks)
     } catch { /* ignore */ }
     setToggling(null);
+  };
+
+  const handleToggle = (plugin: PluginInfo) => {
+    if (plugin.enabled) {
+      // Disabling never needs consent — strip permissions, go.
+      applyToggle(plugin.id, false);
+      return;
+    }
+    // Enabling: always show the consent prompt so the admin sees what the plugin is allowed to do.
+    // For plugins that declare nothing (no services, no capabilities), the modal still renders a
+    // short notice so there's no confusion about what's happening.
+    setConsentFor(plugin);
   };
 
   const [uninstalling, setUninstalling] = useState<string | null>(null);
@@ -349,7 +365,7 @@ export function PluginsTab() {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
-                      onClick={() => handleToggle(plugin.id, !plugin.enabled)}
+                      onClick={() => handleToggle(plugin)}
                       disabled={toggling === plugin.id}
                       className={clsx(
                         'relative w-12 h-6 rounded-full transition-colors',
@@ -640,6 +656,18 @@ export function PluginsTab() {
           </div>
         </div>
       )}
+      <PluginConsentModal
+        plugin={consentFor ?? { id: '', name: '', version: '', enabled: false, hasSettings: false, hasFrontend: false }}
+        open={!!consentFor}
+        busy={consentFor ? toggling === consentFor.id : false}
+        onCancel={() => setConsentFor(null)}
+        onConfirm={async () => {
+          if (!consentFor) return;
+          const target = consentFor;
+          setConsentFor(null);
+          await applyToggle(target.id, true);
+        }}
+      />
     </AdminTabLayout>
   );
 }

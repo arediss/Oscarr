@@ -246,6 +246,9 @@ export class PluginEngine {
       hasFrontend: !!p.manifest.frontend,
       error: p.error,
       compat: this.compatCache.get(p.manifest.id),
+      services: p.manifest.services,
+      capabilities: p.manifest.capabilities,
+      capabilityReasons: p.manifest.capabilityReasons,
     }));
   }
 

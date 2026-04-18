@@ -166,4 +166,8 @@ export interface PluginInfo {
   latestVersion?: string | null;
   lastUpdateCheck?: string | null;
   updateAvailable?: boolean;
+  /** Surfaced from manifest so the admin UI can render the consent prompt before an enable. */
+  services?: string[];
+  capabilities?: string[];
+  capabilityReasons?: Partial<Record<string, string>>;
 }

@@ -27,6 +27,9 @@ export interface PluginInfo {
   latestVersion?: string | null;
   lastUpdateCheck?: string | null;
   updateAvailable?: boolean;
+  services?: string[];
+  capabilities?: string[];
+  capabilityReasons?: Record<string, string>;
 }
 
 export interface PluginSettingDef {
