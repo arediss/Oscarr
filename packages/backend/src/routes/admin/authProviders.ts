@@ -27,10 +27,22 @@ function maskPasswords(schema: AuthProviderField[] | undefined, config: Record<s
   return out;
 }
 
-/** Drop masked values from a PATCH so the stored password doesn't get overwritten with the placeholder. */
-function stripMasked(patch: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
+/**
+ * Build the cleaned config from a PATCH payload: keep only keys declared in the provider's
+ * configSchema (drops `__proto__`/`constructor` and any typo'd field), and skip values that
+ * still hold the MASK placeholder so the stored password isn't clobbered on save-with-no-edit.
+ *
+ * The per-key whitelist also satisfies CodeQL's "remote property injection" check — we never
+ * write an attacker-controlled key to our output object.
+ */
+function buildCleanedConfig(
+  patch: Record<string, unknown>,
+  schema: AuthProviderField[] | undefined
+): Record<string, unknown> {
+  const out: Record<string, unknown> = Object.create(null);
+  const allowed = new Set(schema?.map((f) => f.key) ?? []);
   for (const [k, v] of Object.entries(patch)) {
+    if (!allowed.has(k)) continue;
     if (v === MASK) continue;
     out[k] = v;
   }
@@ -133,12 +145,8 @@ export async function authProvidersRoutes(app: FastifyInstance) {
         }
       }
 
-      // Filter config keys against the declared schema so unknown keys don't pile up in the
-      // JSON blob and confuse future readers. Defense-in-depth against a typo'd admin payload.
-      const rawConfig = patch.config ? stripMasked(patch.config) : undefined;
-      const allowedKeys = new Set(provider.config.configSchema?.map((f) => f.key) ?? []);
-      const cleanedConfig = rawConfig
-        ? Object.fromEntries(Object.entries(rawConfig).filter(([k]) => allowedKeys.has(k)))
+      const cleanedConfig = patch.config
+        ? buildCleanedConfig(patch.config, provider.config.configSchema)
         : undefined;
 
       if (cleanedConfig) {
