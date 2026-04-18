@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { pluginEventBus } from '../eventBus.js';
 import { prisma } from '../../utils/prisma.js';
 import { getPluginDataDir } from '../../utils/dataPath.js';
+import { scrubSecrets } from '../../utils/logScrubber.js';
 import { notificationRegistry } from '../../notifications/index.js';
 import type { NotificationPayload } from '../../notifications/types.js';
 import { sendUserNotification } from '../../services/userNotifications.js';
@@ -32,8 +33,11 @@ function createCapturingLogger(
   const child = baseLogger.child({ plugin: pluginId });
 
   const capture = (level: string, msg: string) => {
+    // Scrub secrets before persistence — PluginLog is exposed in the admin UI,
+    // so a careless `ctx.log.info(config)` must not leak tokens/keys there.
+    const scrubbed = scrubSecrets(String(msg)).slice(0, 2000);
     prisma.pluginLog.create({
-      data: { pluginId, level, message: String(msg).slice(0, 2000) },
+      data: { pluginId, level, message: scrubbed },
     }).catch(() => {}); // Fire-and-forget
   };
 
