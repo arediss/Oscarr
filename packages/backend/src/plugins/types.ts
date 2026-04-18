@@ -1,7 +1,8 @@
-import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
+import type { FastifyBaseLogger } from 'fastify';
 import type { NotificationRegistry } from '../notifications/registry.js';
 import type { NotificationPayload } from '../notifications/types.js';
 import type { ArrClient } from '../providers/types.js';
+import type { PluginRouter } from './router.js';
 
 // ─── Plugin Manifest (manifest.json) ────────────────────────────────
 
@@ -126,7 +127,7 @@ export interface PluginGuardResult {
 
 export interface PluginRegistration {
   manifest: PluginManifest;
-  registerRoutes?(app: FastifyInstance, ctx: PluginContext): Promise<void>;
+  registerRoutes?(app: PluginRouter, ctx: PluginContext): Promise<void>;
   registerJobs?(ctx: PluginContext): Record<string, () => Promise<unknown>>;
   registerGuards?(ctx: PluginContext): Record<string, (userId: number) => Promise<PluginGuardResult | null>>;
   registerNotificationProviders?(registry: NotificationRegistry): void;

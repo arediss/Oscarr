@@ -319,6 +319,50 @@ function resolveRule(method: string, url: string): RouteRule | null {
   return null;
 }
 
+/**
+ * Enforce the RBAC rule for a plugin sub-route that has been resolved by the dispatcher.
+ *
+ * The catch-all on /api/plugins/:pluginId/* only satisfies the `/api/plugins` = AUTH prefix
+ * default, so an authenticated user passes the global hook regardless of what the plugin
+ * asked for via ctx.registerRoutePermission. Once the dispatcher has matched the sub-route
+ * to its real URL, it calls this helper to apply the plugin-declared rule (if any) against
+ * the already-authenticated request.
+ *
+ * Returns true when the request is allowed, false when a 4xx has been sent. Assumes global
+ * RBAC already ran (request.user is set, disabled check done). Mirrors the role + owner-scope
+ * logic of the main rbacPlugin hook.
+ */
+export function enforcePluginRoutePermission(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  method: string,
+  url: string
+): boolean {
+  const rule = resolveRule(method, url);
+  if (!rule || rule.permission === PUBLIC || rule.permission === AUTH) return true;
+
+  const jwtUser = request.user as { id: number; role: string } | undefined;
+  if (!jwtUser) {
+    reply.status(401).send({ error: 'Unauthorized' });
+    return false;
+  }
+
+  const viewAsRole = request.headers['x-view-as-role'] as string | undefined;
+  const effectiveRole = (viewAsRole && jwtUser.role === 'admin' && !rule.permission.startsWith('admin'))
+    ? viewAsRole
+    : jwtUser.role;
+
+  if (!hasPermission(effectiveRole, rule.permission)) {
+    reply.status(403).send({ error: 'Forbidden' });
+    return false;
+  }
+
+  if (rule.ownerScoped && shouldOwnerScope(effectiveRole, rule.permission)) {
+    request.ownerScoped = true;
+  }
+  return true;
+}
+
 // ── Swagger tag helper ──────────────────────────────────────────────────────
 export function getAccessTag(method: string, url: string): string {
   const rule = resolveRule(method, url);

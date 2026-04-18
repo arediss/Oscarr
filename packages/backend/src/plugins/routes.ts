@@ -178,10 +178,9 @@ export async function pluginRoutes(app: FastifyInstance) {
   );
 
   // ── Uninstall plugin ────────────────────────────────────────────
-  // Fastify can't dynamically unregister routes — the best we can do without a restart
-  // is mark the plugin uninstalled so its routes start returning 404, then remove the
-  // dir so the next boot doesn't re-discover it. Admin can restart at their convenience
-  // to free the in-memory route handlers.
+  // Drops the plugin's router entry in the dispatcher map, pauses jobs, removes the dir —
+  // no restart needed. The module itself stays in Node's ESM loader cache until process exit,
+  // but the routes, ctx, and capability surface are all gone.
   app.post<{ Params: { id: string } }>(
     '/:id/uninstall',
     {

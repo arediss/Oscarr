@@ -8,6 +8,8 @@ import { parseManifest } from './manifestSchema.js';
 import { checkCompat, type CompatResult } from './compat.js';
 import { updateJobSchedule } from '../services/scheduler.js';
 import { createContext, type ContextFactoryDeps } from './context/index.js';
+import { PluginRouter } from './router.js';
+import { enforcePluginRoutePermission } from '../middleware/rbac.js';
 import type {
   LoadedPlugin,
   LoadedUIContribution,
@@ -21,13 +23,10 @@ export class PluginEngine {
   private plugins = new Map<string, LoadedPlugin>();
   private settingsCache = new Map<string, Record<string, unknown>>();
   private compatCache = new Map<string, CompatResult>();
-  /** Plugin IDs that the admin has uninstalled during this process lifetime. Their routes are
-   *  still registered with Fastify (no dynamic unregister) but the guard below returns 404. */
-  private uninstalled = new Set<string>();
-  /** Plugin IDs whose routes have been registered with the live Fastify app. Used to avoid
-   *  double-registering (Fastify throws on duplicate prefix) when togglePlugin(true) is called
-   *  on a plugin that already registered its routes at boot or hot-load. */
-  private routesRegistered = new Set<string>();
+  /** Per-plugin dispatch router. Key = pluginId. Presence = "this plugin's routes are live".
+   *  Toggle off, uninstall, and hot-update just mutate this map — no Fastify restart needed. */
+  private routers = new Map<string, PluginRouter>();
+  private dispatcherMounted = false;
   private logger: FastifyBaseLogger | null = null;
   private app: FastifyInstance | null = null;
 
@@ -49,8 +48,7 @@ export class PluginEngine {
    * Shared "load one plugin from disk" pipeline used by both loadAll (boot) and loadSingle (runtime install).
    * Runs the compat check, upserts PluginState, dynamic-imports the entry, calls register(), runs onInstall
    * if first-time, registers notification providers, and stores the LoadedPlugin in the map. Does NOT
-   * register Fastify routes — callers handle that themselves (boot path uses registerWithFastify, runtime
-   * install uses inline app.register). Throws on compat failure or register() error.
+   * mount the plugin's router on the dispatcher — callers do that via _registerRoutes when appropriate.
    */
   private async _loadFromDisk(
     dir: string,
@@ -96,39 +94,69 @@ export class PluginEngine {
     return loaded;
   }
 
-  /** Register a plugin's routes against the live Fastify app with the uninstall guard. Used by both
-   *  loadSingle (hot-load) and registerWithFastify (boot). */
+  /** Build a PluginRouter for a plugin and store it in the dispatcher map. Idempotent — a second
+   *  call for the same plugin replaces the previous router (used for hot-update down the line). */
   private async _registerRoutes(plugin: LoadedPlugin): Promise<void> {
-    if (!this.app || !plugin.registration.registerRoutes) return;
-    const { manifest, registration } = plugin;
-    const prefix = manifest.hooks?.routes?.prefix || `/api/plugins/${manifest.id}`;
-    const pluginId = manifest.id;
-    const engine = this;
+    const registerRoutes = plugin.registration.registerRoutes;
+    if (!registerRoutes) return;
+    const { manifest } = plugin;
     try {
+      const router = new PluginRouter();
       const ctx = createContext(manifest, this.getContextDeps());
-      await this.app.register(
-        async (instance) => {
-          // Uninstall guard — Fastify has no route unregister, so we short-circuit here instead.
-          instance.addHook('preHandler', async (_req, reply) => {
-            if (engine.uninstalled.has(pluginId)) {
-              return reply.status(404).send({ error: 'Plugin has been uninstalled' });
-            }
-          });
-          await registration.registerRoutes!(instance, ctx);
-        },
-        { prefix }
-      );
-      this.routesRegistered.add(manifest.id);
-      this.log('info', `Registered routes for "${manifest.id}" at ${prefix}`);
+      await registerRoutes(router, ctx);
+      this.routers.set(manifest.id, router);
+      this.log('info', `Mounted ${router.listRoutes().length} route(s) for "${manifest.id}"`);
     } catch (err) {
       this.log('error', `Route registration failed for "${manifest.id}": ${err}`);
       plugin.error = `Route registration failed: ${err}`;
       plugin.enabled = false;
+      this.routers.delete(manifest.id);
       await prisma.pluginState.update({
         where: { pluginId: manifest.id },
         data: { enabled: false },
       }).catch(() => {});
     }
+  }
+
+  /** Mount the single dispatcher catch-all on the live Fastify app. Called once from
+   *  registerWithFastify — every plugin goes through it. */
+  private mountDispatcher(app: FastifyInstance): void {
+    if (this.dispatcherMounted) return;
+    this.dispatcherMounted = true;
+
+    const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const;
+    for (const method of methods) {
+      app.route({
+        method,
+        // '*' is Fastify's wildcard that exposes the unmatched remainder as request.params['*'].
+        url: '/api/plugins/:pluginId/*',
+        handler: async (request, reply) => {
+          const { pluginId } = request.params as { pluginId: string };
+          const rest = (request.params as Record<string, string>)['*'] ?? '';
+          const subUrl = `/${rest}`;
+
+          const router = this.routers.get(pluginId);
+          if (!router) {
+            return reply.status(404).send({ error: 'Plugin not found or disabled' });
+          }
+
+          const match = router.match(method, subUrl);
+          if (!match) {
+            return reply.status(404).send({ error: 'Route not found' });
+          }
+
+          // Plugin-registered permission overrides (ctx.registerRoutePermission) are keyed by the
+          // real URL the plugin declared — reconstruct it here so RBAC can find the rule.
+          const fullUrl = `/api/plugins/${pluginId}${match.entry.pattern}`;
+          if (!enforcePluginRoutePermission(request, reply, method, fullUrl)) return;
+
+          // Swap the catch-all's params for the sub-route's params before calling the handler.
+          (request as { params: Record<string, string> }).params = match.params;
+          return router.runHandler(match, request, reply);
+        },
+      });
+    }
+    this.log('info', 'Plugin dispatcher mounted at /api/plugins/:pluginId/*');
   }
 
   /**
@@ -176,6 +204,7 @@ export class PluginEngine {
   async registerWithFastify(app: FastifyInstance): Promise<void> {
     this.setLogger(app.log);
     this.app = app;
+    this.mountDispatcher(app);
 
     for (const plugin of this.plugins.values()) {
       if (!plugin.enabled || plugin.error) continue;
@@ -257,9 +286,9 @@ export class PluginEngine {
   }
 
   /**
-   * Uninstall a plugin: mark its routes as 404 via the runtime guard, pause its jobs, remove its
-   * dir from disk. Does not attempt to unregister Fastify routes (not supported) — admin restart
-   * is required to free the in-memory handlers. Returns true if the plugin was known and removed.
+   * Uninstall a plugin at runtime: drop its dispatcher entry, pause its jobs, remove its dir.
+   * Subsequent requests to /api/plugins/<id>/* hit the dispatcher's "not found" branch. No
+   * Oscarr restart needed — the LoadedPlugin is also evicted so getPluginList stops listing it.
    */
   async uninstall(id: string): Promise<boolean> {
     const plugin = this.plugins.get(id);
@@ -275,10 +304,8 @@ export class PluginEngine {
       }
     }
 
-    // Flip the runtime guard BEFORE deleting the dir so no in-flight request imports a removed file.
-    this.uninstalled.add(id);
-    plugin.enabled = false;
-    plugin.error = 'Uninstalled — restart Oscarr to release the in-memory routes';
+    // Drop routes first so no in-flight request can still hit a handler whose module is about to die.
+    this.routers.delete(id);
 
     await prisma.pluginState.update({ where: { pluginId: id }, data: { enabled: false } }).catch(() => {});
 
@@ -286,8 +313,10 @@ export class PluginEngine {
       this.log('error', `Failed to delete plugin dir "${plugin.dir}": ${err}`);
     });
 
+    this.plugins.delete(id);
     this.settingsCache.delete(id);
-    this.log('info', `Uninstalled "${id}" — routes will 404 until restart`);
+    this.compatCache.delete(id);
+    this.log('info', `Uninstalled "${id}"`);
     return true;
   }
 
@@ -315,10 +344,13 @@ export class PluginEngine {
     plugin.enabled = enabled;
     this.settingsCache.delete(id);
 
-    // If the plugin was loaded disabled (consent flow after /install) its routes were skipped.
-    // When the admin now toggles it ON for the first time, mount the routes on the live app.
-    if (enabled && !this.routesRegistered.has(id) && plugin.registration.registerRoutes) {
-      await this._registerRoutes(plugin);
+    // Enable → mount (or re-mount) the plugin router; disable → drop it so requests 404.
+    if (plugin.registration.registerRoutes) {
+      if (enabled) {
+        await this._registerRoutes(plugin);
+      } else {
+        this.routers.delete(id);
+      }
     }
 
     // Stop or restart plugin cron jobs
