@@ -9,7 +9,7 @@ import { checkCompat, type CompatResult } from './compat.js';
 import { updateJobSchedule } from '../services/scheduler.js';
 import { createContext, type ContextFactoryDeps } from './context/index.js';
 import { PluginRouter } from './router.js';
-import { enforcePluginRoutePermission } from '../middleware/rbac.js';
+import { enforcePluginRoutePermission, unregisterPluginRbac } from '../middleware/rbac.js';
 import type {
   LoadedPlugin,
   LoadedUIContribution,
@@ -306,6 +306,9 @@ export class PluginEngine {
 
     // Drop routes first so no in-flight request can still hit a handler whose module is about to die.
     this.routers.delete(id);
+    // RBAC overrides + declared permissions are module-scoped; without this they'd outlive the
+    // plugin and keep affecting routing until process restart.
+    unregisterPluginRbac(id);
 
     await prisma.pluginState.update({ where: { pluginId: id }, data: { enabled: false } }).catch(() => {});
 
@@ -347,9 +350,13 @@ export class PluginEngine {
     // Enable → mount (or re-mount) the plugin router; disable → drop it so requests 404.
     if (plugin.registration.registerRoutes) {
       if (enabled) {
+        // Re-register from scratch. _registerRoutes rebuilds the ctx which re-runs
+        // registerRoutePermission / registerPluginPermission calls, so the RBAC clear on
+        // disable is rebuilt on enable without losing anything.
         await this._registerRoutes(plugin);
       } else {
         this.routers.delete(id);
+        unregisterPluginRbac(id);
       }
     }
 

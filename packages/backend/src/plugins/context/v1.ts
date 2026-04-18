@@ -257,11 +257,21 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
     },
     registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }) {
       req('permissions', 'registerRoutePermission');
-      rbacRegisterRoute(routeKey, rule);
+      // A plugin can only rewrite RBAC rules for routes under its own namespace — without this
+      // guard a plugin with the `permissions` capability could downgrade core admin routes
+      // (e.g. `POST:/api/plugins/install`) to $public and escalate arbitrarily.
+      const parsed = routeKey.match(/^([A-Z]+):(\/.+)$/);
+      const allowedPrefix = `/api/plugins/${pluginId}/`;
+      if (!parsed || !parsed[2].startsWith(allowedPrefix)) {
+        throw new Error(
+          `Plugin "${pluginId}" may only register route permissions under ${allowedPrefix} (got "${routeKey}")`
+        );
+      }
+      rbacRegisterRoute(pluginId, routeKey, rule);
     },
     registerPluginPermission(permission: string, description?: string) {
       req('permissions', 'registerPluginPermission');
-      rbacRegisterPermission(permission, description);
+      rbacRegisterPermission(pluginId, permission, description);
     },
     events: {
       on: (event, handler) => {

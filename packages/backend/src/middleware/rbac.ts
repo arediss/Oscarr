@@ -225,22 +225,54 @@ const PERMISSION_DESCRIPTIONS: Record<string, string> = {
 };
 
 // ── Plugin overrides (plugins can add/replace rules at runtime) ─────────────
+// Keyed by METHOD:url like ROUTE_PERMISSIONS. We additionally track which pluginId owns
+// each entry so togglePlugin(false) / uninstall can cleanly tear them down — otherwise a
+// stale override would outlive the plugin and keep affecting routing until process restart.
 const pluginOverrides: Record<string, RouteRule> = {};
-const pluginPermissions: { key: string; description?: string }[] = [];
+const pluginOverrideOwners = new Map<string, Set<string>>(); // pluginId -> set of routeKeys
+const pluginPermissions: { key: string; description?: string; pluginId: string }[] = [];
 
 /**
- * Allow plugins to register custom route permissions.
+ * Register a plugin-scoped route permission. Defense-in-depth: even though ctx/v1.ts already
+ * validates the routeKey starts with `/api/plugins/${pluginId}/`, we re-check here so any
+ * other caller (tests, future internal code) can't accidentally register a core-route override.
  */
-export function registerRoutePermission(key: string, rule: RouteRule): void {
+export function registerRoutePermission(pluginId: string, key: string, rule: RouteRule): void {
+  const allowedPrefix = `/api/plugins/${pluginId}/`;
+  const parsed = key.match(/^([A-Z]+):(\/.+)$/);
+  if (!parsed || !parsed[2].startsWith(allowedPrefix)) {
+    throw new Error(`Route permission "${key}" is outside plugin "${pluginId}" namespace (${allowedPrefix})`);
+  }
   pluginOverrides[key] = rule;
+  let owned = pluginOverrideOwners.get(pluginId);
+  if (!owned) {
+    owned = new Set();
+    pluginOverrideOwners.set(pluginId, owned);
+  }
+  owned.add(key);
 }
 
 /**
  * Allow plugins to declare new permissions (visible in admin role editor).
  */
-export function registerPluginPermission(permission: string, description?: string): void {
+export function registerPluginPermission(pluginId: string, permission: string, description?: string): void {
   if (!pluginPermissions.some(p => p.key === permission)) {
-    pluginPermissions.push({ key: permission, description });
+    pluginPermissions.push({ key: permission, description, pluginId });
+  }
+}
+
+/**
+ * Drop every RBAC entry owned by a plugin. Called on disable + uninstall so a plugin can't
+ * leave lingering rules that affect routing after it's no longer running.
+ */
+export function unregisterPluginRbac(pluginId: string): void {
+  const owned = pluginOverrideOwners.get(pluginId);
+  if (owned) {
+    for (const key of owned) delete pluginOverrides[key];
+    pluginOverrideOwners.delete(pluginId);
+  }
+  for (let i = pluginPermissions.length - 1; i >= 0; i--) {
+    if (pluginPermissions[i].pluginId === pluginId) pluginPermissions.splice(i, 1);
   }
 }
 
