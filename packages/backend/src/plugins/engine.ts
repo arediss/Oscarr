@@ -24,6 +24,10 @@ export class PluginEngine {
   /** Plugin IDs that the admin has uninstalled during this process lifetime. Their routes are
    *  still registered with Fastify (no dynamic unregister) but the guard below returns 404. */
   private uninstalled = new Set<string>();
+  /** Plugin IDs whose routes have been registered with the live Fastify app. Used to avoid
+   *  double-registering (Fastify throws on duplicate prefix) when togglePlugin(true) is called
+   *  on a plugin that already registered its routes at boot or hot-load. */
+  private routesRegistered = new Set<string>();
   private logger: FastifyBaseLogger | null = null;
   private app: FastifyInstance | null = null;
 
@@ -114,6 +118,7 @@ export class PluginEngine {
         },
         { prefix }
       );
+      this.routesRegistered.add(manifest.id);
       this.log('info', `Registered routes for "${manifest.id}" at ${prefix}`);
     } catch (err) {
       this.log('error', `Route registration failed for "${manifest.id}": ${err}`);
@@ -306,6 +311,12 @@ export class PluginEngine {
     });
     plugin.enabled = enabled;
     this.settingsCache.delete(id);
+
+    // If the plugin was loaded disabled (consent flow after /install) its routes were skipped.
+    // When the admin now toggles it ON for the first time, mount the routes on the live app.
+    if (enabled && !this.routesRegistered.has(id) && plugin.registration.registerRoutes) {
+      await this._registerRoutes(plugin);
+    }
 
     // Stop or restart plugin cron jobs
     const jobDefs = plugin.manifest.hooks?.jobs || [];
