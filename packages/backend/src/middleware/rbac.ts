@@ -146,6 +146,10 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'POST:/api/plugins/:id/uninstall':     { permission: 'admin.plugins' },
   'GET:/api/plugins/updates':            { permission: 'admin.plugins' },
 
+  // ── Admin auth-provider settings ──
+  'GET:/api/admin/auth-providers':         { permission: 'admin.*' },
+  'PATCH:/api/admin/auth-providers/:id':   { permission: 'admin.*' },
+
   // ── Admin RBAC routes ──
   'GET:/api/admin/roles':                { permission: 'admin.roles' },
   'POST:/api/admin/roles':               { permission: 'admin.roles' },

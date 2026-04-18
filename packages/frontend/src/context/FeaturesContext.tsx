@@ -6,7 +6,6 @@ interface Features {
   supportEnabled: boolean;
   calendarEnabled: boolean;
   siteName: string;
-  registrationEnabled: boolean;
   [key: string]: boolean | string;
 }
 
@@ -21,7 +20,6 @@ const defaultFeatures: Features = {
   supportEnabled: true,
   calendarEnabled: true,
   siteName: 'Oscarr',
-  registrationEnabled: true,
 };
 
 const FeaturesContext = createContext<FeaturesContextType | null>(null);

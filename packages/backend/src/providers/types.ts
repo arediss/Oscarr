@@ -149,10 +149,29 @@ export interface ServiceDefinition {
 
 // ─── Auth Provider ──────────────────────────────────────────────────
 
+export interface AuthProviderField {
+  key: string;
+  label: string;
+  type: 'string' | 'password' | 'url' | 'boolean';
+  required?: boolean;
+  placeholder?: string;
+  /** Optional human-readable help text shown under the input. */
+  help?: string;
+  /** Default value (used by the UI when no value is set yet; not persisted on its own). */
+  default?: string | boolean;
+}
+
 export interface AuthProviderConfig {
   id: string;
   label: string;
   type: 'oauth' | 'credentials';
+  /** Fields the admin must configure (e.g. OAuth clientId/secret). Empty or missing = no admin config. */
+  configSchema?: AuthProviderField[];
+  /** When true, the matching `Service` row (by `type === id`) must exist AND be enabled for this
+   *  auth provider to surface at all — both in the admin Authentication tab and the public login
+   *  page. Use for providers that rely on an admin-configured server URL (jellyfin, emby).
+   *  Leave undefined for federated/self-contained providers (plex.tv, Discord OAuth, email). */
+  requiresService?: boolean;
 }
 
 export interface AuthHelpers {
@@ -201,8 +220,11 @@ export interface AuthProvider {
 }
 
 // ─── Unified Provider ───────────────────────────────────────────────
+// Every provider has at least one of `service` (it's a media/downloader server) or
+// `auth` (it's a login source). Service-only = radarr/sonarr/qbittorrent; auth-only =
+// email/discord; both = plex/jellyfin/emby (the media server IS also the login source).
 
 export interface Provider {
-  service: ServiceDefinition;
+  service?: ServiceDefinition;
   auth?: AuthProvider;
 }

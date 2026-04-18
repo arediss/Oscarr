@@ -2,6 +2,7 @@ import axios from 'axios';
 import { prisma } from '../../utils/prisma.js';
 import { logEvent } from '../../utils/logEvent.js';
 import type { Provider, AuthProvider } from '../types.js';
+import { isProviderEnabled } from '../authSettings.js';
 
 // ─── Emby API helpers ──────────────────────────────────────────────
 
@@ -53,7 +54,21 @@ async function getConfig(): Promise<{ url: string; apiKey: string } | null> {
 // ─── Auth Provider ─────────────────────────────────────────────────
 
 const embyAuth: AuthProvider = {
-  config: { id: 'emby', label: 'Emby', type: 'credentials' },
+  config: {
+    id: 'emby',
+    label: 'Emby',
+    type: 'credentials',
+    configSchema: [
+      {
+        key: 'allowSignup',
+        label: 'Allow new account creation',
+        type: 'boolean',
+        default: false,
+        help: 'Auto-create Oscarr users for new Emby logins.',
+      },
+    ],
+    requiresService: true,
+  },
 
   async registerRoutes(app, helpers) {
     app.post('/emby/login', {
@@ -69,6 +84,9 @@ const embyAuth: AuthProvider = {
         },
       },
     }, async (request, reply) => {
+      if (!(await isProviderEnabled('emby'))) {
+        return reply.status(403).send({ error: 'PROVIDER_DISABLED' });
+      }
       const { username, password } = request.body as { username: string; password: string };
 
       const cfg = await getConfig();
@@ -92,6 +110,9 @@ const embyAuth: AuthProvider = {
         logEvent('info', 'Auth', `${result.displayName} logged in (emby)${result.isNew ? ' — new account' : ''}`);
         return helpers.signAndSend(reply, result.id);
       } catch (err) {
+        if ((err as Error).message === 'SIGNUP_NOT_ALLOWED') {
+          return reply.status(403).send({ error: 'SIGNUP_NOT_ALLOWED' });
+        }
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 401) return reply.status(401).send({ error: 'Invalid username or password' });
         logEvent('warn', 'Auth', `Emby auth failed for "${username}": ${String(err)}`);

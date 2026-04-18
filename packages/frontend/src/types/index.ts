@@ -24,6 +24,8 @@ export interface AuthProviderConfig {
   id: string;
   label: string;
   type: 'oauth' | 'credentials';
+  /** True when the provider will auto-create new Oscarr users on first login / registration. */
+  allowSignup?: boolean;
 }
 
 export interface RootFolder {

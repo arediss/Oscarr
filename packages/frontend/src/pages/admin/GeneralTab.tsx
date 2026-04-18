@@ -37,7 +37,6 @@ export function GeneralTab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [autoApproveRequests, setAutoApproveRequests] = useState(false);
-  const [registrationEnabled, setRegistrationEnabled] = useState(true);
   const [requestsEnabled, setRequestsEnabled] = useState(true);
   const [supportEnabled, setSupportEnabled] = useState(true);
   const [calendarEnabled, setCalendarEnabled] = useState(true);
@@ -66,7 +65,6 @@ export function GeneralTab() {
       api.get('/admin/settings').then(({ data }) => {
         const vals = {
           autoApproveRequests: data.autoApproveRequests ?? false,
-          registrationEnabled: data.registrationEnabled ?? true,
           requestsEnabled: data.requestsEnabled ?? true,
           supportEnabled: data.supportEnabled ?? true,
           calendarEnabled: data.calendarEnabled ?? true,
@@ -78,7 +76,6 @@ export function GeneralTab() {
           disabledLoginMode: (data.disabledLoginMode === 'block' ? 'block' : 'friendly') as 'block' | 'friendly',
         };
         setAutoApproveRequests(vals.autoApproveRequests);
-        setRegistrationEnabled(vals.registrationEnabled);
         setRequestsEnabled(vals.requestsEnabled);
         setSupportEnabled(vals.supportEnabled);
         setCalendarEnabled(vals.calendarEnabled);
@@ -101,9 +98,9 @@ export function GeneralTab() {
   }, []);
 
   const currentValues = useMemo(() => ({
-    autoApproveRequests, registrationEnabled, requestsEnabled, nsfwBlurEnabled, supportEnabled,
+    autoApproveRequests, requestsEnabled, nsfwBlurEnabled, supportEnabled,
     calendarEnabled, missingSearchCooldownMin, siteName, siteUrl, instanceLanguage, disabledLoginMode, bannerText,
-  }), [autoApproveRequests, registrationEnabled, requestsEnabled, nsfwBlurEnabled, supportEnabled,
+  }), [autoApproveRequests, requestsEnabled, nsfwBlurEnabled, supportEnabled,
     calendarEnabled, missingSearchCooldownMin, siteName, siteUrl, instanceLanguage, disabledLoginMode, bannerText]);
 
   const hasChanges = !loading && Object.keys(initialValues.current).length > 0 &&
@@ -112,7 +109,6 @@ export function GeneralTab() {
   const handleReset = () => {
     const iv = initialValues.current;
     setAutoApproveRequests(iv.autoApproveRequests as boolean);
-    setRegistrationEnabled(iv.registrationEnabled as boolean);
     setRequestsEnabled(iv.requestsEnabled as boolean);
     setSupportEnabled(iv.supportEnabled as boolean);
     setCalendarEnabled(iv.calendarEnabled as boolean);
@@ -131,7 +127,6 @@ export function GeneralTab() {
       await Promise.all([
         api.put('/admin/settings', {
           autoApproveRequests,
-          registrationEnabled,
           requestsEnabled,
           nsfwBlurEnabled,
           supportEnabled,
@@ -153,7 +148,6 @@ export function GeneralTab() {
   if (loading) return <Spinner />;
 
   const features = [
-    { label: t('admin.general.feature.registration'), desc: t('admin.general.feature.registration_desc'), value: registrationEnabled, set: setRegistrationEnabled },
     { label: t('admin.general.feature.requests'), desc: t('admin.general.feature.requests_desc'), value: requestsEnabled, set: setRequestsEnabled },
     { label: t('admin.general.feature.auto_approve'), desc: t('admin.general.feature.auto_approve_desc'), value: autoApproveRequests, set: setAutoApproveRequests },
     { label: t('admin.general.feature.support'), desc: t('admin.general.feature.support_desc'), value: supportEnabled, set: setSupportEnabled },

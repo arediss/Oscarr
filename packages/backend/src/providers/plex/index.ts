@@ -3,6 +3,7 @@ import { prisma } from '../../utils/prisma.js';
 import { getPlexUser, createPlexPin, checkPlexPin, getSharedServerUsers } from '../../services/plex.js';
 import { logEvent } from '../../utils/logEvent.js';
 import type { Provider, AuthProvider, AuthHelpers } from '../types.js';
+import { isProviderEnabled } from '../authSettings.js';
 
 const PLEX_CLIENT_ID = 'oscarr-client';
 
@@ -74,10 +75,26 @@ async function importPlexUsers(plexToken: string, machineId: string) {
 // ─── Auth Provider ──────────────────────────────────────────────────
 
 const plexAuth: AuthProvider = {
-  config: { id: 'plex', label: 'Plex', type: 'oauth' },
+  config: {
+    id: 'plex',
+    label: 'Plex',
+    type: 'oauth',
+    configSchema: [
+      {
+        key: 'allowSignup',
+        label: 'Allow new account creation',
+        type: 'boolean',
+        default: false,
+        help: 'Auto-create Oscarr users for new Plex logins.',
+      },
+    ],
+  },
 
   async registerRoutes(app, helpers) {
     app.post('/plex/pin', async (_request, reply) => {
+      if (!(await isProviderEnabled('plex'))) {
+        return reply.status(403).send({ error: 'PROVIDER_DISABLED' });
+      }
       const result = await plexCreatePin();
       return reply.send(result);
     });
@@ -93,6 +110,9 @@ const plexAuth: AuthProvider = {
         },
       },
     }, async (request, reply) => {
+      if (!(await isProviderEnabled('plex'))) {
+        return reply.status(403).send({ error: 'PROVIDER_DISABLED' });
+      }
       const { pinId } = request.body as { pinId: unknown };
       if (typeof pinId !== 'number' || !Number.isFinite(pinId) || pinId < 1) {
         return reply.status(400).send({ error: 'Invalid pinId' });
@@ -105,16 +125,24 @@ const plexAuth: AuthProvider = {
       }
 
       const plexAccount = await getPlexUser(authToken);
-      const result = await helpers.findOrCreateUser({
-        provider: 'plex',
-        providerId: String(plexAccount.id),
-        providerToken: authToken,
-        providerUsername: plexAccount.username,
-        providerEmail: plexAccount.email.toLowerCase(),
-        email: plexAccount.email.toLowerCase(),
-        displayName: plexAccount.username,
-        avatar: plexAccount.thumb,
-      });
+      let result;
+      try {
+        result = await helpers.findOrCreateUser({
+          provider: 'plex',
+          providerId: String(plexAccount.id),
+          providerToken: authToken,
+          providerUsername: plexAccount.username,
+          providerEmail: plexAccount.email.toLowerCase(),
+          email: plexAccount.email.toLowerCase(),
+          displayName: plexAccount.username,
+          avatar: plexAccount.thumb,
+        });
+      } catch (err) {
+        if ((err as Error).message === 'SIGNUP_NOT_ALLOWED') {
+          return reply.status(403).send({ error: 'SIGNUP_NOT_ALLOWED' });
+        }
+        throw err;
+      }
 
       logEvent('info', 'Auth', `${result.displayName} logged in (plex)${result.isNew ? ' — new account' : ''}`);
       return helpers.signAndSend(reply, result.id);
