@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, ChevronDown, ChevronUp, BookOpen, Copy, Check, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, ChevronDown, ChevronUp, BookOpen, Copy, Check, RefreshCw, AlertTriangle, Trash2 } from 'lucide-react';
 import api from '@/lib/api';
 import { invalidatePluginUICache } from '@/plugins/usePlugins';
 import { Spinner } from './Spinner';
@@ -172,6 +172,24 @@ export function PluginsTab() {
     setToggling(null);
   };
 
+  const [uninstalling, setUninstalling] = useState<string | null>(null);
+  const [uninstallConfirm, setUninstallConfirm] = useState<string | null>(null);
+
+  const handleUninstall = async (id: string) => {
+    setUninstalling(id);
+    setUninstallConfirm(null);
+    try {
+      await api.post(`/plugins/${id}/uninstall`);
+      await fetchPlugins();
+      invalidatePluginUICache();
+    } catch (err) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? String((err as Error).message);
+      setInstallMessage({ kind: 'error', text: `Uninstall failed: ${msg}` });
+      setTimeout(() => setInstallMessage(null), 6000);
+    }
+    setUninstalling(null);
+  };
+
   const installedIds = new Set(plugins.map(p => p.id));
 
   // Build a map of registry versions for update detection
@@ -321,19 +339,47 @@ export function PluginsTab() {
                       <p className="text-xs text-ndp-danger mt-1 line-clamp-2">{plugin.error}</p>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleToggle(plugin.id, !plugin.enabled)}
-                    disabled={toggling === plugin.id}
-                    className={clsx(
-                      'relative w-12 h-6 rounded-full transition-colors flex-shrink-0',
-                      plugin.enabled ? 'bg-ndp-accent' : 'bg-white/10'
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleToggle(plugin.id, !plugin.enabled)}
+                      disabled={toggling === plugin.id}
+                      className={clsx(
+                        'relative w-12 h-6 rounded-full transition-colors',
+                        plugin.enabled ? 'bg-ndp-accent' : 'bg-white/10'
+                      )}
+                      title={plugin.enabled ? 'Disable' : 'Enable'}
+                    >
+                      <span className={clsx(
+                        'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform',
+                        plugin.enabled && 'translate-x-6'
+                      )} />
+                    </button>
+                    {uninstallConfirm === plugin.id ? (
+                      <>
+                        <button
+                          onClick={() => handleUninstall(plugin.id)}
+                          disabled={uninstalling === plugin.id}
+                          className="px-3 py-1.5 bg-ndp-danger hover:bg-ndp-danger/80 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                        >
+                          {uninstalling === plugin.id ? 'Uninstalling…' : 'Confirm'}
+                        </button>
+                        <button
+                          onClick={() => setUninstallConfirm(null)}
+                          className="px-3 py-1.5 bg-white/10 hover:bg-white/15 text-ndp-text-dim rounded-lg text-xs font-medium transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setUninstallConfirm(plugin.id)}
+                        className="p-2 rounded-lg text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors"
+                        title="Uninstall"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     )}
-                  >
-                    <span className={clsx(
-                      'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform',
-                      plugin.enabled && 'translate-x-6'
-                    )} />
-                  </button>
+                  </div>
                 </div>
               );
             })
