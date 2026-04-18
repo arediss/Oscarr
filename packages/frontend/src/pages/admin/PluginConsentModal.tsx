@@ -44,7 +44,7 @@ export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: 
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}
     >
-      <div className="card w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl shadow-black/50">
+      <div className="card w-full max-w-lg flex flex-col shadow-2xl shadow-black/50">
         <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 flex-shrink-0">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-ndp-text truncate">
@@ -63,7 +63,7 @@ export function PluginConsentModal({ plugin, open, busy, onCancel, onConfirm }: 
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-2">
+        <div className="px-6 pb-2">
           {nothingToShow && (
             <p className="text-sm text-ndp-text-muted">
               This plugin declares no services or capabilities. It can still add routes and UI
