@@ -13,13 +13,22 @@
  * capability system in L3 is for).
  */
 
+// Rule order matters — more-specific patterns run first so the generic key-value
+// catch-all doesn't partially consume a string and prevent the specific rule from firing.
+// Example: `Authorization: Bearer <jwt>`. If key-value runs first, it captures the word
+// `Bearer` as the value of `Authorization:` and the jwt/bearer-header rules never see
+// the token on the other side. Specific first = redaction of the actual secret.
 const RULES: Array<{ name: string; regex: RegExp; replace: string }> = [
-  // key=value / key:value / "key": "value" shapes — covers query strings, JSON, YAML-like. We keep the
-  // key+separator (including any opening quote on the value) and swap the value for [REDACTED]; the
-  // forbidden-char set stops the capture at the next delimiter so we don't eat the rest of the payload.
+  // JWT-like tokens (eyJxxx.eyJxxx.xxx) — 3 base64url chunks, first starting with eyJ
   {
-    name: 'key-value-pairs',
-    regex: /((?:api[_-]?key|apikey|token|password|pass|bearer|secret|auth(?:orization)?)["']?\s*[=:]\s*["']?)([^\s"',&;}\])]+)/gi,
+    name: 'jwt',
+    regex: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+    replace: '[REDACTED_JWT]',
+  },
+  // Bearer authorization header values (must run before key-value-pairs)
+  {
+    name: 'bearer-header',
+    regex: /(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi,
     replace: '$1[REDACTED]',
   },
   // Plex-specific: X-Plex-Token=... in query strings or headers
@@ -28,16 +37,12 @@ const RULES: Array<{ name: string; regex: RegExp; replace: string }> = [
     regex: /(X-Plex-Token\s*=\s*)([^\s&]+)/gi,
     replace: '$1[REDACTED]',
   },
-  // JWT-like tokens (eyJxxx.eyJxxx.xxx) — 3 base64url chunks separated by dots, first starting with eyJ
+  // key=value / key:value / "key": "value" shapes — covers query strings, JSON, YAML-like. We keep the
+  // key+separator (including any opening quote on the value) and swap the value for [REDACTED]; the
+  // forbidden-char set stops the capture at the next delimiter so we don't eat the rest of the payload.
   {
-    name: 'jwt',
-    regex: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
-    replace: '[REDACTED_JWT]',
-  },
-  // Bearer authorization header values
-  {
-    name: 'bearer-header',
-    regex: /(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi,
+    name: 'key-value-pairs',
+    regex: /((?:api[_-]?key|apikey|token|password|pass|secret|auth(?:orization)?)["']?\s*[=:]\s*["']?)([^\s"',&;}\])[]+)/gi,
     replace: '$1[REDACTED]',
   },
 ];

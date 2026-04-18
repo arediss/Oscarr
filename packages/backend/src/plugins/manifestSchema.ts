@@ -50,7 +50,7 @@ const hooks = z.object({
 
 const capabilityEnum = z.enum(ALL_CAPABILITIES as unknown as [string, ...string[]]);
 
-export const pluginManifestSchema = z.object({
+const pluginManifestSchema = z.object({
   id: z.string().min(1).regex(/^[a-z0-9-]+$/, 'must be lowercase alphanumeric + dashes'),
   name: z.string().min(1),
   version: z.string().min(1),
@@ -70,7 +70,7 @@ export const pluginManifestSchema = z.object({
   hooks: hooks.optional(),
 }).strict();
 
-export type ParsedManifest = z.infer<typeof pluginManifestSchema>;
+type ParsedManifest = z.infer<typeof pluginManifestSchema>;
 
 /** Parse + validate a manifest. Throws with a readable error including the field path on failure. */
 export function parseManifest(data: unknown, dir: string): ParsedManifest {

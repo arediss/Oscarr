@@ -140,6 +140,11 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'GET:/api/plugins/:id/frontend/*':     { permission: AUTH },
   'GET:/api/plugins/features':           { permission: PUBLIC },
   'GET:/api/plugins/registry':           { permission: AUTH },  // Plugin discovery — any authenticated user
+  // Admin-only side of the plugin engine — install + updates must NOT fall through
+  // to the /api/plugins = AUTH prefix default, otherwise any user can RCE the server.
+  'POST:/api/plugins/install':           { permission: 'admin.plugins' },
+  'POST:/api/plugins/:id/uninstall':     { permission: 'admin.plugins' },
+  'GET:/api/plugins/updates':            { permission: 'admin.plugins' },
 
   // ── Admin RBAC routes ──
   'GET:/api/admin/roles':                { permission: 'admin.roles' },

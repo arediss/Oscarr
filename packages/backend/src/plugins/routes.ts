@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { join, extname, resolve, sep, relative } from 'path';
 import { existsSync, createReadStream } from 'fs';
+import { rm } from 'fs/promises';
 import { pluginEngine } from './engine.js';
 import { installPluginFromUrl } from './installer.js';
 import { prisma } from '../utils/prisma.js';
@@ -109,8 +110,10 @@ export async function pluginRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { url } = request.body;
+      let installedDir: string | null = null;
       try {
         const installed = await installPluginFromUrl(url);
+        installedDir = installed.dir;
         const loaded = await pluginEngine.loadSingle(installed.dir);
         return {
           ok: true,
@@ -124,7 +127,40 @@ export async function pluginRoutes(app: FastifyInstance) {
         };
       } catch (err) {
         request.log.error({ err, url }, '[plugins] Install failed');
+        // Rollback: if the tarball landed on disk but loadSingle threw (bad manifest,
+        // incompatible version, bad entry…), the dir would otherwise be picked up
+        // at the next boot. Remove it now so a failed install leaves no trace.
+        if (installedDir) {
+          await rm(installedDir, { recursive: true, force: true }).catch((rmErr) => {
+            request.log.error({ err: rmErr, dir: installedDir }, '[plugins] Rollback failed to remove install dir');
+          });
+        }
         return reply.status(400).send({ error: String((err as Error).message ?? err) });
+      }
+    }
+  );
+
+  // ── Uninstall plugin ────────────────────────────────────────────
+  // Fastify can't dynamically unregister routes — the best we can do without a restart
+  // is mark the plugin uninstalled so its routes start returning 404, then remove the
+  // dir so the next boot doesn't re-discover it. Admin can restart at their convenience
+  // to free the in-memory route handlers.
+  app.post<{ Params: { id: string } }>(
+    '/:id/uninstall',
+    {
+      schema: {
+        params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      try {
+        const removed = await pluginEngine.uninstall(id);
+        if (!removed) return reply.status(404).send({ error: `Plugin "${id}" not found` });
+        return { ok: true };
+      } catch (err) {
+        request.log.error({ err, id }, '[plugins] Uninstall failed');
+        return reply.status(500).send({ error: String((err as Error).message ?? err) });
       }
     }
   );

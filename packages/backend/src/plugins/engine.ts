@@ -1,5 +1,5 @@
 import { join } from 'path';
-import { readFile } from 'fs/promises';
+import { readFile, rm } from 'fs/promises';
 import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { notificationRegistry } from '../notifications/index.js';
@@ -21,6 +21,9 @@ export class PluginEngine {
   private plugins = new Map<string, LoadedPlugin>();
   private settingsCache = new Map<string, Record<string, unknown>>();
   private compatCache = new Map<string, CompatResult>();
+  /** Plugin IDs that the admin has uninstalled during this process lifetime. Their routes are
+   *  still registered with Fastify (no dynamic unregister) but the guard below returns 404. */
+  private uninstalled = new Set<string>();
   private logger: FastifyBaseLogger | null = null;
   private app: FastifyInstance | null = null;
 
@@ -91,9 +94,20 @@ export class PluginEngine {
     // If the app is already running, register routes now — no restart needed.
     if (this.app && state.enabled && registration.registerRoutes) {
       const prefix = manifest.hooks?.routes?.prefix || `/api/plugins/${manifest.id}`;
+      const pluginId = manifest.id;
+      const engine = this;
       try {
         await this.app.register(
-          async (instance) => { await registration.registerRoutes!(instance, ctx); },
+          async (instance) => {
+            // Guard — lets us "unmount" the plugin without Fastify support for route removal
+            // by short-circuiting before the real handlers run.
+            instance.addHook('preHandler', async (_req, reply) => {
+              if (engine.uninstalled.has(pluginId)) {
+                return reply.status(404).send({ error: 'Plugin has been uninstalled' });
+              }
+            });
+            await registration.registerRoutes!(instance, ctx);
+          },
           { prefix }
         );
         this.log('info', `Hot-registered routes for "${manifest.id}" at ${prefix}`);
@@ -182,6 +196,7 @@ export class PluginEngine {
     this.setLogger(app.log);
     this.app = app;
 
+    const engine = this;
     for (const [id, plugin] of this.plugins) {
       if (!plugin.enabled || plugin.error) continue;
       if (!plugin.registration.registerRoutes) continue;
@@ -191,6 +206,13 @@ export class PluginEngine {
         const ctx = createContext(plugin.manifest, this.getContextDeps());
         await app.register(
           async (instance) => {
+            // Same 404-on-uninstall guard as loadSingle — keeps behaviour uniform across boot-loaded
+            // and hot-loaded plugins.
+            instance.addHook('preHandler', async (_req, reply) => {
+              if (engine.uninstalled.has(id)) {
+                return reply.status(404).send({ error: 'Plugin has been uninstalled' });
+              }
+            });
             await plugin.registration.registerRoutes!(instance, ctx);
           },
           { prefix }
@@ -276,6 +298,41 @@ export class PluginEngine {
 
   getPlugin(id: string): LoadedPlugin | undefined {
     return this.plugins.get(id);
+  }
+
+  /**
+   * Uninstall a plugin: mark its routes as 404 via the runtime guard, pause its jobs, remove its
+   * dir from disk. Does not attempt to unregister Fastify routes (not supported) — admin restart
+   * is required to free the in-memory handlers. Returns true if the plugin was known and removed.
+   */
+  async uninstall(id: string): Promise<boolean> {
+    const plugin = this.plugins.get(id);
+    if (!plugin) return false;
+
+    // Pause jobs before the dir disappears so a cron tick doesn't try to import a removed file.
+    for (const job of plugin.manifest.hooks?.jobs ?? []) {
+      try {
+        const dbJob = await prisma.cronJob.findUnique({ where: { key: job.key } });
+        if (dbJob) await updateJobSchedule(job.key, dbJob.cronExpression, false);
+      } catch (err) {
+        this.log('warn', `Failed to pause job "${job.key}" during uninstall of "${id}": ${err}`);
+      }
+    }
+
+    // Flip the runtime guard BEFORE deleting the dir so no in-flight request imports a removed file.
+    this.uninstalled.add(id);
+    plugin.enabled = false;
+    plugin.error = 'Uninstalled — restart Oscarr to release the in-memory routes';
+
+    await prisma.pluginState.update({ where: { pluginId: id }, data: { enabled: false } }).catch(() => {});
+
+    await rm(plugin.dir, { recursive: true, force: true }).catch((err) => {
+      this.log('error', `Failed to delete plugin dir "${plugin.dir}": ${err}`);
+    });
+
+    this.settingsCache.delete(id);
+    this.log('info', `Uninstalled "${id}" — routes will 404 until restart`);
+    return true;
   }
 
   async togglePlugin(id: string, enabled: boolean): Promise<void> {
