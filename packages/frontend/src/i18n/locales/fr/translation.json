@@ -612,7 +612,7 @@
   "admin.general.search_cooldown": "Délai de recherche des manquants",
   "admin.general.search_cooldown_desc": "Temps minimum entre deux recherches d'épisodes manquants pour un même média",
   "admin.general.feature.registration": "Inscription",
-  "admin.general.feature.registration_desc": "Permettre aux nouveaux utilisateurs de créer un compte",
+  "admin.general.feature.registration_desc": "Interrupteur global pour toutes les méthodes d'inscription — email, et création automatique à la première connexion via Plex, Jellyfin, Emby, Discord. Éteint = aucun nouveau compte n'est créé.",
   "admin.general.feature.requests": "Demandes",
   "admin.general.feature.requests_desc": "Permet aux utilisateurs de demander des médias",
   "admin.general.feature.auto_approve": "Auto-acceptation",

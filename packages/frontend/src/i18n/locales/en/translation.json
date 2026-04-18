@@ -615,7 +615,7 @@
   "admin.general.search_cooldown": "Missing search cooldown",
   "admin.general.search_cooldown_desc": "Minimum time between two missing episode searches for the same media",
   "admin.general.feature.registration": "Account registration",
-  "admin.general.feature.registration_desc": "Allow new users to create an account",
+  "admin.general.feature.registration_desc": "Master switch for all signup channels — email registration and first-login auto-creation via Plex, Jellyfin, Emby, Discord. Off = nobody gets a new account.",
   "admin.general.feature.requests": "Requests",
   "admin.general.feature.requests_desc": "Allow users to request media",
   "admin.general.feature.auto_approve": "Auto-approve",
