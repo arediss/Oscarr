@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import type { AuthHelpers, AuthProvider, Provider } from '../types.js';
 import { getProviderConfig } from '../authSettings.js';
+import { resolveOAuthCallbackUrl } from '../../utils/publicUrl.js';
 
 const AUTHORIZE_URL = 'https://discord.com/oauth2/authorize';
 const TOKEN_URL = 'https://discord.com/api/oauth2/token';
@@ -14,7 +15,6 @@ const SCOPE = 'identify email guilds';
 interface DiscordConfig {
   clientId?: string;
   clientSecret?: string;
-  redirectUri?: string;
   /** Optional: when set, only users who are members of this Discord guild can log in / link. */
   guildId?: string;
 }
@@ -37,19 +37,17 @@ function gcStates(): void {
 interface DiscordConfigResolved {
   clientId: string;
   clientSecret: string;
-  redirectUri: string;
   guildId?: string; // optional — empty means no guild restriction
 }
 
 async function getConfig(): Promise<DiscordConfigResolved> {
   const cfg = (await getProviderConfig('discord')) as DiscordConfig;
-  if (!cfg.clientId || !cfg.clientSecret || !cfg.redirectUri) {
+  if (!cfg.clientId || !cfg.clientSecret) {
     throw new Error('Discord OAuth is not fully configured');
   }
   return {
     clientId: cfg.clientId,
     clientSecret: cfg.clientSecret,
-    redirectUri: cfg.redirectUri,
     guildId: cfg.guildId || undefined,
   };
 }
@@ -75,13 +73,6 @@ const discordAuth: AuthProvider = {
     configSchema: [
       { key: 'clientId', label: 'Application (Client) ID', type: 'string', required: true },
       { key: 'clientSecret', label: 'Client Secret', type: 'password', required: true },
-      {
-        key: 'redirectUri',
-        label: 'Redirect URI',
-        type: 'url',
-        required: true,
-        help: "Must match one of the Redirect URIs registered in your Discord application's OAuth2 settings (character for character). Use the shown placeholder as the starting value — copy it into Discord and into this field.",
-      },
       {
         key: 'guildId',
         label: 'Guild (Server) ID',
@@ -113,9 +104,10 @@ const discordAuth: AuthProvider = {
       const state = randomUUID();
       stateStore.set(state, { intent: action, userId, createdAt: Date.now() });
 
+      const redirectUri = resolveOAuthCallbackUrl(request, 'discord');
       const url = new URL(AUTHORIZE_URL);
       url.searchParams.set('client_id', cfg.clientId);
-      url.searchParams.set('redirect_uri', cfg.redirectUri);
+      url.searchParams.set('redirect_uri', redirectUri);
       url.searchParams.set('response_type', 'code');
       url.searchParams.set('scope', SCOPE);
       url.searchParams.set('state', state);
@@ -137,6 +129,9 @@ const discordAuth: AuthProvider = {
         const cfg = await getConfig().catch(() => null);
         if (!cfg) return reply.status(503).send({ error: 'Discord OAuth not configured' });
 
+        // Discord enforces that the redirect_uri on the token exchange matches the one we
+        // sent in the authorize request. Re-derive from the same helper so they're identical.
+        const redirectUri = resolveOAuthCallbackUrl(request, 'discord');
         const tokenRes = await fetch(TOKEN_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -145,7 +140,7 @@ const discordAuth: AuthProvider = {
             client_secret: cfg.clientSecret,
             grant_type: 'authorization_code',
             code,
-            redirect_uri: cfg.redirectUri,
+            redirect_uri: redirectUri,
           }),
         });
         if (!tokenRes.ok) return reply.redirect(`/login?error=discord_token_${tokenRes.status}`);

@@ -7,6 +7,7 @@ import {
   updateProviderSettings,
 } from '../../providers/authSettings.js';
 import type { AuthProviderField } from '../../providers/types.js';
+import { resolveOAuthCallbackUrl } from '../../utils/publicUrl.js';
 
 // adminRoutes is mounted with prefix '/api/admin', so paths here are relative.
 const PREFIX = '/auth-providers';
@@ -62,36 +63,23 @@ export async function authProvidersRoutes(app: FastifyInstance) {
     // hint instead of pretending the toggle would actually enable a working login.
     const serviceEnabledByType = new Map(services.map((s) => [s.type, s.enabled]));
 
-    // Compute the public base URL Oscarr is being reached at, so we can suggest concrete callback
-    // paths in the admin UI. Trust x-forwarded-* first (reverse proxy setups) with request.protocol
-    // / request.hostname as fallback — those are Fastify-provided and already respect trustProxy.
-    const fwdProto = (request.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim();
-    const fwdHost = (request.headers['x-forwarded-host'] as string | undefined)?.split(',')[0]?.trim();
-    const proto = fwdProto || request.protocol;
-    const host = fwdHost || request.hostname;
-    const baseUrl = `${proto}://${host}`;
-
     return providers.map((p) => {
       const s = settingsById.get(p.config.id);
       const serviceAvailable = p.config.requiresService
         ? serviceEnabledByType.get(p.config.id) === true
         : true;
-      // Inject a dynamic placeholder for Discord's redirectUri so the admin sees the exact URL
-      // they need to register in Discord's OAuth2 settings without guessing. Keep provider-
-      // specific logic here rather than bloating the generic AuthProviderField shape.
-      const configSchema = (p.config.configSchema ?? []).map((field) => {
-        if (p.config.id === 'discord' && field.key === 'redirectUri') {
-          return { ...field, placeholder: `${baseUrl}/api/auth/discord/callback` };
-        }
-        return field;
-      });
+      // OAuth providers get a read-only `callbackUrl` computed from the current request so the
+      // admin can copy it into the provider's portal. The same URL is sent back to the provider
+      // at authorize + token-exchange time — we own it end-to-end, admin can't mistype it.
+      const callbackUrl = p.config.type === 'oauth' ? resolveOAuthCallbackUrl(request, p.config.id) : undefined;
       return {
         id: p.config.id,
         label: p.config.label,
         type: p.config.type,
-        configSchema,
+        configSchema: p.config.configSchema ?? [],
         requiresService: p.config.requiresService ?? false,
         serviceAvailable,
+        callbackUrl,
         enabled: s?.enabled ?? false,
         config: maskPasswords(p.config.configSchema, s?.config ?? {}),
       };

@@ -23,6 +23,9 @@ interface AuthProviderRow {
   configSchema: AuthProviderField[];
   requiresService: boolean;
   serviceAvailable: boolean;
+  /** OAuth callback URL Oscarr will send to the provider — admin copies this into the provider's portal.
+   *  Computed server-side per-request; undefined for non-OAuth providers. */
+  callbackUrl?: string;
   enabled: boolean;
   config: Record<string, string>;
 }
@@ -238,6 +241,9 @@ function ProviderConfigModal({
         </div>
 
         <div className="px-6 pb-4 flex flex-col gap-3">
+          {provider.callbackUrl && (
+            <CallbackUrlBlock url={provider.callbackUrl} />
+          )}
           {provider.configSchema.map((field) => (
             <ConfigField
               key={field.key}
@@ -283,14 +289,10 @@ function ConfigField({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const { t } = useTranslation();
   const isMasked = value === MASK;
   const [revealMasked, setRevealMasked] = useState(false);
   const displayValue = isMasked && !revealMasked ? '••••••••' : value;
-  // When the server sent a placeholder and the field is empty, offer quick access to the
-  // suggested value so the admin doesn't have to guess (e.g. Discord redirect URI).
   const hasValue = !!value && !isMasked;
-  const showSuggestion = !hasValue && !!field.placeholder;
 
   return (
     <label className="flex flex-col gap-1">
@@ -322,31 +324,37 @@ function ConfigField({
           </button>
         )}
       </div>
-      {showSuggestion && (
-        <div className="flex items-center gap-2 mt-1 text-xs">
-          <span className="text-ndp-text-dim flex-shrink-0">{t('admin.authProviders.suggested')}:</span>
-          <code className="flex-1 bg-black/30 rounded px-2 py-1 text-ndp-text font-mono truncate">
-            {field.placeholder}
-          </code>
-          <button
-            type="button"
-            onClick={() => onChange(field.placeholder!)}
-            className="px-2 py-1 rounded bg-ndp-accent/15 text-ndp-accent hover:bg-ndp-accent/25 transition-colors flex-shrink-0"
-            title={t('admin.authProviders.use_suggested')}
-          >
-            {t('common.use')}
-          </button>
-          <button
-            type="button"
-            onClick={() => { navigator.clipboard.writeText(field.placeholder!); }}
-            className="p-1 rounded text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors flex-shrink-0"
-            title={t('common.copy')}
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
       {field.help && <p className="text-xs text-ndp-text-dim">{field.help}</p>}
     </label>
+  );
+}
+
+/** Read-only display of the OAuth callback URL the admin must register in the provider's portal. */
+function CallbackUrlBlock({ url }: { url: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-white/10 bg-white/[0.02]">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-ndp-text">{t('admin.authProviders.callback_url')}</span>
+        <button
+          type="button"
+          onClick={copy}
+          className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors"
+        >
+          {copied ? <Check className="w-3.5 h-3.5 text-ndp-success" /> : <Copy className="w-3.5 h-3.5" />}
+          {copied ? t('common.copied') : t('common.copy')}
+        </button>
+      </div>
+      <code className="text-xs bg-black/30 rounded px-2 py-1.5 text-ndp-text font-mono overflow-x-auto whitespace-nowrap">
+        {url}
+      </code>
+      <p className="text-xs text-ndp-text-dim">{t('admin.authProviders.callback_url_help')}</p>
+    </div>
   );
 }
