@@ -4,14 +4,18 @@ import { mkdir, readFile, readdir, rename, rm } from 'fs/promises';
 import { lookup as dnsLookup } from 'dns/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { Readable } from 'stream';
+import { Readable, Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import { extract as tarExtract } from 'tar';
+import { Agent, fetch as undiciFetch } from 'undici';
 import { parseManifest } from './manifestSchema.js';
 import { getPluginsDir } from './loader.js';
 import type { PluginManifest } from './types.js';
 
 const DOWNLOAD_TIMEOUT_MS = 60_000;
+// Hard cap on plugin tarballs. Oscarr plugins are small (a few hundred KB once bundled); 50 MB
+// is generous and still keeps a misconfigured / malicious registry entry from filling /tmp.
+const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
 
 /** CIDR check against IPv4 private / loopback / link-local ranges (blocks SSRF to internal infra). */
 function isPrivateIPv4(ip: string): boolean {
@@ -35,42 +39,92 @@ function isPrivateIPv6(ip: string): boolean {
   return false;
 }
 
-async function assertPublicHost(hostname: string): Promise<void> {
-  // Some fetch implementations return an IP in the URL if the input had one; otherwise resolve it.
+function isPrivate(address: string, family: number): boolean {
+  return family === 6 ? isPrivateIPv6(address) : isPrivateIPv4(address);
+}
+
+/**
+ * Resolve the hostname once ourselves, pick a public address, and pin undici's connection to it.
+ *
+ * The previous implementation did a CIDR check with `dns.lookup`, then let `fetch` resolve again
+ * when opening the socket. An attacker-controlled DNS zone can return public IPs on the first
+ * lookup and a private IP on the second — a classic DNS-rebind SSRF bypass. By passing an Agent
+ * with a custom `connect.lookup` we guarantee the socket connects to the address we validated.
+ *
+ * Pure IP URLs skip resolution and are CIDR-checked directly.
+ */
+async function buildPinnedAgent(hostname: string): Promise<{ agent: Agent; pinned: string }> {
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
     if (isPrivateIPv4(hostname)) throw new Error(`Refusing to download from private IPv4 ${hostname}`);
-    return;
+    return { agent: makeAgent(hostname, 4), pinned: hostname };
   }
   if (hostname.includes(':')) {
     if (isPrivateIPv6(hostname)) throw new Error(`Refusing to download from private IPv6 ${hostname}`);
-    return;
+    return { agent: makeAgent(hostname, 6), pinned: hostname };
   }
-  // Hostname — resolve and check all returned addresses (some hosts round-robin internal IPs).
-  const addresses = await dnsLookup(hostname, { all: true }).catch(() => [] as Array<{ address: string; family: number }>);
+  const addresses = await dnsLookup(hostname, { all: true })
+    .catch(() => [] as Array<{ address: string; family: number }>);
+  if (addresses.length === 0) throw new Error(`DNS lookup failed for ${hostname}`);
+  // Reject if ANY resolved address is private — some hosts round-robin internal IPs and we want
+  // to fail closed rather than depend on luck-of-the-draw which public IP we'd pick.
   for (const { address, family } of addresses) {
-    const blocked = family === 6 ? isPrivateIPv6(address) : isPrivateIPv4(address);
-    if (blocked) throw new Error(`Refusing to download from ${hostname} → ${address} (private network)`);
+    if (isPrivate(address, family)) {
+      throw new Error(`Refusing to download from ${hostname} → ${address} (private network)`);
+    }
   }
+  const pick = addresses[0];
+  return { agent: makeAgent(pick.address, pick.family), pinned: pick.address };
+}
+
+function makeAgent(pinnedIp: string, family: number): Agent {
+  return new Agent({
+    connect: {
+      lookup: (_host, _opts, cb) => cb(null, pinnedIp, family),
+    },
+  });
 }
 
 async function downloadToFile(url: string, destPath: string): Promise<void> {
   const parsed = new URL(url);
-  await assertPublicHost(parsed.hostname);
+  const { agent } = await buildPinnedAgent(parsed.hostname);
 
-  const res = await fetch(url, {
+  const res = await undiciFetch(url, {
+    dispatcher: agent,
     redirect: 'follow',
     signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Download failed (${res.status}): ${res.statusText}`);
   if (!res.body) throw new Error('Download returned empty body');
 
-  // After redirect resolution, re-check the final URL in case a public host 302'd us to an internal one.
+  // Final-URL recheck: if a redirect pointed at a different host, rebuild the agent so the next
+  // hop doesn't bypass the pin. Our fetch already followed redirects with the original agent;
+  // this is defence-in-depth for a future change that might fetch after an inspection.
   const finalUrl = new URL(res.url);
-  await assertPublicHost(finalUrl.hostname);
+  if (finalUrl.hostname !== parsed.hostname) {
+    await buildPinnedAgent(finalUrl.hostname);
+  }
+
+  // Content-length early-reject — best-effort, some servers omit it. We still enforce the
+  // byte counter below.
+  const declared = Number(res.headers.get('content-length') ?? '0');
+  if (declared > MAX_DOWNLOAD_BYTES) {
+    throw new Error(`Plugin archive too large: ${declared} bytes (max ${MAX_DOWNLOAD_BYTES})`);
+  }
+
+  let received = 0;
+  const sizeGate = new Transform({
+    transform(chunk, _enc, cb) {
+      received += chunk.length;
+      if (received > MAX_DOWNLOAD_BYTES) {
+        return cb(new Error(`Plugin archive exceeds ${MAX_DOWNLOAD_BYTES} bytes — aborted mid-download`));
+      }
+      cb(null, chunk);
+    },
+  });
 
   const nodeStream = Readable.fromWeb(res.body as import('stream/web').ReadableStream);
   const fileStream = createWriteStream(destPath);
-  await pipeline(nodeStream, fileStream);
+  await pipeline(nodeStream, sizeGate, fileStream);
 }
 
 // Manifest may live either at the archive root or inside a single top-level directory
@@ -119,7 +173,22 @@ export async function installPluginFromUrl(url: string): Promise<InstalledPlugin
   try {
     await mkdir(extractDir, { recursive: true });
     await downloadToFile(url, downloadPath);
-    await tarExtract({ file: downloadPath, cwd: extractDir });
+    await tarExtract({
+      file: downloadPath,
+      cwd: extractDir,
+      // Reject anything that isn't a plain file or directory — symlink entries would survive the
+      // move to plugins/<id>/ and, once the ESM loader follows them, could dynamic-import JS from
+      // anywhere readable on disk (arbitrary code execution). Also refuse absolute paths and
+      // `..` segments so a crafted archive can't write outside the extraction root.
+      filter: (path, entry) => {
+        // tar@7 types the filter as Stats | ReadEntry; for extract we only ever see ReadEntry,
+        // and Stats happens to expose the same membership test for our shape guard.
+        const type = 'type' in entry ? entry.type : null;
+        if (type !== 'File' && type !== 'Directory') return false;
+        if (path.startsWith('/') || path.split('/').includes('..')) return false;
+        return true;
+      },
+    });
 
     const manifestRoot = await findManifestRoot(extractDir);
     const raw = await readFile(join(manifestRoot, 'manifest.json'), 'utf-8');

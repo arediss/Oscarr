@@ -14,6 +14,10 @@ let registryCache: { data: unknown; timestamp: number } | null = null;
 // ── Update check cache ──────────────────────────────────────────────
 const UPDATE_TTL = 60 * 60 * 1000; // 1h — keeps us well under GitHub's 60 req/h unauthenticated limit
 let updateCache: { data: Record<string, UpdateInfo>; timestamp: number } | null = null;
+// Shared in-flight promise while a check is running. Without this, two admins (or a tab reopen
+// + a background refresh) can both pass the cache-miss guard and each fire N releases API calls,
+// eating the 60 req/h unauthenticated limit in one user action.
+let inflightUpdateCheck: Promise<Record<string, UpdateInfo>> | null = null;
 
 interface UpdateInfo {
   installed: string;
@@ -27,7 +31,15 @@ interface UpdateInfo {
 async function checkUpdatesForInstalledPlugins(): Promise<Record<string, UpdateInfo>> {
   const now = Date.now();
   if (updateCache && now - updateCache.timestamp < UPDATE_TTL) return updateCache.data;
+  if (inflightUpdateCheck) return inflightUpdateCheck;
 
+  inflightUpdateCheck = runUpdateCheck(now).finally(() => {
+    inflightUpdateCheck = null;
+  });
+  return inflightUpdateCheck;
+}
+
+async function runUpdateCheck(now: number): Promise<Record<string, UpdateInfo>> {
   // Load registry (re-use the registry cache, don't hit GitHub twice). Don't cache the final
   // result if the registry itself failed to load — avoids hiding updates for 1h over a transient blip.
   let registry: { plugins?: Array<{ repository?: string }> } = {};
