@@ -65,11 +65,20 @@ export function getAuthProvider(id: string): AuthProvider | undefined {
 export async function getAuthProviderConfigs() {
   // Enablement now lives in AuthProviderSettings — decoupled from the Service table so
   // auth-only providers (email, discord, …) and media-service providers (plex, jellyfin, emby)
-  // can be toggled independently.
+  // can be toggled independently. Providers declaring `requiresService` (jellyfin, emby) are
+  // additionally filtered out when their matching Service row is missing or disabled, so the
+  // login page never offers a button that would 503 on click.
   const settings = await listAllProviderSettings();
   const enabledIds = new Set(settings.filter((s) => s.enabled).map((s) => s.provider));
+  const { prisma } = await import('../utils/prisma.js');
+  const services = await prisma.service.findMany({ select: { type: true, enabled: true } });
+  const serviceEnabledByType = new Map(services.map((s) => [s.type, s.enabled]));
   return getAuthProviders()
-    .filter((p) => enabledIds.has(p.config.id))
+    .filter((p) => {
+      if (!enabledIds.has(p.config.id)) return false;
+      if (p.config.requiresService && serviceEnabledByType.get(p.config.id) !== true) return false;
+      return true;
+    })
     .map((p) => p.config);
 }
 

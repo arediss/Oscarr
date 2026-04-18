@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { prisma } from '../../utils/prisma.js';
 import { getAuthProviders } from '../../providers/index.js';
 import {
   getProviderConfig,
@@ -51,15 +52,27 @@ function validate(schema: AuthProviderField[] | undefined, config: Record<string
 export async function authProvidersRoutes(app: FastifyInstance) {
   app.get(PREFIX, async () => {
     const providers = getAuthProviders();
-    const settings = await listAllProviderSettings();
-    const byId = new Map(settings.map((s) => [s.provider, s]));
+    const [settings, services] = await Promise.all([
+      listAllProviderSettings(),
+      prisma.service.findMany({ select: { type: true, enabled: true } }),
+    ]);
+    const settingsById = new Map(settings.map((s) => [s.provider, s]));
+    // For providers that require an admin-configured service (jellyfin, emby), map their id to
+    // whether that Service exists AND is enabled. Lets the admin UI grey them out with a helpful
+    // hint instead of pretending the toggle would actually enable a working login.
+    const serviceEnabledByType = new Map(services.map((s) => [s.type, s.enabled]));
     return providers.map((p) => {
-      const s = byId.get(p.config.id);
+      const s = settingsById.get(p.config.id);
+      const serviceAvailable = p.config.requiresService
+        ? serviceEnabledByType.get(p.config.id) === true
+        : true;
       return {
         id: p.config.id,
         label: p.config.label,
         type: p.config.type,
         configSchema: p.config.configSchema ?? [],
+        requiresService: p.config.requiresService ?? false,
+        serviceAvailable,
         enabled: s?.enabled ?? false,
         config: maskPasswords(p.config.configSchema, s?.config ?? {}),
       };

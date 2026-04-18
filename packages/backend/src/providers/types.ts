@@ -165,6 +165,11 @@ export interface AuthProviderConfig {
   type: 'oauth' | 'credentials';
   /** Fields the admin must configure (e.g. OAuth clientId/secret). Empty or missing = no admin config. */
   configSchema?: AuthProviderField[];
+  /** When true, the matching `Service` row (by `type === id`) must exist AND be enabled for this
+   *  auth provider to surface at all — both in the admin Authentication tab and the public login
+   *  page. Use for providers that rely on an admin-configured server URL (jellyfin, emby).
+   *  Leave undefined for federated/self-contained providers (plex.tv, Discord OAuth, email). */
+  requiresService?: boolean;
 }
 
 export interface AuthHelpers {
