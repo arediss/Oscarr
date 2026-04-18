@@ -18,8 +18,11 @@ export function resolvePublicBaseUrl(request: FastifyRequest): string {
 
   const fwdProto = (request.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim();
   const fwdHost = (request.headers['x-forwarded-host'] as string | undefined)?.split(',')[0]?.trim();
+  // Fastify's request.hostname strips the port. Fall back to the raw Host header (which keeps
+  // :port for non-default ports — e.g. localhost:3456 in dev, 443 implicit in prod).
+  const rawHost = request.headers.host;
   const proto = fwdProto || request.protocol;
-  const host = fwdHost || request.hostname;
+  const host = fwdHost || rawHost || request.hostname;
   return `${proto}://${host}`;
 }
 
