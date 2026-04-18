@@ -71,14 +71,22 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
       const isFirstUser = userCount === 0;
 
       if (!user) {
-        // Per-provider signup gate, secure-by-default: the admin must explicitly opt-in to
-        // auto-creation via the "Allow new account creation" toggle on each provider. A user
-        // authenticating via Plex/Jellyfin/Emby/Discord without a matching Oscarr account gets
-        // rejected unless the toggle is on. Bootstrapping is always allowed (first user = admin
-        // so a fresh install can actually be set up).
-        const providerCfg = await getProviderConfig(opts.provider);
-        if (providerCfg.allowSignup !== true && !isFirstUser) {
-          throw new Error('SIGNUP_NOT_ALLOWED');
+        // Two gates, AND'd. Bootstrapping bypasses both so a fresh install can create its admin.
+        //   1. Global AppSettings.registrationEnabled — master switch. When off, no signup via
+        //      ANY channel (email register, Plex, Jellyfin, Emby, Discord…). Admin-level policy.
+        //   2. Per-provider allowSignup — fine-grained opt-in per login source. Secure-by-default.
+        // If either is false, the user must already exist (either matched by providerId, or email
+        // auto-link); otherwise we reject. Avoids the footgun where the admin turns off "Register"
+        // in General expecting it to close off signup, but Discord/Plex quietly keep creating users.
+        if (!isFirstUser) {
+          const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+          if (!(appSettings?.registrationEnabled ?? true)) {
+            throw new Error('SIGNUP_NOT_ALLOWED');
+          }
+          const providerCfg = await getProviderConfig(opts.provider);
+          if (providerCfg.allowSignup !== true) {
+            throw new Error('SIGNUP_NOT_ALLOWED');
+          }
         }
         user = await prisma.user.create({
           data: {

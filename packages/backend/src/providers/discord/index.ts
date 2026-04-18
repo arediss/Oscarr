@@ -85,7 +85,7 @@ const discordAuth: AuthProvider = {
         label: 'Allow new account creation',
         type: 'boolean',
         default: false,
-        help: 'Off by default — only users with an existing Oscarr account (matching the Discord email) can log in. Turn on to let any Discord user auto-register on first login.',
+        help: 'Off by default — only users with an existing Oscarr account (matching the Discord email) can log in. Turn on to let any Discord user auto-register on first login. Ignored when General → Registration is disabled (global kill-switch wins).',
       },
     ],
   },
