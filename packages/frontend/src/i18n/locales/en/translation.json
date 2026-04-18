@@ -292,6 +292,8 @@
   "login.errors.ACCOUNT_DISABLED": "Your account has been disabled. Contact an administrator to restore access.",
   "login.errors.DISCORD_GUILD_DENIED": "Your Discord account isn't a member of the required server. Ask the administrator for an invite.",
   "login.errors.SIGNUP_NOT_ALLOWED": "No Oscarr account matches this login. Ask an administrator to create one for you.",
+  "login.errors.PROVIDER_DISABLED": "This login method has been disabled by the administrator.",
+  "login.errors.DISCORD_ERROR": "Discord login failed. Please try again or contact your administrator.",
   "admin.authProviders.title": "Authentication providers",
   "admin.authProviders.subtitle": "Enable the login methods your users can choose from and configure OAuth credentials where needed.",
   "admin.authProviders.enabled": "Enabled",

@@ -27,6 +27,13 @@ export async function getProviderConfig(providerId: string): Promise<Record<stri
   return config;
 }
 
+/** True if the provider's enabled flag is set. Use before running auth/register/callback logic
+ *  so the admin's "disable" toggle actually blocks the routes, not just the login-page buttons. */
+export async function isProviderEnabled(providerId: string): Promise<boolean> {
+  const { enabled } = await getProviderSettings(providerId);
+  return enabled;
+}
+
 /** Every row, for the admin UI grid. */
 export async function listAllProviderSettings(): Promise<
   Array<{ provider: string; enabled: boolean; config: Record<string, unknown> }>

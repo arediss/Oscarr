@@ -3,6 +3,7 @@ import { prisma } from '../../utils/prisma.js';
 import { getPlexUser, createPlexPin, checkPlexPin, getSharedServerUsers } from '../../services/plex.js';
 import { logEvent } from '../../utils/logEvent.js';
 import type { Provider, AuthProvider, AuthHelpers } from '../types.js';
+import { isProviderEnabled } from '../authSettings.js';
 
 const PLEX_CLIENT_ID = 'oscarr-client';
 
@@ -91,6 +92,9 @@ const plexAuth: AuthProvider = {
 
   async registerRoutes(app, helpers) {
     app.post('/plex/pin', async (_request, reply) => {
+      if (!(await isProviderEnabled('plex'))) {
+        return reply.status(403).send({ error: 'PROVIDER_DISABLED' });
+      }
       const result = await plexCreatePin();
       return reply.send(result);
     });
@@ -106,6 +110,9 @@ const plexAuth: AuthProvider = {
         },
       },
     }, async (request, reply) => {
+      if (!(await isProviderEnabled('plex'))) {
+        return reply.status(403).send({ error: 'PROVIDER_DISABLED' });
+      }
       const { pinId } = request.body as { pinId: unknown };
       if (typeof pinId !== 'number' || !Number.isFinite(pinId) || pinId < 1) {
         return reply.status(400).send({ error: 'Invalid pinId' });

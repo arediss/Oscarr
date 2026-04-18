@@ -2,6 +2,7 @@ import axios from 'axios';
 import { prisma } from '../../utils/prisma.js';
 import { logEvent } from '../../utils/logEvent.js';
 import type { Provider, AuthProvider } from '../types.js';
+import { isProviderEnabled } from '../authSettings.js';
 
 // ─── Jellyfin API helpers ──────────────────────────────────────────
 
@@ -83,6 +84,9 @@ const jellyfinAuth: AuthProvider = {
         },
       },
     }, async (request, reply) => {
+      if (!(await isProviderEnabled('jellyfin'))) {
+        return reply.status(403).send({ error: 'PROVIDER_DISABLED' });
+      }
       const { username, password } = request.body as { username: string; password: string };
 
       const cfg = await getConfig();

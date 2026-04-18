@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import type { AuthHelpers, AuthProvider, Provider } from '../types.js';
-import { getProviderConfig } from '../authSettings.js';
+import { getProviderConfig, isProviderEnabled } from '../authSettings.js';
 import { resolveOAuthCallbackUrl } from '../../utils/publicUrl.js';
 
 const AUTHORIZE_URL = 'https://discord.com/oauth2/authorize';
@@ -99,6 +99,9 @@ const discordAuth: AuthProvider = {
   async registerRoutes(app: FastifyInstance, helpers: AuthHelpers) {
     // ── Authorize: entrypoint for both login and link-to-existing-account flows ──
     app.get<{ Querystring: { action?: string } }>('/discord/authorize', async (request, reply) => {
+      if (!(await isProviderEnabled('discord'))) {
+        return reply.redirect('/login?error=PROVIDER_DISABLED');
+      }
       gcStates();
       const cfg = await getConfig().catch(() => null);
       if (!cfg) return reply.status(503).send({ error: 'Discord OAuth not configured' });
@@ -131,6 +134,9 @@ const discordAuth: AuthProvider = {
     app.get<{ Querystring: { code?: string; state?: string; error?: string } }>(
       '/discord/callback',
       async (request, reply) => {
+        if (!(await isProviderEnabled('discord'))) {
+          return reply.redirect('/login?error=PROVIDER_DISABLED');
+        }
         const { code, state, error } = request.query;
         if (error) {
           // Only echo Discord's documented error codes; coerce anything else to a generic

@@ -292,6 +292,8 @@
   "login.errors.ACCOUNT_DISABLED": "Votre compte a été désactivé. Contactez un administrateur pour rétablir l'accès.",
   "login.errors.DISCORD_GUILD_DENIED": "Votre compte Discord n'est pas membre du serveur requis. Demandez une invitation à l'administrateur.",
   "login.errors.SIGNUP_NOT_ALLOWED": "Aucun compte Oscarr ne correspond à cette connexion. Demandez à un administrateur d'en créer un pour vous.",
+  "login.errors.PROVIDER_DISABLED": "Cette méthode de connexion a été désactivée par l'administrateur.",
+  "login.errors.DISCORD_ERROR": "La connexion Discord a échoué. Réessayez ou contactez votre administrateur.",
   "admin.authProviders.title": "Fournisseurs d'authentification",
   "admin.authProviders.subtitle": "Activez les méthodes de connexion proposées aux utilisateurs et configurez les identifiants OAuth si nécessaire.",
   "admin.authProviders.enabled": "Activé",

@@ -3,7 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { logEvent } from '../utils/logEvent.js';
 import { registerEmail, loginEmail } from '../providers/email/index.js';
 import { getAuthProviders, getAuthProvider, getAuthProviderConfigs } from '../providers/index.js';
-import { getProviderConfig } from '../providers/authSettings.js';
+import { getProviderConfig, isProviderEnabled } from '../providers/authSettings.js';
 import type { AuthHelpers } from '../providers/types.js';
 import { getPermissionsForRole } from '../middleware/rbac.js';
 
@@ -162,6 +162,11 @@ export async function authRoutes(app: FastifyInstance) {
     const isFirstUser = userCount === 0;
 
     if (!isFirstUser) {
+      // Provider enablement: an admin who flips Email off should fully shut down email-based
+      // registration, not just hide the button on the login page.
+      if (!(await isProviderEnabled('email'))) {
+        return reply.status(403).send({ error: 'PROVIDER_DISABLED' });
+      }
       // Email signup is gated by email's own allowSignup toggle (same per-provider model as
       // Plex/Jellyfin/Emby/Discord). Admin manages it from Authentication → Email.
       const emailCfg = await getProviderConfig('email');
@@ -206,6 +211,9 @@ export async function authRoutes(app: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
+    if (!(await isProviderEnabled('email'))) {
+      return reply.status(403).send({ error: 'PROVIDER_DISABLED' });
+    }
     const { email, password } = request.body as { email: string; password: string };
 
     try {
