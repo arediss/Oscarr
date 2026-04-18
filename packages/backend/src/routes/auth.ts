@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { logEvent } from '../utils/logEvent.js';
-import { registerEmail, loginEmail } from '../auth/providers/email.js';
+import { registerEmail, loginEmail } from '../providers/email/index.js';
 import { getAuthProviders, getAuthProvider, getAuthProviderConfigs } from '../providers/index.js';
 import type { AuthHelpers } from '../providers/types.js';
 import { getPermissionsForRole } from '../middleware/rbac.js';

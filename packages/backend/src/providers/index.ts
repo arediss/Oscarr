@@ -11,12 +11,10 @@ import type { Provider, ServiceDefinition, AuthProvider, ArrClient } from './typ
 import { getServiceConfig } from '../utils/services.js';
 import { listAllProviderSettings } from './authSettings.js';
 
-// Auth-only providers (no matching media service) — filtered out of service queries so they
-// don't appear on the Services admin tab. Add here when introducing another auth-only provider.
-const AUTH_ONLY_PROVIDER_IDS = new Set(['email', 'discord']);
-
 // ─── Provider Registry ──────────────────────────────────────────────
-// Add new providers here — they auto-register everywhere
+// Add new providers here — they auto-register everywhere. A provider may expose `service`,
+// `auth`, or both. Auth-only providers (email, discord) have no `service` field and are
+// naturally filtered out of the Services admin tab by `p.service` presence checks.
 const ALL_PROVIDERS: Provider[] = [
   radarrProvider,
   sonarrProvider,
@@ -32,16 +30,20 @@ const ALL_PROVIDERS: Provider[] = [
 // ─── Service queries ────────────────────────────────────────────────
 
 export function getServiceDefinition(type: string): ServiceDefinition | undefined {
-  return ALL_PROVIDERS.find((p) => p.service.id === type)?.service;
+  return ALL_PROVIDERS.find((p) => p.service?.id === type)?.service;
+}
+
+function hasService(p: Provider): p is Provider & { service: ServiceDefinition } {
+  return p.service !== undefined;
 }
 
 export function getAllServiceDefinitions(): ServiceDefinition[] {
-  return ALL_PROVIDERS.filter((p) => !AUTH_ONLY_PROVIDER_IDS.has(p.service.id)).map((p) => p.service);
+  return ALL_PROVIDERS.filter(hasService).map((p) => p.service);
 }
 
 /** Return schemas for the frontend (fields, icon, label — no test function) */
 export function getServiceSchemas() {
-  return ALL_PROVIDERS.filter((p) => !AUTH_ONLY_PROVIDER_IDS.has(p.service.id)).map((p) => ({
+  return ALL_PROVIDERS.filter(hasService).map((p) => ({
     id: p.service.id,
     label: p.service.label,
     icon: p.service.icon,

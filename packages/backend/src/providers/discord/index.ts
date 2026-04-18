@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import type { FastifyInstance } from 'fastify';
-import type { AuthHelpers, AuthProvider, Provider, ServiceDefinition } from '../types.js';
+import type { AuthHelpers, AuthProvider, Provider } from '../types.js';
 import { getProviderConfig } from '../authSettings.js';
 
 const AUTHORIZE_URL = 'https://discord.com/oauth2/authorize';
@@ -36,15 +36,6 @@ async function getConfig(): Promise<Required<DiscordConfig>> {
   }
   return cfg as Required<DiscordConfig>;
 }
-
-const discordService: ServiceDefinition = {
-  id: 'discord',
-  label: 'Discord',
-  icon: '',
-  category: 'media-server', // unused — filtered out of the services admin tab
-  fields: [],
-  test: async () => ({ ok: true }),
-};
 
 const discordAuth: AuthProvider = {
   config: {
@@ -186,4 +177,4 @@ const discordAuth: AuthProvider = {
   },
 };
 
-export const discordProvider: Provider = { service: discordService, auth: discordAuth };
+export const discordProvider: Provider = { auth: discordAuth };

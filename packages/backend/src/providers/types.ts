@@ -213,8 +213,11 @@ export interface AuthProvider {
 }
 
 // ─── Unified Provider ───────────────────────────────────────────────
+// Every provider has at least one of `service` (it's a media/downloader server) or
+// `auth` (it's a login source). Service-only = radarr/sonarr/qbittorrent; auth-only =
+// email/discord; both = plex/jellyfin/emby (the media server IS also the login source).
 
 export interface Provider {
-  service: ServiceDefinition;
+  service?: ServiceDefinition;
   auth?: AuthProvider;
 }
