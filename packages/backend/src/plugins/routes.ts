@@ -28,11 +28,16 @@ async function checkUpdatesForInstalledPlugins(): Promise<Record<string, UpdateI
   const now = Date.now();
   if (updateCache && now - updateCache.timestamp < UPDATE_TTL) return updateCache.data;
 
-  // Load registry (re-use the registry cache, don't hit GitHub twice)
+  // Load registry (re-use the registry cache, don't hit GitHub twice). Don't cache the final
+  // result if the registry itself failed to load — avoids hiding updates for 1h over a transient blip.
   let registry: { plugins?: Array<{ repository?: string }> } = {};
+  let registryOk = false;
   try {
     const res = await fetch(REGISTRY_URL);
-    if (res.ok) registry = await res.json() as typeof registry;
+    if (res.ok) {
+      registry = await res.json() as typeof registry;
+      registryOk = true;
+    }
   } catch { /* ignore — no registry = no update checks */ }
 
   const reposByPluginId = new Map<string, string>();
@@ -44,6 +49,9 @@ async function checkUpdatesForInstalledPlugins(): Promise<Record<string, UpdateI
 
   const installed = pluginEngine.getPluginList();
   const result: Record<string, UpdateInfo> = {};
+  const persistOps: Promise<unknown>[] = [];
+  const checkedAt = new Date();
+
   for (const p of installed) {
     const repo = reposByPluginId.get(p.id);
     if (!repo) {
@@ -51,9 +59,10 @@ async function checkUpdatesForInstalledPlugins(): Promise<Record<string, UpdateI
       continue;
     }
     try {
-      const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
-        headers: { Accept: 'application/vnd.github+json' },
-      });
+      const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
+      const ghToken = process.env.GITHUB_TOKEN;
+      if (ghToken) headers.Authorization = `Bearer ${ghToken}`;
+      const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, { headers });
       if (!r.ok) {
         result[p.id] = { installed: p.version, latest: null, available: false, repository: repo };
         continue;
@@ -67,12 +76,21 @@ async function checkUpdatesForInstalledPlugins(): Promise<Record<string, UpdateI
         repository: repo,
         sourceUrl: rel.tarball_url,
       };
+      // Persist so the badge survives a restart (the admin doesn't have to wait for
+      // the next TTL miss to see "update available" again).
+      persistOps.push(
+        prisma.pluginState.update({
+          where: { pluginId: p.id },
+          data: { latestVersion: latest, lastUpdateCheck: checkedAt },
+        }).catch(() => {})
+      );
     } catch {
       result[p.id] = { installed: p.version, latest: null, available: false, repository: repo };
     }
   }
 
-  updateCache = { data: result, timestamp: now };
+  await Promise.all(persistOps);
+  if (registryOk) updateCache = { data: result, timestamp: now };
   return result;
 }
 
@@ -82,8 +100,26 @@ const ALLOWED_EXTENSIONS = new Set(['.js', '.mjs', '.css', '.json', '.map', '.sv
 export async function pluginRoutes(app: FastifyInstance) {
 
   // ── List installed plugins ──────────────────────────────────────
+  // Joins the engine's in-memory plugin list with PluginState so the caller gets
+  // `latestVersion` / `lastUpdateCheck` / `updateAvailable` out of the box —
+  // avoids the frontend re-implementing a semver comparison against the registry.
   app.get('/', async () => {
-    return pluginEngine.getPluginList();
+    const list = pluginEngine.getPluginList();
+    if (list.length === 0) return list;
+    const states = await prisma.pluginState.findMany({
+      where: { pluginId: { in: list.map((p) => p.id) } },
+      select: { pluginId: true, latestVersion: true, lastUpdateCheck: true },
+    });
+    const byId = new Map(states.map((s) => [s.pluginId, s]));
+    return list.map((p) => {
+      const s = byId.get(p.id);
+      return {
+        ...p,
+        latestVersion: s?.latestVersion ?? null,
+        lastUpdateCheck: s?.lastUpdateCheck?.toISOString() ?? null,
+        updateAvailable: !!s?.latestVersion && s.latestVersion !== p.version,
+      };
+    });
   });
 
   // ── Check for updates ────────────────────────────────────────────

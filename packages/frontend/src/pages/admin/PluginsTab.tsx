@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, ChevronDown, ChevronUp, BookOpen, Copy, Check, RefreshCw, AlertTriangle, Trash2 } from 'lucide-react';
@@ -8,17 +8,8 @@ import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import type { PluginInfo } from '@/plugins/types';
 
-function isNewerVersion(remote: string, local: string): boolean {
-  const r = remote.split('.').map(Number);
-  const l = local.split('.').map(Number);
-  for (let i = 0; i < Math.max(r.length, l.length); i++) {
-    const rv = r[i] || 0;
-    const lv = l[i] || 0;
-    if (rv > lv) return true;
-    if (rv < lv) return false;
-  }
-  return false;
-}
+// `plugin.updateAvailable` + `plugin.latestVersion` come straight from the backend, which
+// runs a proper semver comparison against the registry cache. No hand-rolled version logic here.
 
 interface RegistryPlugin {
   id: string;
@@ -162,6 +153,16 @@ export function PluginsTab() {
     }
   }, [subTab, registry.length, registryLoading, fetchRegistry]);
 
+  // Kick an update-check once on first mount of the Installed tab so the
+  // latestVersion badges can populate without user action. Backend has its
+  // own 1h cache, so this is a no-op on subsequent mounts.
+  const updateCheckedRef = useRef(false);
+  useEffect(() => {
+    if (subTab !== 'installed' || updateCheckedRef.current) return;
+    updateCheckedRef.current = true;
+    api.get('/plugins/updates').then(() => fetchPlugins()).catch(() => { /* best-effort */ });
+  }, [subTab, fetchPlugins]);
+
   const handleToggle = async (id: string, enabled: boolean) => {
     setToggling(id);
     try {
@@ -192,17 +193,14 @@ export function PluginsTab() {
 
   const installedIds = new Set(plugins.map(p => p.id));
 
-  // Build a map of registry versions for update detection
-  const registryVersions = new Map<string, { version: string; url: string; repository: string }>();
+  // Registry metadata (repo URL etc.) — used only for the "View update" link, not for version detection.
+  const registryRepos = new Map<string, { url: string; repository: string }>();
   for (const rp of registry) {
-    registryVersions.set(rp.id, { version: rp.version, url: rp.url, repository: rp.repository });
+    registryRepos.set(rp.id, { url: rp.url, repository: rp.repository });
   }
 
-  // Count available updates
-  const updatesAvailable = plugins.filter(p => {
-    const rv = registryVersions.get(p.id);
-    return rv && isNewerVersion(rv.version, p.version);
-  }).length;
+  // Update detection is authoritative from the backend (plugin.updateAvailable / plugin.latestVersion).
+  const updatesAvailable = plugins.filter((p) => p.updateAvailable).length;
 
   if (loading) return <Spinner />;
 
@@ -299,8 +297,8 @@ export function PluginsTab() {
             </div>
           ) : (
             plugins.map((plugin) => {
-              const rv = registryVersions.get(plugin.id);
-              const hasUpdate = rv && isNewerVersion(rv.version, plugin.version);
+              const rv = registryRepos.get(plugin.id);
+              const hasUpdate = !!plugin.updateAvailable;
               return (
                 <div key={plugin.id} className="card p-5 flex items-center gap-4">
                   <PluginInitial name={plugin.name} />
@@ -308,9 +306,19 @@ export function PluginsTab() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-sm font-semibold text-ndp-text">{plugin.name}</h3>
                       <span className="text-xs text-ndp-text-dim">v{plugin.version}</span>
-                      {hasUpdate && (
+                      {hasUpdate && plugin.latestVersion && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-ndp-accent/15 text-ndp-accent font-medium">
-                          v{rv.version} available
+                          v{plugin.latestVersion} available
+                        </span>
+                      )}
+                      {plugin.compat?.status === 'untested' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-medium" title={plugin.compat.reason}>
+                          Untested
+                        </span>
+                      )}
+                      {plugin.compat?.status === 'incompatible' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-ndp-danger/15 text-ndp-danger font-medium" title={plugin.compat.reason}>
+                          Incompatible
                         </span>
                       )}
                       {plugin.error && (
@@ -324,7 +332,7 @@ export function PluginsTab() {
                       {plugin.author && (
                         <span className="text-xs text-ndp-text-dim">{t('common.by')} {plugin.author}</span>
                       )}
-                      {hasUpdate && rv.url && (
+                      {hasUpdate && rv?.url && (
                         <a
                           href={rv.url}
                           target="_blank"

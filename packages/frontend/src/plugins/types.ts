@@ -17,6 +17,16 @@ export interface PluginInfo {
   hasSettings: boolean;
   hasFrontend: boolean;
   error?: string;
+  compat?: {
+    status: 'verified' | 'untested' | 'incompatible' | 'unknown';
+    range?: string;
+    oscarrVersion: string;
+    reason?: string;
+  };
+  /** Populated by the backend from the update-check cache (see GET /api/plugins/updates). */
+  latestVersion?: string | null;
+  lastUpdateCheck?: string | null;
+  updateAvailable?: boolean;
 }
 
 export interface PluginSettingDef {

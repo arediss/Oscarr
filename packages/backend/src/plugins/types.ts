@@ -162,4 +162,8 @@ export interface PluginInfo {
     oscarrVersion: string;
     reason?: string;
   };
+  /** Latest version seen by the last `/updates` check — populated from PluginState, null if never checked. */
+  latestVersion?: string | null;
+  lastUpdateCheck?: string | null;
+  updateAvailable?: boolean;
 }
