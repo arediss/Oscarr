@@ -9,7 +9,7 @@ import { emailProvider } from './email/index.js';
 import { discordProvider } from './discord/index.js';
 import type { Provider, ServiceDefinition, AuthProvider, ArrClient } from './types.js';
 import { getServiceConfig } from '../utils/services.js';
-import { listAllProviderSettings } from './authSettings.js';
+import { getProviderSettings, listAllProviderSettings } from './authSettings.js';
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Add new providers here — they auto-register everywhere. A provider may expose `service`,
@@ -68,6 +68,10 @@ export async function getAuthProviderConfigs() {
   // can be toggled independently. Providers declaring `requiresService` (jellyfin, emby) are
   // additionally filtered out when their matching Service row is missing or disabled, so the
   // login page never offers a button that would 503 on click.
+  const authProviders = getAuthProviders();
+  // Ensure every declared auth provider has a settings row — upsert-on-read defends against
+  // the race where two concurrent calls both miss the row and both try to create it.
+  await Promise.all(authProviders.map((p) => getProviderSettings(p.config.id)));
   const settings = await listAllProviderSettings();
   const settingsById = new Map(settings.map((s) => [s.provider, s]));
   const enabledIds = new Set(settings.filter((s) => s.enabled).map((s) => s.provider));

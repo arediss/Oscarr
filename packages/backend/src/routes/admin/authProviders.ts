@@ -3,6 +3,7 @@ import { prisma } from '../../utils/prisma.js';
 import { getAuthProviders } from '../../providers/index.js';
 import {
   getProviderConfig,
+  getProviderSettings,
   listAllProviderSettings,
   updateProviderSettings,
 } from '../../providers/authSettings.js';
@@ -50,6 +51,11 @@ function validate(schema: AuthProviderField[] | undefined, config: Record<string
     }
     if (typeof v !== 'string') return `Field "${field.label}" must be a string`;
     if (field.required && v === '') return `Field "${field.label}" is required`;
+    // URL fields must be http(s) — blocks javascript:/data:/file: schemes that could bite if
+    // a future feature renders the value as a link (e.g. OIDC issuer URL).
+    if (field.type === 'url' && v !== '' && !/^https?:\/\//i.test(v)) {
+      return `Field "${field.label}" must be an http(s) URL`;
+    }
   }
   return null;
 }
@@ -57,6 +63,10 @@ function validate(schema: AuthProviderField[] | undefined, config: Record<string
 export async function authProvidersRoutes(app: FastifyInstance) {
   app.get(PREFIX, async (request) => {
     const providers = getAuthProviders();
+    // Reconcile: upsert-on-read every declared provider so a registry addition (e.g. a new
+    // provider shipped in code) surfaces with its default disabled row instead of racing on the
+    // first concurrent call that hits getProviderConfig.
+    await Promise.all(providers.map((p) => getProviderSettings(p.config.id)));
     const [settings, services] = await Promise.all([
       listAllProviderSettings(),
       prisma.service.findMany({ select: { type: true, enabled: true } }),
@@ -110,7 +120,26 @@ export async function authProvidersRoutes(app: FastifyInstance) {
       if (!provider) return reply.status(404).send({ error: `Unknown provider "${id}"` });
 
       const patch = request.body;
-      const cleanedConfig = patch.config ? stripMasked(patch.config) : undefined;
+
+      // Self-lockout guard: refuse to disable the last enabled provider. Without this an admin
+      // who clicks the wrong power icon loses login access permanently — recovery is DB surgery.
+      if (patch.enabled === false) {
+        const allSettings = await listAllProviderSettings();
+        const othersEnabled = allSettings.some((s) => s.provider !== id && s.enabled);
+        if (!othersEnabled) {
+          return reply.status(409).send({
+            error: 'Cannot disable the last enabled auth provider — you would lose login access. Enable another provider first.',
+          });
+        }
+      }
+
+      // Filter config keys against the declared schema so unknown keys don't pile up in the
+      // JSON blob and confuse future readers. Defense-in-depth against a typo'd admin payload.
+      const rawConfig = patch.config ? stripMasked(patch.config) : undefined;
+      const allowedKeys = new Set(provider.config.configSchema?.map((f) => f.key) ?? []);
+      const cleanedConfig = rawConfig
+        ? Object.fromEntries(Object.entries(rawConfig).filter(([k]) => allowedKeys.has(k)))
+        : undefined;
 
       if (cleanedConfig) {
         const current = await getProviderConfig(id);

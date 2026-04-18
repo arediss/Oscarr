@@ -67,7 +67,6 @@ export async function settingsRoutes(app: FastifyInstance) {
           plexMachineId: { type: 'string', description: 'Plex server machine identifier' },
           notificationMatrix: { type: 'string', description: 'JSON matrix mapping event types to notification channels' },
           autoApproveRequests: { type: 'boolean', description: 'Automatically approve all requests' },
-          registrationEnabled: { type: 'boolean', description: 'Allow new account registration' },
           missingSearchCooldownMin: { type: 'number', description: 'Cooldown in minutes before allowing another missing search' },
           requestsEnabled: { type: 'boolean', description: 'Enable the request system' },
           nsfwBlurEnabled: { type: 'boolean', description: 'Enable NSFW content blur' },
@@ -90,7 +89,6 @@ export async function settingsRoutes(app: FastifyInstance) {
       plexMachineId?: string;
       notificationMatrix?: string;
       autoApproveRequests?: boolean;
-      registrationEnabled?: boolean;
       missingSearchCooldownMin?: number;
       requestsEnabled?: boolean;
       nsfwBlurEnabled?: boolean;
@@ -112,7 +110,6 @@ export async function settingsRoutes(app: FastifyInstance) {
         plexMachineId: body.plexMachineId ?? undefined,
         notificationMatrix: body.notificationMatrix ?? undefined,
         autoApproveRequests: body.autoApproveRequests ?? undefined,
-        registrationEnabled: body.registrationEnabled ?? undefined,
         missingSearchCooldownMin: body.missingSearchCooldownMin ?? undefined,
         requestsEnabled: body.requestsEnabled ?? undefined,
         nsfwBlurEnabled: body.nsfwBlurEnabled ?? undefined,
@@ -132,7 +129,6 @@ export async function settingsRoutes(app: FastifyInstance) {
         plexMachineId: body.plexMachineId,
         notificationMatrix: body.notificationMatrix,
         autoApproveRequests: body.autoApproveRequests,
-        registrationEnabled: body.registrationEnabled,
         missingSearchCooldownMin: body.missingSearchCooldownMin,
         requestsEnabled: body.requestsEnabled,
         supportEnabled: body.supportEnabled,

@@ -21,6 +21,9 @@ interface DiscordConfig {
 
 // Short-lived in-memory store for OAuth `state` → intent. Enough for interactive OAuth round-trips
 // (10min TTL); a server restart mid-flow drops pending states, which is acceptable for admins.
+// Node-local only: running Oscarr behind a load-balancer with >1 backend would need a shared
+// store (Redis etc.) so authorize and callback on different nodes can reconcile. Single-instance
+// is the supported topology today.
 interface StateRecord {
   intent: 'login' | 'link';
   userId?: number; // present when intent === 'link'
@@ -59,7 +62,10 @@ async function getConfig(): Promise<DiscordConfigResolved> {
  * partially controls upstream could bypass the gate by triggering a 429 / 5xx.
  */
 async function isGuildMember(accessToken: string, guildId: string): Promise<boolean> {
-  const res = await fetch(GUILDS_URL, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const res = await fetch(GUILDS_URL, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    redirect: 'error',
+  });
   if (!res.ok) return false;
   const guilds = (await res.json()) as Array<{ id?: string }>;
   return Array.isArray(guilds) && guilds.some((g) => g.id === guildId);
@@ -126,11 +132,17 @@ const discordAuth: AuthProvider = {
       '/discord/callback',
       async (request, reply) => {
         const { code, state, error } = request.query;
-        if (error) return reply.redirect(`/login?error=${encodeURIComponent(error)}`);
-        if (!code || !state) return reply.redirect('/login?error=missing_code_or_state');
+        if (error) {
+          // Only echo Discord's documented error codes; coerce anything else to a generic
+          // token so an attacker who crafts /api/auth/discord/callback?error=<phishing text>
+          // can't phish through the login page error box.
+          const KNOWN = new Set(['access_denied', 'invalid_scope', 'server_error', 'temporarily_unavailable']);
+          return reply.redirect(`/login?error=${KNOWN.has(error) ? error : 'DISCORD_ERROR'}`);
+        }
+        if (!code || !state) return reply.redirect('/login?error=DISCORD_ERROR');
 
         const record = stateStore.get(state);
-        if (!record) return reply.redirect('/login?error=invalid_state');
+        if (!record) return reply.redirect('/login?error=DISCORD_ERROR');
         stateStore.delete(state);
 
         const cfg = await getConfig().catch(() => null);
@@ -149,13 +161,17 @@ const discordAuth: AuthProvider = {
             code,
             redirect_uri: redirectUri,
           }),
+          redirect: 'error',
         });
-        if (!tokenRes.ok) return reply.redirect(`/login?error=discord_token_${tokenRes.status}`);
+        if (!tokenRes.ok) return reply.redirect('/login?error=DISCORD_ERROR');
         const tokenPayload = (await tokenRes.json()) as { access_token?: string };
-        if (!tokenPayload.access_token) return reply.redirect('/login?error=discord_no_token');
+        if (!tokenPayload.access_token) return reply.redirect('/login?error=DISCORD_ERROR');
 
-        const userRes = await fetch(USER_URL, { headers: { Authorization: `Bearer ${tokenPayload.access_token}` } });
-        if (!userRes.ok) return reply.redirect(`/login?error=discord_user_${userRes.status}`);
+        const userRes = await fetch(USER_URL, {
+          headers: { Authorization: `Bearer ${tokenPayload.access_token}` },
+          redirect: 'error',
+        });
+        if (!userRes.ok) return reply.redirect('/login?error=DISCORD_ERROR');
         const profile = (await userRes.json()) as {
           id: string;
           username: string;
