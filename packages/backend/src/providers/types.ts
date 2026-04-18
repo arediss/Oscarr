@@ -152,11 +152,13 @@ export interface ServiceDefinition {
 export interface AuthProviderField {
   key: string;
   label: string;
-  type: 'string' | 'password' | 'url';
+  type: 'string' | 'password' | 'url' | 'boolean';
   required?: boolean;
   placeholder?: string;
   /** Optional human-readable help text shown under the input. */
   help?: string;
+  /** Default value (used by the UI when no value is set yet; not persisted on its own). */
+  default?: string | boolean;
 }
 
 export interface AuthProviderConfig {

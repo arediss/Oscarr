@@ -80,6 +80,13 @@ const discordAuth: AuthProvider = {
         required: false,
         help: 'Optional — when set, only members of this Discord server can log in. Enable Developer Mode in Discord, right-click your server, Copy Server ID.',
       },
+      {
+        key: 'allowSignup',
+        label: 'Allow new account creation',
+        type: 'boolean',
+        default: true,
+        help: 'When off, only users with an existing Oscarr account (matching the Discord email) can log in — no new accounts are created.',
+      },
     ],
   },
 
@@ -187,14 +194,22 @@ const discordAuth: AuthProvider = {
         // Login flow — find-or-create, set the JWT cookie manually (helpers.signAndSend also
         // writes a JSON body which we'd then clobber with the redirect), and redirect home.
         const displayName = profile.global_name ?? profile.username;
-        const resolved = await helpers.findOrCreateUser({
-          provider: 'discord',
-          providerId: profile.id,
-          providerUsername: profile.username,
-          providerEmail: profile.email,
-          email: profile.email ?? `${profile.id}@discord.local`,
-          displayName,
-        });
+        let resolved;
+        try {
+          resolved = await helpers.findOrCreateUser({
+            provider: 'discord',
+            providerId: profile.id,
+            providerUsername: profile.username,
+            providerEmail: profile.email,
+            email: profile.email ?? `${profile.id}@discord.local`,
+            displayName,
+          });
+        } catch (err) {
+          if ((err as Error).message === 'SIGNUP_NOT_ALLOWED') {
+            return reply.redirect('/login?error=SIGNUP_NOT_ALLOWED');
+          }
+          throw err;
+        }
 
         const jwt = app.jwt.sign(
           { id: resolved.id, email: resolved.email, role: resolved.role },

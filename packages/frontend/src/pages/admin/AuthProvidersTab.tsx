@@ -10,10 +10,11 @@ import { AdminTabLayout } from './AdminTabLayout';
 interface AuthProviderField {
   key: string;
   label: string;
-  type: 'string' | 'password' | 'url';
+  type: 'string' | 'password' | 'url' | 'boolean';
   required?: boolean;
   placeholder?: string;
   help?: string;
+  default?: string | boolean;
 }
 
 interface AuthProviderRow {
@@ -27,7 +28,8 @@ interface AuthProviderRow {
    *  Computed server-side per-request; undefined for non-OAuth providers. */
   callbackUrl?: string;
   enabled: boolean;
-  config: Record<string, string>;
+  /** Per-provider config values. Booleans (e.g. allowSignup) come as true/false; strings for the rest. */
+  config: Record<string, string | boolean>;
 }
 
 const MASK = '__MASKED__';
@@ -193,7 +195,7 @@ function ProviderConfigModal({
   onSaved: () => void;
 }) {
   const { t } = useTranslation();
-  const [config, setConfig] = useState<Record<string, string>>(provider.config);
+  const [config, setConfig] = useState<Record<string, string | boolean>>(provider.config);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -202,7 +204,8 @@ function ProviderConfigModal({
     setError(null);
     try {
       // Strip fields that still hold the server-side MASK so we don't clobber stored secrets.
-      const cleaned: Record<string, string> = {};
+      // Booleans pass through unchanged (MASK only ever applies to password strings).
+      const cleaned: Record<string, string | boolean> = {};
       for (const [k, v] of Object.entries(config)) {
         if (v === MASK) continue;
         cleaned[k] = v;
@@ -248,7 +251,7 @@ function ProviderConfigModal({
             <ConfigField
               key={field.key}
               field={field}
-              value={typeof config[field.key] === 'string' ? config[field.key] : ''}
+              value={config[field.key]}
               onChange={(v) => setConfig((prev) => ({ ...prev, [field.key]: v }))}
             />
           ))}
@@ -286,13 +289,49 @@ function ConfigField({
   field, value, onChange,
 }: {
   field: AuthProviderField;
-  value: string;
-  onChange: (v: string) => void;
+  value: string | boolean | undefined;
+  onChange: (v: string | boolean) => void;
 }) {
-  const isMasked = value === MASK;
+  if (field.type === 'boolean') {
+    // Resolve the effective value: stored boolean wins, else fall back to the declared default,
+    // else false. Lets the admin see the right state even when they never changed anything.
+    const effective =
+      typeof value === 'boolean'
+        ? value
+        : typeof field.default === 'boolean'
+        ? field.default
+        : false;
+    return (
+      <div className="flex items-start gap-3 py-1">
+        <button
+          type="button"
+          onClick={() => onChange(!effective)}
+          className={clsx(
+            'relative w-9 h-5 rounded-full transition-colors flex-shrink-0 mt-0.5',
+            effective ? 'bg-ndp-accent' : 'bg-white/10'
+          )}
+          aria-pressed={effective}
+        >
+          <span
+            className={clsx(
+              'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform',
+              effective && 'translate-x-4'
+            )}
+          />
+        </button>
+        <div className="flex-1 min-w-0">
+          <span className="text-sm text-ndp-text">{field.label}</span>
+          {field.help && <p className="text-xs text-ndp-text-dim mt-0.5">{field.help}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  const strValue = typeof value === 'string' ? value : '';
+  const isMasked = strValue === MASK;
   const [revealMasked, setRevealMasked] = useState(false);
-  const displayValue = isMasked && !revealMasked ? '••••••••' : value;
-  const hasValue = !!value && !isMasked;
+  const displayValue = isMasked && !revealMasked ? '••••••••' : strValue;
+  const hasValue = !!strValue && !isMasked;
 
   return (
     <label className="flex flex-col gap-1">
@@ -316,7 +355,7 @@ function ConfigField({
         {field.type === 'url' && hasValue && (
           <button
             type="button"
-            onClick={() => { navigator.clipboard.writeText(value); }}
+            onClick={() => { navigator.clipboard.writeText(strValue); }}
             className="btn-secondary px-3"
             title="Copy"
           >

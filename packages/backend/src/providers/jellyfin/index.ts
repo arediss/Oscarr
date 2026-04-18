@@ -53,7 +53,21 @@ async function getConfig(): Promise<{ url: string; apiKey: string } | null> {
 // ─── Auth Provider ─────────────────────────────────────────────────
 
 const jellyfinAuth: AuthProvider = {
-  config: { id: 'jellyfin', label: 'Jellyfin', type: 'credentials', configSchema: [], requiresService: true },
+  config: {
+    id: 'jellyfin',
+    label: 'Jellyfin',
+    type: 'credentials',
+    configSchema: [
+      {
+        key: 'allowSignup',
+        label: 'Allow new account creation',
+        type: 'boolean',
+        default: true,
+        help: 'When off, only users with an existing Oscarr account can log in via Jellyfin — no new accounts are created.',
+      },
+    ],
+    requiresService: true,
+  },
 
   async registerRoutes(app, helpers) {
     app.post('/jellyfin/login', {
@@ -92,6 +106,9 @@ const jellyfinAuth: AuthProvider = {
         logEvent('info', 'Auth', `${result.displayName} logged in (jellyfin)${result.isNew ? ' — new account' : ''}`);
         return helpers.signAndSend(reply, result.id);
       } catch (err) {
+        if ((err as Error).message === 'SIGNUP_NOT_ALLOWED') {
+          return reply.status(403).send({ error: 'SIGNUP_NOT_ALLOWED' });
+        }
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 401) return reply.status(401).send({ error: 'Invalid username or password' });
         logEvent('warn', 'Auth', `Jellyfin auth failed for "${username}": ${String(err)}`);

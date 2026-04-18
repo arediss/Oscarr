@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { logEvent } from '../utils/logEvent.js';
 import { registerEmail, loginEmail } from '../providers/email/index.js';
 import { getAuthProviders, getAuthProvider, getAuthProviderConfigs } from '../providers/index.js';
+import { getProviderConfig } from '../providers/authSettings.js';
 import type { AuthHelpers } from '../providers/types.js';
 import { getPermissionsForRole } from '../middleware/rbac.js';
 
@@ -70,6 +71,14 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
       const isFirstUser = userCount === 0;
 
       if (!user) {
+        // Per-provider signup gate. The admin can disable "allow account creation" so a user
+        // authenticating via Plex/Jellyfin/Emby/Discord can't create an Oscarr account out of
+        // thin air — they must already exist (either matched by email auto-link, or created
+        // manually by an admin). Bootstrapping is always allowed (first user becomes admin).
+        const providerCfg = await getProviderConfig(opts.provider);
+        if (providerCfg.allowSignup === false && !isFirstUser) {
+          throw new Error('SIGNUP_NOT_ALLOWED');
+        }
         user = await prisma.user.create({
           data: {
             email: opts.email,

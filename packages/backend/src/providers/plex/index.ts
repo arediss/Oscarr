@@ -74,7 +74,20 @@ async function importPlexUsers(plexToken: string, machineId: string) {
 // ─── Auth Provider ──────────────────────────────────────────────────
 
 const plexAuth: AuthProvider = {
-  config: { id: 'plex', label: 'Plex', type: 'oauth', configSchema: [] },
+  config: {
+    id: 'plex',
+    label: 'Plex',
+    type: 'oauth',
+    configSchema: [
+      {
+        key: 'allowSignup',
+        label: 'Allow new account creation',
+        type: 'boolean',
+        default: true,
+        help: 'When off, only users with an existing Oscarr account (matching the Plex email) can log in — no new accounts are created.',
+      },
+    ],
+  },
 
   async registerRoutes(app, helpers) {
     app.post('/plex/pin', async (_request, reply) => {
@@ -105,16 +118,24 @@ const plexAuth: AuthProvider = {
       }
 
       const plexAccount = await getPlexUser(authToken);
-      const result = await helpers.findOrCreateUser({
-        provider: 'plex',
-        providerId: String(plexAccount.id),
-        providerToken: authToken,
-        providerUsername: plexAccount.username,
-        providerEmail: plexAccount.email.toLowerCase(),
-        email: plexAccount.email.toLowerCase(),
-        displayName: plexAccount.username,
-        avatar: plexAccount.thumb,
-      });
+      let result;
+      try {
+        result = await helpers.findOrCreateUser({
+          provider: 'plex',
+          providerId: String(plexAccount.id),
+          providerToken: authToken,
+          providerUsername: plexAccount.username,
+          providerEmail: plexAccount.email.toLowerCase(),
+          email: plexAccount.email.toLowerCase(),
+          displayName: plexAccount.username,
+          avatar: plexAccount.thumb,
+        });
+      } catch (err) {
+        if ((err as Error).message === 'SIGNUP_NOT_ALLOWED') {
+          return reply.status(403).send({ error: 'SIGNUP_NOT_ALLOWED' });
+        }
+        throw err;
+      }
 
       logEvent('info', 'Auth', `${result.displayName} logged in (plex)${result.isNew ? ' — new account' : ''}`);
       return helpers.signAndSend(reply, result.id);
