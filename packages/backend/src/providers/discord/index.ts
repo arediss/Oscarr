@@ -85,7 +85,7 @@ const discordAuth: AuthProvider = {
         label: 'Allow new account creation',
         type: 'boolean',
         default: false,
-        help: 'Auto-create Oscarr users for new Discord logins. Requires General → Registration on.',
+        help: 'Auto-create Oscarr users for new Discord logins.',
       },
     ],
   },

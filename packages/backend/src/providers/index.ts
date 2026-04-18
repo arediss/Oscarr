@@ -69,6 +69,7 @@ export async function getAuthProviderConfigs() {
   // additionally filtered out when their matching Service row is missing or disabled, so the
   // login page never offers a button that would 503 on click.
   const settings = await listAllProviderSettings();
+  const settingsById = new Map(settings.map((s) => [s.provider, s]));
   const enabledIds = new Set(settings.filter((s) => s.enabled).map((s) => s.provider));
   const { prisma } = await import('../utils/prisma.js');
   const services = await prisma.service.findMany({ select: { type: true, enabled: true } });
@@ -79,7 +80,12 @@ export async function getAuthProviderConfigs() {
       if (p.config.requiresService && serviceEnabledByType.get(p.config.id) !== true) return false;
       return true;
     })
-    .map((p) => p.config);
+    .map((p) => ({
+      ...p.config,
+      // Expose allowSignup so the login page can hide the "Create account" UI when email's
+      // signup is off, and so OAuth buttons can optionally signal "existing users only".
+      allowSignup: settingsById.get(p.config.id)?.config.allowSignup === true,
+    }));
 }
 
 // ─── Arr Client Factory & Caching ───────────────────────────────────

@@ -63,7 +63,7 @@ const embyAuth: AuthProvider = {
         label: 'Allow new account creation',
         type: 'boolean',
         default: false,
-        help: 'Auto-create Oscarr users for new Emby logins. Requires General → Registration on.',
+        help: 'Auto-create Oscarr users for new Emby logins.',
       },
     ],
     requiresService: true,

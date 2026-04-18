@@ -71,18 +71,11 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
       const isFirstUser = userCount === 0;
 
       if (!user) {
-        // Two gates, AND'd. Bootstrapping bypasses both so a fresh install can create its admin.
-        //   1. Global AppSettings.registrationEnabled — master switch. When off, no signup via
-        //      ANY channel (email register, Plex, Jellyfin, Emby, Discord…). Admin-level policy.
-        //   2. Per-provider allowSignup — fine-grained opt-in per login source. Secure-by-default.
-        // If either is false, the user must already exist (either matched by providerId, or email
-        // auto-link); otherwise we reject. Avoids the footgun where the admin turns off "Register"
-        // in General expecting it to close off signup, but Discord/Plex quietly keep creating users.
+        // Per-provider signup gate, secure-by-default: each AuthProvider has its own
+        // `allowSignup` toggle (including email). Admin opts-in explicitly per channel, no
+        // global master switch to reason about. Bootstrapping bypasses so a fresh install
+        // can create its first admin.
         if (!isFirstUser) {
-          const appSettings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-          if (!(appSettings?.registrationEnabled ?? true)) {
-            throw new Error('SIGNUP_NOT_ALLOWED');
-          }
           const providerCfg = await getProviderConfig(opts.provider);
           if (providerCfg.allowSignup !== true) {
             throw new Error('SIGNUP_NOT_ALLOWED');
@@ -169,9 +162,11 @@ export async function authRoutes(app: FastifyInstance) {
     const isFirstUser = userCount === 0;
 
     if (!isFirstUser) {
-      const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-      if (!(settings?.registrationEnabled ?? true)) {
-        return reply.status(403).send({ error: 'Registration is disabled.' });
+      // Email signup is gated by email's own allowSignup toggle (same per-provider model as
+      // Plex/Jellyfin/Emby/Discord). Admin manages it from Authentication → Email.
+      const emailCfg = await getProviderConfig('email');
+      if (emailCfg.allowSignup !== true) {
+        return reply.status(403).send({ error: 'SIGNUP_NOT_ALLOWED' });
       }
     }
 

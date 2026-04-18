@@ -54,7 +54,15 @@ const emailAuth: AuthProvider = {
     id: 'email',
     label: 'Email',
     type: 'credentials',
-    configSchema: [],
+    configSchema: [
+      {
+        key: 'allowSignup',
+        label: 'Allow new account creation',
+        type: 'boolean',
+        default: false,
+        help: 'Lets anyone submit the email register form and land an Oscarr account.',
+      },
+    ],
   },
   async registerRoutes(_app: FastifyInstance, _helpers: AuthHelpers) {
     // No per-provider routes — the generic /api/auth/register + /api/auth/login call

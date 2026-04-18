@@ -63,7 +63,7 @@ const jellyfinAuth: AuthProvider = {
         label: 'Allow new account creation',
         type: 'boolean',
         default: false,
-        help: 'Auto-create Oscarr users for new Jellyfin logins. Requires General → Registration on.',
+        help: 'Auto-create Oscarr users for new Jellyfin logins.',
       },
     ],
     requiresService: true,

@@ -138,11 +138,16 @@ function ProviderRow({
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-ndp-text truncate">{provider.label}</span>
             <span className="text-xs text-ndp-text-dim">
               {provider.type === 'oauth' ? 'OAuth 2.0' : 'Credentials'}
             </span>
+            {provider.config.allowSignup === true && !unavailable && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-ndp-accent/15 text-ndp-accent font-medium">
+                {t('admin.authProviders.signup_on')}
+              </span>
+            )}
           </div>
           {unavailable ? (
             <div className="flex items-center gap-1.5 mt-0.5 text-xs text-ndp-warning">

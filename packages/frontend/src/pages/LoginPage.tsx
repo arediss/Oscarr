@@ -375,7 +375,7 @@ export default function LoginPage() {
               )}
 
               {/* Register link */}
-              {hasEmailProvider && features.registrationEnabled && (
+              {hasEmailProvider && providers.find(p => p.id === 'email')?.allowSignup && (
                 <p className="text-center text-sm text-ndp-text-dim mt-6">
                   <button onClick={() => { setMode('register'); setError(''); }} className="text-ndp-accent hover:underline">
                     {t('login.register_link')}

@@ -84,7 +84,7 @@ const plexAuth: AuthProvider = {
         label: 'Allow new account creation',
         type: 'boolean',
         default: false,
-        help: 'Auto-create Oscarr users for new Plex logins. Requires General → Registration on.',
+        help: 'Auto-create Oscarr users for new Plex logins.',
       },
     ],
   },
