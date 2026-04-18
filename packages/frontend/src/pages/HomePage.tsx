@@ -184,7 +184,7 @@ function HeroCarousel({ trending, loading }: { trending: TmdbMedia[]; loading: b
   return (
     <>
       {/* Fixed hero backdrop */}
-      <div className="fixed inset-0 h-screen z-0">
+      <div className="fixed inset-0 h-dvh z-0">
         {loading && <div className="w-full h-full bg-ndp-surface" />}
         {!loading && hero && (
           <>
@@ -296,7 +296,7 @@ function DynamicHomePage({ sections }: { sections: HomepageSection[] }) {
   const enabledSections = sections.filter(s => s.enabled);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-dvh">
       {/* Render hero if present (must be before scrollable content wrapper) */}
       {enabledSections.some(s => s.builtinKey === 'hero') && <HeroSection />}
 
@@ -367,7 +367,7 @@ function FallbackHomePage() {
   const loading = loadingRecent;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-dvh">
       <HeroCarousel trending={trending} loading={loading} />
 
       {/* Scrollable content */}
@@ -404,8 +404,8 @@ export default function HomePage() {
   /* While fetching the layout config, show nothing (avoids flicker) */
   if (layoutLoading) {
     return (
-      <div className="min-h-screen">
-        <div className="fixed inset-0 h-screen z-0">
+      <div className="min-h-dvh">
+        <div className="fixed inset-0 h-dvh z-0">
           <div className="w-full h-full bg-ndp-surface" />
         </div>
       </div>

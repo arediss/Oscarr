@@ -288,13 +288,17 @@ model TmdbCache {
 }
 
 model PluginState {
-  id            Int       @id @default(autoincrement())
-  pluginId      String    @unique
-  enabled       Boolean   @default(true)
-  settings      String    @default("{}") // JSON blob for plugin-specific settings
-  onInstallRan  Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              Int       @id @default(autoincrement())
+  pluginId        String    @unique
+  enabled         Boolean   @default(true)
+  settings        String    @default("{}") // JSON blob for plugin-specific settings
+  onInstallRan    Boolean   @default(false)
+  // Latest release version as observed by the update checker — null if the plugin
+  // isn't in the registry or no check has run yet. Updated by GET /plugins/updates.
+  latestVersion   String?
+  lastUpdateCheck DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model UserNotification {

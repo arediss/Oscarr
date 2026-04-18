@@ -25,6 +25,17 @@
   body {
     overflow-x: hidden;
   }
+
+  /* iOS Safari auto-zooms when focusing an input whose font-size is below 16px.
+     Force 16px on mobile across all text inputs — design systems use text-sm (14px)
+     widely, so !important is needed to beat Tailwind utilities. */
+  @media (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
 }
 
 @layer components {

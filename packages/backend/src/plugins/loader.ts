@@ -2,12 +2,12 @@ import { readdir, readFile, stat, access } from 'fs/promises';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import type { PluginManifest } from './types.js';
-import { isVersionSupported, getSupportedVersions } from './context/index.js';
+import { parseManifest } from './manifestSchema.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Resolve the plugins directory. Supports OSCARR_PLUGINS_DIR env var. */
-function getPluginsDir(): string {
+export function getPluginsDir(): string {
   if (process.env.OSCARR_PLUGINS_DIR) return resolve(process.env.OSCARR_PLUGINS_DIR);
   return resolve(__dirname, '../../../plugins');
 }
@@ -15,59 +15,6 @@ function getPluginsDir(): string {
 export interface DiscoveredPlugin {
   dir: string;
   manifest: PluginManifest;
-}
-
-function validateManifest(data: unknown, dir: string): PluginManifest {
-  const m = data as Record<string, unknown>;
-  if (!m.id || typeof m.id !== 'string') throw new Error(`Missing or invalid "id" in ${dir}`);
-  if (!m.name || typeof m.name !== 'string') throw new Error(`Missing or invalid "name" in ${dir}`);
-  if (!m.version || typeof m.version !== 'string') throw new Error(`Missing or invalid "version" in ${dir}`);
-  if (typeof m.apiVersion !== 'string' || !isVersionSupported(m.apiVersion)) {
-    throw new Error(
-      `Unsupported apiVersion "${m.apiVersion}" in ${dir}. Supported: ${getSupportedVersions().join(', ')}`
-    );
-  }
-  if (!m.entry || typeof m.entry !== 'string') throw new Error(`Missing or invalid "entry" in ${dir}`);
-
-  // Prevent path traversal in entry field
-  const normalizedEntry = (m.entry as string).replace(/\\/g, '/');
-  if (normalizedEntry.startsWith('..') || normalizedEntry.includes('/../') || normalizedEntry.startsWith('/')) {
-    throw new Error(`Invalid "entry" in ${dir}: path traversal or absolute path not allowed`);
-  }
-  // Same check for frontend field if present
-  if (typeof m.frontend === 'string') {
-    const normalizedFrontend = m.frontend.replace(/\\/g, '/');
-    if (normalizedFrontend.startsWith('..') || normalizedFrontend.includes('/../') || normalizedFrontend.startsWith('/')) {
-      throw new Error(`Invalid "frontend" in ${dir}: path traversal or absolute path not allowed`);
-    }
-  }
-
-  // Validate hooks shape if present
-  if (m.hooks !== undefined && (typeof m.hooks !== 'object' || m.hooks === null)) {
-    throw new Error(`Invalid "hooks" in ${dir}: must be an object`);
-  }
-  const hooks = m.hooks as Record<string, unknown> | undefined;
-  if (hooks?.routes !== undefined) {
-    if (typeof hooks.routes !== 'object' || hooks.routes === null || typeof (hooks.routes as any).prefix !== 'string') {
-      throw new Error(`Invalid "hooks.routes" in ${dir}: must be { prefix: string }`);
-    }
-  }
-  if (hooks?.jobs !== undefined && !Array.isArray(hooks.jobs)) {
-    throw new Error(`Invalid "hooks.jobs" in ${dir}: must be an array`);
-  }
-  if (hooks?.ui !== undefined && !Array.isArray(hooks.ui)) {
-    throw new Error(`Invalid "hooks.ui" in ${dir}: must be an array`);
-  }
-  if (hooks?.features !== undefined && (typeof hooks.features !== 'object' || hooks.features === null)) {
-    throw new Error(`Invalid "hooks.features" in ${dir}: must be an object`);
-  }
-
-  // Validate settings shape if present
-  if (m.settings !== undefined && !Array.isArray(m.settings)) {
-    throw new Error(`Invalid "settings" in ${dir}: must be an array`);
-  }
-
-  return data as PluginManifest;
 }
 
 export async function discoverPlugins(): Promise<DiscoveredPlugin[]> {
@@ -96,7 +43,7 @@ export async function discoverPlugins(): Promise<DiscoveredPlugin[]> {
       // Read directly — if the file doesn't exist, readFile throws and we skip
       const raw = await readFile(manifestPath, 'utf-8');
       const data = JSON.parse(raw);
-      const manifest = validateManifest(data, entryPath);
+      const manifest = parseManifest(data, entryPath) as PluginManifest;
       plugins.push({ dir: entryPath, manifest });
     } catch (err) {
       console.error(`[PluginLoader] Failed to load manifest from ${entryPath}:`, err);

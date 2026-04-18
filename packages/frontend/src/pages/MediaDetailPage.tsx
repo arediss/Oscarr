@@ -118,7 +118,7 @@ export default function MediaDetailPage({ type }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-dvh flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-ndp-accent animate-spin" />
       </div>
     );
@@ -126,7 +126,7 @@ export default function MediaDetailPage({ type }: Props) {
 
   if (!media) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-dvh flex items-center justify-center">
         <p className="text-ndp-text-muted">{t('media.not_found')}</p>
       </div>
     );
@@ -142,9 +142,9 @@ export default function MediaDetailPage({ type }: Props) {
   const director = media.credits?.crew?.find((c) => c.job === 'Director');
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-dvh">
       {/* Fixed backdrop */}
-      <div className="fixed inset-0 h-screen z-0">
+      <div className="fixed inset-0 h-dvh z-0">
         {media.backdrop_path ? (
           <img src={backdropUrl(media.backdrop_path)} alt="" className={clsx('w-full h-full object-cover', nsfw && 'blur-3xl scale-110')} />
         ) : (
@@ -166,7 +166,7 @@ export default function MediaDetailPage({ type }: Props) {
       </button>
 
       {/* Scrollable content */}
-      <div className="relative z-10 pt-[35vh] min-h-screen">
+      <div className="relative z-10 pt-[35vh] min-h-dvh">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-8">
         <div className="flex flex-col md:flex-row gap-8">
           {/* Poster */}

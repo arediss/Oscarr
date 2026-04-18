@@ -1,10 +1,15 @@
 import { join } from 'path';
+import { readFile, rm } from 'fs/promises';
 import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { notificationRegistry } from '../notifications/index.js';
 import { discoverPlugins } from './loader.js';
+import { parseManifest } from './manifestSchema.js';
+import { checkCompat, type CompatResult } from './compat.js';
 import { updateJobSchedule } from '../services/scheduler.js';
 import { createContext, type ContextFactoryDeps } from './context/index.js';
+import { PluginRouter } from './router.js';
+import { enforcePluginRoutePermission, unregisterPluginRbac } from '../middleware/rbac.js';
 import type {
   LoadedPlugin,
   LoadedUIContribution,
@@ -17,6 +22,11 @@ import type {
 export class PluginEngine {
   private plugins = new Map<string, LoadedPlugin>();
   private settingsCache = new Map<string, Record<string, unknown>>();
+  private compatCache = new Map<string, CompatResult>();
+  /** Per-plugin dispatch router. Key = pluginId. Presence = "this plugin's routes are live".
+   *  Toggle off, uninstall, and hot-update just mutate this map — no Fastify restart needed. */
+  private routers = new Map<string, PluginRouter>();
+  private dispatcherMounted = false;
   private logger: FastifyBaseLogger | null = null;
   private app: FastifyInstance | null = null;
 
@@ -34,45 +44,150 @@ export class PluginEngine {
     }
   }
 
+  /**
+   * Shared "load one plugin from disk" pipeline used by both loadAll (boot) and loadSingle (runtime install).
+   * Runs the compat check, upserts PluginState, dynamic-imports the entry, calls register(), runs onInstall
+   * if first-time, registers notification providers, and stores the LoadedPlugin in the map. Does NOT
+   * mount the plugin's router on the dispatcher — callers do that via _registerRoutes when appropriate.
+   */
+  private async _loadFromDisk(
+    dir: string,
+    manifest: PluginManifest,
+    opts: { defaultEnabled: boolean }
+  ): Promise<LoadedPlugin> {
+    const compat = checkCompat(manifest);
+    this.compatCache.set(manifest.id, compat);
+    if (compat.status === 'incompatible') {
+      throw new Error(`Plugin "${manifest.id}" is incompatible: ${compat.reason}`);
+    }
+
+    const state = await prisma.pluginState.upsert({
+      where: { pluginId: manifest.id },
+      update: {},
+      create: { pluginId: manifest.id, enabled: opts.defaultEnabled, settings: '{}' },
+    });
+
+    const entryPath = join(dir, manifest.entry);
+    const mod = await import(entryPath);
+    if (typeof mod.register !== 'function') {
+      throw new Error(`Plugin "${manifest.id}" does not export a register() function`);
+    }
+
+    const ctx = createContext(manifest, this.getContextDeps());
+    const registration: PluginRegistration = await mod.register(ctx);
+
+    if (!state.onInstallRan && registration.onInstall) {
+      await registration.onInstall(ctx);
+      await prisma.pluginState.update({
+        where: { pluginId: manifest.id },
+        data: { onInstallRan: true },
+      });
+      this.log('info', `Ran onInstall for "${manifest.id}"`);
+    }
+
+    if (registration.registerNotificationProviders) {
+      registration.registerNotificationProviders(notificationRegistry);
+    }
+
+    const loaded: LoadedPlugin = { manifest, registration, dir, enabled: state.enabled };
+    this.plugins.set(manifest.id, loaded);
+    return loaded;
+  }
+
+  /** Build a PluginRouter for a plugin and store it in the dispatcher map. Idempotent — a second
+   *  call for the same plugin replaces the previous router (used for hot-update down the line). */
+  private async _registerRoutes(plugin: LoadedPlugin): Promise<void> {
+    const registerRoutes = plugin.registration.registerRoutes;
+    if (!registerRoutes) return;
+    const { manifest } = plugin;
+    try {
+      const router = new PluginRouter();
+      const ctx = createContext(manifest, this.getContextDeps());
+      await registerRoutes(router, ctx);
+      this.routers.set(manifest.id, router);
+      this.log('info', `Mounted ${router.listRoutes().length} route(s) for "${manifest.id}"`);
+    } catch (err) {
+      this.log('error', `Route registration failed for "${manifest.id}": ${err}`);
+      plugin.error = `Route registration failed: ${err}`;
+      plugin.enabled = false;
+      this.routers.delete(manifest.id);
+      await prisma.pluginState.update({
+        where: { pluginId: manifest.id },
+        data: { enabled: false },
+      }).catch(() => {});
+    }
+  }
+
+  /** Mount the single dispatcher catch-all on the live Fastify app. Called once from
+   *  registerWithFastify — every plugin goes through it. */
+  private mountDispatcher(app: FastifyInstance): void {
+    if (this.dispatcherMounted) return;
+    this.dispatcherMounted = true;
+
+    const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const;
+    for (const method of methods) {
+      app.route({
+        method,
+        // '*' is Fastify's wildcard that exposes the unmatched remainder as request.params['*'].
+        url: '/api/plugins/:pluginId/*',
+        handler: async (request, reply) => {
+          const { pluginId } = request.params as { pluginId: string };
+          const rest = (request.params as Record<string, string>)['*'] ?? '';
+          const subUrl = `/${rest}`;
+
+          const router = this.routers.get(pluginId);
+          if (!router) {
+            return reply.status(404).send({ error: 'Plugin not found or disabled' });
+          }
+
+          const match = router.match(method, subUrl);
+          if (!match) {
+            return reply.status(404).send({ error: 'Route not found' });
+          }
+
+          // Plugin-registered permission overrides (ctx.registerRoutePermission) are keyed by the
+          // real URL the plugin declared — reconstruct it here so RBAC can find the rule.
+          const fullUrl = `/api/plugins/${pluginId}${match.entry.pattern}`;
+          if (!enforcePluginRoutePermission(request, reply, method, fullUrl)) return;
+
+          // Swap the catch-all's params for the sub-route's params before calling the handler.
+          (request as { params: Record<string, string> }).params = match.params;
+          return router.runHandler(match, request, reply);
+        },
+      });
+    }
+    this.log('info', 'Plugin dispatcher mounted at /api/plugins/:pluginId/*');
+  }
+
+  /**
+   * Load a single plugin from its directory at runtime. Used by the install flow to avoid a full restart.
+   *
+   * `defaultEnabled` controls the state when the plugin has never been seen before:
+   *  - `true` (boot-time discovery) — preserves the current UX where filesystem-present plugins load enabled
+   *  - `false` (runtime install) — gives the admin a chance to review capabilities before enabling
+   */
+  async loadSingle(dir: string, opts: { defaultEnabled?: boolean } = {}): Promise<LoadedPlugin> {
+    const raw = await readFile(join(dir, 'manifest.json'), 'utf-8');
+    const manifest = parseManifest(JSON.parse(raw), dir) as PluginManifest;
+
+    if (this.plugins.has(manifest.id)) {
+      throw new Error(`Plugin "${manifest.id}" is already loaded`);
+    }
+
+    const loaded = await this._loadFromDisk(dir, manifest, { defaultEnabled: opts.defaultEnabled ?? true });
+    if (loaded.enabled) await this._registerRoutes(loaded);
+    this.log('info', `Loaded "${manifest.id}" v${manifest.version} via loadSingle`);
+    return loaded;
+  }
+
   async loadAll(): Promise<void> {
     const discovered = await discoverPlugins();
     this.log('info', `Discovered ${discovered.length} plugin(s)`);
 
     for (const { dir, manifest } of discovered) {
       try {
-        const state = await prisma.pluginState.upsert({
-          where: { pluginId: manifest.id },
-          update: {},
-          create: { pluginId: manifest.id, enabled: true, settings: '{}' },
-        });
-
-        const entryPath = join(dir, manifest.entry);
-        const mod = await import(entryPath);
-
-        if (typeof mod.register !== 'function') {
-          throw new Error(`Plugin "${manifest.id}" does not export a register() function`);
-        }
-
-        const ctx = createContext(manifest, this.getContextDeps());
-        const registration: PluginRegistration = await mod.register(ctx);
-
-        // Run onInstall ONLY on first load (tracked by DB flag)
-        if (!state.onInstallRan && registration.onInstall) {
-          await registration.onInstall(ctx);
-          await prisma.pluginState.update({
-            where: { pluginId: manifest.id },
-            data: { onInstallRan: true },
-          });
-          this.log('info', `Ran onInstall for "${manifest.id}"`);
-        }
-
-        if (registration.registerNotificationProviders) {
-          registration.registerNotificationProviders(notificationRegistry);
-          this.log('info', `Registered notification providers for "${manifest.id}"`);
-        }
-
-        this.plugins.set(manifest.id, { manifest, registration, dir, enabled: state.enabled });
-        this.log('info', `Loaded "${manifest.id}" v${manifest.version} (${state.enabled ? 'enabled' : 'disabled'})`);
+        await this._loadFromDisk(dir, manifest, { defaultEnabled: true });
+        this.log('info', `Loaded "${manifest.id}" v${manifest.version}`);
       } catch (err) {
         this.log('error', `Failed to load plugin "${manifest.id}": ${err}`);
         this.plugins.set(manifest.id, {
@@ -89,31 +204,12 @@ export class PluginEngine {
   async registerWithFastify(app: FastifyInstance): Promise<void> {
     this.setLogger(app.log);
     this.app = app;
+    this.mountDispatcher(app);
 
-    for (const [id, plugin] of this.plugins) {
+    for (const plugin of this.plugins.values()) {
       if (!plugin.enabled || plugin.error) continue;
       if (!plugin.registration.registerRoutes) continue;
-
-      const prefix = plugin.manifest.hooks?.routes?.prefix || `/api/plugins/${id}`;
-      try {
-        const ctx = createContext(plugin.manifest, this.getContextDeps());
-        await app.register(
-          async (instance) => {
-            await plugin.registration.registerRoutes!(instance, ctx);
-          },
-          { prefix }
-        );
-        this.log('info', `Registered routes for "${id}" at ${prefix}`);
-      } catch (err) {
-        this.log('error', `Failed to register routes for "${id}": ${err}`);
-        plugin.error = `Route registration failed: ${err}`;
-        plugin.enabled = false;
-        // Persist disabled state so the UI reflects the failure
-        await prisma.pluginState.update({
-          where: { pluginId: id },
-          data: { enabled: false },
-        }).catch(() => {}); // best-effort
-      }
+      await this._registerRoutes(plugin);
     }
   }
 
@@ -178,11 +274,53 @@ export class PluginEngine {
       hasSettings: (p.manifest.settings?.length ?? 0) > 0,
       hasFrontend: !!p.manifest.frontend,
       error: p.error,
+      compat: this.compatCache.get(p.manifest.id),
+      services: p.manifest.services,
+      capabilities: p.manifest.capabilities,
+      capabilityReasons: p.manifest.capabilityReasons,
     }));
   }
 
   getPlugin(id: string): LoadedPlugin | undefined {
     return this.plugins.get(id);
+  }
+
+  /**
+   * Uninstall a plugin at runtime: drop its dispatcher entry, pause its jobs, remove its dir.
+   * Subsequent requests to /api/plugins/<id>/* hit the dispatcher's "not found" branch. No
+   * Oscarr restart needed — the LoadedPlugin is also evicted so getPluginList stops listing it.
+   */
+  async uninstall(id: string): Promise<boolean> {
+    const plugin = this.plugins.get(id);
+    if (!plugin) return false;
+
+    // Pause jobs before the dir disappears so a cron tick doesn't try to import a removed file.
+    for (const job of plugin.manifest.hooks?.jobs ?? []) {
+      try {
+        const dbJob = await prisma.cronJob.findUnique({ where: { key: job.key } });
+        if (dbJob) await updateJobSchedule(job.key, dbJob.cronExpression, false);
+      } catch (err) {
+        this.log('warn', `Failed to pause job "${job.key}" during uninstall of "${id}": ${err}`);
+      }
+    }
+
+    // Drop routes first so no in-flight request can still hit a handler whose module is about to die.
+    this.routers.delete(id);
+    // RBAC overrides + declared permissions are module-scoped; without this they'd outlive the
+    // plugin and keep affecting routing until process restart.
+    unregisterPluginRbac(id);
+
+    await prisma.pluginState.update({ where: { pluginId: id }, data: { enabled: false } }).catch(() => {});
+
+    await rm(plugin.dir, { recursive: true, force: true }).catch((err) => {
+      this.log('error', `Failed to delete plugin dir "${plugin.dir}": ${err}`);
+    });
+
+    this.plugins.delete(id);
+    this.settingsCache.delete(id);
+    this.compatCache.delete(id);
+    this.log('info', `Uninstalled "${id}"`);
+    return true;
   }
 
   async togglePlugin(id: string, enabled: boolean): Promise<void> {
@@ -208,6 +346,19 @@ export class PluginEngine {
     });
     plugin.enabled = enabled;
     this.settingsCache.delete(id);
+
+    // Enable → mount (or re-mount) the plugin router; disable → drop it so requests 404.
+    if (plugin.registration.registerRoutes) {
+      if (enabled) {
+        // Re-register from scratch. _registerRoutes rebuilds the ctx which re-runs
+        // registerRoutePermission / registerPluginPermission calls, so the RBAC clear on
+        // disable is rebuilt on enable without losing anything.
+        await this._registerRoutes(plugin);
+      } else {
+        this.routers.delete(id);
+        unregisterPluginRbac(id);
+      }
+    }
 
     // Stop or restart plugin cron jobs
     const jobDefs = plugin.manifest.hooks?.jobs || [];

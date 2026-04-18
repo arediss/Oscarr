@@ -19,6 +19,7 @@ import { clsx } from 'clsx';
 import NotificationBell from '@/components/NotificationBell';
 import ChangelogModal from '@/components/ChangelogModal';
 import { useChangelogNotification } from '@/hooks/useChangelogNotification';
+import { useNotifications } from '@/hooks/useNotifications';
 import { PluginSlot } from '@/plugins/PluginSlot';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
 import { useFeatures } from '@/context/FeaturesContext';
@@ -46,6 +47,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [viewAsRole, setViewAsRoleState] = useState<string | null>(sessionStorage.getItem('view-as-role'));
   const { features } = useFeatures();
   const [scrolled, setScrolled] = useState(false);
+  const { unreadCount } = useNotifications();
+  const hasMenuBadge = unreadCount > 0 || (hasPermission('admin.*') && changelog.hasNew);
 
   const setViewAsRole = (role: string | null) => {
     if (role) sessionStorage.setItem('view-as-role', role);
@@ -92,7 +95,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const topOffset = (hasBanner ? 10 : 0) + (hasViewAsBanner ? 10 : 0);
 
   return (
-    <div className="min-h-screen bg-ndp-bg">
+    <div className="min-h-dvh bg-ndp-bg">
       {hasBanner && (
         <div className="fixed top-0 left-0 right-0 z-[60] bg-ndp-warning/90 backdrop-blur-sm text-black px-4 py-2 flex items-center justify-center gap-3">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
@@ -122,21 +125,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Mobile header */}
+      {/* Mobile bottom nav — thumb-zone friendly. Stays solid (not transparent on scroll)
+          since content scrolls behind it and a transparent bar would be unreadable. */}
       <nav
-        className={clsx(
-          'md:hidden fixed left-0 right-0 z-50 transition-[background-color,backdrop-filter] duration-300',
-          scrolled ? 'bg-ndp-surface/80 backdrop-blur-xl' : 'bg-transparent'
-        )}
-        style={{ top: `${topOffset * 4}px` }}
+        className="md:hidden fixed left-0 right-0 bottom-0 z-50 bg-ndp-surface/95 backdrop-blur-xl border-t border-white/5"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <div className="px-4 h-16 flex items-center gap-3">
           <button
             onClick={() => setDrawerOpen(true)}
-            className="p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg hover:bg-white/5 transition-colors flex-shrink-0"
+            className="relative p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg hover:bg-white/5 transition-colors flex-shrink-0"
             aria-label={t('nav.open_menu', 'Open menu')}
           >
             <Menu className="w-5 h-5" />
+            {hasMenuBadge && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-ndp-accent rounded-full animate-pulse" />
+            )}
           </button>
           <form onSubmit={handleSearch} className="flex-1 min-w-0">
             <div className="relative">
@@ -244,11 +248,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         onClick={() => setDrawerOpen(false)}
         aria-hidden={!drawerOpen}
       />
+      {/* Bottom-up sheet drawer — slides up from the mobile nav. Header at top of the sheet
+          (since the trigger is at the bottom of the screen, the close affordance reads naturally
+          near where the user's thumb already is on the bottom bar). */}
       <aside
         className={clsx(
-          'md:hidden fixed left-0 top-0 bottom-0 z-[56] w-72 bg-ndp-surface border-r border-white/5 transform transition-transform duration-300 flex flex-col',
-          drawerOpen ? 'translate-x-0' : '-translate-x-full'
+          'md:hidden fixed inset-x-0 bottom-0 top-0 z-[56] bg-ndp-surface border-t border-white/5 transform transition-transform duration-300 flex flex-col',
+          drawerOpen ? 'translate-y-0' : 'translate-y-full'
         )}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         aria-hidden={!drawerOpen}
       >
         <div className="flex items-center justify-between px-4 h-14 border-b border-white/5 flex-shrink-0">
@@ -260,6 +268,28 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           >
             <X className="w-4 h-4 text-ndp-text-muted" />
           </button>
+        </div>
+
+        <div className="border-b border-white/5 px-3 py-3 flex items-center gap-2 flex-shrink-0">
+          <div className="flex-1 min-w-0">
+            <UserCluster
+              viewAsRole={viewAsRole}
+              onViewAsRoleChange={setViewAsRole}
+              variant="expanded"
+            />
+          </div>
+          <NotificationBell />
+          <PluginSlot hookPoint="header.actions" context={{ user, isAdmin: hasPermission('admin.*'), hasPermission }} />
+          {hasPermission('admin.*') && changelog.hasNew && (
+            <button
+              onClick={() => { setChangelogOpen(true); changelog.dismiss(); setDrawerOpen(false); }}
+              className="relative p-2 rounded-xl hover:bg-white/5 transition-colors flex-shrink-0"
+              title={t('changelog.new_version')}
+            >
+              <Sparkles className="w-5 h-5 text-ndp-accent" />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-ndp-accent rounded-full animate-pulse" />
+            </button>
+          )}
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
@@ -313,23 +343,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </>
           )}
         </nav>
-
-        <div className="border-t border-white/5 p-2 flex items-center gap-2 flex-shrink-0">
-          <div className="flex-1 min-w-0">
-            <UserCluster
-              viewAsRole={viewAsRole}
-              onViewAsRoleChange={setViewAsRole}
-              variant="expanded"
-              dropdownDirection="above"
-            />
-          </div>
-          <NotificationBell dropdownDirection="above" />
-        </div>
       </aside>
 
       <main
-        className="min-h-screen"
-        style={location.pathname === '/' ? undefined : { paddingTop: `${64 + topOffset * 4}px` }}
+        className={clsx(
+          'min-h-dvh',
+          'pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0',
+          location.pathname !== '/' &&
+            'pt-[var(--banner-offset,0px)] md:pt-[calc(4rem+var(--banner-offset,0px))]'
+        )}
+        style={{ ['--banner-offset' as string]: `${topOffset * 4}px` }}
       >
         {children}
       </main>
