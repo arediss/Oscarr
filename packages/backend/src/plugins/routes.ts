@@ -114,7 +114,8 @@ export async function pluginRoutes(app: FastifyInstance) {
       try {
         const installed = await installPluginFromUrl(url);
         installedDir = installed.dir;
-        const loaded = await pluginEngine.loadSingle(installed.dir);
+        // Freshly installed plugins default to disabled — admin reviews capabilities + toggles on.
+        const loaded = await pluginEngine.loadSingle(installed.dir, { defaultEnabled: false });
         return {
           ok: true,
           plugin: {

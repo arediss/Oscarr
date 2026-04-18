@@ -45,8 +45,13 @@ export class PluginEngine {
    * Load a single plugin from its directory at runtime. Used by the install flow to avoid a full restart.
    * If the app is already serving requests, the plugin's routes are registered on the fly via Fastify's
    * post-boot `register()` (works because we encapsulate each plugin in its own sub-context).
+   *
+   * `defaultEnabled` controls the state when the plugin has never been seen before:
+   *  - `true` (boot-time discovery) — preserves the current UX where filesystem-present plugins load enabled
+   *  - `false` (runtime install) — gives the admin a chance to review capabilities before enabling
    */
-  async loadSingle(dir: string): Promise<LoadedPlugin> {
+  async loadSingle(dir: string, opts: { defaultEnabled?: boolean } = {}): Promise<LoadedPlugin> {
+    const defaultEnabled = opts.defaultEnabled ?? true;
     const raw = await readFile(join(dir, 'manifest.json'), 'utf-8');
     const manifest = parseManifest(JSON.parse(raw), dir) as PluginManifest;
 
@@ -63,7 +68,7 @@ export class PluginEngine {
     const state = await prisma.pluginState.upsert({
       where: { pluginId: manifest.id },
       update: {},
-      create: { pluginId: manifest.id, enabled: true, settings: '{}' },
+      create: { pluginId: manifest.id, enabled: defaultEnabled, settings: '{}' },
     });
 
     const entryPath = join(dir, manifest.entry);
