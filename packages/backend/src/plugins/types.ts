@@ -14,6 +14,9 @@ export interface PluginManifest {
   author?: string;
   entry: string;
   frontend?: string;
+  /** Services whose config the plugin is allowed to read via getServiceConfig / getServiceConfigRaw.
+   *  Any service not listed here returns null and is logged. Empty / missing = no service access. */
+  services?: string[];
   settings?: PluginSettingDef[];
   hooks?: {
     routes?: { prefix: string };

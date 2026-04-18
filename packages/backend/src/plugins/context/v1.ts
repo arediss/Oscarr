@@ -67,11 +67,36 @@ function createCapturingLogger(
  * This is a faithful extraction of the former `PluginEngine.createContext`
  * private method -- no behaviour changes.
  */
+/**
+ * Service config access-control — a plugin can only read the config of services it declared in
+ * its manifest's `services` array. Missing / empty = no access. Denied requests return null and
+ * log a warning so a misconfigured plugin is easy to diagnose.
+ */
+function checkServiceAccess(pluginId: string, allowedServices: string[] | undefined, serviceType: string, logger: FastifyBaseLogger): boolean {
+  if (!allowedServices || allowedServices.length === 0) {
+    logger.warn(
+      { plugin: pluginId, attemptedService: serviceType },
+      `[plugins] Plugin "${pluginId}" requested service "${serviceType}" but declares no services in its manifest — access denied`
+    );
+    return false;
+  }
+  if (!allowedServices.includes(serviceType)) {
+    logger.warn(
+      { plugin: pluginId, attemptedService: serviceType, allowed: allowedServices },
+      `[plugins] Plugin "${pluginId}" requested service "${serviceType}" which is not in its manifest services list — access denied`
+    );
+    return false;
+  }
+  return true;
+}
+
 export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): PluginContext {
   const pluginId = manifest.id;
   const log = deps.logger
     ? createCapturingLogger(deps.logger, pluginId)
     : deps.makeFallbackLogger(pluginId);
+  const allowedServices = manifest.services;
+  const aclLogger = deps.logger ?? log;
 
   return {
     log,
@@ -130,8 +155,14 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       await sendUserNotification(userId, payload);
     },
     notificationRegistry,
-    getArrClient: (serviceType: string) => getArrClient(serviceType),
+    getArrClient: (serviceType: string) => {
+      if (!checkServiceAccess(pluginId, allowedServices, serviceType, aclLogger)) {
+        throw new Error(`Plugin "${pluginId}" is not allowed to access service "${serviceType}" — declare it in manifest.services`);
+      }
+      return getArrClient(serviceType);
+    },
     async getServiceConfig(serviceType: string) {
+      if (!checkServiceAccess(pluginId, allowedServices, serviceType, aclLogger)) return null;
       const svc = await prisma.service.findFirst({ where: { type: serviceType } });
       if (!svc) return null;
       try {
@@ -142,6 +173,7 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       }
     },
     async getServiceConfigRaw(serviceType: string) {
+      if (!checkServiceAccess(pluginId, allowedServices, serviceType, aclLogger)) return null;
       const svc = await prisma.service.findFirst({ where: { type: serviceType } });
       if (!svc) return null;
       try {

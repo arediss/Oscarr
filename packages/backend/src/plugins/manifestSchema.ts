@@ -56,6 +56,7 @@ export const pluginManifestSchema = z.object({
   author: z.string().optional(),
   entry: relativePath,
   frontend: relativePath.optional(),
+  services: z.array(z.string().min(1)).optional(),
   settings: z.array(settingDef).optional(),
   hooks: hooks.optional(),
 }).strict();
