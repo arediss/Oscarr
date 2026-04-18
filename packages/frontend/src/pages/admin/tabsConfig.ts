@@ -9,6 +9,7 @@ import {
   ScrollText,
   Plug,
   LayoutDashboard,
+  KeyRound,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -17,6 +18,7 @@ export type AdminTabId =
   | 'homepage'
   | 'users'
   | 'roles'
+  | 'auth'
   | 'services'
   | 'media'
   | 'notifications'
@@ -36,6 +38,7 @@ export const ADMIN_TABS: AdminTabDef[] = [
   { id: 'homepage', label: 'admin.tab.homepage', icon: LayoutDashboard },
   { id: 'users', label: 'admin.tab.users', icon: Users },
   { id: 'roles', label: 'admin.tab.roles', icon: Shield },
+  { id: 'auth', label: 'admin.tab.auth', icon: KeyRound },
   { id: 'services', label: 'admin.tab.services', icon: Server },
   { id: 'media', label: 'admin.tab.media', icon: Film },
   { id: 'notifications', label: 'admin.tab.notifications', icon: Bell },

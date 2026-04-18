@@ -95,6 +95,13 @@ export default function LoginPage() {
   };
 
   const handleOAuthLogin = async (providerId: string) => {
+    // Discord uses a full-page OAuth redirect (no popup + polling): the authorize endpoint
+    // sends the browser to discord.com, which redirects back to /api/auth/discord/callback
+    // where the backend sets the cookie and redirects home.
+    if (providerId === 'discord') {
+      window.location.href = '/api/auth/discord/authorize';
+      return;
+    }
     if (providerId === 'plex') {
       setLoading(true);
       setError('');

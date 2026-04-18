@@ -15,6 +15,7 @@ import { LogsTab } from './admin/LogsTab';
 import { PluginsTab } from './admin/PluginsTab';
 import { RolesTab } from './admin/RolesTab';
 import { HomepageTab } from './admin/HomepageTab';
+import { AuthProvidersTab } from './admin/AuthProvidersTab';
 
 export default function AdminPage() {
   const { user, hasPermission } = useAuth();
@@ -45,6 +46,7 @@ export default function AdminPage() {
       {activeTab === 'homepage' && <HomepageTab />}
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'roles' && <RolesTab />}
+      {activeTab === 'auth' && <AuthProvidersTab />}
       {activeTab === 'services' && <ServicesTab />}
       {activeTab === 'media' && <MediaConfigTab />}
       {activeTab === 'notifications' && <NotificationsTab />}
