@@ -43,6 +43,15 @@ export default function LoginPage() {
   const [credUsername, setCredUsername] = useState('');
   const [credPassword, setCredPassword] = useState('');
 
+  // The backend returns specific tokens (INVALID_CREDENTIALS, EXTERNAL_ACCOUNT, …) that need
+  // to be translated before display. Plain English strings from other errors pass through.
+  const translateAuthError = (rawError: string | undefined): string => {
+    if (!rawError) return t('login.error');
+    const key = `login.errors.${rawError}`;
+    const translated = t(key);
+    return translated === key ? rawError : translated;
+  };
+
   const handleCredentialLogin = async (providerId: string) => {
     setLoading(true);
     setError('');
@@ -52,7 +61,7 @@ export default function LoginPage() {
       navigate('/', { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg || t('login.error'));
+      setError(translateAuthError(msg));
     } finally {
       setLoading(false);
     }
@@ -68,7 +77,7 @@ export default function LoginPage() {
       navigate('/', { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg || t('login.error'));
+      setError(translateAuthError(msg));
     } finally {
       setLoading(false);
     }
@@ -88,7 +97,7 @@ export default function LoginPage() {
       navigate('/', { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg || t('login.error'));
+      setError(translateAuthError(msg));
     } finally {
       setLoading(false);
     }
