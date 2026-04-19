@@ -6,36 +6,23 @@ import { safeNotify, invalidateSiteUrl } from '../../utils/safeNotify.js';
 import { invalidateLanguageCache } from '../../services/tmdb.js';
 
 export async function settingsRoutes(app: FastifyInstance) {
-  // === SETUP STATUS (checklist) ===
-
-  app.get('/setup-status', async (request, reply) => {
-
-    const [radarr, sonarr, plex, settings, qualityMappings, folderRules, userCount, requestSyncJob] = await Promise.all([
-      prisma.service.findFirst({ where: { type: 'radarr', enabled: true } }),
-      prisma.service.findFirst({ where: { type: 'sonarr', enabled: true } }),
-      prisma.service.findFirst({ where: { type: 'plex', enabled: true } }),
-      prisma.appSettings.findUnique({ where: { id: 1 } }),
+  // === SETUP STATUS ===
+  // Returns warnings keyed by admin tab id, true when that tab needs the admin's attention
+  // (missing required config). Rendered as red dots in the sidebar on the owning group + tab.
+  app.get('/setup-status', async () => {
+    const [arrService, qualityMappings, settings] = await Promise.all([
+      prisma.service.findFirst({ where: { type: { in: ['radarr', 'sonarr'] }, enabled: true } }),
       prisma.qualityMapping.count(),
-      prisma.folderRule.count(),
-      prisma.user.count(),
-      prisma.cronJob.findUnique({ where: { key: 'request_sync' } }),
+      prisma.appSettings.findUnique({ where: { id: 1 } }),
     ]);
 
-    const hasDefaultMovieFolder = !!settings?.defaultMovieFolder;
-    const hasDefaultTvFolder = !!settings?.defaultTvFolder;
-    const hasSynced = !!(settings?.lastRadarrSync || settings?.lastSonarrSync);
-
-    return {
-      plex: !!plex,
-      radarr: !!radarr,
-      sonarr: !!sonarr,
-      usersImported: userCount > 1, // more than just the admin
-      synced: hasSynced,
-      requestsSynced: !!(requestSyncJob?.lastRunAt && requestSyncJob.lastStatus === 'success'),
-      qualityMappings: qualityMappings > 0,
-      defaultFolders: hasDefaultMovieFolder && hasDefaultTvFolder,
-      folderRules: folderRules > 0,
+    const warnings: Record<string, boolean> = {
+      services: !arrService,
+      quality: qualityMappings === 0,
+      paths: !settings?.defaultMovieFolder || !settings?.defaultTvFolder,
     };
+
+    return { warnings };
   });
 
   // === SETTINGS ===
@@ -184,6 +171,16 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (!settings?.apiKey) return { hasKey: false, maskedKey: null };
     const key = settings.apiKey;
     return { hasKey: true, maskedKey: `${key.slice(0, 8)}${'•'.repeat(24)}${key.slice(-8)}` };
+  });
+
+  // Separate endpoint so the plaintext key only travels the wire when the admin explicitly
+  // asks for it (Show / Copy), not on every page load. Matches the *arr UX where the key stays
+  // retrievable — avoids having to regenerate and re-paste it into every downstream service.
+  app.get('/api-key/reveal', async (_request, reply) => {
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    if (!settings?.apiKey) return reply.code(404).send({ error: 'NO_API_KEY' });
+    logEvent('info', 'Settings', 'API key revealed');
+    return { apiKey: settings.apiKey };
   });
 
   app.post('/api-key/generate', async () => {

@@ -1,11 +1,17 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { ArrowLeft, Menu, X } from 'lucide-react';
+import { Menu, X, Search } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
+// Diacritic-insensitive lowercase so "systeme" matches "Système" and "acces" matches "Accès".
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { ADMIN_TABS } from '@/pages/admin/tabsConfig';
+import { useFeatures } from '@/context/FeaturesContext';
+import { ADMIN_GROUPS, ADMIN_TABS, findGroupForTab } from '@/pages/admin/tabsConfig';
 import { usePluginUI } from '@/plugins/usePlugins';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
 import { UserCluster } from '@/components/nav/UserCluster';
@@ -14,11 +20,14 @@ import NotificationBell from '@/components/NotificationBell';
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const { hasPermission } = useAuth();
+  const { features } = useFeatures();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { contributions: pluginTabs } = usePluginUI('admin.tabs');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [warnings, setWarnings] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [viewAsRole, setViewAsRoleState] = useState<string | null>(sessionStorage.getItem('view-as-role'));
 
   const setViewAsRole = (role: string | null) => {
@@ -31,7 +40,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     try {
       const { data } = await api.get('/admin/setup-status');
       setWarnings(data.warnings || {});
-    } catch { /* ignore */ }
+    } catch (err) {
+      // Non-blocking: if setup-status is down, warnings just don't refresh. Keep the last known
+      // warnings rather than clearing them so a transient 500 doesn't make the dots vanish.
+      console.error('AdminLayout refreshWarnings failed', err);
+    }
   }, []);
 
   const currentTab = searchParams.get('tab');
@@ -49,7 +62,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   );
 
   const allTabIds = [...ADMIN_TABS.map((tb) => tb.id), ...pluginTabItems.map((tb) => tb.id)];
-  const activeTab = currentTab && allTabIds.includes(currentTab) ? currentTab : 'general';
+  const defaultTab = ADMIN_TABS[0]?.id ?? 'dashboard';
+  const activeTab = currentTab && allTabIds.includes(currentTab) ? currentTab : defaultTab;
+  const activeGroup = findGroupForTab(activeTab);
   const activeTabLabel =
     ADMIN_TABS.find((tb) => tb.id === activeTab)?.label ??
     pluginTabItems.find((tb) => tb.id === activeTab)?.label ??
@@ -59,12 +74,139 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setSearchParams({ tab }, { replace: true });
   };
 
-  if (!hasPermission('admin.*')) {
-    navigate('/');
-    return null;
-  }
+  /** Flat list of searchable entries — native admin tabs + plugin-contributed tabs.
+   *  Each entry carries its parent group label so we can both match against it (typing
+   *  a group name surfaces all its tabs) and display it under the tab name in results. */
+  type SearchEntry = {
+    id: string;
+    label: string;
+    groupLabel: string;
+    icon: LucideIcon | null;
+    pluginIcon?: string;
+    hasWarning: boolean;
+  };
 
-  const renderTabButton = (id: string, label: string, iconEl: React.ReactNode) => (
+  const pluginGroupLabel = t('admin.sidebar.plugin_pages', 'Pages de plugins');
+  const searchableTabs: SearchEntry[] = useMemo(() => {
+    const nativeEntries: SearchEntry[] = ADMIN_GROUPS.flatMap((group) => {
+      const groupLabel = t(group.label);
+      return group.tabs.map((tab) => ({
+        id: tab.id,
+        label: t(tab.label),
+        groupLabel,
+        icon: tab.icon,
+        hasWarning: !!warnings[tab.id],
+      }));
+    });
+    const pluginEntries: SearchEntry[] = pluginTabItems.map((tb) => ({
+      id: tb.id,
+      label: tb.label,
+      groupLabel: pluginGroupLabel,
+      icon: null,
+      pluginIcon: tb.pluginIcon,
+      hasWarning: !!warnings[tb.id],
+    }));
+    return [...nativeEntries, ...pluginEntries];
+  }, [t, warnings, pluginTabItems, pluginGroupLabel]);
+
+  const trimmedQuery = searchQuery.trim();
+  const searchResults = useMemo(() => {
+    if (!trimmedQuery) return null;
+    const needle = normalize(trimmedQuery);
+    return searchableTabs.filter(
+      (e) => normalize(e.label).includes(needle) || normalize(e.groupLabel).includes(needle)
+    );
+  }, [trimmedQuery, searchableTabs]);
+
+  /** Global ⌘/Ctrl+K focuses the search input from anywhere in the admin. Skipped when the
+   *  user is already typing in an input/textarea so we don't steal the shortcut mid-field. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName;
+        const editable = target?.isContentEditable;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || editable) return;
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Redirect non-admins in an effect — calling navigate() during render triggers a React warning
+  // and can cause a cross-component update. The same-render `return null` below still prevents
+  // rendering the admin chrome for the one frame before the redirect kicks in.
+  const canAccess = hasPermission('admin.*');
+  useEffect(() => {
+    if (!canAccess) navigate('/');
+  }, [canAccess, navigate]);
+  if (!canAccess) return null;
+
+  const pickSearchResult = (id: string) => {
+    setSearchQuery('');
+    searchInputRef.current?.blur();
+    setActiveTab(id);
+  };
+
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      if (searchQuery) setSearchQuery('');
+      else searchInputRef.current?.blur();
+      e.preventDefault();
+    } else if (e.key === 'Enter' && searchResults && searchResults.length > 0) {
+      pickSearchResult(searchResults[0].id);
+    }
+  };
+
+  /** Group button — icon + label + subtitle. Active when any of its child tabs is selected. */
+  const renderGroupButton = (group: typeof ADMIN_GROUPS[number]) => {
+    const Icon = group.icon;
+    const isActive = activeGroup?.id === group.id;
+    const hasWarning = group.tabs.some((t) => warnings[t.id] && !isActive);
+    const landingTab =
+      isActive && group.tabs.some((t) => t.id === activeTab) ? activeTab : group.tabs[0].id;
+
+    // Multi-tab: derive subtitle from tab labels (DRY). Single-tab: fall back to the explicit
+    // description so every row stays the same height.
+    const subtitle =
+      group.tabs.length > 1
+        ? group.tabs.map((tb) => t(tb.label)).join(', ')
+        : group.description
+        ? t(group.description)
+        : null;
+
+    return (
+      <button
+        key={group.id}
+        onClick={() => setActiveTab(landingTab)}
+        aria-current={isActive ? 'page' : undefined}
+        className={clsx(
+          'flex items-start gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors',
+          isActive
+            ? 'bg-ndp-accent/10 text-ndp-accent'
+            : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
+        )}
+      >
+        <Icon className={clsx('w-4 h-4 flex-shrink-0 mt-0.5', isActive ? 'text-ndp-accent' : 'text-ndp-text-dim')} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium truncate">{t(group.label)}</span>
+            {hasWarning && <span className="w-1.5 h-1.5 rounded-full bg-ndp-danger flex-shrink-0" />}
+          </div>
+          {subtitle && (
+            <p className={clsx('text-[11px] leading-snug mt-0.5 truncate', isActive ? 'text-ndp-accent/70' : 'text-ndp-text-dim')}>
+              {subtitle}
+            </p>
+          )}
+        </div>
+      </button>
+    );
+  };
+
+  const renderPluginTabButton = (id: string, label: string, iconEl: React.ReactNode) => (
     <button
       key={id}
       onClick={() => setActiveTab(id)}
@@ -72,7 +214,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       className={clsx(
         'flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition-colors text-left',
         activeTab === id
-          ? 'bg-ndp-accent/15 text-ndp-accent'
+          ? 'bg-ndp-accent/10 text-ndp-accent'
           : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
       )}
     >
@@ -86,63 +228,147 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
-      <div className="px-3 pt-4 pb-2">
-        <Link
-          to="/"
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-ndp-text-muted hover:text-ndp-accent hover:bg-white/5 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>{t('admin.back_to_app', 'Retour Oscarr')}</span>
-        </Link>
+      <div className="px-3 pt-5 pb-3 space-y-3">
+        {/* Sidebar wordmark — uses the configured site name so forks / custom deploys show their
+            own brand. Defaults to "Oscarr". Kept as a heading, not a link (the avatar dropdown
+            carries the "Return to Oscarr" action). */}
+        <h1 className="px-1 text-lg font-bold text-ndp-text tracking-tight">
+          {features.siteName || 'Oscarr'}
+        </h1>
+
+        {/* Admin-wide search — filters tabs (native + plugin pages) by translated label and
+            parent group. ⌘/Ctrl+K focuses from anywhere; Enter picks the top hit. */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ndp-text-dim" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+            placeholder={t('admin.sidebar.search_placeholder', 'Rechercher…')}
+            className="w-full h-9 pl-9 pr-12 rounded-lg bg-white/5 border border-white/5 text-sm text-ndp-text placeholder:text-ndp-text-dim focus:outline-none focus:border-ndp-accent/30 focus:bg-white/[0.07]"
+            aria-label={t('admin.sidebar.search_placeholder', 'Rechercher…')}
+          />
+          {searchQuery ? (
+            <button
+              onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-ndp-text-dim hover:text-ndp-text hover:bg-white/10 transition-colors"
+              aria-label={t('common.clear', 'Clear')}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <kbd className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 items-center gap-0.5 px-1.5 h-5 rounded bg-white/5 text-[10px] font-mono text-ndp-text-dim border border-white/5 pointer-events-none">
+              ⌘K
+            </kbd>
+          )}
+        </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 pt-2 space-y-0.5 pb-4">
-        {ADMIN_TABS.map(({ id, label, icon: Icon }) =>
-          renderTabButton(id, t(label), <Icon className="w-4 h-4 flex-shrink-0" />)
-        )}
-        {pluginTabItems.length > 0 && (
-          <div className="mt-6 pt-4 border-t border-white/5">
-            <p className="text-[10px] text-ndp-text-dim uppercase tracking-wider px-3 mb-2 font-semibold">
-              {t('admin.tab.plugins')}
-            </p>
-            {pluginTabItems.map((tb) =>
-              renderTabButton(tb.id, tb.label, <DynamicIcon name={tb.pluginIcon} className="w-4 h-4 flex-shrink-0" />)
+      <nav className="flex-1 overflow-y-auto px-3 pt-1 space-y-0.5 pb-4">
+        {searchResults === null ? (
+          <>
+            {ADMIN_GROUPS.map(renderGroupButton)}
+            {pluginTabItems.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-white/5">
+                <p className="text-[10px] text-ndp-text-dim uppercase tracking-wider px-3 mb-2 font-semibold">
+                  {pluginGroupLabel}
+                </p>
+                {pluginTabItems.map((tb) =>
+                  renderPluginTabButton(tb.id, tb.label, <DynamicIcon name={tb.pluginIcon} className="w-4 h-4 flex-shrink-0" />)
+                )}
+              </div>
             )}
-          </div>
+          </>
+        ) : searchResults.length === 0 ? (
+          <p className="px-3 py-6 text-xs text-ndp-text-dim text-center">
+            {t('admin.sidebar.search_no_results', 'Aucun résultat')}
+          </p>
+        ) : (
+          searchResults.map((entry) => {
+            const isActive = activeTab === entry.id;
+            const Icon = entry.icon;
+            return (
+              <button
+                key={entry.id}
+                onClick={() => pickSearchResult(entry.id)}
+                className={clsx(
+                  'flex items-center gap-3 w-full px-3 py-2 rounded-lg text-left transition-colors',
+                  isActive
+                    ? 'bg-ndp-accent/10 text-ndp-accent'
+                    : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
+                )}
+              >
+                {Icon ? (
+                  <Icon className={clsx('w-4 h-4 flex-shrink-0', isActive ? 'text-ndp-accent' : 'text-ndp-text-dim')} />
+                ) : entry.pluginIcon ? (
+                  <DynamicIcon name={entry.pluginIcon} className="w-4 h-4 flex-shrink-0" />
+                ) : null}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate">{entry.label}</span>
+                    {entry.hasWarning && !isActive && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-ndp-danger flex-shrink-0" />
+                    )}
+                  </div>
+                  <p className={clsx('text-[11px] truncate mt-0.5', isActive ? 'text-ndp-accent/70' : 'text-ndp-text-dim')}>
+                    {entry.groupLabel}
+                  </p>
+                </div>
+              </button>
+            );
+          })
         )}
       </nav>
+    </div>
+  );
 
-      <div className="border-t border-white/5 p-2 flex items-center gap-2">
-        <div className="flex-1 min-w-0">
+  /** Current-page title for the top bar. Prefers the active group's icon+label (most admin
+   *  pages). Falls back to the plugin-contributed tab's label when the active tab comes from a
+   *  plugin — plugin icons are rendered dynamically by DynamicIcon. */
+  const activePluginTabItem = pluginTabItems.find((tb) => tb.id === activeTab);
+  const headerIcon = activeGroup ? (
+    <activeGroup.icon className="w-5 h-5 text-ndp-accent" />
+  ) : activePluginTabItem ? (
+    <DynamicIcon name={activePluginTabItem.pluginIcon} className="w-5 h-5 text-ndp-accent" />
+  ) : null;
+  const headerLabel = activeGroup ? t(activeGroup.label) : activePluginTabItem?.label ?? '';
+
+  /** Top header — current page title on the left, notifications + avatar on the right. The
+   *  inner row shares the same max-width + horizontal padding as AdminPage's content container
+   *  so the title and the tabs below it line up vertically on wide screens. */
+  const topBar = (
+    <header className="h-14 flex-shrink-0">
+      <div className="max-w-[1800px] mx-auto h-full flex items-center justify-between px-4 sm:px-6">
+        <div className="flex items-center gap-3 min-w-0">
+          {headerIcon}
+          <h1 className="text-base font-semibold text-ndp-text truncate">{headerLabel}</h1>
+        </div>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
           <UserCluster
             viewAsRole={viewAsRole}
             onViewAsRoleChange={setViewAsRole}
-            variant="expanded"
-            dropdownDirection="above"
+            variant="compact"
           />
         </div>
-        <NotificationBell dropdownDirection="above" />
       </div>
-    </div>
+    </header>
   );
 
   return (
     <div className="min-h-dvh bg-ndp-bg flex">
-      <aside className="hidden md:flex md:flex-col w-60 flex-shrink-0 bg-ndp-surface/40 border-r border-white/5 sticky top-0 h-dvh">
+      <aside className="hidden md:flex md:flex-col w-72 flex-shrink-0 border-r border-white/5 sticky top-0 h-dvh">
         {sidebarContent}
       </aside>
 
+      {/* Mobile bottom nav — menu button + active tab label. Avatar + bell on mobile live in
+          the top bar (same as desktop) so we don't overcrowd the bottom strip. */}
       <div
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-ndp-surface/95 backdrop-blur-xl border-t border-white/5 flex items-center h-14 px-3 gap-2"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <Link
-          to="/"
-          className="p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg hover:bg-white/5 transition-colors"
-          aria-label={t('admin.back_to_app', 'Retour Oscarr')}
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
         <button
           onClick={() => setDrawerOpen(true)}
           className="p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg hover:bg-white/5 transition-colors"
@@ -181,7 +407,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {sidebarContent}
       </aside>
 
-      <main className="flex-1 min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
+      <div className="flex-1 min-w-0 flex flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
+        {topBar}
+        <main className="flex-1 min-w-0">{children}</main>
+      </div>
     </div>
   );
 }

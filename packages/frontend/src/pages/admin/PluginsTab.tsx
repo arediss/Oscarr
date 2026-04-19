@@ -239,7 +239,7 @@ export function PluginsTab() {
   );
 
   return (
-    <AdminTabLayout title={t('admin.tab.plugins')} count={plugins.length} actions={headerActions}>
+    <AdminTabLayout actions={headerActions}>
       {/* Sub-tabs — underline style to stay consistent with MediaConfigTab. */}
       <div className="flex gap-2 mb-6 border-b border-white/5 pb-3">
         <button

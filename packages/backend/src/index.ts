@@ -29,7 +29,13 @@ import { pluginRoutes } from './plugins/routes.js';
 import { loadInstallState } from './utils/install.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const app = Fastify({ logger: true, trustProxy: true });
+
+// Trust X-Forwarded-* headers (client IP, scheme) when running behind a reverse proxy — the
+// default because Docker / Traefik / nginx / Caddy are the overwhelming deploy path. Set
+// TRUST_PROXY=false only when exposing Oscarr directly to the network (no proxy in front),
+// otherwise any client can spoof their IP by sending X-Forwarded-For themselves.
+const trustProxy = process.env.TRUST_PROXY !== 'false';
+const app = Fastify({ logger: true, trustProxy });
 
 async function start() {
   loadInstallState();
