@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { Loader2, RefreshCw, Plus, Trash2, Pencil, Power, Save, Server, Star, Plug, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
+import { toastApiError } from '@/utils/toast';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import { useServiceSchemas, type ServiceData } from '@/hooks/useServiceSchemas';
@@ -25,16 +26,22 @@ export function ServicesTab() {
       const { data } = await api.get('/admin/services');
       setServices(data);
       return data as ServiceData[];
-    } catch { return []; } finally { setLoading(false); }
-  }, []);
+    } catch (err) {
+      toastApiError(err, t('admin.services.load_failed'));
+      return [];
+    } finally { setLoading(false); }
+  }, [t]);
 
   const testAllServices = useCallback((serviceList: ServiceData[]) => {
+    // Bulk probe on mount: one red badge per failing service in the grid is enough UX signal,
+    // no per-service toast. But log so a timeout / 401 / DNS issue leaves a trail in devtools.
     serviceList.forEach(async (svc) => {
       if (!svc.enabled) return;
       try {
         const { data } = await api.post(`/admin/services/${svc.id}/test`);
         setTestResults(prev => ({ ...prev, [svc.id]: { ok: true, version: data.version } }));
-      } catch {
+      } catch (err) {
+        console.error(`Service test failed for #${svc.id} (${svc.type})`, err);
         setTestResults(prev => ({ ...prev, [svc.id]: { ok: false } }));
       }
     });
@@ -49,7 +56,7 @@ export function ServicesTab() {
     try {
       await api.delete(`/admin/services/${id}`);
       fetchServices();
-    } catch { /* empty */ }
+    } catch (err) { toastApiError(err, t('admin.services.delete_failed')); }
     finally { setDeleting(false); setConfirmDelete(null); }
   };
 
@@ -57,14 +64,14 @@ export function ServicesTab() {
     try {
       await api.put(`/admin/services/${service.id}`, { enabled: !service.enabled });
       fetchServices();
-    } catch { /* ignore */ }
+    } catch (err) { toastApiError(err, t('admin.services.toggle_failed')); }
   };
 
   const handleSetDefault = async (service: ServiceData) => {
     try {
       await api.put(`/admin/services/${service.id}`, { isDefault: true });
       fetchServices();
-    } catch { /* ignore */ }
+    } catch (err) { toastApiError(err, t('admin.services.set_default_failed')); }
   };
 
   const handleTest = async (service: ServiceData) => {
@@ -72,7 +79,9 @@ export function ServicesTab() {
     try {
       const { data } = await api.post(`/admin/services/${service.id}/test`);
       setTestResults(prev => ({ ...prev, [service.id]: { ok: true, version: data.version } }));
-    } catch {
+    } catch (err) {
+      // Explicit click — surface the backend error so the admin knows if it's a 401, timeout, etc.
+      toastApiError(err, t('admin.services.test_failed', { name: service.name }));
       setTestResults(prev => ({ ...prev, [service.id]: { ok: false } }));
     } finally { setTesting(null); }
   };
@@ -237,7 +246,7 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
       const json = await res.json();
       const machineId = json.MediaContainer?.machineIdentifier;
       if (machineId) handleConfigChange('machineId', machineId);
-    } catch { /* empty */ }
+    } catch (err) { toastApiError(err, t('admin.services.detect_machine_id_failed')); }
     finally { setDetectingMachineId(false); }
   };
 
@@ -251,7 +260,8 @@ function ServiceModal({ service, onClose, onSaved }: { service: ServiceData | nu
         await api.post('/admin/services', { name, type, config, isDefault });
       }
       onSaved();
-    } catch { /* empty */ } finally { setSaving(false); }
+    } catch (err) { toastApiError(err, t(isEdit ? 'admin.services.save_failed' : 'admin.services.create_failed')); }
+    finally { setSaving(false); }
   };
 
   return createPortal(

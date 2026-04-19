@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Search, Tag, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '@/lib/api';
+import { toastApiError } from '@/utils/toast';
 
 interface Keyword {
   id: number;
@@ -141,9 +142,9 @@ export function KeywordsTab() {
   useEffect(() => {
     api.get<Keyword[]>('/admin/keywords')
       .then(({ data }) => setKeywords(data))
-      .catch(() => {})
+      .catch((err) => toastApiError(err, t('admin.keywords.load_failed')))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   useEffect(() => setPage(0), [search]);
 
@@ -156,7 +157,7 @@ export function KeywordsTab() {
       setKeywords((prev) =>
         prev.map((k) => (k.tmdbId === tmdbId ? { ...k, tag } : k))
       );
-    } catch {}
+    } catch (err) { toastApiError(err, t('admin.keywords.update_failed')); }
   }
 
   const filtered = keywords.filter((k) =>

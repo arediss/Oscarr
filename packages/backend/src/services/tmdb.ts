@@ -409,7 +409,11 @@ export async function discoverByGenre(
     // Require minimum votes when sorting by rating to avoid obscure titles
     if (sortBy.startsWith('vote_average')) params['vote_count.gte'] = 50;
 
-    const { data } = await getTmdbApi(l).get(`/discover/${mediaType}`, { params });
+    // Static path selection — mediaType is narrowed to 'movie' | 'tv' at the type level, but
+    // the template literal was flagged by CodeQL taint analysis as SSRF-reachable. Picking from
+    // literal strings via equality makes the allowlist obvious to both humans and scanners.
+    const discoverPath = mediaType === 'movie' ? '/discover/movie' : '/discover/tv';
+    const { data } = await getTmdbApi(l).get(discoverPath, { params });
     return data;
   }, 12);
 }
