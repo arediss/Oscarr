@@ -108,24 +108,28 @@ function patchBuildJs(buildJsPath) {
   // Append a post-build Tailwind step. Runs the CLI with the plugin's local config, reads the
   // CSS entry we dropped at frontend/index.css, emits to dist/frontend/index.css. Works with
   // both one-shot `npm run build` and watch mode — the CLI supports `--watch` itself.
+  //
+  // The watch flag is declared locally (`twWatch`) so the patch works even in plugin build.js
+  // files that don't declare their own top-level `watch` variable.
   const patch = `
 ${BUILD_JS_MARKER} ─────────────────
 import { spawn, spawnSync } from 'child_process';
 
+const twWatch = process.argv.includes('--watch');
 const tailwindArgs = [
   '-c', resolve(__dirname, 'tailwind.config.js'),
   '-i', resolve(__dirname, 'frontend/index.css'),
   '-o', resolve(__dirname, 'dist/frontend/index.css'),
-  ...(watch ? ['--watch'] : ['--minify']),
+  ...(twWatch ? ['--watch'] : ['--minify']),
 ];
 
-if (watch) {
+if (twWatch) {
   // Fire-and-forget in watch mode; the CLI's own watcher owns the lifecycle.
-  const child = spawn('npx', ['tailwindcss', ...tailwindArgs], { stdio: 'inherit', cwd: __dirname });
-  child.on('exit', (code) => { if (code !== null && code !== 0) process.exit(code); });
+  const twChild = spawn('npx', ['tailwindcss', ...tailwindArgs], { stdio: 'inherit', cwd: __dirname });
+  twChild.on('exit', (code) => { if (code !== null && code !== 0) process.exit(code); });
 } else {
-  const result = spawnSync('npx', ['tailwindcss', ...tailwindArgs], { stdio: 'inherit', cwd: __dirname });
-  if (result.status !== 0) process.exit(result.status || 1);
+  const twResult = spawnSync('npx', ['tailwindcss', ...tailwindArgs], { stdio: 'inherit', cwd: __dirname });
+  if (twResult.status !== 0) process.exit(twResult.status || 1);
   console.log('Frontend (CSS) built → dist/frontend/index.css');
 }
 `;
