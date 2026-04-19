@@ -77,14 +77,20 @@ function addDevDep(pkgPath, name, version) {
 }
 
 function writeIfMissing(path, content, label) {
-  if (existsSync(path)) {
-    log(`${label} already exists at ${path}`);
-    return false;
-  }
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, content);
-  log(`created ${label}`);
-  return true;
+  try {
+    // `wx` = atomic "create only if missing". Avoids the existsSync + writeFileSync TOCTOU
+    // window and makes the intent ("don't clobber") explicit in the syscall itself.
+    writeFileSync(path, content, { flag: 'wx' });
+    log(`created ${label}`);
+    return true;
+  } catch (err) {
+    if ((err)?.code === 'EEXIST') {
+      log(`${label} already exists at ${path}`);
+      return false;
+    }
+    throw err;
+  }
 }
 
 function patchBuildJs(buildJsPath) {
