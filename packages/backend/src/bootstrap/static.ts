@@ -13,7 +13,13 @@ export async function registerStatic(app: FastifyInstance) {
 
   const __dirname = dirname(fileURLToPath(import.meta.url));
   const frontendDir = resolve(__dirname, '../../../frontend/dist');
-  if (!existsSync(frontendDir)) return;
+  // Operators sometimes deploy the backend image without the frontend stage (headless / API-only
+  // setup, broken multi-stage Dockerfile, wrong volume mount). A silent no-op here leaves the
+  // admin puzzled by a 404 on /. Surface it loudly so the boot log makes the cause obvious.
+  if (!existsSync(frontendDir)) {
+    app.log.warn({ frontendDir }, 'Frontend bundle not found — serving API only');
+    return;
+  }
 
   await app.register(fastifyStatic, {
     root: frontendDir,

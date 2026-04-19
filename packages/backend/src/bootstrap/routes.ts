@@ -10,17 +10,24 @@ import { appRoutes } from '../routes/app.js';
 import { supportRoutes } from '../routes/support.js';
 import { notificationRoutes } from '../routes/notifications.js';
 import { pushRoutes } from '../routes/push.js';
+import { getInstanceLanguages } from '../services/tmdb.js';
 
 /**
- * Mount every HTTP route group under its /api/<prefix>. The TMDB language cache is warmed here
- * so the first request doesn't pay the hydration cost.
+ * Mount every HTTP route group under its /api/<prefix>. Warms the TMDB language cache first
+ * so the first real request doesn't pay the hydration cost.
  *
- * Webhooks are lazy-imported because they pull in a handful of provider-specific modules that
- * we don't need evaluated unless the server actually starts handling requests.
+ * Webhooks are lazy-imported because they pull in a handful of provider-specific modules we
+ * don't need evaluated unless the server actually starts handling requests.
  */
 export async function registerRoutes(app: FastifyInstance) {
-  const { getInstanceLanguages } = await import('../services/tmdb.js');
-  await getInstanceLanguages();
+  // TMDB is a third party — treat cache hydration as a best-effort warm-up, not a gate on
+  // boot. A 500 / network blip / bad key should not prevent Oscarr from coming up; the lazy
+  // path inside tmdb.ts will retry on first use.
+  try {
+    await getInstanceLanguages();
+  } catch (err) {
+    app.log.warn({ err }, 'TMDB language cache warm-up failed — will lazy-load on first request');
+  }
 
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(tmdbRoutes, { prefix: '/api/tmdb' });

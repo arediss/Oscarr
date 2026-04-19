@@ -18,22 +18,22 @@ const app = Fastify({ logger: true, trustProxy });
 async function start() {
   loadInstallState();
   await registerSecurity(app);
-  await registerDocs(app); // before routes so the onRoute hook tags everything
+  await registerDocs(app);
   await registerRoutes(app);
-  initNotifications();     // before plugins so providers can extend the registry
+  initNotifications();
   await registerPlugins(app);
   await registerStatic(app);
 
   const port = parseInt(process.env.PORT || '3001', 10);
   if (Number.isNaN(port)) throw new Error('PORT environment variable must be a valid number');
   await app.listen({ port, host: '0.0.0.0' });
-  console.log(`Oscarr API running on port ${port}`);
+  app.log.info({ port }, 'Oscarr API listening');
 
   await startScheduler();
 }
 
 start().catch((err) => {
-  console.error(err);
+  app.log.fatal({ err }, 'Boot failed');
   process.exit(1);
 });
 
