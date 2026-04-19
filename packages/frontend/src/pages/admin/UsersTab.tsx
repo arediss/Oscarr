@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Users, Loader2, CheckCircle, RefreshCw, Trash2, Link, ChevronDown, UserX, UserCheck, RefreshCcw, Download } from 'lucide-react';
+import { Loader2, CheckCircle, RefreshCw, Trash2, Link, ChevronDown, UserX, UserCheck, RefreshCcw, Download } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
+import { showToast } from '@/utils/toast';
 import { useAuth } from '@/context/AuthContext';
 import type { AdminUser } from '@/types';
 import { Spinner } from './Spinner';
@@ -33,7 +34,15 @@ export function UsersTab() {
   const [updatingRoleFor, setUpdatingRoleFor] = useState<number | null>(null);
   const [togglingDisabledFor, setTogglingDisabledFor] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ enabled: number; disabled: number; pendingImports: Array<{ providerId: string; providerUsername?: string | null; providerEmail?: string | null }> } | null>(null);
+  const [syncResult, setSyncResult] = useState<{
+    providerId: string;
+    providerLabel: string;
+    enabled: number;
+    disabled: number;
+    pendingImports: Array<{ providerId: string; providerUsername?: string | null; providerEmail?: string | null }>;
+  } | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [selectedImportIds, setSelectedImportIds] = useState<Set<string>>(new Set());
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -54,7 +63,13 @@ export function UsersTab() {
   };
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
-  useEffect(() => { api.get('/auth/providers').then(({ data }) => setAuthProviders(data)).catch(() => {}); }, []);
+  useEffect(() => {
+    api.get('/auth/providers')
+      .then(({ data }) => setAuthProviders(data))
+      // If this fails the Sync buttons silently don't render — at least surface the cause
+      // in the console so the admin has a diagnostic when the toolbar goes blank.
+      .catch((err) => console.error('Failed to fetch auth providers:', err));
+  }, []);
   useEffect(() => { api.get('/admin/roles').then(({ data }) => setRoles(data)).catch(() => {}); }, []);
 
   const handleChangeRole = async (userId: number, newRole: string) => {
@@ -139,23 +154,61 @@ export function UsersTab() {
     }
   };
 
-  const handleImport = async (providerId: string) => {
+  // Two-step flow: Sync reconciles existing accounts (enable/disable) and lists provider users
+  // without an Oscarr account. The admin then opens a modal from the sync banner, cherry-picks
+  // which to pull in, and confirms — avoids auto-creating random server members.
+  const handleImport = async (providerId: string, providerIds?: string[]) => {
     setImporting(true); setImportResult(null);
     try {
-      const { data } = await api.post(`/admin/users/import/${providerId}`);
+      const { data } = await api.post(`/admin/users/import/${providerId}`, { providerIds });
       setImportResult(data);
+      setImportModalOpen(false);
+      setSyncResult(null); // pendingImports are now resolved, clear the sync banner
       fetchUsers();
-    } catch (err) { console.error('Import failed:', err); }
+    } catch (err) {
+      console.error('Import failed:', err);
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      showToast(msg || t('admin.users.import_failed'), 'error');
+      // Keep the modal open with the selection intact so the admin can retry.
+    }
     finally { setImporting(false); }
   };
 
-  const handleSync = async (providerId: string) => {
-    setSyncing(true); setSyncResult(null);
+  const openImportModal = () => {
+    if (!syncResult) return;
+    setSelectedImportIds(new Set(syncResult.pendingImports.map((p) => p.providerId)));
+    setImportModalOpen(true);
+  };
+
+  const toggleImportId = (providerId: string) => {
+    setSelectedImportIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(providerId)) next.delete(providerId);
+      else next.add(providerId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllImports = () => {
+    if (!syncResult) return;
+    if (selectedImportIds.size === syncResult.pendingImports.length) {
+      setSelectedImportIds(new Set());
+    } else {
+      setSelectedImportIds(new Set(syncResult.pendingImports.map((p) => p.providerId)));
+    }
+  };
+
+  const handleSync = async (providerId: string, providerLabel: string) => {
+    setSyncing(true); setSyncResult(null); setImportResult(null);
     try {
       const { data } = await api.post(`/admin/users/sync/${providerId}`);
-      setSyncResult(data);
+      setSyncResult({ providerId, providerLabel, ...data });
       fetchUsers();
-    } catch (err) { console.error('Sync failed:', err); }
+    } catch (err) {
+      console.error('Sync failed:', err);
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      showToast(msg || t('admin.users.sync_failed', { provider: providerLabel }), 'error');
+    }
     finally { setSyncing(false); }
   };
 
@@ -173,16 +226,10 @@ export function UsersTab() {
       actions={
         <div className="flex items-center gap-2 flex-wrap">
           {authProviders.filter(p => p.id !== 'email').map(p => (
-            <div key={p.id} className="flex items-center gap-1.5">
-              <button onClick={() => handleSync(p.id)} disabled={syncing} className="btn-secondary flex items-center gap-2 text-sm">
-                {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
-                Sync {p.label}
-              </button>
-              <button onClick={() => handleImport(p.id)} disabled={importing} className="btn-primary flex items-center gap-2 text-sm">
-                {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                {t('admin.users.import_provider', { provider: p.label })}
-              </button>
-            </div>
+            <button key={p.id} onClick={() => handleSync(p.id, p.label)} disabled={syncing} className="btn-secondary flex items-center gap-2 text-sm">
+              {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
+              {t('admin.users.sync_provider', { provider: p.label })}
+            </button>
           ))}
           <button onClick={fetchUsers} className="btn-secondary flex items-center gap-2 text-sm"><RefreshCw className="w-4 h-4" /> {t('common.refresh')}</button>
         </div>
@@ -202,28 +249,107 @@ export function UsersTab() {
           <div className="flex items-center gap-3">
             <RefreshCcw className="w-5 h-5 text-ndp-accent flex-shrink-0" />
             <p className="text-sm text-ndp-text-muted">
-              Sync complete: {syncResult.enabled} re-enabled · {syncResult.disabled} disabled
-              {syncResult.pendingImports.length > 0 && ` · ${syncResult.pendingImports.length} on provider without Oscarr account`}
+              {t('admin.users.sync_complete', {
+                provider: syncResult.providerLabel,
+                enabled: syncResult.enabled,
+                disabled: syncResult.disabled,
+              })}
+              {syncResult.pendingImports.length > 0 && ` · ${t('admin.users.sync_pending_count', { count: syncResult.pendingImports.length })}`}
             </p>
             <button onClick={() => setSyncResult(null)} className="ml-auto text-xs text-ndp-text-dim hover:text-ndp-text">×</button>
           </div>
           {syncResult.pendingImports.length > 0 && (
-            <div className="mt-3 pl-8 space-y-1">
-              <p className="text-xs text-ndp-text-dim">Found on provider but not in Oscarr — click "Import" to pull them in:</p>
-              <ul className="text-xs text-ndp-text-muted space-y-0.5">
-                {syncResult.pendingImports.slice(0, 10).map((p) => (
-                  <li key={p.providerId}>
-                    · {p.providerUsername || p.providerEmail || p.providerId}
-                    {p.providerEmail && p.providerUsername && <span className="text-ndp-text-dim"> ({p.providerEmail})</span>}
-                  </li>
-                ))}
-                {syncResult.pendingImports.length > 10 && (
-                  <li className="text-ndp-text-dim">… and {syncResult.pendingImports.length - 10} more</li>
-                )}
-              </ul>
+            <div className="mt-3 pl-8">
+              <p className="text-xs text-ndp-text-dim mb-2">{t('admin.users.sync_pending_hint')}</p>
+              <button
+                onClick={openImportModal}
+                className="btn-primary flex items-center gap-2 text-sm"
+              >
+                <Download className="w-4 h-4" />
+                {t('admin.users.sync_review_cta', { count: syncResult.pendingImports.length })}
+              </button>
             </div>
           )}
         </div>
+      )}
+
+      {importModalOpen && syncResult && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in"
+          onClick={() => !importing && setImportModalOpen(false)}
+        >
+          <div
+            className="bg-ndp-surface border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 border-b border-white/5">
+              <h3 className="text-lg font-bold text-ndp-text flex items-center gap-2">
+                <Download className="w-5 h-5 text-ndp-accent" />
+                {t('admin.users.import_modal.title', { provider: syncResult.providerLabel })}
+              </h3>
+              <p className="text-sm text-ndp-text-muted mt-1">
+                {t('admin.users.import_modal.subtitle', { count: syncResult.pendingImports.length })}
+              </p>
+              <button
+                onClick={toggleSelectAllImports}
+                className="mt-3 text-xs text-ndp-accent hover:text-ndp-accent/80 transition-colors"
+              >
+                {selectedImportIds.size === syncResult.pendingImports.length
+                  ? t('admin.users.import_modal.deselect_all')
+                  : t('admin.users.import_modal.select_all')}
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-2">
+              {syncResult.pendingImports.map((p) => {
+                const checked = selectedImportIds.has(p.providerId);
+                return (
+                  <label
+                    key={p.providerId}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleImportId(p.providerId)}
+                      className="w-4 h-4 rounded border-white/20 bg-transparent checked:bg-ndp-accent checked:border-ndp-accent focus:ring-ndp-accent focus:ring-offset-0 flex-shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-ndp-text truncate">{p.providerUsername || p.providerEmail || p.providerId}</p>
+                      {p.providerEmail && p.providerUsername && (
+                        <p className="text-xs text-ndp-text-dim truncate">{p.providerEmail}</p>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="p-4 border-t border-white/5 flex items-center justify-between gap-3">
+              <span className="text-xs text-ndp-text-dim">
+                {t('admin.users.import_modal.selected_count', { count: selectedImportIds.size })}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setImportModalOpen(false)}
+                  disabled={importing}
+                  className="btn-secondary text-sm"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={() => handleImport(syncResult.providerId, Array.from(selectedImportIds))}
+                  disabled={importing || selectedImportIds.size === 0}
+                  className="btn-primary flex items-center gap-2 text-sm"
+                >
+                  {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  {t('admin.users.sync_import_cta', { count: selectedImportIds.size })}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
       {importResult && (
         <div className="p-3 bg-ndp-success/5 border border-ndp-success/20 rounded-xl mb-4 animate-fade-in flex items-center gap-3">
