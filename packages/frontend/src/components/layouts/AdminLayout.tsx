@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
@@ -8,6 +8,11 @@ import type { LucideIcon } from 'lucide-react';
 // Diacritic-insensitive lowercase so "systeme" matches "Système" and "acces" matches "Accès".
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();
+
+// Show ⌘K on Apple platforms (macOS, iPadOS — navigator.platform starts with "Mac" or "iPad")
+// and Ctrl+K everywhere else. The keybinding itself accepts both modifiers either way.
+const isAppleHost = typeof navigator !== 'undefined' && /mac|ipad|iphone/i.test(navigator.platform);
+const shortcutHint = isAppleHost ? '⌘K' : 'Ctrl+K';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useFeatures } from '@/context/FeaturesContext';
@@ -27,8 +32,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [warnings, setWarnings] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const [viewAsRole, setViewAsRoleState] = useState<string | null>(sessionStorage.getItem('view-as-role'));
+
+  // `sidebarContent` is rendered twice (desktop aside + mobile drawer), so a plain ref would
+  // get overwritten by whichever input mounts last — which on desktop is the hidden drawer copy.
+  // Look up the currently visible one by data attribute + offsetParent check instead.
+  const getVisibleSearchInput = () => {
+    const inputs = document.querySelectorAll<HTMLInputElement>('[data-admin-search]');
+    return Array.from(inputs).find((el) => el.offsetParent !== null) ?? null;
+  };
 
   const setViewAsRole = (role: string | null) => {
     if (role) sessionStorage.setItem('view-as-role', role);
@@ -118,22 +130,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }, [trimmedQuery, searchableTabs]);
 
-  /** Global ⌘/Ctrl+K focuses the search input from anywhere in the admin. Skipped when the
-   *  user is already typing in an input/textarea so we don't steal the shortcut mid-field. */
+  /** Global ⌘/Ctrl+K focuses the search input from anywhere in the admin. Works even when the
+   *  user is typing in another field — we preventDefault to win the browser's default (Chrome
+   *  opens the omnibox on Ctrl+K) and the event runs in capture phase so nested handlers can't
+   *  swallow it first. */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        const target = e.target as HTMLElement | null;
-        const tag = target?.tagName;
-        const editable = target?.isContentEditable;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || editable) return;
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+        const input = getVisibleSearchInput();
+        if (!input) return;
         e.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
+        input.focus();
+        input.select();
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, { capture: true });
+    return () => window.removeEventListener('keydown', onKey, { capture: true });
   }, []);
 
   // Redirect non-admins in an effect — calling navigate() during render triggers a React warning
@@ -147,14 +159,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const pickSearchResult = (id: string) => {
     setSearchQuery('');
-    searchInputRef.current?.blur();
+    getVisibleSearchInput()?.blur();
     setActiveTab(id);
   };
 
   const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
       if (searchQuery) setSearchQuery('');
-      else searchInputRef.current?.blur();
+      else e.currentTarget.blur();
       e.preventDefault();
     } else if (e.key === 'Enter' && searchResults && searchResults.length > 0) {
       pickSearchResult(searchResults[0].id);
@@ -241,7 +253,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ndp-text-dim" />
           <input
-            ref={searchInputRef}
+            data-admin-search
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -252,7 +264,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           />
           {searchQuery ? (
             <button
-              onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
+              onClick={() => { setSearchQuery(''); getVisibleSearchInput()?.focus(); }}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-ndp-text-dim hover:text-ndp-text hover:bg-white/10 transition-colors"
               aria-label={t('common.clear', 'Clear')}
             >
@@ -260,7 +272,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </button>
           ) : (
             <kbd className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 items-center gap-0.5 px-1.5 h-5 rounded bg-white/5 text-[10px] font-mono text-ndp-text-dim border border-white/5 pointer-events-none">
-              ⌘K
+              {shortcutHint}
             </kbd>
           )}
         </div>
