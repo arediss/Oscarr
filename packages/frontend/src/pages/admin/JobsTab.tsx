@@ -9,7 +9,6 @@ import api from '@/lib/api';
 import { showToast as showGlobalToast } from '@/utils/toast';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
-import { DangerZone } from './GeneralTab';
 import { useServiceSchemas, type ServiceData } from '@/hooks/useServiceSchemas';
 
 interface CronJobData {
@@ -303,8 +302,6 @@ export function JobsTab() {
         </div>
       )}
 
-      {/* Danger Zone */}
-      <DangerZone />
     </AdminTabLayout>
   );
 }

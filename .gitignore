@@ -17,3 +17,4 @@ docs/superpowers/
 # Plugin symlinks are per-machine dev artifacts — keep the folder tracked (via .gitkeep) but ignore entries inside.
 /packages/plugins/*
 !/packages/plugins/.gitkeep
+.superpowers/
