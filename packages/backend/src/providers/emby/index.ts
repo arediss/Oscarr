@@ -145,12 +145,14 @@ const embyAuth: AuthProvider = {
     return { providerUsername: auth.user.name };
   },
 
-  async importUsers(_adminUserId) {
+  async importUsers(_adminUserId, filter) {
     const cfg = await getConfig();
     if (!cfg || !cfg.apiKey) throw new Error('NO_TOKEN');
     const { url: serverUrl, apiKey } = cfg;
 
-    const users = await getUsers(serverUrl, apiKey);
+    const allUsers = await getUsers(serverUrl, apiKey);
+    const allowed = filter?.providerIds ? new Set(filter.providerIds) : null;
+    const users = allowed ? allUsers.filter((u) => allowed.has(u.id)) : allUsers;
     let imported = 0;
     let skipped = 0;
 
@@ -184,6 +186,28 @@ const embyAuth: AuthProvider = {
 
     logEvent('info', 'User', `Import Emby: ${imported} imported, ${skipped} existing`);
     return { imported, skipped, total: users.length };
+  },
+
+  // Minimal sync: Emby has no "share revoked" equivalent, so no enable/disable pass.
+  // We just surface users on the server without a matching Oscarr account, so the admin can
+  // cherry-pick imports through the same review modal as Plex.
+  async syncUsers(_adminUserId) {
+    const cfg = await getConfig();
+    if (!cfg || !cfg.apiKey) throw new Error('NO_TOKEN');
+    const { url: serverUrl, apiKey } = cfg;
+
+    const users = await getUsers(serverUrl, apiKey);
+    const linked = await prisma.userProvider.findMany({
+      where: { provider: 'emby' },
+      select: { providerId: true },
+    });
+    const linkedIds = new Set(linked.map((l) => l.providerId).filter((id): id is string => !!id));
+
+    const pendingImports = users
+      .filter((u) => !linkedIds.has(u.id))
+      .map((u) => ({ providerId: u.id, providerUsername: u.name, providerEmail: null }));
+
+    return { enabled: 0, disabled: 0, pendingImports };
   },
 };
 

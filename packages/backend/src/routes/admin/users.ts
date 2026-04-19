@@ -8,7 +8,9 @@ import { invalidateUserStateCache } from '../../middleware/rbac.js';
 export async function usersRoutes(app: FastifyInstance) {
   // === USER MANAGEMENT ===
 
-  // Import users from a provider (e.g. Plex shared users, Jellyfin users)
+  // Import users from a provider (e.g. Plex shared users, Jellyfin users). Optional body
+  // `{ providerIds: string[] }` narrows the import to a cherry-picked subset — used by the
+  // admin UI after a sync to import only the users the admin selected in the review modal.
   app.post('/users/import/:provider', {
     schema: {
       params: {
@@ -16,6 +18,17 @@ export async function usersRoutes(app: FastifyInstance) {
         required: ['provider'],
         properties: {
           provider: { type: 'string', description: 'Provider ID (e.g. "plex")' },
+        },
+      },
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          providerIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional whitelist of provider-side user ids to import',
+          },
         },
       },
     },
@@ -28,9 +41,12 @@ export async function usersRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: `Provider "${providerId}" does not support user import.` });
     }
 
+    const body = (request.body || {}) as { providerIds?: string[] };
+    const filter = body.providerIds && body.providerIds.length > 0 ? { providerIds: body.providerIds } : undefined;
+
     const adminUser = request.user as { id: number };
     try {
-      const result = await authProvider.importUsers(adminUser.id);
+      const result = await authProvider.importUsers(adminUser.id, filter);
       return result;
     } catch (err) {
       const msg = (err as Error).message;
