@@ -6,7 +6,7 @@ import cronstrue from 'cronstrue/i18n';
 import i18n from '@/i18n';
 import { localizedDateTime } from '@/i18n/formatters';
 import api from '@/lib/api';
-import { showToast as showGlobalToast } from '@/utils/toast';
+import { showToast as showGlobalToast, toastApiError } from '@/utils/toast';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import { useServiceSchemas, type ServiceData } from '@/hooks/useServiceSchemas';
@@ -55,8 +55,9 @@ export function JobsTab() {
     try {
       const { data } = await api.get('/admin/jobs');
       setJobs(data);
-    } catch { /* empty */ } finally { setLoading(false); }
-  }, []);
+    } catch (err) { toastApiError(err, t('admin.jobs.load_failed')); }
+    finally { setLoading(false); }
+  }, [t]);
 
   const fetchWebhooks = useCallback(async () => {
     try {
@@ -64,15 +65,31 @@ export function JobsTab() {
       const arrServices = services.filter(s => ['radarr', 'sonarr'].includes(s.type));
       setWebhooks([]);
       arrServices.forEach(async (svc) => {
+        const schema = SERVICE_SCHEMAS[svc.type];
         try {
           const { data } = await api.get(`/admin/services/${svc.id}/webhook/status`);
-          const schema = SERVICE_SCHEMAS[svc.type];
           const status = { serviceId: svc.id, serviceName: svc.name, serviceType: svc.type, icon: schema?.icon || '', ...data } as WebhookStatus;
           setWebhooks(prev => [...prev.filter(w => w.serviceId !== svc.id), status]);
-        } catch { /* ignore */ }
+        } catch (err) {
+          // If the probe itself fails (service down, 500, network), push a degraded tile so the
+          // Webhooks section doesn't vanish when all services are unreachable — admin sees the
+          // row with "unreachable" state instead of thinking webhooks aren't supported at all.
+          console.error(`Webhook status probe failed for service ${svc.id}`, err);
+          setWebhooks(prev => [...prev.filter(w => w.serviceId !== svc.id), {
+            serviceId: svc.id,
+            serviceName: svc.name,
+            serviceType: svc.type,
+            icon: schema?.icon || '',
+            enabled: false,
+            serviceReachable: false,
+            url: '',
+            events: [],
+            supportsWebhooks: false,
+          }]);
+        }
       });
-    } catch { /* ignore */ }
-  }, [SERVICE_SCHEMAS]);
+    } catch (err) { toastApiError(err, t('admin.jobs.webhooks_load_failed')); }
+  }, [SERVICE_SCHEMAS, t]);
 
   useEffect(() => { fetchJobs(); fetchWebhooks(); }, [fetchJobs, fetchWebhooks]);
 
@@ -112,7 +129,7 @@ export function JobsTab() {
     try {
       await api.put(`/admin/jobs/${job.key}`, { enabled: !job.enabled });
       fetchJobs();
-    } catch { /* ignore */ }
+    } catch (err) { toastApiError(err, t('admin.jobs.toggle_failed', { key: job.key })); }
   };
 
   const saveCron = async (key: string, cronExpression: string) => {
@@ -120,7 +137,7 @@ export function JobsTab() {
       await api.put(`/admin/jobs/${key}`, { cronExpression });
       setEditingCron(null);
       fetchJobs();
-    } catch { /* ignore */ }
+    } catch (err) { toastApiError(err, t('admin.jobs.schedule_save_failed', { key })); }
   };
 
   if (loading) return <Spinner />;
