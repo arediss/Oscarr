@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { Loader2, Plus, X, Check, Trash2, Shield, Link2, CheckCircle, Clock } from 'lucide-react';
 import api from '@/lib/api';
+import { toastApiError } from '@/utils/toast';
 
 interface QualityMappingType {
   id: number;
@@ -58,9 +59,9 @@ export function QualityTab() {
       setOptions(optRes.data);
       setServices(svcRes.data.filter((s: ServiceType) => ['radarr', 'sonarr'].includes(s.type) && s.enabled));
       setRoles(roleRes.data.filter((r: RoleType) => r.name !== 'admin'));
-    } catch (err) { console.error(err); }
+    } catch (err) { toastApiError(err, t('admin.quality.load_failed')); }
     finally { setLoading(false); }
-  }, []);
+  }, [t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -71,14 +72,14 @@ export function QualityTab() {
       setNewLabel('');
       setAdding(false);
       load();
-    } catch { /* ignore */ }
+    } catch (err) { toastApiError(err, t('admin.quality.add_option_failed')); }
   };
 
   const deleteOption = async (id: number) => {
     try {
       await api.delete(`/admin/quality-options/${id}`);
       load();
-    } catch { /* ignore */ }
+    } catch (err) { toastApiError(err, t('admin.quality.delete_option_failed')); }
   };
 
   const updateAllowedRoles = async (optionId: number, roleName: string, add: boolean) => {
@@ -89,14 +90,14 @@ export function QualityTab() {
     try {
       await api.put(`/admin/quality-options/${optionId}`, { allowedRoles: next });
       load();
-    } catch { /* ignore */ }
+    } catch (err) { toastApiError(err, t('admin.quality.update_roles_failed')); }
   };
 
   const updateApprovalMode = async (optionId: number, mode: string | null) => {
     try {
       await api.put(`/admin/quality-options/${optionId}`, { approvalMode: mode });
       load();
-    } catch { /* ignore */ }
+    } catch (err) { toastApiError(err, t('admin.quality.update_approval_failed')); }
   };
 
   const openMapping = async (qualityOptionId: number, serviceId: number) => {
@@ -111,7 +112,7 @@ export function QualityTab() {
         opt?.mappings.filter(m => m.service.id === serviceId).map(m => m.qualityProfileId) || []
       );
       setProfiles(data.filter((p: { id: number }) => !existingProfileIds.has(p.id)));
-    } catch { /* service unreachable */ }
+    } catch (err) { toastApiError(err, t('admin.quality.profiles_fetch_failed')); }
     finally { setLoadingProfiles(false); }
   };
 
@@ -130,15 +131,22 @@ export function QualityTab() {
       }
       setEditingMapping(null);
       load();
-    } catch { /* ignore */ } finally { setSavingMapping(false); }
+    } catch (err) { toastApiError(err, t('admin.quality.save_mappings_failed')); }
+    finally { setSavingMapping(false); }
   };
 
   const deleteMapping = async (mappingId: number) => {
-    try { await api.delete(`/admin/quality-mappings/${mappingId}`); load(); } catch { /* ignore */ }
+    try {
+      await api.delete(`/admin/quality-mappings/${mappingId}`);
+      load();
+    } catch (err) { toastApiError(err, t('admin.quality.delete_mapping_failed')); }
   };
 
   const seedDefaults = async () => {
-    try { await api.post('/admin/quality-options/seed'); load(); } catch { /* ignore */ }
+    try {
+      await api.post('/admin/quality-options/seed');
+      load();
+    } catch (err) { toastApiError(err, t('admin.quality.seed_failed')); }
   };
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-ndp-accent" /></div>;

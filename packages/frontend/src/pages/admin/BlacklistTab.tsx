@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { Loader2, Trash2, ShieldBan, Search, Film, X } from 'lucide-react';
 import api from '@/lib/api';
 import { posterUrl } from '@/lib/api';
+import { toastApiError } from '@/utils/toast';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 
@@ -49,7 +50,10 @@ export function BlacklistTab() {
   const [adding, setAdding] = useState(false);
 
   const fetchEntries = () => {
-    api.get('/admin/blacklist').then(({ data }) => setEntries(data)).catch(() => {}).finally(() => setLoading(false));
+    api.get('/admin/blacklist')
+      .then(({ data }) => setEntries(data))
+      .catch((err) => toastApiError(err, t('admin.blacklist.load_failed')))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchEntries(); }, []);
@@ -73,7 +77,12 @@ export function BlacklistTab() {
         const { data } = await api.get(`/tmdb/search?q=${encodeURIComponent(value.trim())}`);
         setResults((data.results || []).filter((r: TmdbResult) => r.media_type === 'movie' || r.media_type === 'tv').slice(0, 6));
         setShowResults(true);
-      } catch { setResults([]); }
+      } catch (err) {
+        // Don't let a failed TMDB call look like "no results" — toast + empty the list so the
+        // admin knows it's a provider issue, not an actual absence.
+        toastApiError(err, t('admin.blacklist.search_failed'));
+        setResults([]);
+      }
       finally { setSearching(false); }
     }, 400);
   };
@@ -90,7 +99,7 @@ export function BlacklistTab() {
       setQuery('');
       setResults([]);
       fetchEntries();
-    } catch { /* already blacklisted */ }
+    } catch (err) { toastApiError(err, t('admin.blacklist.add_failed')); }
     finally { setAdding(false); }
   };
 
@@ -99,7 +108,7 @@ export function BlacklistTab() {
     try {
       await api.delete(`/admin/blacklist/${id}`);
       setEntries(prev => prev.filter(e => e.id !== id));
-    } catch { /* error */ }
+    } catch (err) { toastApiError(err, t('admin.blacklist.delete_failed')); }
     finally { setDeleting(null); }
   };
 

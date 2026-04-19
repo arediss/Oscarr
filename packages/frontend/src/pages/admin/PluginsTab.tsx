@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { Plug, ExternalLink, Star, Loader2, Download, Package, Terminal, BookOpen, Copy, Check, RefreshCw, AlertTriangle, Trash2, X } from 'lucide-react';
 import api from '@/lib/api';
+import { toastApiError } from '@/utils/toast';
 import { invalidatePluginUICache } from '@/plugins/usePlugins';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
@@ -145,8 +146,11 @@ export function PluginsTab() {
   };
 
   const fetchPlugins = useCallback(() => {
-    api.get('/plugins').then(({ data }) => setPlugins(data)).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+    api.get('/plugins')
+      .then(({ data }) => setPlugins(data))
+      .catch((err) => toastApiError(err, t('admin.plugins.load_failed')))
+      .finally(() => setLoading(false));
+  }, [t]);
 
   const fetchRegistry = useCallback(() => {
     setRegistryLoading(true);
@@ -182,7 +186,7 @@ export function PluginsTab() {
       await api.put(`/plugins/${plugin.id}/toggle`, { enabled: !plugin.enabled });
       setPlugins(prev => prev.map(p => p.id === plugin.id ? { ...p, enabled: !plugin.enabled } : p));
       invalidatePluginUICache();
-    } catch { /* ignore */ }
+    } catch (err) { toastApiError(err, t('admin.plugins.toggle_failed', { name: plugin.name })); }
     setToggling(null);
   };
 
