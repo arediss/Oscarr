@@ -363,9 +363,16 @@ export async function getTvRecommendations(tvId: number, lang?: string) {
 }
 
 export async function getCollection(collectionId: number, lang?: string): Promise<TmdbCollection> {
+  // Self-validate before hitting TMDB — the type says `number` but the value is user-controlled
+  // at the edge (route param / body). Coercing to a safe integer here keeps the URL template
+  // obviously scanner-safe and protects future callers that might forget to validate upstream.
+  const safeId = Math.floor(Number(collectionId));
+  if (!Number.isFinite(safeId) || safeId < 1) {
+    throw new Error(`Invalid TMDB collectionId: ${collectionId}`);
+  }
   const l = normalizeLang(lang);
-  return cachedRequest(`collection:${collectionId}:${l}`, async () => {
-    const { data } = await getTmdbApi(l).get(`/collection/${collectionId}`);
+  return cachedRequest(`collection:${safeId}:${l}`, async () => {
+    const { data } = await getTmdbApi(l).get(`/collection/${safeId}`);
     return data;
   }, 48);
 }
