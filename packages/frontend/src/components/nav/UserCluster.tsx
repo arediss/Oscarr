@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
-import { ChevronDown, Shield, Eye, Globe, Bell, LogOut } from 'lucide-react';
+import { ChevronDown, Shield, Eye, Globe, Bell, LogOut, Home } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -25,6 +25,10 @@ export function UserCluster({
   const { t } = useTranslation();
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // We swap "Admin" for "Retour Oscarr" when the user is already in admin — same slot, opposite
+  // destination. Prevents a useless "Admin" link when you're already there.
+  const isInAdmin = location.pathname.startsWith('/admin');
   const push = usePushNotifications();
   const [open, setOpen] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<{ name: string }[]>([]);
@@ -101,15 +105,26 @@ export function UserCluster({
             <p className="text-xs text-ndp-text-dim truncate">{user?.email}</p>
           </div>
 
-          {hasPermission('admin.*') && (
+          {isInAdmin ? (
             <Link
-              to="/admin"
+              to="/"
               onClick={() => setOpen(false)}
               className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ndp-text-muted hover:text-ndp-accent hover:bg-white/5 transition-colors"
             >
-              <Shield className="w-4 h-4" />
-              {t('nav.admin')}
+              <Home className="w-4 h-4" />
+              {t('admin.back_to_app', 'Retour Oscarr')}
             </Link>
+          ) : (
+            hasPermission('admin.*') && (
+              <Link
+                to="/admin"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ndp-text-muted hover:text-ndp-accent hover:bg-white/5 transition-colors"
+              >
+                <Shield className="w-4 h-4" />
+                {t('nav.admin')}
+              </Link>
+            )
           )}
 
           {canManageRoles && (
