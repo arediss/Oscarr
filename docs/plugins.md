@@ -603,7 +603,49 @@ export default function MyPluginPage() {
 }
 ```
 
-The frontend component is lazy-loaded via ESM by Oscarr's router. It has access to all Tailwind CSS classes and Oscarr's design system (e.g. `text-ndp-text`, `card`, `btn-primary`).
+The frontend component is lazy-loaded via ESM by Oscarr's router. See [Styling](#styling) for how to use Tailwind classes and Oscarr's design tokens in your plugin.
+
+## Styling
+
+Plugins can style their UI with the same Tailwind + design tokens as the core. Two things to know:
+
+**Component classes (`card`, `btn-primary`, `btn-secondary`, `input`, …) come free.** They're defined in the core CSS bundle that Oscarr loads on every page, so just writing `<div className="card">` in your plugin works out of the box.
+
+**Tailwind utility classes (`bg-sky-500`, `border-l-amber-400`, `p-4`, `flex`…) need the plugin to ship its own CSS bundle.** Tailwind's JIT purges classes the core doesn't use itself, so a plugin that wants colors or spacings not present in core would otherwise render unstyled. To fix this, plugins compile a small CSS bundle alongside their JS, which Oscarr's loader injects when the plugin mounts.
+
+### One-time setup (per plugin)
+
+Run the scaffolder from the Oscarr repo:
+
+```bash
+npm run plugin:add-tailwind -- ~/Oscarr/plugins/my-plugin
+```
+
+The script is idempotent — safe to re-run. It drops in:
+
+- `tailwind.preset.js` — Oscarr's design tokens (`ndp-*` colors, animations, keyframes), copied inline so your plugin stays self-contained. **Oscarr-owned**: re-running the scaffolder re-syncs it. If you want to extend the tokens (extra colors, brand fonts), use `theme.extend` in your plugin's `tailwind.config.js` rather than editing the preset in-place.
+- `tailwind.config.js` — wires the preset, scans `frontend/**/*.{ts,tsx}`, and disables preflight (core's reset already applies).
+- `frontend/index.css` — entry file that just emits `@tailwind utilities;`. Base + components are served by the core bundle already loaded in the page.
+- `package.json` — pins `tailwindcss` to the same version the core uses.
+- `build.js` — patched to run `npx tailwindcss` after esbuild, emitting `dist/frontend/index.css`.
+
+After the script runs:
+
+```bash
+cd ~/Oscarr/plugins/my-plugin
+npm install
+npm run build     # emits dist/frontend/{index.js,index.css}
+```
+
+The plugin loader injects `<link rel="stylesheet" href="/api/plugins/<id>/frontend/index.css">` the first time any component from the plugin mounts, and removes it when the plugin is disabled or uninstalled. No explicit import needed on your side.
+
+### Scoping runtime-injected custom CSS
+
+If your plugin injects raw CSS at runtime (e.g. `.plugin-communication`'s markdown typography), prefix selectors with `.oscarr-<plugin-id>-*` to avoid colliding with core or other plugins. Tailwind utilities don't need scoping — same class name = same rule everywhere.
+
+### Tailwind version alignment
+
+The scaffolder pins `tailwindcss` to the core's exact version. Major version drift (e.g. core v3 → v4) changes syntax for some utilities (opacity, arbitrary values) and will eventually require running the scaffolder again to re-pin. Keep your plugin's `tailwindcss` in lockstep with the Oscarr you're targeting.
 
 ## Settings
 
