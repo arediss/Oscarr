@@ -213,7 +213,13 @@ export interface AuthProvider {
   registerRoutes(app: FastifyInstance, helpers: AuthHelpers): Promise<void>;
   linkAccount?(pinId: number, userId: number): Promise<{ providerUsername: string }>;
   linkAccountByCredentials?(username: string, password: string, userId: number): Promise<{ providerUsername: string }>;
-  importUsers?(adminUserId: number): Promise<{ imported: number; skipped: number; total: number }>;
+  /** Pull users from the provider into Oscarr. When `filter.providerIds` is set, only users
+   *  whose provider-side id is in the list are imported — lets the admin cherry-pick from a
+   *  sync-surfaced pendingImports list instead of importing everyone on the server. */
+  importUsers?(
+    adminUserId: number,
+    filter?: { providerIds?: string[] },
+  ): Promise<{ imported: number; skipped: number; total: number }>;
   /** Reconcile local Oscarr users with the provider's authoritative list. Disables users who aren't on the provider anymore, re-enables returning ones, and reports unmatched provider entries for admin-confirmed import. */
   syncUsers?(adminUserId: number): Promise<SyncResult>;
   getToken?(adminUserId: number): Promise<string | null>;

@@ -35,8 +35,10 @@ export async function getPlexToken(adminUserId?: number): Promise<string | null>
   return null;
 }
 
-async function importPlexUsers(plexToken: string, machineId: string) {
-  const sharedUsers = await getSharedServerUsers(plexToken, machineId);
+async function importPlexUsers(plexToken: string, machineId: string, filter?: { providerIds?: string[] }) {
+  const allShared = await getSharedServerUsers(plexToken, machineId);
+  const allowed = filter?.providerIds ? new Set(filter.providerIds) : null;
+  const sharedUsers = allowed ? allShared.filter((u) => allowed.has(String(u.id))) : allShared;
   let imported = 0;
   let skipped = 0;
 
@@ -174,12 +176,12 @@ const plexAuth: AuthProvider = {
     return getPlexToken(adminUserId);
   },
 
-  async importUsers(adminUserId) {
+  async importUsers(adminUserId, filter) {
     const token = await getPlexToken(adminUserId);
     if (!token) throw new Error('NO_TOKEN');
     const machineId = await resolveMachineId();
     if (!machineId) throw new Error('NO_MACHINE_ID');
-    return importPlexUsers(token, machineId);
+    return importPlexUsers(token, machineId, filter);
   },
 
   async syncUsers(adminUserId) {

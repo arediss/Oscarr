@@ -207,7 +207,6 @@
   "admin.users.sort.name": "Sort option: sort users by name",
   "admin.users.sort.date": "Sort option: sort users by registration date",
   "admin.users.sort.role": "Sort option: sort users by role (admin/user)",
-  "admin.users.import_plex": "Button to import users from the connected Plex server",
   "admin.users.imported": "Toast message after importing users. {{imported}} is new users count, {{existing}} is already known count",
   "admin.users.plex_access": "Badge/label indicating the user has access to the Plex server",
   "admin.users.no_plex_access": "Badge/label indicating the user does NOT have access to the Plex server",
