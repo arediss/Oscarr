@@ -1,0 +1,133 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import api from '@/lib/api';
+import { toastApiError } from '@/utils/toast';
+import { invalidatePluginUICache } from '@/plugins/usePlugins';
+import type { PluginInfo } from '@/plugins/types';
+import type { RegistryPlugin, SubTab } from './constants';
+
+export interface InstallMessage {
+  kind: 'success' | 'error';
+  text: string;
+}
+
+/**
+ * Owns all plugin-page data + mutations: installed list, remote registry, toggle/install/
+ * uninstall flows, one-shot update-check probe on the Installed tab, and the Reload-Oscarr
+ * restart poller. UI consumes the returned state + handlers and stays presentational.
+ */
+export function usePluginsTab() {
+  const { t } = useTranslation();
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const [registry, setRegistry] = useState<RegistryPlugin[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [registryLoading, setRegistryLoading] = useState(false);
+  const [registryError, setRegistryError] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [installing, setInstalling] = useState<string | null>(null);
+  const [uninstalling, setUninstalling] = useState<string | null>(null);
+  const [restarting, setRestarting] = useState(false);
+  const [installMessage, setInstallMessage] = useState<InstallMessage | null>(null);
+
+  const fetchPlugins = useCallback(() => {
+    return api.get('/plugins')
+      .then(({ data }) => setPlugins(data))
+      .catch((err) => toastApiError(err, t('admin.plugins.load_failed')))
+      .finally(() => setLoading(false));
+  }, [t]);
+
+  const fetchRegistry = useCallback(() => {
+    setRegistryLoading(true);
+    setRegistryError(null);
+    return api.get('/plugins/registry')
+      .then(({ data }) => setRegistry(data))
+      .catch(() => setRegistryError('Failed to load plugin registry'))
+      .finally(() => setRegistryLoading(false));
+  }, []);
+
+  useEffect(() => { fetchPlugins(); }, [fetchPlugins]);
+
+  /** Kick an update-check once when the Installed tab first becomes visible so the
+   *  `latestVersion` badges can populate without user action. Backend has a 1h cache, so this
+   *  is a cheap no-op on subsequent mounts. */
+  const updateCheckedRef = useRef(false);
+  const checkForUpdates = useCallback((subTab: SubTab) => {
+    if (subTab !== 'installed' || updateCheckedRef.current) return;
+    updateCheckedRef.current = true;
+    api.get('/plugins/updates').then(() => fetchPlugins()).catch(() => { /* best-effort */ });
+  }, [fetchPlugins]);
+
+  const toggle = useCallback(async (plugin: PluginInfo) => {
+    setToggling(plugin.id);
+    try {
+      await api.put(`/plugins/${plugin.id}/toggle`, { enabled: !plugin.enabled });
+      setPlugins((prev) => prev.map((p) => (p.id === plugin.id ? { ...p, enabled: !plugin.enabled } : p)));
+      invalidatePluginUICache();
+    } catch (err) {
+      toastApiError(err, t('admin.plugins.toggle_failed', { name: plugin.name }));
+    } finally {
+      setToggling(null);
+    }
+  }, [t]);
+
+  const install = useCallback(async (entry: RegistryPlugin): Promise<boolean> => {
+    setInstalling(entry.id);
+    const url = `https://api.github.com/repos/${entry.repository}/tarball/HEAD`;
+    try {
+      const { data } = await api.post('/plugins/install', { url });
+      setInstallMessage({ kind: 'success', text: `Installed ${data.plugin.name} v${data.plugin.version} — toggle it on in Installed whenever you're ready` });
+      // Fire-and-forget so the caller can unmount the consent modal immediately; the refetch
+      // populates the Installed tab in the background before the admin flips to it.
+      fetchPlugins();
+      return true;
+    } catch (err) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? String((err as Error).message);
+      setInstallMessage({ kind: 'error', text: msg });
+      return false;
+    } finally {
+      setInstalling(null);
+      setTimeout(() => setInstallMessage(null), 6000);
+    }
+  }, [fetchPlugins]);
+
+  const uninstall = useCallback(async (id: string) => {
+    setUninstalling(id);
+    try {
+      await api.post(`/plugins/${id}/uninstall`);
+      await fetchPlugins();
+      invalidatePluginUICache();
+    } catch (err) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? String((err as Error).message);
+      setInstallMessage({ kind: 'error', text: `Uninstall failed: ${msg}` });
+      setTimeout(() => setInstallMessage(null), 6000);
+    } finally {
+      setUninstalling(null);
+    }
+  }, [fetchPlugins]);
+
+  const restart = useCallback(async () => {
+    setRestarting(true);
+    try {
+      await api.post('/admin/restart');
+    } catch { /* server is shutting down, expected */ }
+
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        await api.get('/app/features');
+        window.location.reload();
+        return;
+      } catch { /* still down */ }
+    }
+    setRestarting(false);
+    alert('Server did not come back after 30 seconds. Check the logs.');
+  }, []);
+
+  return {
+    plugins, registry, loading, registryLoading, registryError,
+    toggling, installing, uninstalling, restarting, installMessage,
+    fetchPlugins, fetchRegistry, checkForUpdates,
+    toggle, install, uninstall, restart,
+    setInstallMessage,
+  };
+}
