@@ -5,7 +5,7 @@ import { clsx } from 'clsx';
 import { useAuth } from '@/context/AuthContext';
 import { usePluginUI } from '@/plugins/usePlugins';
 import { PluginAdminTab } from '@/plugins/PluginAdminTab';
-import { ADMIN_GROUPS, ADMIN_TABS, findGroupForTab } from './admin/tabsConfig';
+import { ADMIN_TABS, findGroupForTab } from './admin/tabsConfig';
 
 import { DashboardTab } from './admin/DashboardTab';
 import { BackupsTab } from './admin/BackupsTab';
