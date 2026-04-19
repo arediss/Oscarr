@@ -9,6 +9,21 @@ import { getAccessTag } from '../middleware/rbac.js';
  * Must be registered BEFORE routes so the onRoute hook catches every addition.
  */
 export async function registerDocs(app: FastifyInstance) {
+  // Tags are cheap to compute and harmless in prod; registering the hook unconditionally matches
+  // the pre-refactor behavior (the hook used to live outside the dev-only swagger gate).
+  app.addHook('onRoute', (routeOptions) => {
+    if (routeOptions.url.startsWith('/api/docs')) return;
+    if (!routeOptions.url.startsWith('/api/')) return;
+
+    const segment = (routeOptions.prefix || '').split('/').filter(Boolean).pop() || 'other';
+    const categoryTag = segment.charAt(0).toUpperCase() + segment.slice(1);
+
+    const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
+    const accessTag = getAccessTag(methods[0], routeOptions.url);
+
+    routeOptions.schema = { ...routeOptions.schema, tags: [categoryTag, accessTag] };
+  });
+
   if (process.env.NODE_ENV === 'production') return;
 
   await app.register(swagger, {
@@ -42,18 +57,5 @@ export async function registerDocs(app: FastifyInstance) {
         if (user.role !== 'admin') return reply.status(403).send({ error: 'Admin only' });
       },
     },
-  });
-
-  app.addHook('onRoute', (routeOptions) => {
-    if (routeOptions.url.startsWith('/api/docs')) return;
-    if (!routeOptions.url.startsWith('/api/')) return;
-
-    const segment = (routeOptions.prefix || '').split('/').filter(Boolean).pop() || 'other';
-    const categoryTag = segment.charAt(0).toUpperCase() + segment.slice(1);
-
-    const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
-    const accessTag = getAccessTag(methods[0], routeOptions.url);
-
-    routeOptions.schema = { ...routeOptions.schema, tags: [categoryTag, accessTag] };
   });
 }

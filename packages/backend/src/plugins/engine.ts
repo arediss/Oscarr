@@ -254,6 +254,14 @@ export class PluginEngine {
     return contributions.sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
   }
 
+  /** Plugins whose on-disk load failed. Used by the boot bootstrap to surface a single
+   *  aggregated warning once every plugin has been processed. */
+  listFailed(): { id: string; error: string }[] {
+    return Array.from(this.plugins.values())
+      .filter((p) => p.error)
+      .map((p) => ({ id: p.manifest.id, error: p.error as string }));
+  }
+
   getAllFeatureFlags(): Record<string, boolean> {
     const flags: Record<string, boolean> = {};
     for (const plugin of this.plugins.values()) {
