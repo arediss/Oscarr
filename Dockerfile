@@ -19,7 +19,12 @@ RUN npx prisma generate --schema=packages/backend/prisma/schema.prisma
 
 # Build shared first — backend + frontend both import @oscarr/shared compiled to JS.
 RUN npm run build --workspace=packages/shared
-RUN npm run build --workspace=packages/backend
+
+# Bundle backend into a single dist/server.js (~2.8 MB). Natives (bcrypt, bare-*) + Prisma stay
+# external — they need real files on disk. See esbuild.config.mjs for the externals list.
+RUN npm run build:bundle --workspace=packages/backend
+
+# Build frontend
 RUN npm run build --workspace=packages/frontend
 
 # ── Stage 2: Production ──
@@ -31,8 +36,7 @@ FROM node:22-alpine
 RUN apk add --no-cache tini su-exec wget
 
 # Create the non-root user BEFORE any COPY so --chown=oscarr:oscarr on the COPY lines
-# bakes ownership into each layer without a 300+ MB post-copy `chown -R` that would
-# duplicate every file via Docker's COW filesystem.
+# bakes ownership into each layer without a 300+ MB post-copy `chown -R`.
 RUN addgroup -S -g 1001 oscarr \
  && adduser -S -G oscarr -u 1001 oscarr \
  && mkdir -p /data \
@@ -40,28 +44,28 @@ RUN addgroup -S -g 1001 oscarr \
 
 WORKDIR /app
 
-# Install prod deps. npm workspaces hoists all subtrees into the root node_modules, and the
-# lockfile doesn't differentiate by workspace — so `--workspace=backend` doesn't actually
-# skip the frontend tree's hoisted deps. Image slimming (drop frontend-only deps, prune
-# @prisma size, etc.) is tracked as a follow-up; current size ≈ 1.35 GB post --chown optim.
-COPY --chown=oscarr:oscarr package.json package-lock.json ./
-COPY --chown=oscarr:oscarr packages/backend/package.json packages/backend/
-COPY --chown=oscarr:oscarr packages/frontend/package.json packages/frontend/
-COPY --chown=oscarr:oscarr packages/shared/package.json packages/shared/
-RUN npm ci --omit=dev
+# Install ONLY the runtime externals (Prisma + native modules) from a trimmed manifest.
+# Everything else (fastify, axios, archiver, swagger, zod, …) is inlined in dist/server.js.
+# This is the 500+ MB image-slimming win vs shipping the full `npm ci --omit=dev` tree.
+COPY --chown=oscarr:oscarr packages/backend/package.prod.json packages/backend/package.json
+RUN cd packages/backend && npm install --omit=dev --no-audit --no-fund
 
-# Copy the built shared package + backend dist + frontend dist + prisma bits from the
-# builder. --chown= avoids the duplicate-files-in-new-layer cost of a post-copy chown -R.
-COPY --from=builder --chown=oscarr:oscarr /app/packages/shared/dist packages/shared/dist
-COPY --from=builder --chown=oscarr:oscarr /app/packages/backend/dist packages/backend/dist
+# Bundled backend server + its sourcemap (keeps stack traces useful in prod logs).
+COPY --from=builder --chown=oscarr:oscarr /app/packages/backend/dist/server.js packages/backend/dist/server.js
+COPY --from=builder --chown=oscarr:oscarr /app/packages/backend/dist/server.js.map packages/backend/dist/server.js.map
+
+# Frontend bundle served by @fastify/static from the bundled backend.
 COPY --from=builder --chown=oscarr:oscarr /app/packages/frontend/dist packages/frontend/dist
-COPY --chown=oscarr:oscarr packages/backend/prisma packages/backend/prisma
-COPY --from=builder --chown=oscarr:oscarr /app/node_modules/.prisma node_modules/.prisma
-COPY --from=builder --chown=oscarr:oscarr /app/node_modules/@prisma/client node_modules/@prisma/client
-COPY --from=builder --chown=oscarr:oscarr /app/node_modules/prisma node_modules/prisma
-COPY --from=builder --chown=oscarr:oscarr /app/node_modules/@prisma/engines node_modules/@prisma/engines
 
-# Root package.json (version probe uses it at runtime).
+# Prisma schema + migrations: the bundled server still shells out to `prisma migrate deploy`
+# on boot, so the schema and migrations folder need to be on disk.
+COPY --chown=oscarr:oscarr packages/backend/prisma packages/backend/prisma
+
+# Prisma generated client + platform-specific engines, copied from the builder (they were
+# generated there during `prisma generate`).
+COPY --from=builder --chown=oscarr:oscarr /app/node_modules/.prisma packages/backend/node_modules/.prisma
+
+# Root package.json used by src/routes/app.ts + services/backupService.ts for the app version.
 COPY --chown=oscarr:oscarr package.json .
 
 # Entrypoint: chown /data (covers upgrade from pre-1001 volumes + host bind mounts) then
@@ -80,4 +84,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 
 # tini → entrypoint.sh → node as oscarr. Exec-form throughout so docker stop propagates SIGTERM.
 ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/entrypoint.sh"]
-CMD ["node", "packages/backend/dist/index.js"]
+CMD ["node", "packages/backend/dist/server.js"]

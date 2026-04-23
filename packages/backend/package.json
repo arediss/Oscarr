@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "build:bundle": "node esbuild.config.mjs",
     "start": "node dist/index.js",
     "db:generate": "dotenv -e ../../.env -- prisma generate",
     "db:migrate": "dotenv -e ../../.env -- prisma migrate deploy",
@@ -45,6 +46,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/semver": "^7.7.1",
     "dotenv-cli": "^11.0.0",
+    "esbuild": "^0.25.9",
     "tsx": "^4.19.3",
     "typescript": "^6.0.2"
   }

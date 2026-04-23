@@ -6,11 +6,12 @@ import { execFileSync } from 'child_process';
 import archiver from 'archiver';
 import { prisma } from '../utils/prisma.js';
 import { logEvent } from '../utils/logEvent.js';
+import { BACKEND_ROOT, PROJECT_PACKAGE_JSON } from '../utils/paths.js';
 
 /** Backup creation + HMAC signing + file rotation. Consumed by routes and scheduler. */
 
 const APP_VERSION = JSON.parse(
-  readFileSync(resolve(import.meta.dirname, '../../../../package.json'), 'utf-8'),
+  readFileSync(PROJECT_PACKAGE_JSON, 'utf-8'),
 ).version as string;
 
 export function getBackupAppVersion(): string {
@@ -40,8 +41,8 @@ export function safeEqualHex(a: string, b: string): boolean {
 export function getDbPath(): string {
   const url = process.env.DATABASE_URL || 'file:../data/oscarr.db';
   const relativePath = url.replace('file:', '');
-  // DATABASE_URL is relative to packages/backend/ (Prisma convention).
-  return resolve(import.meta.dirname, '../', relativePath);
+  // DATABASE_URL is Prisma-relative to packages/backend/.
+  return resolve(BACKEND_ROOT, relativePath);
 }
 
 export function getBackupDir(): string {

@@ -1,15 +1,13 @@
 import { readdir, readFile, stat, access } from 'fs/promises';
-import { join, resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join, resolve } from 'path';
 import type { PluginManifest } from './types.js';
 import { parseManifest } from './manifestSchema.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { PLUGINS_DIR } from '../utils/paths.js';
 
 /** Resolve the plugins directory. Supports OSCARR_PLUGINS_DIR env var. */
 export function getPluginsDir(): string {
   if (process.env.OSCARR_PLUGINS_DIR) return resolve(process.env.OSCARR_PLUGINS_DIR);
-  return resolve(__dirname, '../../../plugins');
+  return PLUGINS_DIR;
 }
 
 export interface DiscoveredPlugin {

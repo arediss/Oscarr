@@ -66,6 +66,78 @@ jobs:
           cache-from: type=local,src=/tmp/docker-cache
           cache-to: type=local,dest=/tmp/docker-cache,mode=max
 
+  # Boot the bundled image end-to-end on amd64: healthcheck, static frontend, public API.
+  # Catches regressions from the esbuild externals list — a missing native in externals (bcrypt,
+  # bare-*, Prisma engines) only surfaces at runtime when the `require()` misses, not at build
+  # time. Gate the manifest on this so we never promote a broken bundle to :latest.
+  smoke:
+    name: Smoke test (amd64)
+    needs: build
+    permissions:
+      contents: read
+      packages: read
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull image
+        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-linux-amd64
+
+      - name: Boot + probe
+        run: |
+          DATADIR=$(mktemp -d)
+          chmod 0777 "$DATADIR"
+          docker run -d --name oscarr-smoke \
+            -p 127.0.0.1:3456:3456 \
+            -v "$DATADIR:/data" \
+            -e JWT_SECRET=ci-smoke-test-secret \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-linux-amd64
+
+          # Wait up to 90s for the healthcheck (covers prisma migrate deploy on a fresh DB).
+          for i in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' oscarr-smoke 2>/dev/null || echo "starting")
+            echo "[$i/30] health=$status"
+            if [ "$status" = "healthy" ]; then break; fi
+            sleep 3
+          done
+          if [ "$status" != "healthy" ]; then
+            echo "::error::Container never became healthy"
+            docker logs oscarr-smoke | tail -80
+            exit 1
+          fi
+
+          # Probe three representative surfaces:
+          # - /api/setup/install-status: always-mounted (pre-auth, migration-safe)
+          # - /api/app/features: pre-auth public settings, exercises Prisma read
+          # - /: static frontend fallback (@fastify/static on FRONTEND_DIST)
+          set -e
+          curl -fsS http://127.0.0.1:3456/api/setup/install-status > /dev/null
+          curl -fsS http://127.0.0.1:3456/api/app/features | grep -q '"siteName"'
+          curl -fsS http://127.0.0.1:3456/ | grep -q '<!doctype html'
+          echo "Smoke OK"
+
+      - name: Graceful shutdown check
+        run: |
+          # docker stop sends SIGTERM via tini. If tini/entrypoint forward correctly, node exits
+          # <10s. A process that ignores SIGTERM waits for the 10s docker kill timeout.
+          start=$(date +%s)
+          docker stop oscarr-smoke
+          elapsed=$(( $(date +%s) - start ))
+          echo "Shutdown took ${elapsed}s"
+          if [ "$elapsed" -ge 10 ]; then
+            echo "::error::Shutdown exceeded 10s — SIGTERM likely not propagated"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f oscarr-smoke 2>/dev/null || true
+
   # Trivy scan on the amd64 image (representative of both)
   scan:
     name: Trivy Scan
@@ -97,7 +169,7 @@ jobs:
   # Merge platform images into a single multi-arch manifest
   manifest:
     name: Create multi-arch manifest
-    needs: [build, scan]
+    needs: [build, scan, smoke]
     permissions:
       contents: read
       packages: write

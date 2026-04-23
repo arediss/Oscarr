@@ -1,16 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { readFileSync } from 'fs';
-import { resolve } from 'path';
 import axios from 'axios';
 import crypto from 'crypto';
 import { prisma } from '../utils/prisma.js';
 import { pluginEngine } from '../plugins/engine.js';
 import { getArrClient } from '../providers/index.js';
 import { getServiceConfig } from '../utils/services.js';
+import { PROJECT_PACKAGE_JSON } from '../utils/paths.js';
 import { getHomepageLayout } from './admin/homepage.js';
 
 const APP_VERSION = JSON.parse(
-  readFileSync(resolve(import.meta.dirname, '../../../../package.json'), 'utf-8')
+  readFileSync(PROJECT_PACKAGE_JSON, 'utf-8')
 ).version as string;
 
 export async function appRoutes(app: FastifyInstance) {
