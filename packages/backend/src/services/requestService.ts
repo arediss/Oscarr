@@ -5,7 +5,7 @@ import { matchFolderRule } from './folderRules.js';
 import { logEvent } from '../utils/logEvent.js';
 import { getServiceById, getAllServices } from '../utils/services.js';
 import { VALID_MEDIA_TYPES } from '../utils/params.js';
-import { ACTIVE_REQUEST_STATUSES, COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
+import { ACTIVE_REQUEST_STATUSES, COMPLETABLE_REQUEST_STATUSES } from '@oscarr/shared';
 
 // ---------------------------------------------------------------------------
 // Validation

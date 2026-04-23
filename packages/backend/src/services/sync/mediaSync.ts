@@ -5,7 +5,7 @@ import { getServiceConfig } from '../../utils/services.js';
 import { logEvent } from '../../utils/logEvent.js';
 import type { SyncResult } from './helpers.js';
 import { sendAvailabilityNotifications } from './helpers.js';
-import { COMPLETABLE_REQUEST_STATUSES } from '../../utils/requestStatus.js';
+import { COMPLETABLE_REQUEST_STATUSES } from '@oscarr/shared';
 
 export async function syncArrService(serviceType: string, since?: Date | null): Promise<SyncResult> {
   const start = Date.now();

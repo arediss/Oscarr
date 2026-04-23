@@ -6,14 +6,19 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/backend/package.json packages/backend/
 COPY packages/frontend/package.json packages/frontend/
+COPY packages/shared/package.json packages/shared/
 RUN npm ci
 
 # Copy source
+COPY packages/shared packages/shared
 COPY packages/backend packages/backend
 COPY packages/frontend packages/frontend
 
 # Generate Prisma client
 RUN npx prisma generate --schema=packages/backend/prisma/schema.prisma
+
+# Build shared package first — backend + frontend both import @oscarr/shared compiled to JS.
+RUN npm run build --workspace=packages/shared
 
 # Build backend (TypeScript → dist/)
 RUN npm run build --workspace=packages/backend
@@ -29,7 +34,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/backend/package.json packages/backend/
 COPY packages/frontend/package.json packages/frontend/
+COPY packages/shared/package.json packages/shared/
 RUN npm ci --omit=dev
+
+# Copy the shared package's compiled dist/ from the builder stage — backend's dist/ imports
+# @oscarr/shared at runtime and resolves via the workspace symlink npm ci just created.
+COPY --from=builder /app/packages/shared/dist packages/shared/dist
 
 # Copy Prisma schema, migrations, generated client + CLI (needed for migrate deploy)
 COPY packages/backend/prisma packages/backend/prisma
