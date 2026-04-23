@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Film, Loader2, CheckCircle, RefreshCw, PartyPopper, Plus, Trash2, XCircle, Eye, EyeOff, Mail, Pencil } from 'lucide-react';
 import api from '@/lib/api';
 import { useServiceSchemas } from '@/hooks/useServiceSchemas';
+import { extractApiError } from '@/utils/toast';
 
 interface WizardService {
   id: string;
@@ -83,8 +84,7 @@ export default function InstallPage() {
       await login('', data.user);
       setStep(2);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg || t('login.error'));
+      setError(extractApiError(err, t('login.error')));
     } finally { setSaving(false); }
   };
 
@@ -231,8 +231,7 @@ export default function InstallPage() {
       }
       setStep(3);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('common.error');
-      setError(msg);
+      setError(extractApiError(err, t('common.error')));
     } finally { setSaving(false); }
   };
 
@@ -244,13 +243,15 @@ export default function InstallPage() {
     setSyncing(true);
     setError('');
     try {
-      const { data } = await api.post('/setup/sync');
-      setSyncResult(data.result);
+      // Backend returns { ok, result, restarting: true } then process.exit(0) 500ms later so
+      // setup routes unmount. If the response races with the exit we may see a network error
+      // despite the install succeeding — poll /install-status after, don't trust the throw.
+      const { data } = await api.post('/setup/sync').catch(() => ({ data: null }));
+      if (data?.result) setSyncResult(data.result);
       setSyncDone(true);
       setTimeout(() => setStep(4), 2000);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('common.error');
-      setError(msg);
+      setError(extractApiError(err, t('common.error')));
     } finally { setSyncing(false); }
   };
 
@@ -260,10 +261,16 @@ export default function InstallPage() {
 
   useEffect(() => {
     if (step !== 4) return;
-    if (countdown <= 0) { navigate('/', { replace: true }); return; }
+    if (countdown <= 0) {
+      // Hard reload instead of SPA navigation: BackendGate cached installed:false at mount.
+      // A full reload re-probes /setup/install-status (now reporting installed:true) and
+      // remounts the app on the normal routes instead of looping back to /install.
+      window.location.href = '/';
+      return;
+    }
     const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
     return () => clearTimeout(timer);
-  }, [step, countdown, navigate]);
+  }, [step, countdown]);
 
   if (checking) {
     return (
@@ -311,7 +318,7 @@ export default function InstallPage() {
 
           {/* Setup Secret Gate */}
           {step === 0 && !secretValid && (
-            <form className="space-y-4 animate-fade-in" onSubmit={async (e) => {
+            <form className="space-y-4" onSubmit={async (e) => {
               e.preventDefault();
               if (!setupSecret) return;
               sessionStorage.setItem('setup-secret', setupSecret);
@@ -326,8 +333,9 @@ export default function InstallPage() {
               }
             }}>
               <div>
-                <label className="text-sm text-ndp-text mb-1.5 block font-medium">{t('install.setup_secret', 'Setup Secret')}</label>
+                <label htmlFor="install-setup-secret" className="text-sm text-ndp-text mb-1.5 block font-medium">{t('install.setup_secret', 'Setup Secret')}</label>
                 <input
+                  id="install-setup-secret"
                   type="password"
                   value={setupSecret}
                   onChange={(e) => { setSetupSecret(e.target.value); setError(''); }}
@@ -349,7 +357,7 @@ export default function InstallPage() {
 
           {/* Step 0 after secret → go to step 1 */}
           {step === 0 && secretValid && (
-            <div className="space-y-4 animate-fade-in">
+            <div className="space-y-4">
               <p className="text-sm text-ndp-text-muted text-center">{t('install.admin_desc')}</p>
               <button onClick={() => setStep(1)} className="btn-primary text-sm w-full">{t('common.next')}</button>
             </div>
@@ -357,7 +365,7 @@ export default function InstallPage() {
 
           {/* Step 1: Create admin account */}
           {step === 1 && (
-            <form onSubmit={handleCreateAdmin} className="space-y-4 animate-fade-in">
+            <form onSubmit={handleCreateAdmin} className="space-y-4">
               <div>
                 <h2 className="text-sm font-semibold text-ndp-text mb-1">{t('install.admin_title')}</h2>
                 <p className="text-xs text-ndp-text-dim">{t('install.admin_desc')}</p>
@@ -366,7 +374,7 @@ export default function InstallPage() {
               <input type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder={t('login.email_placeholder')} required className="input w-full" />
               <div className="relative">
                 <input type={showPassword ? 'text' : 'password'} value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder={t('login.password_placeholder')} required minLength={8} className="input w-full pr-10" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text">
+                <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? t('common.hide') : t('common.show')} className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
@@ -380,7 +388,7 @@ export default function InstallPage() {
 
           {/* Step 2: Services (all types, dynamic) */}
           {step === 2 && (
-            <div className="space-y-4 animate-fade-in">
+            <div className="space-y-4">
               <div>
                 <h2 className="text-sm font-semibold text-ndp-text mb-1">{t('install.arr_title')}</h2>
                 <p className="text-xs text-ndp-text-dim">{t('install.arr_desc')}</p>
@@ -515,7 +523,7 @@ export default function InstallPage() {
 
           {/* Step 3: Sync */}
           {step === 3 && (
-            <div className="space-y-6 animate-fade-in text-center">
+            <div className="space-y-6 text-center">
               <div>
                 <h2 className="text-lg font-bold text-ndp-text mb-1">{t('install.sync_title')}</h2>
                 <p className="text-xs text-ndp-text-dim">{t('install.sync_desc')}</p>
@@ -544,7 +552,7 @@ export default function InstallPage() {
 
           {/* Step 4: Done */}
           {step === 4 && (
-            <div className="space-y-6 animate-fade-in text-center">
+            <div className="space-y-6 text-center">
               <div className="flex justify-center">
                 <div className="w-16 h-16 bg-ndp-success/10 rounded-full flex items-center justify-center">
                   <PartyPopper className="w-8 h-8 text-ndp-success" />

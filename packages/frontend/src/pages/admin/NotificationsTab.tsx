@@ -196,11 +196,14 @@ export function NotificationsTab() {
         <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
           <h3 className="text-lg font-bold text-ndp-text mb-4">{t(provider.nameKey)}</h3>
           <div className="space-y-4">
-            {provider.settingsSchema.map((field) => (
+            {provider.settingsSchema.map((field) => {
+              const inputId = `notif-${provider.id}-${field.key}`;
+              return (
               <div key={field.key}>
-                <label className="text-xs text-ndp-text-dim block mb-1">{t(field.labelKey)}</label>
+                <label htmlFor={inputId} className="text-xs text-ndp-text-dim block mb-1">{t(field.labelKey)}</label>
                 <div className="relative">
                   <input
+                    id={inputId}
                     type={field.type === 'password' && !showSecrets[field.key] ? 'password' : 'text'}
                     value={editSettings[field.key] || ''}
                     onChange={(e) => setEditSettings(prev => ({ ...prev, [field.key]: e.target.value }))}
@@ -211,6 +214,7 @@ export function NotificationsTab() {
                     <button
                       type="button"
                       onClick={() => setShowSecrets(prev => ({ ...prev, [field.key]: !prev[field.key] }))}
+                      aria-label={showSecrets[field.key] ? t('common.hide') : t('common.show')}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text"
                     >
                       {showSecrets[field.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -218,7 +222,8 @@ export function NotificationsTab() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
           <div className="flex gap-3 mt-6">
             <button onClick={() => setEditingProvider(null)} className="btn-secondary text-sm flex-1">{t('common.cancel')}</button>

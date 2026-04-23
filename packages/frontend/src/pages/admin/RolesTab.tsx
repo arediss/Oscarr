@@ -6,6 +6,7 @@ import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
+import { useModal } from '@/hooks/useModal';
 
 interface Role {
   id: number;
@@ -159,9 +160,13 @@ export function RolesTab() {
     }
   };
 
+  const isModalOpen = creating || !!editingRole;
+  // Hooks must stay above the `if (loading)` early return.
+  const editModal = useModal({ open: isModalOpen, onClose: closeModal });
+  const confirmDeleteModal = useModal({ open: confirmDelete !== null, onClose: () => setConfirmDelete(null) });
+
   if (loading) return <Spinner />;
 
-  const isModalOpen = creating || !!editingRole;
   const grouped = groupPermissions(allPermissions);
   const isWildcard = formPermissions.includes('*');
 
@@ -249,22 +254,29 @@ export function RolesTab() {
       {/* Create/Edit Modal */}
       {isModalOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="card p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[85vh] flex flex-col">
+          <div
+            ref={editModal.dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={editModal.titleId}
+            className="card p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[85vh] flex flex-col"
+          >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-ndp-text">
+              <h3 id={editModal.titleId} className="text-lg font-bold text-ndp-text">
                 {creating ? t('admin.roles.create', 'New role') : t('admin.roles.edit', 'Edit role')}
               </h3>
-              <button onClick={closeModal} className="p-1 rounded-lg hover:bg-white/5 text-ndp-text-dim">
+              <button onClick={closeModal} aria-label={t('common.close')} className="p-1 rounded-lg hover:bg-white/5 text-ndp-text-dim">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Name */}
             <div className="mb-4">
-              <label className="text-sm text-ndp-text mb-1.5 block font-medium">
+              <label htmlFor="role-name" className="text-sm text-ndp-text mb-1.5 block font-medium">
                 {t('admin.roles.name', 'Name')}
               </label>
               <input
+                id="role-name"
                 type="text"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
@@ -363,10 +375,16 @@ export function RolesTab() {
           the backend reports the role is still assigned to users. */}
       {confirmDelete && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="card p-6 max-w-sm w-full mx-4 shadow-2xl">
+          <div
+            ref={confirmDeleteModal.dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={confirmDeleteModal.titleId}
+            className="card p-6 max-w-sm w-full mx-4 shadow-2xl"
+          >
             {deleteBlocker ? (
               <>
-                <h3 className="text-lg font-bold text-ndp-text mb-2">
+                <h3 id={confirmDeleteModal.titleId} className="text-lg font-bold text-ndp-text mb-2">
                   {t('admin.roles.in_use_title', 'Role still in use')}
                 </h3>
                 <p className="text-sm text-ndp-text-muted mb-1">

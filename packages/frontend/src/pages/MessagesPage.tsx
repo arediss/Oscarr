@@ -71,10 +71,10 @@ export default function MessagesPage() {
       .finally(() => setLoadingMsgs(false));
   }, [activeTicket]);
 
-  // Poll for new messages every 10s
   useEffect(() => {
     if (!activeTicket) return;
     const interval = setInterval(async () => {
+      if (document.hidden) return;
       try {
         const { data } = await api.get(`/support/tickets/${activeTicket.id}/messages`);
         setMessages(data);
@@ -315,6 +315,7 @@ export default function MessagesPage() {
                   className="input flex-1 text-sm rounded-full px-5"
                 />
                 <button onClick={sendMessage} disabled={!input.trim() || sending}
+                  aria-label={t('common.send')}
                   className={clsx(
                     'w-10 h-10 rounded-full flex items-center justify-center transition-all',
                     input.trim() ? 'bg-ndp-accent text-white hover:bg-ndp-accent-hover' : 'bg-white/5 text-ndp-text-dim'

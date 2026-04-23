@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getServiceById } from '../../../utils/services.js';
 import { getAuthProvider, getArrClient, createArrClient } from '../../../providers/index.js';
+import { plexCreatePin, plexCheckPin } from '../../../providers/plex/index.js';
 import { parseId } from '../../../utils/params.js';
 
 /** Service-config helpers — Plex token passthrough + quality profile / root folder lookups.
@@ -16,6 +17,31 @@ export async function servicesHelperRoutes(app: FastifyInstance) {
     const adminUser = request.user as { id: number };
     const token = await provider.getToken(adminUser.id);
     if (!token) return reply.status(404).send({ error: 'No Plex token found' });
+    return { token };
+  });
+
+  /** PIN-based Plex OAuth for admins configuring a new Plex service. Mirrors /setup/plex-pin +
+   *  /setup/plex-check but lives behind admin auth so it's always available — not just during
+   *  install, and independent of whether the admin linked Plex as an auth provider. */
+  app.post('/plex-pin', {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+  }, async () => {
+    return plexCreatePin();
+  });
+
+  app.post('/plex-check', {
+    config: { rateLimit: { max: 120, timeWindow: '2 minutes' } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['pinId'],
+        properties: { pinId: { type: 'number', description: 'Plex PIN ID to check' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { pinId } = request.body as { pinId: number };
+    const token = await plexCheckPin(pinId);
+    if (!token) return reply.status(400).send({ error: 'PIN not validated' });
     return { token };
   });
 

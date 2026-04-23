@@ -4,7 +4,9 @@ import * as jsxRuntime from 'react/jsx-runtime';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { FeaturesProvider } from './context/FeaturesContext';
+import { BackendGate } from './context/BackendGate';
 import App from './App';
+import LoadingScreen from './components/LoadingScreen';
 import './i18n';
 import './index.css';
 
@@ -16,11 +18,13 @@ import './index.css';
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <FeaturesProvider>
-          <App />
-        </FeaturesProvider>
-      </AuthProvider>
+      <BackendGate fallback={<LoadingScreen />}>
+        <AuthProvider>
+          <FeaturesProvider>
+            <App />
+          </FeaturesProvider>
+        </AuthProvider>
+      </BackendGate>
     </BrowserRouter>
   </React.StrictMode>
 );

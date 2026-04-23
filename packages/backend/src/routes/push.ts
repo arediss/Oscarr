@@ -1,20 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import webpush from 'web-push';
 import { prisma } from '../utils/prisma.js';
-
-// Configure VAPID keys from env
-const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY || '';
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@oscarr.app';
-
-if (VAPID_PUBLIC && VAPID_PRIVATE) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
-}
+import { isPushConfigured } from '../services/pushService.js';
 
 export async function pushRoutes(app: FastifyInstance) {
   // POST /push/subscribe — save subscription for current user
   app.post('/subscribe', async (request, reply) => {
-    if (!VAPID_PUBLIC) return reply.status(503).send({ error: 'Push notifications not configured' });
+    if (!isPushConfigured()) return reply.status(503).send({ error: 'Push notifications not configured' });
 
     const user = request.user as { id: number };
     const { endpoint, keys } = request.body as { endpoint: string; keys: { p256dh: string; auth: string } };
@@ -48,27 +39,5 @@ export async function pushRoutes(app: FastifyInstance) {
   });
 }
 
-// Helper: send push notification to all subscriptions for a list of user IDs
-export async function sendPushToUsers(userIds: number[], payload: { title: string; body: string; icon?: string; url?: string }) {
-  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return;
-
-  const subscriptions = await prisma.pushSubscription.findMany({
-    where: { userId: { in: userIds } },
-  });
-
-  const payloadStr = JSON.stringify(payload);
-
-  for (const sub of subscriptions) {
-    try {
-      await webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        payloadStr
-      );
-    } catch (err: any) {
-      // If subscription is expired/invalid, clean it up
-      if (err.statusCode === 410 || err.statusCode === 404) {
-        await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
-      }
-    }
-  }
-}
+// Legacy re-export — new code should import from services/pushService.js directly.
+export { sendPushToUsers } from '../services/pushService.js';

@@ -346,6 +346,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main
+        id="main"
+        tabIndex={-1}
         className={clsx(
           'min-h-dvh',
           'pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0',

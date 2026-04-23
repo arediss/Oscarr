@@ -30,13 +30,23 @@ export default function PersonPage() {
   const [showAllFilmo, setShowAllFilmo] = useState(false);
   const FILMO_INITIAL = 40;
 
-  const allFilmography = useMemo(() =>
-    person?.combined_credits?.cast
-      ?.filter((c) => c.poster_path && (c.vote_count ?? 0) > 5)
-      .sort((a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0))
-      .map((c) => ({ ...c, media_type: c.media_type || (c.title ? 'movie' : 'tv') })) || [],
-    [person],
-  );
+  // Merge cast + crew so directors/producers (known_for_department ≠ Acting) get a real
+  // filmography. Dedup by (media_type,id) since the same film can appear in both arrays
+  // (e.g. actor-director). Keep the cast entry when present so the character name survives.
+  const allFilmography = useMemo(() => {
+    const credits = person?.combined_credits;
+    if (!credits) return [];
+    const byKey = new Map<string, TmdbMedia>();
+    const add = (item: TmdbMedia) => {
+      if (!item.poster_path || (item.vote_count ?? 0) <= 5) return;
+      const mediaType = item.media_type || (item.title ? 'movie' : 'tv');
+      const key = `${mediaType}-${item.id}`;
+      if (!byKey.has(key)) byKey.set(key, { ...item, media_type: mediaType });
+    };
+    credits.cast?.forEach(add);
+    credits.crew?.forEach(add);
+    return Array.from(byKey.values()).sort((a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0));
+  }, [person]);
 
   const filmography = useMemo(
     () => showAllFilmo ? allFilmography : allFilmography.slice(0, FILMO_INITIAL),

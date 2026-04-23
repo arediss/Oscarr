@@ -462,7 +462,7 @@ export default function MediaDetailPage({ type }: Props) {
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-ndp-bg via-ndp-bg/60 to-transparent" />
               {/* Close button -- top right */}
-              <button onClick={closeEpisodeModal} className="absolute top-3 right-3 p-2 text-white/60 hover:text-white rounded-xl hover:bg-black/20 backdrop-blur-sm transition-colors">
+              <button onClick={closeEpisodeModal} aria-label={t('common.close')} className="absolute top-3 right-3 p-2 text-white/60 hover:text-white rounded-xl hover:bg-black/20 backdrop-blur-sm transition-colors">
                 <X className="w-5 h-5" />
               </button>
               {/* Title + availability */}

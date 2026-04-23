@@ -73,12 +73,12 @@ export async function notificationRoutes(app: FastifyInstance) {
     const user = request.user as { id: number };
     const { id } = request.params as { id: string };
     const notifId = parseId(id);
-    if (!notifId) return reply.status(400).send({ error: 'Invalid ID' });
+    if (!notifId) return reply.status(400).send({ error: 'INVALID_ID' });
 
     const notif = await prisma.userNotification.findFirst({
       where: { id: notifId, userId: user.id },
     });
-    if (!notif) return reply.status(404).send({ error: 'Notification not found' });
+    if (!notif) return reply.status(404).send({ error: 'NOTIFICATION_NOT_FOUND' });
 
     await prisma.userNotification.update({
       where: { id: notifId },
@@ -114,12 +114,12 @@ export async function notificationRoutes(app: FastifyInstance) {
     const user = request.user as { id: number };
     const { id } = request.params as { id: string };
     const notifId = parseId(id);
-    if (!notifId) return reply.status(400).send({ error: 'Invalid ID' });
+    if (!notifId) return reply.status(400).send({ error: 'INVALID_ID' });
 
     const notif = await prisma.userNotification.findFirst({
       where: { id: notifId, userId: user.id },
     });
-    if (!notif) return reply.status(404).send({ error: 'Notification not found' });
+    if (!notif) return reply.status(404).send({ error: 'NOTIFICATION_NOT_FOUND' });
 
     await prisma.userNotification.delete({ where: { id: notifId } });
 

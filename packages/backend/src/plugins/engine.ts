@@ -7,7 +7,7 @@ import { discoverPlugins } from './loader.js';
 import { parseManifest } from './manifestSchema.js';
 import { checkCompat, type CompatResult } from './compat.js';
 import { updateJobSchedule } from '../services/scheduler.js';
-import { createContext, type ContextFactoryDeps } from './context/index.js';
+import { createContext, clearLogRateCounter, type ContextFactoryDeps } from './context/index.js';
 import { PluginRouter } from './router.js';
 import { enforcePluginRoutePermission, unregisterPluginRbac } from '../middleware/rbac.js';
 import type {
@@ -114,7 +114,9 @@ export class PluginEngine {
       await prisma.pluginState.update({
         where: { pluginId: manifest.id },
         data: { enabled: false },
-      }).catch(() => {});
+      }).catch((dbErr) => {
+        this.log('error', `Failed to mark plugin "${manifest.id}" as disabled in DB after route error: ${dbErr}`);
+      });
     }
   }
 
@@ -318,7 +320,8 @@ export class PluginEngine {
     // plugin and keep affecting routing until process restart.
     unregisterPluginRbac(id);
 
-    await prisma.pluginState.update({ where: { pluginId: id }, data: { enabled: false } }).catch(() => {});
+    await prisma.pluginState.update({ where: { pluginId: id }, data: { enabled: false } })
+      .catch((err) => this.log('warn', `Failed to mark plugin "${id}" disabled during uninstall: ${err}`));
 
     await rm(plugin.dir, { recursive: true, force: true }).catch((err) => {
       this.log('error', `Failed to delete plugin dir "${plugin.dir}": ${err}`);
@@ -327,6 +330,7 @@ export class PluginEngine {
     this.plugins.delete(id);
     this.settingsCache.delete(id);
     this.compatCache.delete(id);
+    clearLogRateCounter(id);
     this.log('info', `Uninstalled "${id}"`);
     return true;
   }

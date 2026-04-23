@@ -1,5 +1,6 @@
 import { useRef, memo } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import MediaCard, { MediaCardSkeleton } from './MediaCard';
 import { useMediaStatus, getStatusForMedia } from '@/hooks/useMediaStatus';
@@ -19,6 +20,7 @@ const SIZE_CLASSES = {
 };
 
 function MediaRow({ title, media, loading, href, size = 'default' }: MediaRowProps) {
+  const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const statuses = useMediaStatus(media);
 
@@ -39,7 +41,8 @@ function MediaRow({ title, media, loading, href, size = 'default' }: MediaRowPro
           <Link
             to={href}
             className="flex items-center gap-1 text-ndp-text-dim hover:text-ndp-accent transition-colors group/link"
-            title="Voir plus"
+            title={t('home.more_info')}
+            aria-label={t('home.more_info')}
           >
             <ArrowRight className="w-5 h-5 group-hover/link:translate-x-0.5 transition-transform" />
           </Link>

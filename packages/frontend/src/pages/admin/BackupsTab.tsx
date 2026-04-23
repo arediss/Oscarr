@@ -6,6 +6,7 @@ import { Loader2, CheckCircle, AlertTriangle, Trash2, Download, Upload, Archive,
 import api from '@/lib/api';
 import { showToast } from '@/utils/toast';
 import { AdminTabLayout } from './AdminTabLayout';
+import { useModal } from '@/hooks/useModal';
 
 /**
  * Download / upload an Oscarr archive — lives in the System group. Handles the full create +
@@ -23,7 +24,9 @@ export function BackupsTab() {
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [includeCache, setIncludeCache] = useState(false);
   const [savedBackups, setSavedBackups] = useState<{ filename: string; size: number; createdAt: string }[]>([]);
+  const [restorePassword, setRestorePassword] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const restoreModalA11y = useModal({ open: restoreModal, onClose: () => setRestoreModal(false) });
 
   useEffect(() => {
     api.get('/admin/backup/list')
@@ -90,12 +93,24 @@ export function BackupsTab() {
       const { data } = await api.post('/admin/backup/restore', {
         db: dbBase64,
         manifest: restoreManifest,
+        password: restorePassword,
       });
 
       setRestoreResult(data.message);
+      setRestorePassword('');
     } catch (err) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setRestoreError(msg || t('admin.backup.restore_failed'));
+      const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const mapped = (() => {
+        switch (code) {
+          case 'PASSWORD_REQUIRED': return t('admin.backup.password_required');
+          case 'INVALID_PASSWORD': return t('admin.backup.invalid_password');
+          case 'BACKUP_SIGNATURE_INVALID': return t('admin.backup.signature_invalid');
+          case 'BACKUP_UNSIGNED': return t('admin.backup.unsigned');
+          case 'ADMIN_HAS_NO_PASSWORD': return t('admin.backup.admin_no_password');
+          default: return code || t('admin.backup.restore_failed');
+        }
+      })();
+      setRestoreError(mapped);
     } finally { setRestoring(false); }
   };
 
@@ -189,13 +204,20 @@ export function BackupsTab() {
 
         {restoreModal && createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setRestoreModal(false)}>
-            <div className="card p-6 max-w-md w-full mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div
+              ref={restoreModalA11y.dialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={restoreModalA11y.titleId}
+              className="card p-6 max-w-md w-full mx-4 shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Archive className="w-5 h-5 text-ndp-accent" />
-                  <h3 className="text-lg font-bold text-ndp-text">{t('admin.backup.restore')}</h3>
+                  <h3 id={restoreModalA11y.titleId} className="text-lg font-bold text-ndp-text">{t('admin.backup.restore')}</h3>
                 </div>
-                <button onClick={() => setRestoreModal(false)} className="p-1 rounded-lg hover:bg-white/5 text-ndp-text-dim">
+                <button onClick={() => setRestoreModal(false)} aria-label={t('common.close')} className="p-1 rounded-lg hover:bg-white/5 text-ndp-text-dim">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -248,11 +270,29 @@ export function BackupsTab() {
                     {t('admin.backup.restore_warning')}
                   </div>
 
+                  <div>
+                    <label htmlFor="restore-password" className="text-sm text-ndp-text mb-1.5 block">
+                      {t('admin.backup.confirm_password')}
+                    </label>
+                    <input
+                      id="restore-password"
+                      type="password"
+                      value={restorePassword}
+                      onChange={(e) => setRestorePassword(e.target.value)}
+                      placeholder={t('admin.backup.confirm_password_placeholder')}
+                      className="input w-full"
+                      autoComplete="current-password"
+                    />
+                    <p className="text-xs text-ndp-text-dim mt-1">
+                      {t('admin.backup.confirm_password_help')}
+                    </p>
+                  </div>
+
                   <div className="flex gap-2">
-                    <button onClick={() => { setRestoreFile(null); setRestoreManifest(null); setRestoreValidation(null); }} className="btn-secondary text-sm flex-1">
+                    <button onClick={() => { setRestoreFile(null); setRestoreManifest(null); setRestoreValidation(null); setRestorePassword(''); }} className="btn-secondary text-sm flex-1">
                       {t('common.cancel')}
                     </button>
-                    <button onClick={handleRestore} disabled={restoring} className="btn-danger text-sm flex-1 flex items-center justify-center gap-2">
+                    <button onClick={handleRestore} disabled={restoring || !restorePassword} className="btn-danger text-sm flex-1 flex items-center justify-center gap-2">
                       {restoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                       {t('admin.backup.confirm_restore')}
                     </button>

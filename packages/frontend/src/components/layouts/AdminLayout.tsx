@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Menu, X, Search } from 'lucide-react';
+import { Menu, X, Search, ArrowUpCircle, ExternalLink, AlertCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // Diacritic-insensitive lowercase so "systeme" matches "Système" and "acces" matches "Accès".
@@ -16,11 +16,13 @@ const shortcutHint = isAppleHost ? '⌘K' : 'Ctrl+K';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useFeatures } from '@/context/FeaturesContext';
+import { useVersionInfo } from '@/hooks/useVersionInfo';
 import { ADMIN_GROUPS, ADMIN_TABS, findGroupForTab } from '@/pages/admin/tabsConfig';
 import { usePluginUI } from '@/plugins/usePlugins';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
 import { UserCluster } from '@/components/nav/UserCluster';
 import NotificationBell from '@/components/NotificationBell';
+import SetupChecklistMenu from '@/components/nav/SetupChecklistMenu';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
@@ -29,6 +31,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { contributions: pluginTabs } = usePluginUI('admin.tabs');
+  const versionInfo = useVersionInfo();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [warnings, setWarnings] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -206,7 +209,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium truncate">{t(group.label)}</span>
-            {hasWarning && <span className="w-1.5 h-1.5 rounded-full bg-ndp-danger flex-shrink-0" />}
+            {hasWarning && <AlertCircle className="w-3.5 h-3.5 text-ndp-warning flex-shrink-0" aria-label={t('admin.sidebar.needs_attention')} />}
           </div>
           {subtitle && (
             <p className={clsx('text-[11px] leading-snug mt-0.5 truncate', isActive ? 'text-ndp-accent/70' : 'text-ndp-text-dim')}>
@@ -233,112 +236,134 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {iconEl}
       <span className="flex-1 truncate">{label}</span>
       {warnings[id] && activeTab !== id && (
-        <span className="w-1.5 h-1.5 rounded-full bg-ndp-danger flex-shrink-0" />
+        <AlertCircle className="w-3.5 h-3.5 text-ndp-warning flex-shrink-0" aria-label={t('admin.sidebar.needs_attention')} />
       )}
     </button>
   );
 
-  const sidebarContent = (
-    <div className="flex flex-col h-full">
-      <div className="px-3 pt-5 pb-3 space-y-3">
-        {/* Sidebar wordmark — uses the configured site name so forks / custom deploys show their
-            own brand. Defaults to "Oscarr". Kept as a heading, not a link (the avatar dropdown
-            carries the "Return to Oscarr" action). */}
-        <h1 className="px-1 text-lg font-bold text-ndp-text tracking-tight">
-          {features.siteName || 'Oscarr'}
-        </h1>
-
-        {/* Admin-wide search — filters tabs (native + plugin pages) by translated label and
-            parent group. ⌘/Ctrl+K focuses from anywhere; Enter picks the top hit. */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ndp-text-dim" />
-          <input
-            data-admin-search
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={onSearchKeyDown}
-            placeholder={t('admin.sidebar.search_placeholder', 'Rechercher…')}
-            className="w-full h-9 pl-9 pr-12 rounded-lg bg-white/5 border border-white/5 text-sm text-ndp-text placeholder:text-ndp-text-dim focus:outline-none focus:border-ndp-accent/30 focus:bg-white/[0.07]"
-            aria-label={t('admin.sidebar.search_placeholder', 'Rechercher…')}
-          />
-          {searchQuery ? (
-            <button
-              onClick={() => { setSearchQuery(''); getVisibleSearchInput()?.focus(); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-ndp-text-dim hover:text-ndp-text hover:bg-white/10 transition-colors"
-              aria-label={t('common.clear', 'Clear')}
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <kbd className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 items-center gap-0.5 px-1.5 h-5 rounded bg-white/5 text-[10px] font-mono text-ndp-text-dim border border-white/5 pointer-events-none">
-              {shortcutHint}
-            </kbd>
-          )}
-        </div>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto px-3 pt-1 space-y-0.5 pb-4">
-        {searchResults === null ? (
-          <>
-            {ADMIN_GROUPS.map(renderGroupButton)}
-            {pluginTabItems.length > 0 && (
-              <div className="mt-6 pt-4 border-t border-white/5">
-                <p className="text-[10px] text-ndp-text-dim uppercase tracking-wider px-3 mb-2 font-semibold">
-                  {pluginGroupLabel}
-                </p>
-                {pluginTabItems.map((tb) =>
-                  renderPluginTabButton(tb.id, tb.label, <DynamicIcon name={tb.pluginIcon} className="w-4 h-4 flex-shrink-0" />)
-                )}
-              </div>
-            )}
-          </>
-        ) : searchResults.length === 0 ? (
-          <p className="px-3 py-6 text-xs text-ndp-text-dim text-center">
-            {t('admin.sidebar.search_no_results', 'Aucun résultat')}
-          </p>
-        ) : (
-          searchResults.map((entry) => {
-            const isActive = activeTab === entry.id;
-            const Icon = entry.icon;
-            return (
-              <button
-                key={entry.id}
-                onClick={() => pickSearchResult(entry.id)}
-                className={clsx(
-                  'flex items-center gap-3 w-full px-3 py-2 rounded-lg text-left transition-colors',
-                  isActive
-                    ? 'bg-ndp-accent/10 text-ndp-accent'
-                    : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
-                )}
-              >
-                {Icon ? (
-                  <Icon className={clsx('w-4 h-4 flex-shrink-0', isActive ? 'text-ndp-accent' : 'text-ndp-text-dim')} />
-                ) : entry.pluginIcon ? (
-                  <DynamicIcon name={entry.pluginIcon} className="w-4 h-4 flex-shrink-0" />
-                ) : null}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate">{entry.label}</span>
-                    {entry.hasWarning && !isActive && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-ndp-danger flex-shrink-0" />
-                    )}
-                  </div>
-                  <p className={clsx('text-[11px] truncate mt-0.5', isActive ? 'text-ndp-accent/70' : 'text-ndp-text-dim')}>
-                    {entry.groupLabel}
-                  </p>
-                </div>
-              </button>
-            );
-          })
-        )}
-      </nav>
+  const searchInput = (
+    <div className="relative">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ndp-text-dim" />
+      <input
+        data-admin-search
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        onKeyDown={onSearchKeyDown}
+        placeholder={t('admin.sidebar.search_placeholder', 'Rechercher…')}
+        className="w-full h-9 pl-9 pr-12 rounded-lg bg-white/5 border border-white/5 text-sm text-ndp-text placeholder:text-ndp-text-dim focus:outline-none focus:border-ndp-accent/30 focus:bg-white/[0.07]"
+        aria-label={t('admin.sidebar.search_placeholder', 'Rechercher…')}
+      />
+      {searchQuery ? (
+        <button
+          onClick={() => { setSearchQuery(''); getVisibleSearchInput()?.focus(); }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-ndp-text-dim hover:text-ndp-text hover:bg-white/10 transition-colors"
+          aria-label={t('common.clear', 'Clear')}
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      ) : (
+        <kbd className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 items-center gap-0.5 px-1.5 h-5 rounded bg-white/5 text-[10px] font-mono text-ndp-text-dim border border-white/5 pointer-events-none">
+          {shortcutHint}
+        </kbd>
+      )}
     </div>
   );
 
-  /** Current-page title for the top bar. Prefers the active group's icon+label (most admin
-   *  pages). Falls back to the plugin-contributed tab's label when the active tab comes from a
-   *  plugin — plugin icons are rendered dynamically by DynamicIcon. */
+  const renderSearchResult = (entry: SearchEntry) => {
+    const isActive = activeTab === entry.id;
+    const Icon = entry.icon;
+    return (
+      <button
+        key={entry.id}
+        onClick={() => pickSearchResult(entry.id)}
+        className={clsx(
+          'flex items-center gap-3 w-full px-3 py-2 rounded-lg text-left transition-colors',
+          isActive ? 'bg-ndp-accent/10 text-ndp-accent' : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5',
+        )}
+      >
+        {Icon ? (
+          <Icon className={clsx('w-4 h-4 flex-shrink-0', isActive ? 'text-ndp-accent' : 'text-ndp-text-dim')} />
+        ) : entry.pluginIcon ? (
+          <DynamicIcon name={entry.pluginIcon} className="w-4 h-4 flex-shrink-0" />
+        ) : null}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium truncate">{entry.label}</span>
+            {entry.hasWarning && !isActive && (
+              <AlertCircle className="w-3.5 h-3.5 text-ndp-warning flex-shrink-0" aria-label={t('admin.sidebar.needs_attention')} />
+            )}
+          </div>
+          <p className={clsx('text-[11px] truncate mt-0.5', isActive ? 'text-ndp-accent/70' : 'text-ndp-text-dim')}>
+            {entry.groupLabel}
+          </p>
+        </div>
+      </button>
+    );
+  };
+
+  const tabList = (
+    <>
+      {ADMIN_GROUPS.map(renderGroupButton)}
+      {pluginTabItems.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-white/5">
+          <p className="text-[10px] text-ndp-text-dim uppercase tracking-wider px-3 mb-3 font-semibold">
+            {pluginGroupLabel}
+          </p>
+          {pluginTabItems.map((tb) =>
+            renderPluginTabButton(tb.id, tb.label, <DynamicIcon name={tb.pluginIcon} className="w-4 h-4 flex-shrink-0" />)
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  /** Sidebar body. `withSearch=true` (mobile drawer) keeps the legacy inline search + results
+   *  in the nav, since mobile doesn't see the topbar search. `withSearch=false` (desktop aside)
+   *  drops the wordmark and search — those live in the topbar now — and always renders tabs. */
+  const sidebarBody = (withSearch: boolean) => (
+    <div className="flex flex-col h-full">
+      {withSearch && (
+        <div className="px-3 pt-5 pb-3 space-y-3">
+          <p className="px-1 text-lg font-bold text-ndp-text tracking-tight" role="presentation">
+            {features.siteName || 'Oscarr'}
+          </p>
+          {searchInput}
+        </div>
+      )}
+
+      <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
+        {withSearch && searchResults !== null ? (
+          searchResults.length === 0 ? (
+            <p className="px-3 py-6 text-xs text-ndp-text-dim text-center">
+              {t('admin.sidebar.search_no_results', 'Aucun résultat')}
+            </p>
+          ) : (
+            searchResults.map(renderSearchResult)
+          )
+        ) : tabList}
+      </nav>
+
+      {versionInfo?.updateAvailable && versionInfo.latest && (
+        <a
+          href={versionInfo.releaseUrl || '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mx-3 mb-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-ndp-accent/10 border border-ndp-accent/20 text-ndp-accent text-xs font-medium hover:bg-ndp-accent/15 transition-colors"
+        >
+          <ArrowUpCircle className="w-4 h-4 flex-shrink-0" />
+          <span className="flex-1 min-w-0">
+            <span className="block truncate">{t('admin.sidebar.update_available', 'Update available')}</span>
+            <span className="block text-[10px] text-ndp-accent/70 font-normal">v{versionInfo.latest}</span>
+          </span>
+          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+        </a>
+      )}
+    </div>
+  );
+
+  /** Mobile-only topbar — just the active page title, no branding/search (both in the drawer).
+   *  Plugin icons are rendered dynamically by DynamicIcon. */
   const activePluginTabItem = pluginTabItems.find((tb) => tb.id === activeTab);
   const headerIcon = activeGroup ? (
     <activeGroup.icon className="w-5 h-5 text-ndp-accent" />
@@ -347,10 +372,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   ) : null;
   const headerLabel = activeGroup ? t(activeGroup.label) : activePluginTabItem?.label ?? '';
 
-  /** Top header — current page title on the left, notifications + avatar on the right. The
-   *  inner row shares the same max-width + horizontal padding as AdminPage's content container
-   *  so the title and the tabs below it line up vertically on wide screens. */
-  const topBar = (
+  const mobileTopBar = (
     <header className="h-14 flex-shrink-0">
       <div className="max-w-[1800px] mx-auto h-full flex items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-3 min-w-0">
@@ -358,21 +380,60 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <h1 className="text-base font-semibold text-ndp-text truncate">{headerLabel}</h1>
         </div>
         <div className="flex items-center gap-1">
+          <SetupChecklistMenu />
           <NotificationBell />
-          <UserCluster
-            viewAsRole={viewAsRole}
-            onViewAsRoleChange={setViewAsRole}
-            variant="compact"
-          />
+          <UserCluster viewAsRole={viewAsRole} onViewAsRoleChange={setViewAsRole} variant="compact" />
+        </div>
+      </div>
+    </header>
+  );
+
+  /** Desktop topbar — wordmark (siteName) on the left, admin-wide search in the middle, icons
+   *  on the right. The search floats a results dropdown below the input when a query is active. */
+  const desktopTopBar = (
+    <header className="h-14 flex-shrink-0">
+      <div
+        className="h-full flex items-center gap-4 pl-3 sm:pl-4"
+        style={{ paddingRight: 'max(1rem, calc((100vw - 1800px) / 2 + 1.5rem))' }}
+      >
+        <p className="text-lg font-bold text-ndp-text tracking-tight flex-shrink-0" role="presentation">
+          {features.siteName || 'Oscarr'}
+        </p>
+        <div className="relative flex-1 max-w-md">
+          {searchInput}
+          {searchResults !== null && (
+            <div className="absolute left-0 right-0 top-full mt-2 card shadow-2xl shadow-black/50 border border-white/10 animate-fade-in overflow-hidden z-50">
+              <div className="max-h-96 overflow-y-auto py-1 px-1 space-y-0.5">
+                {searchResults.length === 0 ? (
+                  <p className="px-3 py-6 text-xs text-ndp-text-dim text-center">
+                    {t('admin.sidebar.search_no_results', 'Aucun résultat')}
+                  </p>
+                ) : (
+                  searchResults.map(renderSearchResult)
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+          <SetupChecklistMenu />
+          <NotificationBell />
+          <UserCluster viewAsRole={viewAsRole} onViewAsRoleChange={setViewAsRole} variant="compact" />
         </div>
       </div>
     </header>
   );
 
   return (
-    <div className="min-h-dvh bg-ndp-bg flex">
-      <aside className="hidden md:flex md:flex-col w-72 flex-shrink-0 border-r border-white/5 sticky top-0 h-dvh">
-        {sidebarContent}
+    <div className="min-h-dvh bg-ndp-bg flex flex-col">
+      {/* Topbar spans the full viewport (above the sidebar) so its `max-w-[1800px] mx-auto` is
+          centered against the same width as Layout.tsx's home topbar. Otherwise the max-w
+          centers within `viewport - sidebar`, shifting avatar/notif ~60px right between pages. */}
+      <div className="hidden md:block border-b border-white/5">{desktopTopBar}</div>
+
+      <div className="flex flex-1 min-h-0">
+      <aside className="hidden md:flex md:flex-col w-72 flex-shrink-0 border-r border-white/5 sticky top-0 h-[calc(100dvh-3.5rem)]">
+        {sidebarBody(false)}
       </aside>
 
       {/* Mobile bottom nav — menu button + active tab label. Avatar + bell on mobile live in
@@ -416,12 +477,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         >
           <X className="w-4 h-4 text-ndp-text-muted" />
         </button>
-        {sidebarContent}
+        {sidebarBody(true)}
       </aside>
 
       <div className="flex-1 min-w-0 flex flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
-        {topBar}
-        <main className="flex-1 min-w-0">{children}</main>
+        <div className="md:hidden">{mobileTopBar}</div>
+        <main id="main" tabIndex={-1} className="flex-1 min-w-0">{children}</main>
+      </div>
       </div>
     </div>
   );

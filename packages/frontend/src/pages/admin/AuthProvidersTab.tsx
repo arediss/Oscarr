@@ -6,6 +6,7 @@ import { KeyRound, Loader2, Check, Copy, Pencil, Power, X, AlertTriangle } from 
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
+import { extractApiError } from '@/utils/toast';
 
 interface AuthProviderField {
   key: string;
@@ -232,9 +233,7 @@ function ProviderConfigModal({
       await api.patch(`/admin/auth-providers/${provider.id}`, { config: cleaned });
       onSaved();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        ?? (err as Error).message;
-      setError(msg);
+      setError(extractApiError(err, (err as Error).message));
     } finally {
       setSaving(false);
     }

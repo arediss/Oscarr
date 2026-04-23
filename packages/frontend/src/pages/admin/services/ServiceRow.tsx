@@ -42,11 +42,28 @@ export function ServiceRow({
           </div>
         </div>
 
-        {result && (
-          <span className={clsx('text-xs px-2 py-1 rounded-lg flex-shrink-0', result.ok ? 'bg-ndp-success/10 text-ndp-success' : 'bg-ndp-danger/10 text-ndp-danger')}>
-            {result.ok ? (result.version ? `v${result.version}` : t('status.connected')) : t('status.connection_failed')}
-          </span>
-        )}
+        {result && (() => {
+          const blocked = !result.ok && result.errorCode === 'URL_BLOCKED_BY_SSRF_GUARD';
+          return (
+            <span
+              className={clsx(
+                'text-xs px-2 py-1 rounded-lg flex-shrink-0',
+                result.ok
+                  ? 'bg-ndp-success/10 text-ndp-success'
+                  : blocked
+                  ? 'bg-ndp-warning/10 text-ndp-warning'
+                  : 'bg-ndp-danger/10 text-ndp-danger',
+              )}
+              title={blocked ? t('admin.services.ssrf_blocked') : undefined}
+            >
+              {result.ok
+                ? (result.version ? `v${result.version}` : t('status.connected'))
+                : blocked
+                ? t('status.ssrf_blocked')
+                : t('status.connection_failed')}
+            </span>
+          );
+        })()}
 
         <div className="flex items-center gap-0.5 flex-shrink-0">
           <button onClick={() => onTest(service)} disabled={testing} className="p-2 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors" title={t('common.test')}>

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { logEvent } from '../utils/logEvent.js';
-import { runFullSync } from '../services/sync.js';
+import { runFullSync } from '../services/sync/index.js';
 import { initScheduler } from '../services/scheduler.js';
 import { isInstalled, markInstalled } from '../utils/install.js';
 
@@ -28,16 +28,15 @@ async function requireSetupSecret(request: FastifyRequest, reply: FastifyReply) 
   }
 }
 
-export async function setupRoutes(app: FastifyInstance) {
-  // install-status is public — frontend needs it before anything else
+/** Always-on status endpoint — frontend needs it before anything else. */
+export async function setupStatusRoutes(app: FastifyInstance) {
   app.get('/install-status', async () => {
     return { installed: isInstalled() };
   });
+}
 
-  // All other setup routes require: not installed + valid secret
+export async function setupRoutes(app: FastifyInstance) {
   app.addHook('preHandler', async (request, reply) => {
-    // Skip install-status (already handled above, but hook runs for all routes in this plugin)
-    if (request.url.endsWith('/install-status')) return;
     await requireNotInstalled(request, reply);
     await requireSetupSecret(request, reply);
   });
@@ -158,12 +157,11 @@ export async function setupRoutes(app: FastifyInstance) {
     try {
       const result = await runFullSync();
       await initScheduler();
-
-      // Mark installation as complete — locks all setup routes
       markInstalled();
-
       logEvent('info', 'Setup', 'First full sync completed');
-      return { ok: true, result };
+      // Restart so setup routes are physically unmounted (supervisor/docker will respawn).
+      setTimeout(() => process.exit(0), 500);
+      return { ok: true, result, restarting: true };
     } catch (err) {
       return reply.status(500).send({ error: 'Sync failed', details: String(err) });
     }

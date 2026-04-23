@@ -4,11 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { Loader2, CheckCircle, RefreshCw, Trash2, Link, ChevronDown, UserX, UserCheck, RefreshCcw, Download } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
-import { showToast } from '@/utils/toast';
+import { showToast, extractApiError } from '@/utils/toast';
 import { useAuth } from '@/context/AuthContext';
 import type { AdminUser } from '@/types';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
+import { useModal } from '@/hooks/useModal';
 
 type UserSort = 'username' | 'date' | 'role';
 
@@ -24,12 +25,17 @@ export function UsersTab() {
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number; total: number } | null>(null);
   const [deletingUser, setDeletingUser] = useState<number | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<number | null>(null);
+  const confirmDeleteModal = useModal({
+    open: confirmDeleteUser !== null,
+    onClose: () => setConfirmDeleteUser(null),
+  });
   const [linkingUser, setLinkingUser] = useState<number | null>(null);
   const [linkModal, setLinkModal] = useState<{ userId: number; provider: string } | null>(null);
   const [linkUsername, setLinkUsername] = useState('');
   const [linkPassword, setLinkPassword] = useState('');
   const [linkError, setLinkError] = useState('');
   const [authProviders, setAuthProviders] = useState<{ id: string; label: string; type: string }[]>([]);
+  const [syncableProviders, setSyncableProviders] = useState<{ id: string; label: string; type: string }[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [updatingRoleFor, setUpdatingRoleFor] = useState<number | null>(null);
   const [togglingDisabledFor, setTogglingDisabledFor] = useState<number | null>(null);
@@ -66,9 +72,12 @@ export function UsersTab() {
   useEffect(() => {
     api.get('/auth/providers')
       .then(({ data }) => setAuthProviders(data))
-      // If this fails the Sync buttons silently don't render — at least surface the cause
-      // in the console so the admin has a diagnostic when the toolbar goes blank.
       .catch((err) => console.error('Failed to fetch auth providers:', err));
+    // Sync buttons are driven by service availability, not SSO — fetched separately so admins
+    // can sync a Plex service they've configured even with Plex SSO turned off.
+    api.get('/admin/auth-providers/syncable')
+      .then(({ data }) => setSyncableProviders(data))
+      .catch((err) => console.error('Failed to fetch syncable providers:', err));
   }, []);
   useEffect(() => { api.get('/admin/roles').then(({ data }) => setRoles(data)).catch(() => {}); }, []);
 
@@ -147,8 +156,7 @@ export function UsersTab() {
       setLinkPassword('');
       fetchUsers();
     } catch (err) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setLinkError(msg || t('login.error'));
+      setLinkError(extractApiError(err, t('login.error')));
     } finally {
       setLinkingUser(null);
     }
@@ -167,8 +175,7 @@ export function UsersTab() {
       fetchUsers();
     } catch (err) {
       console.error('Import failed:', err);
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      showToast(msg || t('admin.users.import_failed'), 'error');
+      showToast(extractApiError(err, t('admin.users.import_failed')), 'error');
       // Keep the modal open with the selection intact so the admin can retry.
     }
     finally { setImporting(false); }
@@ -206,8 +213,7 @@ export function UsersTab() {
       fetchUsers();
     } catch (err) {
       console.error('Sync failed:', err);
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      showToast(msg || t('admin.users.sync_failed', { provider: providerLabel }), 'error');
+      showToast(extractApiError(err, t('admin.users.sync_failed', { provider: providerLabel })), 'error');
     }
     finally { setSyncing(false); }
   };
@@ -225,7 +231,7 @@ export function UsersTab() {
       title={t('admin.users.count', { count: users.length })}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          {authProviders.filter(p => p.id !== 'email').map(p => (
+          {syncableProviders.map(p => (
             <button key={p.id} onClick={() => handleSync(p.id, p.label)} disabled={syncing} className="btn-secondary flex items-center gap-2 text-sm">
               {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
               {t('admin.users.sync_provider', { provider: p.label })}
@@ -425,7 +431,8 @@ export function UsersTab() {
                         ? 'text-ndp-success hover:bg-ndp-success/10'
                         : 'text-ndp-text-dim hover:text-ndp-warning hover:bg-ndp-warning/10'
                     )}
-                    title={u.disabled ? 'Re-enable account' : 'Disable account'}
+                    title={u.disabled ? t('admin.users.enable_account', 'Re-enable account') : t('admin.users.disable_account', 'Disable account')}
+                    aria-label={u.disabled ? t('admin.users.enable_account', 'Re-enable account') : t('admin.users.disable_account', 'Disable account')}
                   >
                     {togglingDisabledFor === u.id ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -442,6 +449,7 @@ export function UsersTab() {
                     disabled={u.id === currentUser?.id || deletingUser === u.id}
                     className="p-1.5 rounded-lg text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors disabled:opacity-30 disabled:hover:text-ndp-text-dim disabled:hover:bg-transparent disabled:cursor-not-allowed"
                     title={t('admin.danger.delete_user')}
+                    aria-label={t('admin.danger.delete_user')}
                   >
                     {deletingUser === u.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                   </button>
@@ -453,8 +461,14 @@ export function UsersTab() {
 
       {confirmDeleteUser && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="card p-6 max-w-sm w-full mx-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-ndp-text mb-2">{t('admin.danger.confirm_title')}</h3>
+          <div
+            ref={confirmDeleteModal.dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={confirmDeleteModal.titleId}
+            className="card p-6 max-w-sm w-full mx-4 shadow-2xl"
+          >
+            <h3 id={confirmDeleteModal.titleId} className="text-lg font-bold text-ndp-text mb-2">{t('admin.danger.confirm_title')}</h3>
             <p className="text-sm text-ndp-text-muted mb-1">
               {t('admin.users.confirm_delete', { name: users.find(u => u.id === confirmDeleteUser)?.displayName || users.find(u => u.id === confirmDeleteUser)?.email })}
             </p>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Component as ReactComponent } from 'react';
 import type { PluginUIContribution } from './types';
-import { loadPluginModule, hasLoaded, getCached, pluginHookUrl } from './pluginModuleCache';
+import { loadPluginModule, hasLoaded, getCached, pluginHookUrl, PLUGIN_SCOPE_ATTR } from './pluginModuleCache';
 
 interface Props {
   pluginId: string;
@@ -43,9 +43,12 @@ export function PluginHookComponent({ pluginId, hookPoint, context, contribution
 
   if (!ready || !Comp) return null;
 
+  // `display: contents` keeps the scope wrapper out of layout so parent flex/grid still applies.
   return (
-    <PluginErrorBoundary>
-      <Comp contribution={contribution} context={context} />
-    </PluginErrorBoundary>
+    <div {...{ [PLUGIN_SCOPE_ATTR]: pluginId }} style={{ display: 'contents' }}>
+      <PluginErrorBoundary>
+        <Comp contribution={contribution} context={context} />
+      </PluginErrorBoundary>
+    </div>
   );
 }

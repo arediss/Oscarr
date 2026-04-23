@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useFeatures } from '@/context/FeaturesContext';
+import { useBackend } from '@/context/BackendGate';
 import Layout from '@/components/Layout';
-import AdminLayout from '@/components/layouts/AdminLayout';
+import LoadingScreen from '@/components/LoadingScreen';
 import HomePage from '@/pages/HomePage';
 import LoginPage from '@/pages/LoginPage';
 import InstallPage from '@/pages/InstallPage';
@@ -14,31 +15,14 @@ import PersonPage from '@/pages/PersonPage';
 import RequestsPage from '@/pages/RequestsPage';
 import MessagesPage from '@/pages/MessagesPage';
 
-import AdminPage from '@/pages/AdminPage';
+const AdminPage = lazy(() => import('@/pages/AdminPage'));
+const AdminLayout = lazy(() => import('@/components/layouts/AdminLayout'));
 import NoAccessPage from '@/pages/NoAccessPage';
 import DiscoverGenrePage from '@/pages/DiscoverGenrePage';
 import CategoryPage from '@/pages/CategoryPage';
 import CalendarPage from '@/pages/CalendarPage';
 import { PluginPage } from '@/plugins/PluginPage';
-import api from '@/lib/api';
 import { NsfwFilterContext, useNsfwFilterProvider } from '@/hooks/useNsfwFilter';
-
-function InstallGuard({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<'checking' | 'installed' | 'not-installed'>('checking');
-  const location = useLocation();
-
-  useEffect(() => {
-    api.get('/setup/install-status')
-      .then(({ data }) => setStatus(data.installed ? 'installed' : 'not-installed'))
-      .catch(() => setStatus('installed'));
-  }, [location.pathname]);
-
-  if (status === 'checking') return <LoadingScreen />;
-  if (status === 'not-installed' && location.pathname !== '/install') {
-    return <Navigate to="/install" replace />;
-  }
-  return <>{children}</>;
-}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -66,18 +50,6 @@ function RequireFeature({ feature, children }: { feature: string; children: Reac
   return <>{children}</>;
 }
 
-function LoadingScreen() {
-  const { t } = useTranslation();
-  return (
-    <div className="min-h-dvh bg-ndp-bg flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-ndp-accent/30 border-t-ndp-accent rounded-full animate-spin" />
-        <p className="text-ndp-text-muted text-sm">{t('common.loading')}</p>
-      </div>
-    </div>
-  );
-}
-
 function PageTransition({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   useEffect(() => {
@@ -90,19 +62,44 @@ function PageTransition({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function App() {
+function SkipLink() {
+  const { t } = useTranslation();
   return (
-    <InstallGuard>
+    <a
+      href="#main"
+      className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-ndp-accent focus:text-white focus:font-medium focus:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+    >
+      {t('nav.skip_to_content')}
+    </a>
+  );
+}
+
+export default function App() {
+  const { installed } = useBackend();
+
+  if (!installed) {
+    return (
+      <Routes>
+        <Route path="/install" element={<InstallPage />} />
+        <Route path="*" element={<Navigate to="/install" replace />} />
+      </Routes>
+    );
+  }
+
+  return (
+    <>
+    <SkipLink />
     <Routes>
-      <Route path="/install" element={<InstallPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/admin/*"
         element={
           <ProtectedRoute>
-            <AdminLayout>
-              <AdminPage />
-            </AdminLayout>
+            <Suspense fallback={<LoadingScreen />}>
+              <AdminLayout>
+                <AdminPage />
+              </AdminLayout>
+            </Suspense>
           </ProtectedRoute>
         }
       />
@@ -113,23 +110,18 @@ export default function App() {
             <Layout>
               <PageTransition>
                 <Routes>
-                  {/* These pages require Plex server access */}
                   <Route path="/" element={<RequireAccess><HomePage /></RequireAccess>} />
                   <Route path="/search" element={<RequireAccess><SearchPage /></RequireAccess>} />
                   <Route path="/movie/:id" element={<RequireAccess><MediaDetailPage type="movie" /></RequireAccess>} />
                   <Route path="/tv/:id" element={<RequireAccess><MediaDetailPage type="tv" /></RequireAccess>} />
                   <Route path="/person/:id" element={<RequireAccess><PersonPage /></RequireAccess>} />
                   <Route path="/requests" element={<RequireFeature feature="requestsEnabled"><RequireAccess><RequestsPage /></RequireAccess></RequireFeature>} />
-
                   <Route path="/discover/:mediaType/genre/:genreId" element={<RequireAccess><DiscoverGenrePage /></RequireAccess>} />
                   <Route path="/category/:slug" element={<RequireAccess><CategoryPage /></RequireAccess>} />
                   <Route path="/calendar" element={<RequireFeature feature="calendarEnabled"><RequireAccess><CalendarPage /></RequireAccess></RequireFeature>} />
-
-                  {/* Support accessible even without full access */}
                   <Route path="/support" element={<RequireFeature feature="supportEnabled"><MessagesPage /></RequireFeature>} />
-
-                  {/* Plugin pages */}
                   <Route path="/p/:pluginId/*" element={<PluginPage />} />
+                  <Route path="/install" element={<Navigate to="/" replace />} />
                 </Routes>
               </PageTransition>
             </Layout>
@@ -137,6 +129,6 @@ export default function App() {
         }
       />
     </Routes>
-    </InstallGuard>
+    </>
   );
 }

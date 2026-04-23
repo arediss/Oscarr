@@ -8,6 +8,7 @@ import { PluginSlot } from '@/plugins/PluginSlot';
 import GenreRow from '@/components/GenreRow';
 import type { TmdbMedia } from '@/types';
 import { dbMediaToTmdbShape } from '@/utils/mediaMapper';
+import { buildDiscoverUrl } from '@/utils/tmdbDiscoverQuery';
 import { useTmdbList } from '@/hooks/useTmdbList';
 import { useHomepageLayout, type HomepageSection } from '@/hooks/useHomepageLayout';
 
@@ -82,38 +83,8 @@ function BuiltinSection({ builtinKey, title, size }: { builtinKey: string; title
   );
 }
 
-function buildDiscoverUrl(query: NonNullable<HomepageSection['query']>): string {
-  const params = new URLSearchParams();
-  if (query.genres?.length) params.set('with_genres', query.genres.join(','));
-
-  const dateGteField = query.mediaType === 'tv' ? 'first_air_date.gte' : 'primary_release_date.gte';
-  const dateLteField = query.mediaType === 'tv' ? 'first_air_date.lte' : 'primary_release_date.lte';
-
-  if (query.releasedWithin) {
-    const now = new Date();
-    const lte = now.toISOString().split('T')[0];
-    let gte: string;
-    switch (query.releasedWithin) {
-      case 'last_30d': gte = new Date(now.getTime() - 30 * 86400000).toISOString().split('T')[0]; break;
-      case 'last_90d': gte = new Date(now.getTime() - 90 * 86400000).toISOString().split('T')[0]; break;
-      case 'last_6m': gte = new Date(now.getTime() - 180 * 86400000).toISOString().split('T')[0]; break;
-      case 'last_1y': gte = new Date(now.getTime() - 365 * 86400000).toISOString().split('T')[0]; break;
-      default: gte = lte;
-    }
-    params.set(dateGteField, gte);
-    params.set(dateLteField, lte);
-  } else {
-    if (query.yearGte) params.set(dateGteField, `${query.yearGte}-01-01`);
-    if (query.yearLte) params.set(dateLteField, `${query.yearLte}-12-31`);
-  }
-
-  if (query.voteAverageGte) params.set('vote_average.gte', String(query.voteAverageGte));
-  if (query.voteCountGte) params.set('vote_count.gte', String(query.voteCountGte));
-  if (query.sortBy) params.set('sort_by', query.sortBy);
-  if (query.language) params.set('with_original_language', query.language);
-  const qs = params.toString();
-  return `/tmdb/discover/${query.mediaType}${qs ? `?${qs}` : ''}`;
-}
+// buildDiscoverUrl lives in @/utils/tmdbDiscoverQuery — shared shape with the backend's
+// preview endpoint. Imported where needed below.
 
 function CustomSection({ query, title, size }: { query: NonNullable<HomepageSection['query']>; title: string; size?: 'default' | 'large' }) {
   const url = buildDiscoverUrl(query);
@@ -161,6 +132,7 @@ function HeroCarousel({ trending, loading }: { trending: TmdbMedia[]; loading: b
   useEffect(() => {
     if (trending.length === 0) return;
     const interval = setInterval(() => {
+      if (document.hidden) return;
       setHeroVisible(false);
       setTimeout(advanceHero, 500);
     }, 8000);

@@ -5,14 +5,7 @@ import api from '@/lib/api';
 import { AdminTabLayout } from './AdminTabLayout';
 import { PluginSlot } from '@/plugins/PluginSlot';
 
-/**
- * Admin dashboard — quick read-only overview of the instance. Plugins can extend it by
- * contributing components on the `admin.dashboard` hook point; each contribution renders
- * below the core stats grid.
- *
- * Kept deliberately shallow for now: 4 KPI cards + a plugin slot. When we know what admins
- * actually want on here (health checks? recent requests? disk usage?) we'll grow the shape.
- */
+/** Admin dashboard — stats + plugin slot + setup checklist. */
 
 type StatKey = 'users' | 'pendingRequests' | 'services' | 'plugins';
 type Stats = Record<StatKey, number | null>;

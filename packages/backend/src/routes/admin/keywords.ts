@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../utils/prisma.js';
+import { invalidateNsfwIdsCache } from '../media.js';
 
 export async function keywordsRoutes(app: FastifyInstance) {
   // === KEYWORDS ===
@@ -56,6 +57,7 @@ export async function keywordsRoutes(app: FastifyInstance) {
       where: { tmdbId: id },
       data: { tag: tag || null },
     });
+    if (keyword.tag === 'nsfw' || tag === 'nsfw') invalidateNsfwIdsCache();
     return updated;
   });
 }

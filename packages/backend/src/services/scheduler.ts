@@ -1,11 +1,12 @@
 import cron, { type ScheduledTask } from 'node-cron';
 import { prisma } from '../utils/prisma.js';
-import { runFullSync, runNewMediaSync } from './sync.js';
+import { runFullSync, runNewMediaSync } from './sync/index.js';
 import { syncRequestsFromTags, cleanupOrphanedRequests } from './requestSync.js';
 import { retryFailedRequests } from './requestService.js';
 import { getGenreBackdrops } from './tmdb.js';
 import { syncMissingKeywords } from './sync/keywordSync.js';
-import { runAutoBackup } from '../routes/admin/backup.js';
+import { runAutoBackup } from './backupService.js';
+import { clearExpiredCache } from '../utils/cache.js';
 import type { PluginEngine } from '../plugins/engine.js';
 import { logEvent } from '../utils/logEvent.js';
 
@@ -24,18 +25,20 @@ const JOB_HANDLERS: Record<string, () => Promise<unknown>> = {
   genre_backdrops_refresh: async () => getGenreBackdrops(),
   keyword_sync: async () => syncMissingKeywords(),
   auto_backup: async () => runAutoBackup(),
+  cache_cleanup: async () => ({ removed: await clearExpiredCache() }),
 };
 
-// Default job definitions (seeded on first boot)
+// `label` is an i18n key resolved by the frontend; plugin jobs with free-text labels fall through.
 const DEFAULT_JOBS = [
-  { key: 'new_media_sync', label: 'Sync new media', cronExpression: '*/15 * * * *', enabled: true },
-  { key: 'full_sync', label: 'Full sync (Radarr + Sonarr)', cronExpression: '0 6 * * *', enabled: true },
-  { key: 'request_sync', label: 'Sync requests', cronExpression: '*/5 * * * *', enabled: true },
-  { key: 'cleanup_orphans', label: 'Cleanup orphaned requests', cronExpression: '0 3 * * *', enabled: true },
-  { key: 'retry_failed_requests', label: 'Retry failed requests', cronExpression: '*/30 * * * *', enabled: true },
-  { key: 'genre_backdrops_refresh', label: 'Refresh genre backdrops', cronExpression: '0 4 * * *', enabled: true },
-  { key: 'keyword_sync', label: 'Sync TMDB keywords', cronExpression: '0 */1 * * *', enabled: true },
-  { key: 'auto_backup', label: 'Auto backup', cronExpression: '0 */6 * * *', enabled: true },
+  { key: 'new_media_sync',        label: 'admin.jobs.labels.new_media_sync',        cronExpression: '*/15 * * * *', enabled: true },
+  { key: 'full_sync',              label: 'admin.jobs.labels.full_sync',              cronExpression: '0 6 * * *',    enabled: true },
+  { key: 'request_sync',           label: 'admin.jobs.labels.request_sync',           cronExpression: '*/5 * * * *',  enabled: true },
+  { key: 'cleanup_orphans',        label: 'admin.jobs.labels.cleanup_orphans',        cronExpression: '0 3 * * *',    enabled: true },
+  { key: 'retry_failed_requests',  label: 'admin.jobs.labels.retry_failed_requests',  cronExpression: '*/30 * * * *', enabled: true },
+  { key: 'genre_backdrops_refresh', label: 'admin.jobs.labels.genre_backdrops_refresh', cronExpression: '0 4 * * *',   enabled: true },
+  { key: 'keyword_sync',           label: 'admin.jobs.labels.keyword_sync',           cronExpression: '0 */1 * * *',  enabled: true },
+  { key: 'auto_backup',            label: 'admin.jobs.labels.auto_backup',            cronExpression: '0 */6 * * *',  enabled: true },
+  { key: 'cache_cleanup',          label: 'admin.jobs.labels.cache_cleanup',          cronExpression: '0 3 * * *',    enabled: true },
 ];
 
 const activeTasks = new Map<string, ScheduledTask>();
@@ -44,9 +47,10 @@ let _pluginEngine: PluginEngine | null = null;
 
 async function seedJobs() {
   for (const job of DEFAULT_JOBS) {
+    // Re-sync label so upgrades pick up the new i18n key; cron + enabled stay user-controlled.
     await prisma.cronJob.upsert({
       where: { key: job.key },
-      update: {},
+      update: { label: job.label },
       create: job,
     });
   }
@@ -103,7 +107,7 @@ async function runJob(key: string) {
         lastResult: JSON.stringify({ error: String(err) }),
       },
     });
-    logEvent('error', 'Job', `Job "${sanitize(key)}" failed: ${String(err)}`);
+    logEvent('error', 'Job', `Job "${sanitize(key)}" failed`, err);
     throw err;
   }
 }

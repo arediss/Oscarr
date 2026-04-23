@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
 import { invalidateMediaStatus } from '@/hooks/useMediaStatus';
 import type { TmdbMedia } from '@/types';
+import { extractApiError } from '@/utils/toast';
 
 export function useMediaRequestActions(
   media: TmdbMedia | null,
@@ -40,9 +41,7 @@ export function useMediaRequestActions(
       invalidateMediaStatus(media.id, type);
       await refreshDbData();
     } catch (err: unknown) {
-      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      const message = apiError || (err instanceof Error ? err.message : t('common.error'));
-      setRequestError(message);
+      setRequestError(extractApiError(err, err instanceof Error ? err.message : t('common.error')));
       setTimeout(() => setRequestError(''), 5000);
     } finally {
       setRequesting(false);
@@ -57,8 +56,7 @@ export function useMediaRequestActions(
       await api.post('/requests/search-missing', { tmdbId: media.id, mediaType: type });
       setSearchMissingState('searching');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setSearchMissingError(msg || t('common.error'));
+      setSearchMissingError(extractApiError(err, t('common.error')));
       setSearchMissingState('error');
       setTimeout(() => { setSearchMissingState('idle'); setSearchMissingError(''); }, 5000);
     } finally {

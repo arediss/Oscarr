@@ -35,11 +35,23 @@ function getTagColor(tag: string, index: number): string {
 /** Inline autocomplete tag input for a single keyword row */
 function TagCell({ keyword, allTags, onUpdate }: { keyword: Keyword; allTags: string[]; onUpdate: (tmdbId: number, tag: string | null) => void }) {
   const { t } = useTranslation();
+  // All hooks MUST run unconditionally on every render. Previously inputRef / dropPos /
+  // useEffect lived below the "display tag" early return, so the render after setting a tag
+  // changed the hook count and crashed. Keep every hook above any conditional return.
   const [editing, setEditing] = useState(false);
   const [input, setInput] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
   const suggestions = input.trim()
     ? allTags.filter((t) => t.toLowerCase().includes(input.toLowerCase()) && t !== keyword.tag)
     : allTags.filter((t) => t !== keyword.tag);
+
+  useEffect(() => {
+    if (editing && inputRef.current && suggestions.length > 0) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+  }, [editing, suggestions]);
 
   function handleSelect(tag: string) {
     onUpdate(keyword.tmdbId, tag);
@@ -75,16 +87,6 @@ function TagCell({ keyword, allTags, onUpdate }: { keyword: Keyword; allTags: st
       </div>
     );
   }
-
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
-
-  useEffect(() => {
-    if (editing && inputRef.current && suggestions.length > 0) {
-      const rect = inputRef.current.getBoundingClientRect();
-      setDropPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-    }
-  }, [editing, suggestions]);
 
   if (editing) {
     return (

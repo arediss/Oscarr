@@ -1,5 +1,7 @@
 import type { PluginContext, PluginManifest } from '../types.js';
-import { createContextV1, type V1FactoryDeps } from './v1.js';
+import { createContextV1, clearLogRateCounter, type V1FactoryDeps } from './v1.js';
+
+export { clearLogRateCounter };
 
 // ─── Public types ──────────────────────────────────────────────────
 

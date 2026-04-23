@@ -36,7 +36,7 @@ model AuthProviderSettings {
 
 Upsert-on-read: a brand-new provider added to the code after an earlier migration gets a disabled default row automatically on first query. No manual seed or migration is needed to introduce a new provider.
 
-Before v0.7.0, enablement was coupled to the `Service` table — which worked for providers that doubled as media servers (plex/jellyfin/emby) but had nowhere to put Discord OAuth (Discord isn't a media server, so it had no `Service` row to hook config onto). The rework decouples the two: toggling a media service no longer affects its auth provider and vice versa.
+Before v0.6.3, enablement was coupled to the `Service` table — which worked for providers that doubled as media servers (plex/jellyfin/emby) but had nowhere to put Discord OAuth (Discord isn't a media server, so it had no `Service` row to hook config onto). The rework decouples the two: toggling a media service no longer affects its auth provider and vice versa.
 
 ## How it works at runtime
 

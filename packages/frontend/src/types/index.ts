@@ -112,6 +112,7 @@ export interface TmdbPerson {
   known_for_department: string;
   combined_credits: {
     cast: (TmdbMedia & { character: string; release_date?: string; first_air_date?: string })[];
+    crew: (TmdbMedia & { job: string; department: string; release_date?: string; first_air_date?: string })[];
   };
 }
 

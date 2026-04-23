@@ -7,10 +7,10 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 
-/** Plugin id → injected `<link>` node. Stored by reference so removal never has to re-query
- *  the DOM with a user-controlled selector (escape safety) and stays consistent with the DOM
- *  across Vite HMR cycles where module state resets but document.head doesn't. */
-const cssLinks = new Map<string, HTMLLinkElement>();
+const cssStyles = new Map<string, HTMLStyleElement>();
+
+/** Attribute that plugin containers must carry — matches the scope prefix applied to their CSS. */
+export const PLUGIN_SCOPE_ATTR = 'data-oscarr-plugin';
 
 /** Extract the plugin id from a plugin asset URL. Both entry-point and hook-point URLs follow
  *  `/api/plugins/<pluginId>/frontend/...`, so the third path segment is the id. */
@@ -19,41 +19,57 @@ function pluginIdFromUrl(url: string): string | null {
   return match ? (match[1] ?? null) : null;
 }
 
-/**
- * Inject a `<link rel="stylesheet">` for the plugin's compiled CSS bundle, once per plugin.
- * Called only after the plugin's JS loads successfully so a broken import doesn't leave an
- * orphan stylesheet in the page. If the CSS file 404s (plugin not rebuilt with the Tailwind
- * scaffolder), we surface a dev-mode warning rather than debug-archaeology the network panel.
- */
-function ensurePluginCss(pluginId: string): void {
-  if (cssLinks.has(pluginId)) return;
-  // HMR safety: if a previous module instance already appended the link, re-use it.
-  const existing = Array.from(document.head.querySelectorAll<HTMLLinkElement>('link[data-plugin-id]'))
-    .find((el) => el.dataset.pluginId === pluginId);
-  if (existing) {
-    cssLinks.set(pluginId, existing);
-    return;
-  }
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = `/api/plugins/${pluginId}/frontend/index.css`;
-  link.dataset.pluginId = pluginId;
-  if (import.meta.env.DEV) {
-    link.onerror = () => console.warn(
-      `Plugin "${pluginId}" did not ship a CSS bundle. Run \`npm run plugin:add-tailwind -- <plugin-dir>\` to enable Tailwind in the plugin.`,
-    );
-  }
-  document.head.appendChild(link);
-  cssLinks.set(pluginId, link);
+/** Prefix every rule selector with the scope attribute. Skips keyframe step selectors. */
+function scopePluginCss(css: string, scope: string): string {
+  return css.replace(/([^{}@]+)\{/g, (match, selectorList: string) => {
+    const trimmed = selectorList.trim();
+    if (!trimmed) return match;
+    if (/^(\d+(\.\d+)?%|from|to)(\s*,\s*(\d+(\.\d+)?%|from|to))*$/.test(trimmed)) return match;
+    const scoped = trimmed
+      .split(',')
+      .map((s) => `${scope} ${s.trim()}`)
+      .join(',');
+    return `${scoped}{`;
+  });
 }
 
-/** Remove a previously-injected plugin CSS link — used when the plugin is disabled /
- *  uninstalled so stale utilities don't keep styling the page after the JS is gone. */
+/** Fetch + scope + inject the plugin's compiled CSS bundle. One-shot per pluginId. */
+async function ensurePluginCss(pluginId: string): Promise<void> {
+  if (cssStyles.has(pluginId)) return;
+  const existing = Array.from(document.head.querySelectorAll<HTMLStyleElement>('style[data-plugin-id]'))
+    .find((el) => el.dataset.pluginId === pluginId);
+  if (existing) {
+    cssStyles.set(pluginId, existing);
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/plugins/${pluginId}/frontend/index.css`);
+    if (!res.ok) {
+      if (import.meta.env.DEV && res.status === 404) {
+        console.warn(
+          `Plugin "${pluginId}" did not ship a CSS bundle. Run \`npm run plugin:add-tailwind -- <plugin-dir>\` to enable Tailwind in the plugin.`,
+        );
+      }
+      return;
+    }
+    const raw = await res.text();
+    const scoped = scopePluginCss(raw, `[${PLUGIN_SCOPE_ATTR}="${CSS.escape(pluginId)}"]`);
+    const style = document.createElement('style');
+    style.dataset.pluginId = pluginId;
+    style.textContent = scoped;
+    document.head.appendChild(style);
+    cssStyles.set(pluginId, style);
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn('Failed to inject CSS for plugin', pluginId, err);
+  }
+}
+
 function removePluginCss(pluginId: string): void {
-  const link = cssLinks.get(pluginId);
-  if (!link) return;
-  link.remove();
-  cssLinks.delete(pluginId);
+  const style = cssStyles.get(pluginId);
+  if (!style) return;
+  style.remove();
+  cssStyles.delete(pluginId);
 }
 
 /** Load a plugin ESM module from a URL. Returns the default export as a React component.
@@ -93,7 +109,7 @@ export function getCached(url: string): ComponentType<any> | null {
 export function invalidate(pluginId?: string): void {
   if (!pluginId) {
     cache.clear();
-    for (const id of Array.from(cssLinks.keys())) removePluginCss(id);
+    for (const id of Array.from(cssStyles.keys())) removePluginCss(id);
     return;
   }
   const prefix = `/api/plugins/${pluginId}/`;

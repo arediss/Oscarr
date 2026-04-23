@@ -147,8 +147,9 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'GET:/api/plugins/updates':            { permission: 'admin.plugins' },
 
   // ── Admin auth-provider settings ──
-  'GET:/api/admin/auth-providers':         { permission: 'admin.*' },
-  'PATCH:/api/admin/auth-providers/:id':   { permission: 'admin.*' },
+  'GET:/api/admin/auth-providers':           { permission: 'admin.*' },
+  'GET:/api/admin/auth-providers/syncable':  { permission: 'admin.*' },
+  'PATCH:/api/admin/auth-providers/:id':     { permission: 'admin.*' },
 
   // ── Admin RBAC routes ──
   'GET:/api/admin/roles':                { permission: 'admin.roles' },
@@ -379,7 +380,7 @@ export function enforcePluginRoutePermission(
 
   const jwtUser = request.user as { id: number; role: string } | undefined;
   if (!jwtUser) {
-    reply.status(401).send({ error: 'Unauthorized' });
+    reply.status(401).send({ error: 'UNAUTHORIZED' });
     return false;
   }
 
@@ -389,7 +390,7 @@ export function enforcePluginRoutePermission(
     : jwtUser.role;
 
   if (!hasPermission(effectiveRole, rule.permission)) {
-    reply.status(403).send({ error: 'Forbidden' });
+    reply.status(403).send({ error: 'FORBIDDEN' });
     return false;
   }
 
@@ -427,7 +428,7 @@ export function rbacPlugin(app: FastifyInstance): void {
     if (!rule) {
       // Fail-closed: no rule -> deny
       request.log.warn(`RBAC: no rule for ${method}:${url}, denying`);
-      return reply.status(403).send({ error: 'Forbidden' });
+      return reply.status(403).send({ error: 'FORBIDDEN' });
     }
 
     // Public route — no auth needed
@@ -437,7 +438,7 @@ export function rbacPlugin(app: FastifyInstance): void {
     try {
       await request.jwtVerify();
     } catch {
-      return reply.status(401).send({ error: 'Unauthorized' });
+      return reply.status(401).send({ error: 'UNAUTHORIZED' });
     }
 
     // Fetch fresh state (role + disabled) — cached 30s
@@ -458,7 +459,7 @@ export function rbacPlugin(app: FastifyInstance): void {
       : freshRole;
 
     if (!hasPermission(effectiveRole, rule.permission)) {
-      return reply.status(403).send({ error: 'Forbidden' });
+      return reply.status(403).send({ error: 'FORBIDDEN' });
     }
 
     // Flag owner-scoped routes for handlers

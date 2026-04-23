@@ -12,6 +12,21 @@ interface SonarrSeason {
   totalEpisodeCount: number;
 }
 
+interface QualityOption { id: number; label: string; position: number }
+
+/** Session cache — admin edits to quality options require a full reload to pick up. */
+let qualityOptionsCache: QualityOption[] | null = null;
+let qualityOptionsInFlight: Promise<QualityOption[]> | null = null;
+function loadQualityOptions(): Promise<QualityOption[]> {
+  if (qualityOptionsCache) return Promise.resolve(qualityOptionsCache);
+  if (qualityOptionsInFlight) return qualityOptionsInFlight;
+  qualityOptionsInFlight = api.get<QualityOption[]>('/app/quality-options')
+    .then(({ data }) => { qualityOptionsCache = data; return data; })
+    .catch(() => [] as QualityOption[])
+    .finally(() => { qualityOptionsInFlight = null; });
+  return qualityOptionsInFlight;
+}
+
 export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv') {
   const { addNsfwIds } = useNsfwFilter();
   const [media, setMedia] = useState<TmdbMedia | null>(null);
@@ -20,7 +35,7 @@ export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv')
   const [inLibrary, setInLibrary] = useState(false);
   const [recommendations, setRecommendations] = useState<TmdbMedia[]>([]);
   const [loading, setLoading] = useState(true);
-  const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string; position: number }[]>([]);
+  const [qualityOptions, setQualityOptions] = useState<QualityOption[]>(() => qualityOptionsCache ?? []);
   const [activeQualityOptionIds, setActiveQualityOptionIds] = useState<number[]>([]);
   const [audioLanguages, setAudioLanguages] = useState<string[]>([]);
   const [subtitleLanguages, setSubtitleLanguages] = useState<string[]>([]);
@@ -43,7 +58,8 @@ export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv')
   }, [id, type, addNsfwIds]);
 
   useEffect(() => {
-    api.get('/app/quality-options').then(({ data }) => setQualityOptions(data)).catch(() => {});
+    if (qualityOptionsCache) return;
+    loadQualityOptions().then((data) => setQualityOptions(data));
   }, []);
 
   useEffect(() => {
@@ -56,36 +72,25 @@ export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv')
     setAudioLanguages([]);
     setSubtitleLanguages([]);
 
-    async function fetchData() {
-      // 1. DB + live check first (fast with timeout) -- resolves button state immediately
-      try {
-        const { data } = await api.get(`/media/tmdb/${id}/${type}`);
-        applyDbData(data);
-        if (!data.id) setDbMedia(null);
-      } catch {
-        setDbMedia(null);
-      }
+    // TMDB and DB fetches are independent — parallel, and flip loading on TMDB arrival so
+    // the page renders before the *arr live-check resolves.
+    const tmdbPromise = api.get(`/tmdb/${type}/${id}`)
+      .then(({ data }) => { setMedia(data); setLoading(false); })
+      .catch((err) => { console.error('Failed to fetch media details:', err); setLoading(false); });
 
-      // 2. TMDB details (may be cached 24h on backend)
-      try {
-        const { data } = await api.get(`/tmdb/${type}/${id}`);
-        setMedia(data);
-      } catch (err) {
-        console.error('Failed to fetch media details:', err);
-      } finally {
-        setLoading(false);
-      }
+    const dbPromise = api.get(`/media/tmdb/${id}/${type}`)
+      .then(({ data }) => { applyDbData(data); if (!data.id) setDbMedia(null); })
+      .catch(() => { setDbMedia(null); });
 
-      // 3. Blacklist check + Recommendations (non-blocking)
-      api.get(`/admin/blacklist/check?tmdbId=${id}&mediaType=${type}`)
-        .then(({ data }) => setBlacklisted({ blocked: data.blacklisted, reason: data.reason }))
-        .catch(() => setBlacklisted({ blocked: false, reason: null }));
-      api.get(`/tmdb/${type}/${id}/recommendations`).then(({ data }) => {
-        setRecommendations(data.results?.map((r: TmdbMedia) => ({ ...r, media_type: type })) || []);
-        if (data.nsfwTmdbIds?.length) addNsfwIds(data.nsfwTmdbIds);
-      }).catch(() => {});
-    }
-    fetchData();
+    api.get(`/admin/blacklist/check?tmdbId=${id}&mediaType=${type}`)
+      .then(({ data }) => setBlacklisted({ blocked: data.blacklisted, reason: data.reason }))
+      .catch(() => setBlacklisted({ blocked: false, reason: null }));
+    api.get(`/tmdb/${type}/${id}/recommendations`).then(({ data }) => {
+      setRecommendations(data.results?.map((r: TmdbMedia) => ({ ...r, media_type: type })) || []);
+      if (data.nsfwTmdbIds?.length) addNsfwIds(data.nsfwTmdbIds);
+    }).catch(() => {});
+
+    void tmdbPromise; void dbPromise;
   }, [id, type, applyDbData]);
 
   const refreshDbData = useCallback(async () => {

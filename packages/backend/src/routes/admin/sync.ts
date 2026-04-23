@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../utils/prisma.js';
-import { syncArrService, syncAvailabilityDates } from '../../services/sync.js';
+import { syncArrService } from '../../services/sync/mediaSync.js';
+import { syncAvailabilityDates } from '../../services/sync/availabilitySync.js';
 import { triggerJob } from '../../services/scheduler.js';
 
 export async function syncRoutes(app: FastifyInstance) {
@@ -20,7 +21,7 @@ export async function syncRoutes(app: FastifyInstance) {
     return triggerJob('full_sync');
   });
 
-  app.post('/sync/force', async (request, reply) => {
+  app.post('/sync/force', { config: { rateLimit: { max: 1, timeWindow: '5 minutes' } } }, async (request, reply) => {
 
     await prisma.appSettings.upsert({
       where: { id: 1 },

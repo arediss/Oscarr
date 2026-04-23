@@ -9,6 +9,8 @@ const api = axios.create({
 // Add language header (auth is via httpOnly cookie, no Bearer token needed)
 api.interceptors.request.use((config) => {
   config.headers['Accept-Language'] = i18n.language;
+  // CSRF gate — paired with the backend X-Requested-With check.
+  config.headers['X-Requested-With'] = 'oscarr';
   // "View as role" simulation for admin testing
   const viewAsRole = sessionStorage.getItem('view-as-role');
   if (viewAsRole) {
@@ -59,7 +61,7 @@ api.interceptors.response.use(
     if (error.response?.status === 403) {
       const translated = i18n.t('common.forbidden', 'Access denied');
       showErrorToast(translated);
-      if (error.response.data?.error === 'Forbidden') {
+      if (error.response.data?.error === 'FORBIDDEN' || error.response.data?.error === 'Forbidden') {
         error.response.data.error = translated;
       }
     }
