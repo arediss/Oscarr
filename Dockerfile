@@ -74,6 +74,11 @@ COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 ENV NODE_ENV=production
 ENV DATABASE_URL=file:/data/oscarr.db
+# install.json lives next to the SQLite DB in the persisted volume — the default `./data/…` is
+# relative to the container's cwd (/app) and ends up in the ephemeral writable layer, which
+# means the flag is lost on every container recreate (image upgrade, admin restart, …) and the
+# install wizard shows up again on an already-installed instance.
+ENV INSTALL_FILE_PATH=/data/install.json
 ENV PORT=3456
 
 EXPOSE 3456
