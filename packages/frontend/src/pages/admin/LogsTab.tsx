@@ -165,17 +165,22 @@ export function LogsTab() {
   );
 }
 
-/** Virtualized log list — renders only the rows in viewport. Row heights are variable (the
- *  stack trace expand ~doubles a row), so we use `measureElement` instead of a fixed size.
- *  Viewport is capped at 70dvh so the browser's own scroll drives the surrounding page. */
+/** Virtualized log list — renders only the rows in viewport. Uses window-mode virtualization
+ *  (the browser's own scroll drives the list) so the list flows naturally with the page
+ *  instead of being cut at a fixed height. Row heights are variable (the stack-trace expand
+ *  ~doubles a row), so we use `measureElement`. */
 function LogList({ logs, t }: { logs: LogEntry[]; t: TFunction }) {
   const { parentRef, rowVirtualizer, items } = useVirtualList({
     count: logs.length,
-    estimateSize: 64, // collapsed row; measureElement corrects after first paint
+    estimateSize: 64,
+    mode: 'window',
   });
+  // In window mode translateY is relative to the document, so we subtract the parent's
+  // offset from each virtual item's start. Computed once per render via `scrollMargin`.
+  const scrollMargin = parentRef.current?.offsetTop ?? 0;
 
   return (
-    <div ref={parentRef} className="max-h-[70dvh] overflow-auto">
+    <div ref={parentRef}>
       <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
         {items.map((v) => {
           const log = logs[v.index];
@@ -189,7 +194,7 @@ function LogList({ logs, t }: { logs: LogEntry[]; t: TFunction }) {
                 top: 0,
                 left: 0,
                 right: 0,
-                transform: `translateY(${v.start}px)`,
+                transform: `translateY(${v.start - scrollMargin}px)`,
                 paddingBottom: '0.5rem',
               }}
             >
