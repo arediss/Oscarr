@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../utils/prisma.js';
 import { getTmdbApi } from '../../services/tmdb.js';
+import { buildDiscoverParams, type DiscoverQuery } from '../../utils/tmdbDiscoverQuery.js';
 
 // ── In-memory cache for public layout endpoint ─────────────────────────────
 let homepageLayoutCache: { data: unknown; at: number } | null = null;
@@ -82,54 +83,12 @@ export async function homepageRoutes(app: FastifyInstance) {
 
   // POST /homepage/preview — Preview a TMDB discover query (returns results)
   app.post('/homepage/preview', async (request, reply) => {
-    const query = request.body as {
-      mediaType: 'movie' | 'tv';
-      genres?: number[];
-      yearGte?: number;
-      yearLte?: number;
-      releasedWithin?: string;
-      voteAverageGte?: number;
-      voteCountGte?: number;
-      sortBy?: string;
-      language?: string;
-      keywords?: string;
-      region?: string;
-    };
+    const query = request.body as DiscoverQuery;
 
-    // Build TMDB discover URL params
-    const params = new URLSearchParams();
+    const params = buildDiscoverParams(query);
     params.set('page', '1');
-    if (query.genres?.length) params.set('with_genres', query.genres.join(','));
 
-    // Relative release window (last_30d, last_90d, last_6m, last_1y)
-    const dateGteField = query.mediaType === 'movie' ? 'primary_release_date.gte' : 'first_air_date.gte';
-    const dateLteField = query.mediaType === 'movie' ? 'primary_release_date.lte' : 'first_air_date.lte';
-
-    if (query.releasedWithin) {
-      const now = new Date();
-      const lte = now.toISOString().split('T')[0];
-      let gte: string;
-      switch (query.releasedWithin) {
-        case 'last_30d': gte = new Date(now.getTime() - 30 * 86400000).toISOString().split('T')[0]; break;
-        case 'last_90d': gte = new Date(now.getTime() - 90 * 86400000).toISOString().split('T')[0]; break;
-        case 'last_6m': gte = new Date(now.getTime() - 180 * 86400000).toISOString().split('T')[0]; break;
-        case 'last_1y': gte = new Date(now.getTime() - 365 * 86400000).toISOString().split('T')[0]; break;
-        default: gte = lte;
-      }
-      params.set(dateGteField, gte);
-      params.set(dateLteField, lte);
-    } else {
-      if (query.yearGte) params.set(dateGteField, `${query.yearGte}-01-01`);
-      if (query.yearLte) params.set(dateLteField, `${query.yearLte}-12-31`);
-    }
-    if (query.voteAverageGte) params.set('vote_average.gte', String(query.voteAverageGte));
-    if (query.voteCountGte) params.set('vote_count.gte', String(query.voteCountGte));
-    if (query.sortBy) params.set('sort_by', query.sortBy);
-    if (query.language) params.set('with_original_language', query.language);
-    if (query.keywords) params.set('with_keywords', query.keywords);
-    if (query.region) params.set('region', query.region);
-
-    // Use a static path — no user input in the URL (prevents SSRF / CodeQL alert)
+    // Static-path selector — no user input in the URL (prevents SSRF / CodeQL alert).
     const discoverPath = query.mediaType === 'movie' ? '/discover/movie' : query.mediaType === 'tv' ? '/discover/tv' : null;
     if (!discoverPath) {
       return reply.status(400).send({ error: 'Invalid mediaType' });

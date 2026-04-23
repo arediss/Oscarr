@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { prisma } from '../../utils/prisma.js';
 import { logEvent } from '../../utils/logEvent.js';
+import { parseServiceConfig } from '../../utils/services.js';
 import type { Provider, AuthProvider } from '../types.js';
 import { isProviderEnabled } from '../authSettings.js';
 
@@ -47,7 +48,7 @@ function getAvatarUrl(serverUrl: string, userId: string, imageTag?: string): str
 async function getConfig(): Promise<{ url: string; apiKey: string } | null> {
   const service = await prisma.service.findFirst({ where: { type: 'emby', enabled: true } });
   if (!service) return null;
-  const config = JSON.parse(service.config) as Record<string, string>;
+  const config = parseServiceConfig(service.config);
   return config.url ? { url: config.url, apiKey: config.apiKey || '' } : null;
 }
 

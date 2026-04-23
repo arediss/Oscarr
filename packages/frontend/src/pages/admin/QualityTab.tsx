@@ -279,10 +279,10 @@ export function QualityTab() {
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-bold text-ndp-text">{opt.label}</h3>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => { deleteOption(opt.id); setEditingOption(null); }} className="p-1.5 rounded-lg text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors">
+                  <button onClick={() => { deleteOption(opt.id); setEditingOption(null); }} aria-label={t('common.delete')} className="p-1.5 rounded-lg text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors">
                     <Trash2 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setEditingOption(null)} className="p-1 rounded-lg hover:bg-white/5 text-ndp-text-dim">
+                  <button onClick={() => setEditingOption(null)} aria-label={t('common.close')} className="p-1 rounded-lg hover:bg-white/5 text-ndp-text-dim">
                     <X className="w-5 h-5" />
                   </button>
                 </div>

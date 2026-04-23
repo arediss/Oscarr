@@ -2,6 +2,7 @@ import axios from 'axios';
 import { prisma } from '../../utils/prisma.js';
 import { getPlexUser, createPlexPin, checkPlexPin, getSharedServerUsers } from '../../services/plex.js';
 import { logEvent } from '../../utils/logEvent.js';
+import { parseServiceConfig } from '../../utils/services.js';
 import type { Provider, AuthProvider, AuthHelpers } from '../types.js';
 import { isProviderEnabled } from '../authSettings.js';
 
@@ -23,7 +24,7 @@ export async function getPlexToken(adminUserId?: number): Promise<string | null>
   const plexService = await prisma.service.findFirst({
     where: { type: 'plex', enabled: true },
   });
-  const config = plexService ? JSON.parse(plexService.config) : null;
+  const config = plexService ? parseServiceConfig(plexService.config) : null;
   if (config?.token) return config.token;
 
   if (adminUserId) {
@@ -93,7 +94,9 @@ const plexAuth: AuthProvider = {
   },
 
   async registerRoutes(app, helpers) {
-    app.post('/plex/pin', async (_request, reply) => {
+    app.post('/plex/pin', {
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    }, async (_request, reply) => {
       if (!(await isProviderEnabled('plex'))) {
         return reply.status(403).send({ error: 'PROVIDER_DISABLED' });
       }
@@ -102,6 +105,7 @@ const plexAuth: AuthProvider = {
     });
 
     app.post('/plex/callback', {
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
       schema: {
         body: {
           type: 'object' as const,
@@ -200,7 +204,7 @@ async function resolveMachineId(): Promise<string | null> {
   const plexService = await prisma.service.findFirst({ where: { type: 'plex', enabled: true } });
   if (plexService) {
     try {
-      const cfg = JSON.parse(plexService.config) as Record<string, string>;
+      const cfg = parseServiceConfig(plexService.config);
       return cfg.machineId || null;
     } catch { /* ignore */ }
   }

@@ -6,7 +6,7 @@ import cronstrue from 'cronstrue/i18n';
 import i18n from '@/i18n';
 import { localizedDateTime } from '@/i18n/formatters';
 import api from '@/lib/api';
-import { showToast as showGlobalToast, toastApiError } from '@/utils/toast';
+import { showToast as showGlobalToast, toastApiError, extractApiError } from '@/utils/toast';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import { useServiceSchemas, type ServiceData } from '@/hooks/useServiceSchemas';
@@ -120,8 +120,8 @@ export function JobsTab() {
       } else {
         showToast({ type: 'success', message: t('admin.jobs.job_done', { key }) });
       }
-    } catch (err: any) {
-      showToast({ type: 'error', message: err.response?.data?.error || t('admin.jobs.job_failed', { key }) });
+    } catch (err) {
+      showToast({ type: 'error', message: extractApiError(err, t('admin.jobs.job_failed', { key })) });
     } finally { setRunning(null); }
   };
 
@@ -183,7 +183,9 @@ export function JobsTab() {
                 {/* Job info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-ndp-text">{job.label}</span>
+                    <span className="text-sm font-semibold text-ndp-text">
+                      {job.label.startsWith('admin.jobs.labels.') ? t(job.label) : job.label}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3 mt-0.5">
                     {isEditing ? (

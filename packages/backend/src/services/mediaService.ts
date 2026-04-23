@@ -15,7 +15,15 @@ export interface LiveCheckResult {
   timedOut?: boolean;
 }
 
-const LIVE_CHECK_TIMEOUT = 4000;
+const LIVE_CHECK_TIMEOUT = 2000;
+
+// Slightly above new_media_sync cron interval — DB is fresh enough to skip the live hit.
+const LIVE_CHECK_SKIP_WINDOW_MS = 15 * 60 * 1000;
+
+export function canSkipLiveCheck(mediaStatus: string | null | undefined, availableAt: Date | null | undefined): boolean {
+  if (mediaStatus !== 'available' || !availableAt) return false;
+  return Date.now() - new Date(availableAt).getTime() < LIVE_CHECK_SKIP_WINDOW_MS;
+}
 
 // ---------------------------------------------------------------------------
 // Live check against Radarr/Sonarr

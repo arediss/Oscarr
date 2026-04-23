@@ -12,7 +12,7 @@ function sanitize(input: string): string {
 
 export async function webhookRoutes(app: FastifyInstance) {
 
-  app.post('/:serviceType', async (request, reply) => {
+  app.post('/:serviceType', { bodyLimit: 64 * 1024 }, async (request, reply) => {
     const { serviceType } = request.params as { serviceType: string };
 
     // 1. Validate API key (X-Api-Key header, query param, or Basic Auth password)

@@ -57,6 +57,7 @@ function toTmdbLocale(lang: string): string {
 export function getTmdbApi(lang = DEFAULT_LANG) {
   return axios.create({
     baseURL: TMDB_BASE,
+    timeout: 10000,
     headers: {
       Authorization: `Bearer ${TMDB_TOKEN}`,
     },
@@ -313,6 +314,7 @@ export interface TmdbPerson {
   known_for_department: string;
   combined_credits: {
     cast: (TmdbMovie & TmdbTv & { media_type: string; character: string })[];
+    crew: (TmdbMovie & TmdbTv & { media_type: string; job: string; department: string })[];
   };
 }
 

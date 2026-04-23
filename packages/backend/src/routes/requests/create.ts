@@ -8,17 +8,22 @@ import {
   validateRequestBody,
   findOrCreateMedia,
   getUserTagName,
-  runPluginGuard,
   sendToService,
   requestCollectionMovie,
   isBlacklisted,
 } from '../../services/requestService.js';
+import { pluginEngine } from '../../plugins/engine.js';
+
+async function runPluginGuard(userId: number) {
+  return pluginEngine.runGuards('request.create', userId);
+}
 
 /** Create-request paths — the hot path for a user asking for a movie/tv (one) and the bulk
  *  collection endpoint that fan-outs one request per movie in a TMDB collection. Both run the
  *  plugin guard + blacklist check + auto-approve decision before writing the request row. */
 export async function requestCreateRoutes(app: FastifyInstance) {
   app.post('/', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
     schema: {
       body: {
         type: 'object',
@@ -96,7 +101,9 @@ export async function requestCreateRoutes(app: FastifyInstance) {
           await prisma.media.update({
             where: { id: media.id },
             data: { status: 'searching' },
-          }).catch(() => { /* best-effort status flip */ });
+          }).catch((err) => {
+            request.log.warn({ err, mediaId: media.id, requestId: mediaRequest.id }, 'status flip to searching failed');
+          });
         }
       } else {
         await prisma.mediaRequest.update({ where: { id: mediaRequest.id }, data: { status: 'failed' } });
@@ -118,6 +125,7 @@ export async function requestCreateRoutes(app: FastifyInstance) {
   });
 
   app.post('/collection', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     schema: {
       body: {
         type: 'object',

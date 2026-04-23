@@ -5,7 +5,6 @@ import { matchFolderRule } from './folderRules.js';
 import { logEvent } from '../utils/logEvent.js';
 import { getServiceById, getAllServices } from '../utils/services.js';
 import { VALID_MEDIA_TYPES } from '../utils/params.js';
-import { pluginEngine } from '../plugins/engine.js';
 import { ACTIVE_REQUEST_STATUSES, COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
 
 // ---------------------------------------------------------------------------
@@ -45,32 +44,36 @@ export async function findOrCreateMedia(tmdbId: number, mediaType: 'movie' | 'tv
   const title = 'title' in tmdbData ? tmdbData.title : tmdbData.name;
   const releaseDate = 'release_date' in tmdbData ? tmdbData.release_date : tmdbData.first_air_date;
 
-  const media = await prisma.media.create({
-    data: {
-      tmdbId,
-      tvdbId: tmdbData.external_ids?.tvdb_id ?? null,
-      mediaType,
-      title,
-      overview: tmdbData.overview || null,
-      posterPath: tmdbData.poster_path,
-      backdropPath: tmdbData.backdrop_path,
-      releaseDate: releaseDate || null,
-      voteAverage: tmdbData.vote_average,
-      genres: tmdbData.genres ? JSON.stringify(tmdbData.genres.map(g => g.name)) : null,
-    },
-  });
-
-  if (mediaType === 'tv' && 'seasons' in tmdbData && tmdbData.seasons) {
-    await prisma.season.createMany({
-      data: tmdbData.seasons
-        .filter(s => s.season_number > 0)
-        .map(s => ({
-          mediaId: media.id,
-          seasonNumber: s.season_number,
-          episodeCount: s.episode_count,
-        })),
+  const media = await prisma.$transaction(async (tx) => {
+    const created = await tx.media.create({
+      data: {
+        tmdbId,
+        tvdbId: tmdbData.external_ids?.tvdb_id ?? null,
+        mediaType,
+        title,
+        overview: tmdbData.overview || null,
+        posterPath: tmdbData.poster_path,
+        backdropPath: tmdbData.backdrop_path,
+        releaseDate: releaseDate || null,
+        voteAverage: tmdbData.vote_average,
+        genres: tmdbData.genres ? JSON.stringify(tmdbData.genres.map(g => g.name)) : null,
+      },
     });
-  }
+
+    if (mediaType === 'tv' && 'seasons' in tmdbData && tmdbData.seasons) {
+      await tx.season.createMany({
+        data: tmdbData.seasons
+          .filter(s => s.season_number > 0)
+          .map(s => ({
+            mediaId: created.id,
+            seasonNumber: s.season_number,
+            episodeCount: s.episode_count,
+          })),
+      });
+    }
+
+    return created;
+  });
 
   return media;
 }
@@ -85,10 +88,6 @@ export async function isBlacklisted(tmdbId: number, mediaType: string): Promise<
 export async function getUserTagName(userId: number): Promise<string> {
   const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { displayName: true, email: true } });
   return dbUser?.displayName || dbUser?.email || `user-${userId}`;
-}
-
-export async function runPluginGuard(userId: number): Promise<{ blocked: boolean; statusCode?: number; error?: string } | null> {
-  return pluginEngine.runGuards('request.create', userId);
 }
 
 // ---------------------------------------------------------------------------

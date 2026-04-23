@@ -2,7 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../utils/prisma.js';
 import { getArrClient, getServiceTypeForMedia } from '../../providers/index.js';
 import { logEvent } from '../../utils/logEvent.js';
-import { runPluginGuard } from '../../services/requestService.js';
+import { pluginEngine } from '../../plugins/engine.js';
+
+async function runPluginGuard(userId: number) {
+  return pluginEngine.runGuards('request.create', userId);
+}
 
 /** Bulk maintenance routes — missing-episode search re-trigger (with cooldown) and the admin
  *  cleanup-by-status broom (keep / remove-oscarr-only / remove-from-service-too per bucket).

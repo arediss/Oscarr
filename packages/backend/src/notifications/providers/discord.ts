@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { NotificationProvider, NotificationPayload } from '../types.js';
+import { assertPublicUrl } from '../../utils/ssrfGuard.js';
 
 function buildDescription(payload: NotificationPayload): string {
   if (payload.type === 'incident_banner') return payload.message || '';
@@ -22,6 +23,7 @@ export const discordProvider: NotificationProvider = {
   ],
 
   async send(settings, payload) {
+    await assertPublicUrl(settings.webhookUrl);
     const posterUrl = payload.posterPath ? `https://image.tmdb.org/t/p/w185${payload.posterPath}` : undefined;
     await axios.post(settings.webhookUrl, {
       embeds: [{
@@ -37,6 +39,7 @@ export const discordProvider: NotificationProvider = {
   },
 
   async testConnection(settings) {
+    await assertPublicUrl(settings.webhookUrl);
     await axios.post(settings.webhookUrl, {
       embeds: [{ title: 'Test', description: 'Notification Discord OK!', color: 0x10b981, footer: { text: 'Oscarr' } }],
     });

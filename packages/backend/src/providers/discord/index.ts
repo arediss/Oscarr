@@ -65,6 +65,7 @@ async function isGuildMember(accessToken: string, guildId: string): Promise<bool
   const res = await fetch(GUILDS_URL, {
     headers: { Authorization: `Bearer ${accessToken}` },
     redirect: 'error',
+    signal: AbortSignal.timeout(10000),
   });
   if (!res.ok) return false;
   const guilds = (await res.json()) as Array<{ id?: string }>;
@@ -98,7 +99,9 @@ const discordAuth: AuthProvider = {
 
   async registerRoutes(app: FastifyInstance, helpers: AuthHelpers) {
     // ── Authorize: entrypoint for both login and link-to-existing-account flows ──
-    app.get<{ Querystring: { action?: string } }>('/discord/authorize', async (request, reply) => {
+    app.get<{ Querystring: { action?: string } }>('/discord/authorize', {
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    }, async (request, reply) => {
       if (!(await isProviderEnabled('discord'))) {
         return reply.redirect('/login?error=PROVIDER_DISABLED');
       }
@@ -133,6 +136,7 @@ const discordAuth: AuthProvider = {
     // ── Callback: exchange code → token → user profile, then login or link ──
     app.get<{ Querystring: { code?: string; state?: string; error?: string } }>(
       '/discord/callback',
+      { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
       async (request, reply) => {
         if (!(await isProviderEnabled('discord'))) {
           return reply.redirect('/login?error=PROVIDER_DISABLED');
@@ -168,6 +172,7 @@ const discordAuth: AuthProvider = {
             redirect_uri: redirectUri,
           }),
           redirect: 'error',
+          signal: AbortSignal.timeout(10000),
         });
         if (!tokenRes.ok) return reply.redirect('/login?error=DISCORD_ERROR');
         const tokenPayload = (await tokenRes.json()) as { access_token?: string };
@@ -176,6 +181,7 @@ const discordAuth: AuthProvider = {
         const userRes = await fetch(USER_URL, {
           headers: { Authorization: `Bearer ${tokenPayload.access_token}` },
           redirect: 'error',
+          signal: AbortSignal.timeout(10000),
         });
         if (!userRes.ok) return reply.redirect('/login?error=DISCORD_ERROR');
         const profile = (await userRes.json()) as {

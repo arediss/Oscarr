@@ -11,65 +11,49 @@ import { Agent, fetch as undiciFetch } from 'undici';
 import { parseManifest } from './manifestSchema.js';
 import { getPluginsDir } from './loader.js';
 import type { PluginManifest } from './types.js';
+import { isPrivateIPv4, isPrivateIPv6, isPrivateAddress, normalizeHost } from '../utils/ssrfGuard.js';
 
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 // Hard cap on plugin tarballs. Oscarr plugins are small (a few hundred KB once bundled); 50 MB
 // is generous and still keeps a misconfigured / malicious registry entry from filling /tmp.
 const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
 
-/** CIDR check against IPv4 private / loopback / link-local ranges (blocks SSRF to internal infra). */
-function isPrivateIPv4(ip: string): boolean {
-  const parts = ip.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return false;
-  const [a, b] = parts;
-  if (a === 10) return true;                              // 10.0.0.0/8
-  if (a === 127) return true;                             // 127.0.0.0/8 loopback
-  if (a === 169 && b === 254) return true;                // 169.254.0.0/16 link-local (AWS IMDS, etc.)
-  if (a === 172 && b >= 16 && b <= 31) return true;       // 172.16.0.0/12
-  if (a === 192 && b === 168) return true;                // 192.168.0.0/16
-  if (a === 0) return true;                               // 0.0.0.0/8
-  return false;
-}
-
-function isPrivateIPv6(ip: string): boolean {
-  const lower = ip.toLowerCase();
-  if (lower === '::1') return true;                       // loopback
-  if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // fc00::/7 ULA
-  if (lower.startsWith('fe80:')) return true;             // link-local
-  return false;
-}
-
-function isPrivate(address: string, family: number): boolean {
-  return family === 6 ? isPrivateIPv6(address) : isPrivateIPv4(address);
-}
-
 /**
  * Resolve the hostname once ourselves, pick a public address, and pin undici's connection to it.
  *
- * The previous implementation did a CIDR check with `dns.lookup`, then let `fetch` resolve again
+ * The previous implementation did a CIDR check with dns.lookup, then let fetch resolve again
  * when opening the socket. An attacker-controlled DNS zone can return public IPs on the first
  * lookup and a private IP on the second — a classic DNS-rebind SSRF bypass. By passing an Agent
- * with a custom `connect.lookup` we guarantee the socket connects to the address we validated.
+ * with a custom connect.lookup we guarantee the socket connects to the address we validated.
  *
- * Pure IP URLs skip resolution and are CIDR-checked directly.
+ * Plugin install is ALWAYS guarded (not opt-in via OSCARR_BLOCK_PRIVATE_SERVICES) because the
+ * URL comes from an admin-typed registry entry and can legitimately only be a public GitHub
+ * tarball — no reason to allow a LAN target here.
  */
-async function buildPinnedAgent(hostname: string): Promise<{ agent: Agent; pinned: string }> {
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
-    if (isPrivateIPv4(hostname)) throw new Error(`Refusing to download from private IPv4 ${hostname}`);
-    return { agent: makeAgent(hostname, 4), pinned: hostname };
+async function buildPinnedAgent(rawHostname: string): Promise<{ agent: Agent; pinned: string }> {
+  const { host, mappedIPv4 } = normalizeHost(rawHostname);
+  if (mappedIPv4) {
+    if (isPrivateIPv4(mappedIPv4)) {
+      throw new Error(`Refusing to download from IPv4-mapped IPv6 ${host} → ${mappedIPv4} (private)`);
+    }
+    return { agent: makeAgent(mappedIPv4, 4), pinned: mappedIPv4 };
   }
-  if (hostname.includes(':')) {
-    if (isPrivateIPv6(hostname)) throw new Error(`Refusing to download from private IPv6 ${hostname}`);
-    return { agent: makeAgent(hostname, 6), pinned: hostname };
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+    if (isPrivateIPv4(host)) throw new Error(`Refusing to download from private IPv4 ${host}`);
+    return { agent: makeAgent(host, 4), pinned: host };
   }
-  const addresses = await dnsLookup(hostname, { all: true })
+  if (host.includes(':')) {
+    if (isPrivateIPv6(host)) throw new Error(`Refusing to download from private IPv6 ${host}`);
+    return { agent: makeAgent(host, 6), pinned: host };
+  }
+  const addresses = await dnsLookup(host, { all: true })
     .catch(() => [] as Array<{ address: string; family: number }>);
-  if (addresses.length === 0) throw new Error(`DNS lookup failed for ${hostname}`);
+  if (addresses.length === 0) throw new Error(`DNS lookup failed for ${host}`);
   // Reject if ANY resolved address is private — some hosts round-robin internal IPs and we want
   // to fail closed rather than depend on luck-of-the-draw which public IP we'd pick.
   for (const { address, family } of addresses) {
-    if (isPrivate(address, family)) {
-      throw new Error(`Refusing to download from ${hostname} → ${address} (private network)`);
+    if (isPrivateAddress(address, family)) {
+      throw new Error(`Refusing to download from ${host} → ${address} (private network)`);
     }
   }
   const pick = addresses[0];
@@ -79,30 +63,45 @@ async function buildPinnedAgent(hostname: string): Promise<{ agent: Agent; pinne
 function makeAgent(pinnedIp: string, family: number): Agent {
   return new Agent({
     connect: {
-      lookup: (_host, _opts, cb) => cb(null, pinnedIp, family),
+      lookup: (_host, opts, cb) => {
+        // Node ≥20's net.lookupAndConnectMultiple calls with { all: true } and expects an array;
+        // older callers use the (err, address, family) shape. Support both.
+        const all = (opts as { all?: boolean })?.all;
+        if (all) (cb as unknown as (err: NodeJS.ErrnoException | null, addrs: Array<{ address: string; family: number }>) => void)(null, [{ address: pinnedIp, family }]);
+        else cb(null, pinnedIp, family);
+      },
     },
   });
 }
 
-async function downloadToFile(url: string, destPath: string): Promise<void> {
-  const parsed = new URL(url);
-  const { agent } = await buildPinnedAgent(parsed.hostname);
+const MAX_REDIRECTS = 5;
 
-  const res = await undiciFetch(url, {
-    dispatcher: agent,
-    redirect: 'follow',
-    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
-  });
+async function downloadToFile(url: string, destPath: string): Promise<void> {
+  // Manual redirect handling: each hop gets a freshly pinned agent for its hostname. With
+  // `redirect: 'follow'` undici reuses the *initial* pinned IP across redirects, so a hop to a
+  // different host (github.com → codeload.github.com) hits the wrong server and 400s.
+  let currentUrl = url;
+  let res: Awaited<ReturnType<typeof undiciFetch>> | null = null;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const parsed = new URL(currentUrl);
+    const { agent } = await buildPinnedAgent(parsed.hostname);
+    const hopRes = await undiciFetch(currentUrl, {
+      dispatcher: agent,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+    });
+    if (hopRes.status >= 300 && hopRes.status < 400) {
+      const location = hopRes.headers.get('location');
+      if (!location) throw new Error(`Redirect ${hopRes.status} without Location header`);
+      currentUrl = new URL(location, currentUrl).toString();
+      continue;
+    }
+    res = hopRes;
+    break;
+  }
+  if (!res) throw new Error(`Too many redirects (>${MAX_REDIRECTS})`);
   if (!res.ok) throw new Error(`Download failed (${res.status}): ${res.statusText}`);
   if (!res.body) throw new Error('Download returned empty body');
-
-  // Final-URL recheck: if a redirect pointed at a different host, rebuild the agent so the next
-  // hop doesn't bypass the pin. Our fetch already followed redirects with the original agent;
-  // this is defence-in-depth for a future change that might fetch after an inspection.
-  const finalUrl = new URL(res.url);
-  if (finalUrl.hostname !== parsed.hostname) {
-    await buildPinnedAgent(finalUrl.hostname);
-  }
 
   // Content-length early-reject — best-effort, some servers omit it. We still enforce the
   // byte counter below.

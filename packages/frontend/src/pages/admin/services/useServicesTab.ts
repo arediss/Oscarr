@@ -7,6 +7,9 @@ import type { ServiceData } from '@/hooks/useServiceSchemas';
 export interface ServiceTestResult {
   ok: boolean;
   version?: string;
+  /** Backend error token (UPPER_SNAKE) when !ok — lets the UI distinguish SSRF-blocked
+   *  from actually unreachable services. */
+  errorCode?: string;
 }
 
 /**
@@ -45,7 +48,8 @@ export function useServicesTab() {
         setTestResults((prev) => ({ ...prev, [svc.id]: { ok: true, version: data.version } }));
       } catch (err) {
         console.error(`Service test failed for #${svc.id} (${svc.type})`, err);
-        setTestResults((prev) => ({ ...prev, [svc.id]: { ok: false } }));
+        const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+        setTestResults((prev) => ({ ...prev, [svc.id]: { ok: false, errorCode: code } }));
       }
     });
   }, []);
@@ -96,7 +100,8 @@ export function useServicesTab() {
     } catch (err) {
       // Explicit user click — surface the backend error so the admin knows 401 / timeout / etc.
       toastApiError(err, t('admin.services.test_failed', { name: service.name }));
-      setTestResults((prev) => ({ ...prev, [service.id]: { ok: false } }));
+      const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setTestResults((prev) => ({ ...prev, [service.id]: { ok: false, errorCode: code } }));
     } finally {
       setTesting(null);
     }

@@ -41,7 +41,9 @@ export async function requestLifecycleRoutes(app: FastifyInstance) {
       await prisma.media.update({
         where: { id: mediaRequest.media.id },
         data: { status: 'searching' },
-      }).catch(() => { /* best-effort status flip */ });
+      }).catch((err) => {
+        request.log.warn({ err, mediaId: mediaRequest.media.id, requestId }, 'status flip to searching failed');
+      });
     }
 
     const updated = await prisma.mediaRequest.update({

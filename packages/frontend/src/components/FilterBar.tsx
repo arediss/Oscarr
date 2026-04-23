@@ -139,7 +139,7 @@ export default function FilterBar({ filters, onChange, sortOptions, title, subti
               >
                 {chip.key === 'rating' && <Star className="w-2.5 h-2.5 fill-ndp-text-muted" />}
                 {chip.label}
-                <button onClick={chip.onRemove} className="hover:text-white transition-colors">
+                <button onClick={chip.onRemove} aria-label={t('common.clear')} className="hover:text-white transition-colors">
                   <X className="w-2.5 h-2.5" />
                 </button>
               </span>

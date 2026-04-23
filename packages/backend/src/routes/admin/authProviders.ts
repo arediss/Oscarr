@@ -112,6 +112,18 @@ export async function authProvidersRoutes(app: FastifyInstance) {
     });
   });
 
+  /** Providers usable as a user-sync source: implements `syncUsers` and has a matching enabled
+   *  Service row. Decoupled from /auth/providers (which tracks SSO availability) so admins can
+   *  sync a Plex service even when Plex SSO is off. */
+  app.get(`${PREFIX}/syncable`, async () => {
+    const providers = getAuthProviders().filter((p) => typeof p.syncUsers === 'function');
+    const services = await prisma.service.findMany({ select: { type: true, enabled: true } });
+    const enabledServiceTypes = new Set(services.filter((s) => s.enabled).map((s) => s.type));
+    return providers
+      .filter((p) => enabledServiceTypes.has(p.config.id))
+      .map((p) => ({ id: p.config.id, label: p.config.label, type: p.config.type }));
+  });
+
   app.patch<{ Params: { id: string }; Body: { enabled?: boolean; config?: Record<string, unknown> } }>(
     `${PREFIX}/:id`,
     {

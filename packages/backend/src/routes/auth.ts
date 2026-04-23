@@ -191,9 +191,9 @@ export async function authRoutes(app: FastifyInstance) {
       return helpers.signAndSend(reply, user.id);
     } catch (err) {
       const msg = (err as Error).message;
-      if (msg === 'EMAIL_EXISTS') return reply.status(409).send({ error: 'This email is already in use.' });
-      if (msg === 'PASSWORD_TOO_SHORT') return reply.status(400).send({ error: 'Password must be at least 8 characters.' });
-      if (msg === 'DISPLAY_NAME_REQUIRED') return reply.status(400).send({ error: 'Display name is required.' });
+      if (msg === 'EMAIL_EXISTS') return reply.status(409).send({ error: 'EMAIL_EXISTS' });
+      if (msg === 'PASSWORD_TOO_SHORT') return reply.status(400).send({ error: 'PASSWORD_TOO_SHORT' });
+      if (msg === 'DISPLAY_NAME_REQUIRED') return reply.status(400).send({ error: 'DISPLAY_NAME_REQUIRED' });
       throw err;
     }
   });
@@ -226,7 +226,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (!user) return reply.status(401).send({ error: 'Invalid email or password.' });
+    if (!user) return reply.status(401).send({ error: 'INVALID_CREDENTIALS' });
 
     logEvent('info', 'Auth', `${user.displayName} logged in (email)`);
     return helpers.signAndSend(reply, user.id);
@@ -261,7 +261,7 @@ export async function authRoutes(app: FastifyInstance) {
     };
 
     const provider = getAuthProvider(providerId);
-    if (!provider) return reply.status(400).send({ error: `Unknown provider "${providerId}"` });
+    if (!provider) return reply.status(400).send({ error: 'UNKNOWN_PROVIDER' });
 
     try {
       let result: { providerUsername: string };
@@ -270,16 +270,16 @@ export async function authRoutes(app: FastifyInstance) {
       } else if (pinId && provider.linkAccount) {
         result = await provider.linkAccount(pinId, currentUser.id);
       } else {
-        return reply.status(400).send({ error: `Provider "${providerId}" does not support this linking method` });
+        return reply.status(400).send({ error: 'PROVIDER_LINKING_NOT_SUPPORTED' });
       }
       return reply.send({ success: true, providerUsername: result.providerUsername });
     } catch (err) {
       const msg = (err as Error).message;
-      if (msg === 'PIN_INVALID') return reply.status(400).send({ error: 'PIN not validated. Try again.' });
-      if (msg === 'PROVIDER_ALREADY_LINKED') return reply.status(409).send({ error: 'This account is already linked to another user.' });
-      if (msg === 'NOT_CONFIGURED') return reply.status(503).send({ error: 'Server not configured' });
+      if (msg === 'PIN_INVALID') return reply.status(400).send({ error: 'PIN_INVALID' });
+      if (msg === 'PROVIDER_ALREADY_LINKED') return reply.status(409).send({ error: 'PROVIDER_ALREADY_LINKED' });
+      if (msg === 'NOT_CONFIGURED') return reply.status(503).send({ error: 'PROVIDER_NOT_CONFIGURED' });
       const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 401) return reply.status(401).send({ error: 'Invalid username or password' });
+      if (status === 401) return reply.status(401).send({ error: 'INVALID_CREDENTIALS' });
       throw err;
     }
   });
@@ -295,7 +295,7 @@ export async function authRoutes(app: FastifyInstance) {
         providers: { select: { provider: true, providerUsername: true, providerEmail: true } },
       },
     });
-    if (!user) return reply.status(404).send({ error: 'User not found' });
+    if (!user) return reply.status(404).send({ error: 'USER_NOT_FOUND' });
     const permissions = getPermissionsForRole(user.role);
     return reply.send({ ...user, permissions });
   });

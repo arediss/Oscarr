@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
-import { toastApiError } from '@/utils/toast';
+import { toastApiError, extractApiError } from '@/utils/toast';
 import { invalidatePluginUICache } from '@/plugins/usePlugins';
 import type { PluginInfo } from '@/plugins/types';
 import type { RegistryPlugin, SubTab } from './constants';
@@ -81,8 +81,7 @@ export function usePluginsTab() {
       fetchPlugins();
       return true;
     } catch (err) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? String((err as Error).message);
-      setInstallMessage({ kind: 'error', text: msg });
+      setInstallMessage({ kind: 'error', text: extractApiError(err, String((err as Error).message)) });
       return false;
     } finally {
       setInstalling(null);
@@ -97,8 +96,7 @@ export function usePluginsTab() {
       await fetchPlugins();
       invalidatePluginUICache();
     } catch (err) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? String((err as Error).message);
-      setInstallMessage({ kind: 'error', text: `Uninstall failed: ${msg}` });
+      setInstallMessage({ kind: 'error', text: `Uninstall failed: ${extractApiError(err, String((err as Error).message))}` });
       setTimeout(() => setInstallMessage(null), 6000);
     } finally {
       setUninstalling(null);
@@ -108,7 +106,7 @@ export function usePluginsTab() {
   const restart = useCallback(async () => {
     setRestarting(true);
     try {
-      await api.post('/admin/restart');
+      await api.post('/admin/restart', { confirm: 'RESTART' });
     } catch { /* server is shutting down, expected */ }
 
     for (let i = 0; i < 30; i++) {

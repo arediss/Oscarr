@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import api from '@/lib/api';
@@ -42,6 +42,7 @@ export function SectionEditor({ section, onSave, onClose }: SectionEditorProps) 
   const { t } = useTranslation();
   const isNew = section === null;
   const isBuiltin = section?.type === 'builtin';
+  const fieldId = useId();
 
   const [title, setTitle] = useState(section?.title || '');
   const [size, setSize] = useState<'default' | 'large'>(section?.size || 'default');
@@ -203,6 +204,7 @@ export function SectionEditor({ section, onSave, onClose }: SectionEditorProps) 
           </h3>
           <button
             onClick={onClose}
+            aria-label={t('common.close')}
             className="p-1.5 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors"
           >
             <X className="w-4 h-4" />
@@ -214,10 +216,11 @@ export function SectionEditor({ section, onSave, onClose }: SectionEditorProps) 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* Title */}
             <div>
-              <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+              <label htmlFor={`${fieldId}-title`} className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
                 {t('admin.homepage.section_title', 'Section title')}
               </label>
               <input
+                id={`${fieldId}-title`}
                 className="input"
                 type="text"
                 value={title}

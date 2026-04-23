@@ -21,6 +21,7 @@ const listeners = new Set<() => void>();
 const completionCallbacks = new Map<number, Set<() => void>>();
 
 async function fetchDownloads() {
+  if (typeof document !== 'undefined' && document.hidden) return;
   try {
     const { data } = await api.get('/services/downloads');
     const newTmdbIds = new Set((data as DownloadItem[]).map((d) => d.tmdbId));

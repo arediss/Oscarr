@@ -8,6 +8,13 @@ export interface ServiceWithConfig {
   isDefault: boolean;
 }
 
+/** Parse a Service row's stringified JSON config. Single source of truth — any future change
+ *  to the on-disk format (encryption at rest, versioning, etc.) lives here. Callers that held
+ *  a raw prisma row and called `JSON.parse(row.config)` should now go through this. */
+export function parseServiceConfig(configString: string): Record<string, string> {
+  return JSON.parse(configString) as Record<string, string>;
+}
+
 /** Get a single service config (first default, then any enabled). Used for backwards compat. */
 export async function getServiceConfig(type: string): Promise<Record<string, string> | null> {
   const service = await prisma.service.findFirst({
@@ -18,9 +25,9 @@ export async function getServiceConfig(type: string): Promise<Record<string, str
       where: { type, enabled: true },
     });
     if (!fallback) return null;
-    return JSON.parse(fallback.config);
+    return parseServiceConfig(fallback.config);
   }
-  return JSON.parse(service.config);
+  return parseServiceConfig(service.config);
 }
 
 /** Get ALL enabled services of a given type, with parsed config */
@@ -33,7 +40,7 @@ export async function getAllServices(type: string): Promise<ServiceWithConfig[]>
     id: s.id,
     name: s.name,
     type: s.type,
-    config: JSON.parse(s.config),
+    config: parseServiceConfig(s.config),
     isDefault: s.isDefault,
   }));
 }
@@ -46,7 +53,7 @@ export async function getServiceById(id: number): Promise<ServiceWithConfig | nu
     id: service.id,
     name: service.name,
     type: service.type,
-    config: JSON.parse(service.config),
+    config: parseServiceConfig(service.config),
     isDefault: service.isDefault,
   };
 }

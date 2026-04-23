@@ -178,26 +178,26 @@ async function processSingleMedia(item: ArrMediaItem, client: ArrClient): Promis
     if (existing.tmdbId < 0) updateData.tmdbId = -(item.externalId); // Keep consistent placeholder
   }
 
-  await prisma.media.update({ where: { id: existing.id }, data: updateData });
+  await prisma.$transaction(async (tx) => {
+    await tx.media.update({ where: { id: existing.id }, data: updateData });
 
-  // Sync request statuses when media becomes available
-  if (becameAvailable) {
-    await prisma.mediaRequest.updateMany({
-      where: { mediaId: existing.id, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
-      data: { status: 'available' },
-    });
-  }
-
-  // Upsert seasons for TV
-  if (client.mediaType === 'tv' && item.seasons?.length) {
-    for (const season of item.seasons.filter(s => s.seasonNumber > 0)) {
-      await prisma.season.upsert({
-        where: { mediaId_seasonNumber: { mediaId: existing.id, seasonNumber: season.seasonNumber } },
-        update: { episodeCount: season.totalEpisodeCount, status: season.status },
-        create: { mediaId: existing.id, seasonNumber: season.seasonNumber, episodeCount: season.totalEpisodeCount, status: season.status },
+    if (becameAvailable) {
+      await tx.mediaRequest.updateMany({
+        where: { mediaId: existing.id, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
+        data: { status: 'available' },
       });
     }
-  }
+
+    if (client.mediaType === 'tv' && item.seasons?.length) {
+      for (const season of item.seasons.filter(s => s.seasonNumber > 0)) {
+        await tx.season.upsert({
+          where: { mediaId_seasonNumber: { mediaId: existing.id, seasonNumber: season.seasonNumber } },
+          update: { episodeCount: season.totalEpisodeCount, status: season.status },
+          create: { mediaId: existing.id, seasonNumber: season.seasonNumber, episodeCount: season.totalEpisodeCount, status: season.status },
+        });
+      }
+    }
+  });
 
   return 'updated';
 }

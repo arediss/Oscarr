@@ -53,7 +53,19 @@ export async function requestListRoutes(app: FastifyInstance) {
       prisma.mediaRequest.findMany({
         where,
         include: {
-          media: true,
+          media: {
+            select: {
+              id: true,
+              tmdbId: true,
+              mediaType: true,
+              title: true,
+              posterPath: true,
+              backdropPath: true,
+              releaseDate: true,
+              status: true,
+              availableAt: true,
+            },
+          },
           user: { select: { id: true, displayName: true, avatar: true } },
           approvedBy: { select: { id: true, displayName: true } },
           qualityOption: { select: { id: true, label: true } },
@@ -98,14 +110,14 @@ export async function requestListRoutes(app: FastifyInstance) {
     },
   }, async (request, reply) => {
     const requestId = parseId((request.params as { id: string }).id);
-    if (!requestId) return reply.status(400).send({ error: 'Invalid ID' });
+    if (!requestId) return reply.status(400).send({ error: 'INVALID_ID' });
     const overrideQuality = parseId((request.query as { qualityOptionId?: string }).qualityOptionId || '');
 
     const mediaRequest = await prisma.mediaRequest.findUnique({
       where: { id: requestId },
       include: { media: true, qualityOption: { select: { id: true, label: true } } },
     });
-    if (!mediaRequest) return reply.status(404).send({ error: 'Request not found' });
+    if (!mediaRequest) return reply.status(404).send({ error: 'REQUEST_NOT_FOUND' });
 
     const effectiveQuality = overrideQuality ?? mediaRequest.qualityOptionId ?? undefined;
     let ctx;
@@ -117,7 +129,7 @@ export async function requestListRoutes(app: FastifyInstance) {
         effectiveQuality,
       );
     } catch {
-      return reply.status(502).send({ error: 'Unable to resolve service context (TMDB or service unreachable)' });
+      return reply.status(502).send({ error: 'SERVICE_CONTEXT_UNREACHABLE' });
     }
 
     const matchedRuleName = ctx.ruleMatch?.ruleName ?? null;

@@ -33,6 +33,10 @@ const LOG_RATE_WINDOW_MS = 10_000;
 const LOG_RATE_MAX = 100;
 const logRateCounters = new Map<string, { count: number; windowStart: number; droppedSinceSummary: number }>();
 
+export function clearLogRateCounter(pluginId: string): void {
+  logRateCounters.delete(pluginId);
+}
+
 function shouldPersistLog(pluginId: string): boolean {
   const now = Date.now();
   let c = logRateCounters.get(pluginId);
