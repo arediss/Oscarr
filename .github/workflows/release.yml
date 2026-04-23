@@ -102,6 +102,9 @@ jobs:
       contents: read
       packages: write
     runs-on: [self-hosted, Linux, X64]
+    outputs:
+      digest: ${{ steps.manifest.outputs.digest }}
+      first_tag: ${{ steps.manifest.outputs.first_tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -157,13 +160,70 @@ jobs:
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Create and push multi-arch manifest
+        id: manifest
         run: |
           SRC_AMD64="${REGISTRY}/${IMAGE_NAME}:build-linux-amd64"
           SRC_ARM64="${REGISTRY}/${IMAGE_NAME}:build-linux-arm64"
+          FIRST_TAG=""
           for TAG in $TAGS; do
             FULL="${REGISTRY}/${IMAGE_NAME}:${TAG}"
             echo "Creating manifest for ${FULL}"
             docker buildx imagetools create -t "${FULL}" "${SRC_AMD64}" "${SRC_ARM64}"
+            if [ -z "$FIRST_TAG" ]; then FIRST_TAG="$TAG"; fi
           done
+          # Capture the manifest digest for cosign sign + SBOM attach (immutable, unlike tags).
+          DIGEST=$(docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${FIRST_TAG}" --raw | sha256sum | cut -d' ' -f1)
+          echo "digest=sha256:${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "first_tag=${FIRST_TAG}" >> "$GITHUB_OUTPUT"
         env:
           TAGS: ${{ steps.tags.outputs.tags }}
+
+  # Supply-chain: generate SBOM + keyless-sign the pushed manifest with cosign. Separate job
+  # so a signing failure doesn't block the multi-arch manifest itself (but surfaces loudly).
+  # Uses GitHub's OIDC token — no long-lived secret to rotate.
+  sign:
+    name: SBOM + cosign sign
+    needs: manifest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write      # cosign keyless signing
+      attestations: write  # attach SBOM as an attestation
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Generate SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.manifest.outputs.first_tag || 'latest' }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Sign image + attach SBOM (keyless OIDC)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+          DIGEST: ${{ needs.manifest.outputs.digest }}
+        run: |
+          REF="${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+          echo "Signing ${REF}"
+          cosign sign --yes "${REF}"
+          cosign attach sbom --sbom sbom.spdx.json "${REF}"
+          cosign attest --yes --type spdxjson --predicate sbom.spdx.json "${REF}"
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-spdx
+          path: sbom.spdx.json
+          retention-days: 90

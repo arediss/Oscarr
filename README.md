@@ -329,6 +329,27 @@ Contributions are welcome! Whether it's a bug fix, a new feature, or a plugin â€
 
 ---
 
+## Verifying image provenance
+
+Published `ghcr.io/arediss/oscarr` images are keyless-signed by the GitHub Actions release
+workflow (Sigstore / cosign, via workflow OIDC â€” no long-lived keys to manage). Each signed
+manifest also carries an attached SPDX SBOM attestation.
+
+Verify before pulling into production:
+
+```bash
+cosign verify ghcr.io/arediss/oscarr:latest \
+  --certificate-identity-regexp 'https://github.com/arediss/Oscarr/.github/workflows/release.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+# Inspect the SBOM
+cosign download sbom ghcr.io/arediss/oscarr:latest > oscarr.sbom.spdx.json
+```
+
+Any image without a valid signature from this workflow is not an official Oscarr release.
+
+---
+
 ## License
 
 MIT
