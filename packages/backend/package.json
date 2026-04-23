@@ -32,6 +32,7 @@
     "dotenv": "^17.4.1",
     "fastify": "^5.8.5",
     "node-cron": "^4.2.1",
+    "prisma": "^6.19.3",
     "resend": "^6.10.0",
     "semver": "^7.6.0",
     "tar": "^7.5.13",
@@ -44,7 +45,6 @@
     "@types/node-cron": "^3.0.11",
     "@types/semver": "^7.7.1",
     "dotenv-cli": "^11.0.0",
-    "prisma": "^6.19.3",
     "tsx": "^4.19.3",
     "typescript": "^6.0.2"
   }

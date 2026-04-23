@@ -1,5 +1,5 @@
 # ── Stage 1: Build ──
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Install dependencies (leverage Docker cache)
@@ -27,7 +27,7 @@ RUN npm run build --workspace=packages/backend
 RUN npm run build --workspace=packages/frontend
 
 # ── Stage 2: Production ──
-FROM node:20-alpine
+FROM node:22-alpine
 
 # tini = minimal init system. Docker's default PID 1 doesn't forward SIGTERM/SIGINT to child
 # processes cleanly; tini handles signal propagation + zombie reaping so a `docker stop` gives
