@@ -29,11 +29,12 @@ RUN npm run build --workspace=packages/frontend
 # ── Stage 2: Production ──
 FROM node:22-alpine
 
-# tini = minimal init system. Docker's default PID 1 doesn't forward SIGTERM/SIGINT to child
-# processes cleanly; tini handles signal propagation + zombie reaping so a `docker stop` gives
-# Fastify a chance to close connections + flush Prisma before it's killed.
-# wget is used by HEALTHCHECK (already in busybox, listed here for clarity).
-RUN apk add --no-cache tini wget
+# tini = minimal init system (signal forwarding + zombie reaping).
+# su-exec = tiny gosu-alike, used by docker/entrypoint.sh to drop from root → oscarr AFTER
+#           chowning /data, so upgrades from a pre-1001 image's volume don't hit permission
+#           denied when the existing files were written as root.
+# wget = HEALTHCHECK binary (already in busybox, listed here for clarity).
+RUN apk add --no-cache tini su-exec wget
 
 WORKDIR /app
 
@@ -74,10 +75,14 @@ RUN addgroup -S -g 1001 oscarr \
  && mkdir -p /data \
  && chown -R oscarr:oscarr /app /data
 
-USER oscarr
+# Entrypoint script chowns /data (handles upgrade from older root-owned volumes + host bind
+# mounts) and drops to oscarr via su-exec before exec-ing the CMD. Container stays root for
+# that single chown step, then runs node as UID 1001 for the rest of its life.
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENV NODE_ENV=production
-ENV DATABASE_URL=file:///data/oscarr.db
+ENV DATABASE_URL=file:/data/oscarr.db
 ENV PORT=3456
 
 EXPOSE 3456
@@ -87,8 +92,8 @@ EXPOSE 3456
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD wget -q --spider http://localhost:3456/api/setup/install-status || exit 1
 
-# tini reaps PID 1 + forwards signals; exec-form CMD so `docker stop` hits node directly
-# instead of /bin/sh. The migrate-deploy step moved inside node's boot (see ensureMigrated()
-# in src/index.ts) so we don't need a shell chain here anymore.
-ENTRYPOINT ["/sbin/tini", "--"]
+# tini is PID 1 (signal forwarding + zombie reaping). It exec's entrypoint.sh, which fixes
+# /data ownership then su-execs the CMD as oscarr. Exec-form everywhere so `docker stop`
+# propagates SIGTERM cleanly through tini → node.
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 CMD ["node", "packages/backend/dist/index.js"]
