@@ -1,4 +1,6 @@
 import { BookOpen, ExternalLink, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useModal } from '@/hooks/useModal';
 
 interface PluginDocsModalProps {
   onClose: () => void;
@@ -7,21 +9,29 @@ interface PluginDocsModalProps {
 /** Quick-reference modal for building a plugin — minimal structure + manifest example + links
  *  out to the full docs and the registry. Triggered from the "Docs" button in the tab header. */
 export function PluginDocsModal({ onClose }: PluginDocsModalProps) {
+  const { t } = useTranslation();
+  const { dialogRef, titleId } = useModal({ open: true, onClose });
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="card w-full max-w-xl shadow-2xl shadow-black/50 max-h-[85vh] flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="card w-full max-w-xl shadow-2xl shadow-black/50 max-h-[85vh] flex flex-col"
+      >
         <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 flex-shrink-0">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-ndp-text">Build a plugin</h2>
+            <h2 id={titleId} className="text-base font-semibold text-ndp-text">Build a plugin</h2>
             <p className="text-xs text-ndp-text-dim mt-0.5">Quick reference to get a plugin skeleton running.</p>
           </div>
           <button
             onClick={onClose}
             className="p-1.5 -mt-1 -mr-1 rounded-lg text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors flex-shrink-0"
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             <X className="w-4 h-4" />
           </button>

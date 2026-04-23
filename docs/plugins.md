@@ -983,7 +983,7 @@ Plugins no longer require `git clone + npm install + npm run build + restart`. I
 2. Admin opens **Admin → Plugins → Discover**, finds the plugin, clicks **Install**.
 3. Oscarr downloads the tarball, validates the manifest, drops it in `packages/plugins/<id>/`, and hot-loads the plugin. No restart.
 
-The `Install` button resolves the GitHub tarball of the plugin repo's HEAD. To install a plugin from an arbitrary URL, the admin UI exposes an "Install from URL" option (see the `POST /api/admin/plugins/install { url }` endpoint).
+The `Install` button resolves the GitHub tarball of the plugin repo's HEAD. To install a plugin from an arbitrary URL, the admin UI exposes an "Install from URL" option (see the `POST /api/plugins/install { url }` endpoint).
 
 ## Dev loop
 

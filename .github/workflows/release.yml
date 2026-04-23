@@ -7,14 +7,17 @@ on:
         description: "Image tag (e.g. 0.1.0). Leave empty to tag as 'latest' only."
         required: false
         type: string
+      nightly:
+        description: "Push as :nightly (not :latest). Use for in-prod test builds."
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - "v*"
 
 permissions:
   contents: read
-  packages: write
-  security-events: write
 
 env:
   REGISTRY: ghcr.io
@@ -24,6 +27,9 @@ jobs:
   # Build each platform natively on its own runner
   build:
     name: Build (${{ matrix.platform }})
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         include:
@@ -64,6 +70,10 @@ jobs:
   scan:
     name: Trivy Scan
     needs: build
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
     runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
@@ -75,7 +85,7 @@ jobs:
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
-          exit-code: "0"
+          exit-code: "1"
           ignore-unfixed: true
 
       - name: Upload Trivy results to GitHub Security
@@ -88,6 +98,9 @@ jobs:
   manifest:
     name: Create multi-arch manifest
     needs: [build, scan]
+    permissions:
+      contents: read
+      packages: write
     runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
@@ -101,26 +114,44 @@ jobs:
 
       - name: Determine image tags
         id: tags
+        # Tag logic:
+        # - Nightly runs (workflow_dispatch with nightly=true) → only push :nightly. No :latest,
+        #   no version alias. Lets the owner pull `:nightly` on their prod box for pre-release
+        #   verification without affecting users on :latest.
+        # - Stable tags (refs/tags/vX.Y.Z without '-') → push :latest + X + X.Y + X.Y.Z.
+        # - Pre-release tags (vX.Y.Z-rc.1, v0.1.0-beta, etc.) → push only the full version
+        #   (X.Y.Z-rc.1). No :latest alias — prevents rc from hijacking stable consumers.
+        # - workflow_dispatch with custom 'tag' input → push that tag plus :latest (legacy
+        #   behaviour for ad-hoc stable pushes).
         run: |
-          TAGS="latest"
-          if [ -n "$INPUT_TAG" ]; then
-            TAGS="${TAGS} ${INPUT_TAG}"
-          fi
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          TAGS=""
+          if [ "$INPUT_NIGHTLY" = "true" ]; then
+            TAGS="nightly"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
-            TAGS="${TAGS} ${VERSION}"
-            MINOR="${VERSION%.*}"
-            if [ "$MINOR" != "$VERSION" ]; then
-              TAGS="${TAGS} ${MINOR}"
-              MAJOR="${MINOR%.*}"
-              if [ "$MAJOR" != "$MINOR" ]; then
-                TAGS="${TAGS} ${MAJOR}"
+            TAGS="${VERSION}"
+            if [[ "$VERSION" != *-* ]]; then
+              # Stable release only — roll out the aliases.
+              TAGS="${TAGS} latest"
+              MINOR="${VERSION%.*}"
+              if [ "$MINOR" != "$VERSION" ]; then
+                TAGS="${TAGS} ${MINOR}"
+                MAJOR="${MINOR%.*}"
+                if [ "$MAJOR" != "$MINOR" ]; then
+                  TAGS="${TAGS} ${MAJOR}"
+                fi
               fi
+            fi
+          else
+            TAGS="latest"
+            if [ -n "$INPUT_TAG" ]; then
+              TAGS="${TAGS} ${INPUT_TAG}"
             fi
           fi
           echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
         env:
           INPUT_TAG: ${{ inputs.tag }}
+          INPUT_NIGHTLY: ${{ inputs.nightly }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3

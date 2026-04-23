@@ -106,7 +106,8 @@ export default function MediaCard({ media, className, availability, index = 0 }:
           <button
             onClick={handleRequest}
             className="absolute top-2 right-2 p-1.5 bg-ndp-accent rounded-full hover:bg-ndp-accent/80 transition-colors shadow-lg"
-            title="Demander ce média"
+            title={t('media.request')}
+            aria-label={t('media.request')}
           >
             {requesting ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : <Plus className="w-4 h-4 text-white" />}
           </button>

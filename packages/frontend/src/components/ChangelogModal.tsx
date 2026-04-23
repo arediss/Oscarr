@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { X, Plus, Bug, Zap, Wrench } from 'lucide-react';
 import api from '@/lib/api';
+import { useModal } from '@/hooks/useModal';
 
 interface Entry {
   type: string;
@@ -42,6 +43,7 @@ export default function ChangelogModal({ open, onClose }: { open: boolean; onClo
   const { t } = useTranslation();
   const [data, setData] = useState<ChangelogData | null>(null);
   const [loading, setLoading] = useState(false);
+  const { dialogRef, titleId } = useModal({ open, onClose });
 
   useEffect(() => {
     if (!open || data) return;
@@ -57,16 +59,20 @@ export default function ChangelogModal({ open, onClose }: { open: boolean; onClo
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="bg-ndp-bg rounded-2xl w-full max-w-3xl max-h-[85vh] mx-4 shadow-2xl shadow-black/60 overflow-hidden flex flex-col border border-white/5"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="relative px-6 pt-6 pb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-ndp-text">{t('changelog.title')}</h2>
+            <h2 id={titleId} className="text-lg font-bold text-ndp-text">{t('changelog.title')}</h2>
             <p className="text-[11px] text-ndp-text-dim mt-0.5">{t('changelog.subtitle')}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/5 transition-colors">
+          <button onClick={onClose} aria-label={t('common.close')} className="p-2 rounded-xl hover:bg-white/5 transition-colors">
             <X className="w-5 h-5 text-ndp-text-dim" />
           </button>
         </div>

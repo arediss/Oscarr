@@ -3,15 +3,94 @@ import { prisma } from '../../../utils/prisma.js';
 import { getServiceDefinition, getServiceSchemas } from '../../../providers/index.js';
 import { logEvent } from '../../../utils/logEvent.js';
 import { parseId } from '../../../utils/params.js';
+import { assertPublicUrl, SsrfBlockedError } from '../../../utils/ssrfGuard.js';
+import { verifyPassword } from '../../../utils/password.js';
 
-/** Core service CRUD + connection test — the registry surface that drives the Services admin
- *  tab. Schemas power the dynamic form; test exercises the provider's connection helper. */
+const MASK = '__MASKED__';
+
+function maskServiceConfig(type: string, config: Record<string, unknown>): Record<string, unknown> {
+  const def = getServiceDefinition(type);
+  if (!def) return config;
+  const out: Record<string, unknown> = { ...config };
+  for (const field of def.fields) {
+    if (field.type === 'password' && typeof out[field.key] === 'string' && out[field.key]) {
+      out[field.key] = MASK;
+    }
+  }
+  return out;
+}
+
+/** Merge PATCH with stored config. MASK preserves the stored value, unknown keys are dropped. */
+function mergeServiceConfig(
+  type: string,
+  stored: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const def = getServiceDefinition(type);
+  const allowed = new Set(def?.fields.map((f) => f.key) ?? Object.keys(patch));
+  const out: Record<string, unknown> = Object.create(null);
+  for (const key of allowed) {
+    const incoming = patch[key];
+    if (incoming === MASK) {
+      if (stored[key] !== undefined) out[key] = stored[key];
+    } else if (incoming !== undefined) {
+      out[key] = incoming;
+    } else if (stored[key] !== undefined) {
+      out[key] = stored[key];
+    }
+  }
+  return out;
+}
+
+/** Service CRUD + connection test. Secrets masked on read, revealed via /config/reveal. */
 export async function servicesCrudRoutes(app: FastifyInstance) {
   app.get('/service-schemas', async () => getServiceSchemas());
 
   app.get('/services', async () => {
     const services = await prisma.service.findMany({ orderBy: { createdAt: 'asc' } });
-    return services.map((s) => ({ ...s, config: JSON.parse(s.config) }));
+    return services.map((s) => ({
+      ...s,
+      config: maskServiceConfig(s.type, JSON.parse(s.config) as Record<string, unknown>),
+    }));
+  });
+
+  // Password re-auth to reveal stored secrets — same posture as /backup/restore.
+  app.post('/services/:id/config/reveal', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', description: 'Service ID' } },
+      },
+      body: {
+        type: 'object',
+        required: ['password'],
+        properties: { password: { type: 'string', description: 'Admin password re-auth' } },
+      },
+    },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { password } = request.body as { password: string };
+    const serviceId = parseId(id);
+    if (!serviceId) return reply.status(400).send({ error: 'INVALID_ID' });
+    if (!password || typeof password !== 'string') {
+      return reply.status(400).send({ error: 'PASSWORD_REQUIRED' });
+    }
+
+    const actor = request.user as { id: number };
+    const adminUser = await prisma.user.findUnique({ where: { id: actor.id }, select: { passwordHash: true } });
+    if (!adminUser?.passwordHash) return reply.status(400).send({ error: 'ADMIN_HAS_NO_PASSWORD' });
+    const passwordOk = await verifyPassword(password, adminUser.passwordHash);
+    if (!passwordOk) {
+      logEvent('warn', 'Service', `Reveal rejected: wrong password (user ${actor.id})`);
+      return reply.status(401).send({ error: 'INVALID_PASSWORD' });
+    }
+
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!service) return reply.status(404).send({ error: 'SERVICE_NOT_FOUND' });
+    logEvent('warn', 'Service', `Service "${service.name}" config revealed (user ${actor.id})`);
+    return { config: JSON.parse(service.config) as Record<string, unknown> };
   });
 
   app.post('/services', {
@@ -34,6 +113,13 @@ export async function servicesCrudRoutes(app: FastifyInstance) {
     if (!name || !type || !config) {
       return reply.status(400).send({ error: 'Name, type and config required' });
     }
+    if (typeof config.url === 'string' && config.url) {
+      try { await assertPublicUrl(config.url); }
+      catch (err) {
+        if (err instanceof SsrfBlockedError) return reply.status(400).send({ error: 'URL_BLOCKED_BY_SSRF_GUARD', detail: err.message });
+        throw err;
+      }
+    }
     // Only one default per type — clear the previous one before setting this.
     if (isDefault) {
       await prisma.service.updateMany({ where: { type, isDefault: true }, data: { isDefault: false } });
@@ -42,7 +128,7 @@ export async function servicesCrudRoutes(app: FastifyInstance) {
       data: { name, type, config: JSON.stringify(config), isDefault: isDefault ?? false },
     });
     logEvent('info', 'Service', `Service "${name}" (${type}) added`);
-    return reply.status(201).send({ ...service, config: JSON.parse(service.config) });
+    return reply.status(201).send({ ...service, config: maskServiceConfig(service.type, JSON.parse(service.config) as Record<string, unknown>) });
   });
 
   app.put('/services/:id', {
@@ -69,22 +155,37 @@ export async function servicesCrudRoutes(app: FastifyInstance) {
     const { name, config, isDefault, enabled } = request.body as {
       name?: string; config?: Record<string, string>; isDefault?: boolean; enabled?: boolean;
     };
+    const existing = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!existing) return reply.status(404).send({ error: 'Service not found' });
+
     if (isDefault) {
-      const existing = await prisma.service.findUnique({ where: { id: serviceId } });
-      if (existing) {
-        await prisma.service.updateMany({ where: { type: existing.type, isDefault: true, NOT: { id: serviceId } }, data: { isDefault: false } });
-      }
+      await prisma.service.updateMany({ where: { type: existing.type, isDefault: true, NOT: { id: serviceId } }, data: { isDefault: false } });
     }
+
+    let mergedConfig: string | undefined;
+    if (config !== undefined) {
+      const stored = JSON.parse(existing.config) as Record<string, unknown>;
+      const merged = mergeServiceConfig(existing.type, stored, config as Record<string, unknown>);
+      if (typeof merged.url === 'string' && merged.url) {
+        try { await assertPublicUrl(merged.url); }
+        catch (err) {
+          if (err instanceof SsrfBlockedError) return reply.status(400).send({ error: 'URL_BLOCKED_BY_SSRF_GUARD', detail: err.message });
+          throw err;
+        }
+      }
+      mergedConfig = JSON.stringify(merged);
+    }
+
     const service = await prisma.service.update({
       where: { id: serviceId },
       data: {
         ...(name !== undefined ? { name } : {}),
-        ...(config !== undefined ? { config: JSON.stringify(config) } : {}),
+        ...(mergedConfig !== undefined ? { config: mergedConfig } : {}),
         ...(isDefault !== undefined ? { isDefault } : {}),
         ...(enabled !== undefined ? { enabled } : {}),
       },
     });
-    return { ...service, config: JSON.parse(service.config) };
+    return { ...service, config: maskServiceConfig(service.type, JSON.parse(service.config) as Record<string, unknown>) };
   });
 
   app.delete('/services/:id', {
@@ -122,6 +223,17 @@ export async function servicesCrudRoutes(app: FastifyInstance) {
 
     const def = getServiceDefinition(service.type);
     if (!def) return reply.status(400).send({ error: 'Test not supported for this service type' });
+
+    if (typeof config.url === 'string' && config.url) {
+      try {
+        await assertPublicUrl(config.url);
+      } catch (err) {
+        if (err instanceof SsrfBlockedError) {
+          return reply.status(400).send({ error: 'URL_BLOCKED_BY_SSRF_GUARD', detail: err.message });
+        }
+        throw err;
+      }
+    }
 
     try {
       return await def.test(config);

@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { Save, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
 import type { PluginSettings } from './types';
-import { loadPluginModule, hasLoaded, getCached, pluginFrontendUrl } from './pluginModuleCache';
+import { loadPluginModule, hasLoaded, getCached, pluginFrontendUrl, PLUGIN_SCOPE_ATTR } from './pluginModuleCache';
 import type { ComponentType } from 'react';
 import { PluginErrorBoundary } from './PluginErrorBoundary';
+import { extractApiError } from '@/utils/toast';
 
 interface PluginAdminTabProps {
   pluginId: string;
@@ -52,7 +53,7 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
 
     api.get<PluginSettings>(`/plugins/${pluginId}/settings`)
       .then(({ data }) => { setSettings(data); setValues(data.values); })
-      .catch((err) => setError(err.response?.data?.error || t('plugin.load_error')));
+      .catch((err) => setError(extractApiError(err, t('plugin.load_error'))));
   }, [pluginId, frontendTried, FrontendComp]);
 
   const handleSave = useCallback(async () => {
@@ -63,8 +64,8 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
       await api.put(`/plugins/${pluginId}/settings`, values);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (err: any) {
-      setError(err.response?.data?.error || t('plugin.save_error'));
+    } catch (err) {
+      setError(extractApiError(err, t('plugin.save_error')));
     } finally {
       setSaving(false);
     }
@@ -81,12 +82,13 @@ export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
     );
   }
 
-  // Frontend loaded — render it
   if (FrontendComp) {
     return (
-      <PluginErrorBoundary pluginId={pluginId}>
-        <FrontendComp />
-      </PluginErrorBoundary>
+      <div {...{ [PLUGIN_SCOPE_ATTR]: pluginId }}>
+        <PluginErrorBoundary pluginId={pluginId}>
+          <FrontendComp />
+        </PluginErrorBoundary>
+      </div>
     );
   }
 

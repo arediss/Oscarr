@@ -4,7 +4,7 @@ import { getArrClient } from '../providers/index.js';
 import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 import { isMatureRating } from '../services/tmdb.js';
 import { normalizeLanguages } from '../utils/languages.js';
-import { performLiveCheckWithTimeout, cacheLanguageData, promoteMediaToAvailable } from '../services/mediaService.js';
+import { performLiveCheckWithTimeout, cacheLanguageData, promoteMediaToAvailable, canSkipLiveCheck } from '../services/mediaService.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
 
 /** Normalize episode info to { season, episode, title } regardless of source format */
@@ -154,9 +154,13 @@ export async function mediaRoutes(app: FastifyInstance) {
     const cachedSubs: string[] | null = media?.subtitleLanguages ? JSON.parse(media.subtitleLanguages) : null;
 
     // ── Phase 2: Live check Radarr/Sonarr (with timeout) ────────────
-    const liveCheck = await performLiveCheckWithTimeout(
-      mediaType, tmdbIdNum!, media?.tvdbId ?? null, !!cachedAudio,
-    );
+    // Skipped when DB state is fresh — pending/processing still hit to catch transitions fast.
+    const skipLive = canSkipLiveCheck(media?.status, media?.availableAt ?? null);
+    const liveCheck = skipLive
+      ? { liveAvailable: true, sonarrSeasonStats: null, audioLanguages: null, subtitleLanguages: null, timedOut: false }
+      : await performLiveCheckWithTimeout(
+          mediaType, tmdbIdNum!, media?.tvdbId ?? null, !!cachedAudio,
+        );
     const { liveAvailable, sonarrSeasonStats, audioLanguages, subtitleLanguages } = liveCheck;
 
     // ── Phase 3: Assemble response ──────────────────────────────────
@@ -365,11 +369,13 @@ export async function mediaRoutes(app: FastifyInstance) {
     }
   });
 
-  // Get TMDB IDs of all NSFW media (mature rating OR keyword tagged nsfw)
+  /** TMDB IDs of NSFW media (mature rating or admin nsfw keyword tag). 5min cache. */
   app.get('/nsfw-ids', async () => {
+    const cached = getNsfwIdsCache();
+    if (cached) return cached;
+
     const nsfwIds = new Set<number>();
 
-    // 1. Media with mature content ratings
     const ratedMedia = await prisma.media.findMany({
       where: { contentRating: { not: null } },
       select: { tmdbId: true, contentRating: true },
@@ -378,23 +384,40 @@ export async function mediaRoutes(app: FastifyInstance) {
       if (isMatureRating(m.contentRating)) nsfwIds.add(m.tmdbId);
     }
 
-    // 2. Media with keywords tagged "nsfw" by admin
     const nsfwKeywords = await prisma.keyword.findMany({
       where: { tag: 'nsfw' },
       select: { tmdbId: true },
     });
     if (nsfwKeywords.length > 0) {
-      const nsfwKwSet = new Set(nsfwKeywords.map((k) => k.tmdbId));
-      const mediaWithKeywords = await prisma.media.findMany({
-        where: { keywordIds: { not: null } },
-        select: { tmdbId: true, keywordIds: true },
-      });
-      for (const m of mediaWithKeywords) {
-        const ids: number[] = JSON.parse(m.keywordIds!);
-        if (ids.some((id) => nsfwKwSet.has(id))) nsfwIds.add(m.tmdbId);
-      }
+      // Integer IDs from a trusted DB column — safe to interpolate.
+      const idList = nsfwKeywords.map((k) => k.tmdbId).join(',');
+      const matching = await prisma.$queryRawUnsafe<{ tmdbId: number }[]>(
+        `SELECT DISTINCT m.tmdbId
+         FROM Media m, json_each(m.keywordIds)
+         WHERE m.keywordIds IS NOT NULL
+           AND CAST(json_each.value AS INTEGER) IN (${idList})`
+      );
+      for (const row of matching) nsfwIds.add(row.tmdbId);
     }
 
-    return [...nsfwIds];
+    const result = [...nsfwIds];
+    setNsfwIdsCache(result);
+    return result;
   });
+}
+
+let nsfwIdsCache: { data: number[]; expiresAt: number } | null = null;
+const NSFW_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function getNsfwIdsCache(): number[] | null {
+  if (!nsfwIdsCache || Date.now() > nsfwIdsCache.expiresAt) return null;
+  return nsfwIdsCache.data;
+}
+
+function setNsfwIdsCache(data: number[]): void {
+  nsfwIdsCache = { data, expiresAt: Date.now() + NSFW_CACHE_TTL_MS };
+}
+
+export function invalidateNsfwIdsCache(): void {
+  nsfwIdsCache = null;
 }

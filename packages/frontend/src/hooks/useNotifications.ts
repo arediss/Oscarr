@@ -17,6 +17,7 @@ let lastFetch = 0;
 const listeners = new Set<() => void>();
 
 async function fetchNotifications() {
+  if (typeof document !== 'undefined' && document.hidden) return;
   try {
     const [listRes, countRes] = await Promise.all([
       api.get('/notifications?page=1'),

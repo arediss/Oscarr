@@ -86,6 +86,7 @@ export default function NotificationBell({ dropdownDirection = 'below' }: Notifi
               )}
               <button
                 onClick={() => setOpen(false)}
+                aria-label={t('common.close')}
                 className="p-1 text-ndp-text-dim hover:text-ndp-text rounded hover:bg-white/5 transition-colors"
               >
                 <X className="w-3.5 h-3.5" />

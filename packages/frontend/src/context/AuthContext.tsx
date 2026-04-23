@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import api from '@/lib/api';
 import type { User } from '@/types';
 
@@ -26,9 +26,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { permissions: perms = [], ...userData } = data;
       setUser(userData);
       setPermissions(perms);
-    } catch {
-      setUser(null);
-      setPermissions([]);
+    } catch (err) {
+      // 401/403 = genuine logout. Network error or 5xx = backend hiccup — don't log the user
+      // out silently, keep last state and just stop the loading spinner. BackendGate already
+      // blocks mount until backend is reachable, so this only fires on mid-session transients.
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (status === 401 || status === 403) {
+        setUser(null);
+        setPermissions([]);
+      } else {
+        console.warn('[AuthContext] /auth/me transient failure, keeping session', err);
+      }
     } finally {
       setLoading(false);
     }
@@ -52,12 +60,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await api.post('/auth/logout');
     } catch { /* ignore */ }
     setUser(null);
-  };
+    setPermissions([]);
+  }, []);
 
   const hasPermission = useCallback((permission: string): boolean => {
     if (permissions.length === 0) return false;
@@ -77,14 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = hasPermission('admin.*');
   const hasAccess = isAdmin || (user?.providers ?? []).length > 0;
 
-  return (
-    <AuthContext.Provider value={{
-      user, loading, login, logout,
-      isAdmin, hasAccess, permissions, hasPermission,
-    }}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({ user, loading, login, logout, isAdmin, hasAccess, permissions, hasPermission }),
+    [user, loading, login, logout, isAdmin, hasAccess, permissions, hasPermission],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

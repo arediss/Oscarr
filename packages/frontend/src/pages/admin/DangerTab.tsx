@@ -5,6 +5,8 @@ import { clsx } from 'clsx';
 import { Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import api from '@/lib/api';
 import { AdminTabLayout } from './AdminTabLayout';
+import { extractApiError } from '@/utils/toast';
+import { useModal } from '@/hooks/useModal';
 
 /**
  * Destructive bulk operations (purge requests / media / users) — lives as a final stop inside
@@ -14,6 +16,10 @@ export function DangerTab() {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ id: string; label: string; desc: string; keyword: string; onConfirm: () => Promise<void> } | null>(null);
+  const confirmModal = useModal({
+    open: confirmAction !== null,
+    onClose: () => { if (!executing) setConfirmAction(null); },
+  });
   const [confirmInput, setConfirmInput] = useState('');
   const [executing, setExecuting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -62,8 +68,7 @@ export function DangerTab() {
       setConfirmInput('');
     } catch (err) {
       console.error('DangerTab purge failed', err);
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setExecuteError(msg || t('admin.danger.purge_failed', 'Purge failed — the operation did not complete.'));
+      setExecuteError(extractApiError(err, t('admin.danger.purge_failed', 'Purge failed — the operation did not complete.')));
     } finally { setExecuting(false); }
   };
 
@@ -118,8 +123,15 @@ export function DangerTab() {
 
         {confirmAction && createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => !executing && setConfirmAction(null)}>
-            <div className="bg-ndp-surface border border-white/10 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-ndp-text flex items-center gap-2">
+            <div
+              ref={confirmModal.dialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={confirmModal.titleId}
+              className="bg-ndp-surface border border-white/10 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 id={confirmModal.titleId} className="text-lg font-bold text-ndp-text flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-ndp-danger" />
                 {t('admin.danger.confirm_title')}
               </h3>

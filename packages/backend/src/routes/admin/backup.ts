@@ -1,102 +1,23 @@
 import type { FastifyInstance } from 'fastify';
-import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, readdirSync, unlinkSync, statSync } from 'fs';
-import { resolve, dirname, join } from 'path';
-import { prisma } from '../../utils/prisma.js';
-import { logEvent } from '../../utils/logEvent.js';
-import archiver from 'archiver';
-import { createWriteStream } from 'fs';
+import { readFileSync, existsSync, readdirSync, unlinkSync, statSync } from 'fs';
+import { resolve, join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
-import { execFileSync } from 'child_process';
+import { prisma } from '../../utils/prisma.js';
+import { logEvent } from '../../utils/logEvent.js';
+import { verifyPassword } from '../../utils/password.js';
+import {
+  createBackupZip,
+  runAutoBackup,
+  getBackupAppVersion,
+  getBackupDir,
+  safeBackupPath,
+  hmacOfBuffer,
+  safeEqualHex,
+  applyDbBuffer,
+} from '../../services/backupService.js';
 
-const APP_VERSION = JSON.parse(
-  readFileSync(resolve(import.meta.dirname, '../../../../../package.json'), 'utf-8'),
-).version as string;
-
-function getDbPath(): string {
-  const url = process.env.DATABASE_URL || 'file:../data/oscarr.db';
-  const relativePath = url.replace('file:', '');
-  return resolve(import.meta.dirname, '../../', relativePath);
-}
-
-function getBackupDir(): string {
-  const dbPath = getDbPath();
-  const dir = join(dirname(dbPath), 'backups');
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
-/** Validate filename and resolve safe path inside backup dir (prevents path traversal) */
-function safeBackupPath(filename: string): string | null {
-  if (!/^oscarr-backup-[\w.-]+\.zip$/.test(filename)) return null;
-  const dir = getBackupDir();
-  const resolved = resolve(dir, filename);
-  if (!resolved.startsWith(dir)) return null; // path traversal attempt
-  return resolved;
-}
-
-/** Create a consistent copy of the DB (WAL-safe), optionally without TmdbCache */
-function createDbCopy(dbPath: string, includeCache: boolean): string {
-  const tmpPath = resolve(tmpdir(), `oscarr-backup-${randomUUID()}.db`);
-  try {
-    // VACUUM INTO creates a consistent, defragmented copy regardless of WAL state
-    execFileSync('sqlite3', [dbPath, `VACUUM INTO '${tmpPath}';`], { timeout: 60000 });
-  } catch {
-    // Fallback if sqlite3 CLI not available
-    copyFileSync(dbPath, tmpPath);
-  }
-  if (!includeCache) {
-    try {
-      execFileSync('sqlite3', [tmpPath, 'DELETE FROM TmdbCache;'], { timeout: 30000 });
-      execFileSync('sqlite3', [tmpPath, 'VACUUM;'], { timeout: 30000 });
-    } catch { /* sqlite3 not available — keep full DB */ }
-  }
-  return tmpPath;
-}
-
-async function buildManifest(includeCache: boolean) {
-  const [userCount, mediaCount, requestCount, cacheCount] = await Promise.all([
-    prisma.user.count(),
-    prisma.media.count(),
-    prisma.mediaRequest.count(),
-    prisma.tmdbCache.count(),
-  ]);
-
-  const migrations = await prisma.$queryRawUnsafe<{ migration_name: string }[]>(
-    'SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL ORDER BY finished_at',
-  );
-
-  return {
-    version: APP_VERSION,
-    createdAt: new Date().toISOString(),
-    includeCache,
-    stats: { users: userCount, media: mediaCount, requests: requestCount, cache: includeCache ? cacheCount : 0 },
-    migrations: migrations.map(m => m.migration_name),
-  };
-}
-
-async function createBackupZip(includeCache: boolean, outputPath: string): Promise<{ manifest: Record<string, unknown>; size: number }> {
-  const dbPath = getDbPath();
-  if (!existsSync(dbPath)) throw new Error('Database file not found');
-
-  const manifest = await buildManifest(includeCache);
-  const dbCopy = createDbCopy(dbPath, includeCache);
-
-  await new Promise<void>((resolvePromise, reject) => {
-    const output = createWriteStream(outputPath);
-    const archive = archiver('zip', { zlib: { level: 9 } });
-    output.on('close', () => resolvePromise());
-    archive.on('error', (err) => reject(err));
-    archive.pipe(output);
-    archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
-    archive.file(dbCopy, { name: 'oscarr.db' });
-    archive.finalize();
-  });
-
-  try { unlinkSync(dbCopy); } catch { /* cleanup */ }
-  const size = statSync(outputPath).size;
-  return { manifest, size };
-}
+const APP_VERSION = getBackupAppVersion();
 
 export async function backupRoutes(app: FastifyInstance) {
 
@@ -126,7 +47,7 @@ export async function backupRoutes(app: FastifyInstance) {
         .header('Content-Type', 'application/zip')
         .header('Content-Disposition', `attachment; filename="${filename}"`)
         .send(zipBuffer);
-    } catch (err) {
+    } catch {
       try { unlinkSync(zipPath); } catch { /* cleanup */ }
       return reply.status(500).send({ error: 'Failed to create backup' });
     }
@@ -136,8 +57,8 @@ export async function backupRoutes(app: FastifyInstance) {
   app.get('/backup/list', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async () => {
     const dir = getBackupDir();
     const files = readdirSync(dir)
-      .filter(f => f.endsWith('.zip'))
-      .map(f => {
+      .filter((f) => f.endsWith('.zip'))
+      .map((f) => {
         const stat = statSync(join(dir, f));
         return { filename: f, size: stat.size, createdAt: stat.mtime.toISOString() };
       })
@@ -177,7 +98,9 @@ export async function backupRoutes(app: FastifyInstance) {
   });
 
   // ─── Validate backup ───────────────────────────────────────────
-  app.post('/backup/validate', async (request, reply) => {
+  app.post('/backup/validate', {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     const body = request.body as { manifest?: { version: string; stats: Record<string, number>; migrations: string[] } };
     if (!body?.manifest) return reply.status(400).send({ error: 'Manifest required' });
 
@@ -200,13 +123,30 @@ export async function backupRoutes(app: FastifyInstance) {
     };
   });
 
-  // ─── Restore backup ─────────────────────────────────────────────
+  // Restore gates: HMAC + admin password re-auth + SQLite magic check.
+  // Pre-HMAC backups require BACKUP_ALLOW_UNSIGNED=true.
   const maxRestoreSize = parseInt(process.env.BACKUP_MAX_SIZE_MB || '500', 10) * 1024 * 1024;
   app.post('/backup/restore', { bodyLimit: maxRestoreSize, config: { rateLimit: { max: 3, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const body = request.body as { db?: string; manifest?: { version: string } };
+    const body = request.body as {
+      db?: string;
+      manifest?: { version: string; integrity?: string };
+      password?: string;
+    };
     if (!body?.db || !body?.manifest) return reply.status(400).send({ error: 'Database and manifest required' });
+    if (!body?.password || typeof body.password !== 'string') {
+      return reply.status(400).send({ error: 'PASSWORD_REQUIRED' });
+    }
 
-    const { version } = body.manifest;
+    const actor = request.user as { id: number };
+    const adminUser = await prisma.user.findUnique({ where: { id: actor.id }, select: { passwordHash: true } });
+    if (!adminUser?.passwordHash) return reply.status(400).send({ error: 'ADMIN_HAS_NO_PASSWORD' });
+    const passwordOk = await verifyPassword(body.password, adminUser.passwordHash);
+    if (!passwordOk) {
+      logEvent('warn', 'Backup', `Restore rejected: wrong password (user ${actor.id})`);
+      return reply.status(401).send({ error: 'INVALID_PASSWORD' });
+    }
+
+    const { version, integrity } = body.manifest;
     if (!version || !/^\d+\.\d+\.\d+/.test(version)) return reply.status(400).send({ error: 'Invalid version format' });
     const [major, minor] = version.split('.').map(Number);
     const [curMajor, curMinor] = APP_VERSION.split('.').map(Number);
@@ -214,52 +154,32 @@ export async function backupRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'BACKUP_TOO_NEW' });
     }
 
-    const dbPath = getDbPath();
-    const backupPath = `${dbPath}.pre-restore.bak`;
-
-    try { copyFileSync(dbPath, backupPath); } catch {
-      return reply.status(500).send({ error: 'Failed to create safety backup' });
+    const dbBuffer = Buffer.from(body.db, 'base64');
+    const SQLITE_MAGIC = Buffer.from('SQLite format 3\x00');
+    if (dbBuffer.length < 16 || !dbBuffer.subarray(0, 16).equals(SQLITE_MAGIC)) {
+      return reply.status(400).send({ error: 'Invalid database file' });
     }
 
-    try {
-      const dbBuffer = Buffer.from(body.db, 'base64');
-      const SQLITE_MAGIC = Buffer.from('SQLite format 3\x00');
-      if (dbBuffer.length < 16 || !dbBuffer.subarray(0, 16).equals(SQLITE_MAGIC)) {
-        return reply.status(400).send({ error: 'Invalid database file' });
+    if (integrity) {
+      const expected = hmacOfBuffer(dbBuffer);
+      if (!safeEqualHex(integrity, expected)) {
+        logEvent('error', 'Backup', `Restore rejected: HMAC mismatch (user ${actor.id})`);
+        return reply.status(400).send({ error: 'BACKUP_SIGNATURE_INVALID' });
       }
-      const dbDir = dirname(dbPath);
-      if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true });
-      writeFileSync(dbPath, dbBuffer);
-    } catch {
-      try { copyFileSync(backupPath, dbPath); } catch { /* critical */ }
+    } else if (process.env.BACKUP_ALLOW_UNSIGNED !== 'true') {
+      return reply.status(400).send({ error: 'BACKUP_UNSIGNED' });
+    }
+
+    const result = applyDbBuffer(dbBuffer);
+    if (!result.ok) {
       return reply.status(500).send({ error: 'Failed to write database. Original restored.' });
     }
 
-    logEvent('info', 'Backup', `Database restored from v${version} backup. Restart required.`);
+    logEvent('info', 'Backup', `Database restored from v${version} backup by user ${actor.id}. Restart required.`);
     return { ok: true, message: 'Database restored. Restart required.', needsRestart: true };
   });
 }
 
-// ─── Auto-backup job (called by scheduler) ────────────────────────
-
-export async function runAutoBackup(): Promise<{ filename: string; size: number }> {
-  const dir = getBackupDir();
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
-  const filename = `oscarr-backup-auto-${APP_VERSION}-${timestamp}.zip`;
-  const outputPath = join(dir, filename);
-
-  const { size } = await createBackupZip(false, outputPath);
-
-  // Cleanup: keep only the last N backups
-  const maxBackups = parseInt(process.env.BACKUP_RETENTION || '7', 10);
-  const autoBackups = readdirSync(dir)
-    .filter(f => f.startsWith('oscarr-backup-auto-') && f.endsWith('.zip'))
-    .sort((a, b) => statSync(join(dir, b)).mtimeMs - statSync(join(dir, a)).mtimeMs);
-
-  for (const old of autoBackups.slice(maxBackups)) {
-    try { unlinkSync(join(dir, old)); } catch { /* ignore */ }
-  }
-
-  logEvent('info', 'Backup', `Auto-backup created: ${filename} (${(size / 1024 / 1024).toFixed(1)} MB)`);
-  return { filename, size };
-}
+// Re-export so legacy importers still work — scheduler and any other caller should import
+// from services/backupService directly going forward.
+export { runAutoBackup };

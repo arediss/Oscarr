@@ -8,6 +8,7 @@ import ChangelogModal from '@/components/ChangelogModal';
 import api from '@/lib/api';
 import { showToast } from '@/utils/toast';
 import { useFeatures } from '@/context/FeaturesContext';
+import { useVersionInfo } from '@/hooks/useVersionInfo';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import { FloatingSaveBar } from '@/components/FloatingSaveBar';
@@ -39,7 +40,7 @@ export function InstanceTab() {
   const [siteUrl, setSiteUrl] = useState('');
   const [instanceLanguage, setInstanceLanguage] = useState('en');
   const [bannerText, setBannerText] = useState('');
-  const [versionInfo, setVersionInfo] = useState<{ current: string; latest?: string; updateAvailable?: boolean; releaseUrl?: string } | null>(null);
+  const versionInfo = useVersionInfo();
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [apiKeyFull, setApiKeyFull] = useState<string | null>(null);
   const [apiKeyMasked, setApiKeyMasked] = useState<string | null>(null);
@@ -77,7 +78,6 @@ export function InstanceTab() {
       api.get('/admin/api-key')
         .then(({ data }) => { setApiKeyHasKey(data.hasKey); setApiKeyMasked(data.maskedKey); })
         .catch(() => {});
-      api.get('/app/version').then(({ data }) => setVersionInfo(data)).catch(() => {});
     } catch (err) {
       console.error('InstanceTab load failed', err);
       setLoadError(true);

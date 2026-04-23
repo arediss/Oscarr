@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { clsx } from 'clsx';
-import { Loader2, Trash2, RefreshCw, ScrollText } from 'lucide-react';
+import { Trash2, RefreshCw, ScrollText, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
 import { localizedDateTime } from '@/i18n/formatters';
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
@@ -62,9 +63,9 @@ export function LogsTab() {
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
-  // Auto-refresh every 10s
   useEffect(() => {
-    const interval = setInterval(fetchLogs, 10_000);
+    const tick = () => { if (!document.hidden) fetchLogs(); };
+    const interval = setInterval(tick, 10_000);
     return () => clearInterval(interval);
   }, [fetchLogs]);
 
@@ -120,18 +121,7 @@ export function LogsTab() {
         <div className="text-center py-16"><ScrollText className="w-10 h-10 text-ndp-text-dim mx-auto mb-2" /><p className="text-sm text-ndp-text-dim">{t('admin.logs.no_logs')}</p></div>
       ) : (
         <div className="space-y-2">
-          {logs.map((log) => (
-            <div key={log.id} className="card">
-              <div className="flex items-center gap-4 p-4">
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase', levelColors[log.level] || '')}>{log.level}</span>
-                  <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-semibold', LABEL_COLORS[log.label] || 'bg-white/10 text-ndp-text-muted')}>{log.label}</span>
-                </div>
-                <p className="text-sm text-ndp-text flex-1 min-w-0 truncate">{log.message}</p>
-                <span className="text-xs text-ndp-text-dim flex-shrink-0" title={localizedDateTime(log.createdAt)}>{timeAgo(log.createdAt, t)}</span>
-              </div>
-            </div>
-          ))}
+          {logs.map((log) => <LogRow key={log.id} log={log} t={t} />)}
         </div>
       )}
 
@@ -144,5 +134,65 @@ export function LogsTab() {
       )}
       </div>
     </AdminTabLayout>
+  );
+}
+
+function LogRow({ log, t }: { log: LogEntry; t: TFunction }) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [head, ...stackLines] = log.message.split('\n---\n');
+  const hasStack = stackLines.length > 0;
+  const stack = stackLines.join('\n---\n');
+
+  const levelColors: Record<string, string> = {
+    info: 'bg-ndp-accent/10 text-ndp-accent',
+    warn: 'bg-ndp-warning/10 text-ndp-warning',
+    error: 'bg-ndp-danger/10 text-ndp-danger',
+  };
+
+  const copy = async () => {
+    const block = [
+      `[${log.level.toUpperCase()}] [${log.label}] ${localizedDateTime(log.createdAt)}`,
+      head,
+      hasStack ? `\n${stack}` : '',
+    ].filter(Boolean).join('\n');
+    await navigator.clipboard.writeText(block);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-4 p-4">
+        {hasStack ? (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="p-0.5 text-ndp-text-dim hover:text-ndp-text flex-shrink-0"
+            aria-label={expanded ? t('common.collapse', 'Collapse') : t('common.expand', 'Expand')}
+          >
+            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        ) : (
+          <span className="w-4 flex-shrink-0" />
+        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase', levelColors[log.level] || '')}>{log.level}</span>
+          <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-semibold', LABEL_COLORS[log.label] || 'bg-white/10 text-ndp-text-muted')}>{log.label}</span>
+        </div>
+        <p className="text-sm text-ndp-text flex-1 min-w-0 truncate">{head}</p>
+        <button
+          onClick={copy}
+          className="p-1 text-ndp-text-dim hover:text-ndp-text rounded hover:bg-white/5 transition-colors flex-shrink-0"
+          title={t('admin.logs.copy', 'Copy details')}
+          aria-label={t('admin.logs.copy', 'Copy details')}
+        >
+          {copied ? <Check className="w-3.5 h-3.5 text-ndp-success" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+        <span className="text-xs text-ndp-text-dim flex-shrink-0" title={localizedDateTime(log.createdAt)}>{timeAgo(log.createdAt, t)}</span>
+      </div>
+      {expanded && hasStack && (
+        <pre className="px-4 pb-4 text-[11px] leading-relaxed text-ndp-text-dim overflow-x-auto whitespace-pre-wrap font-mono border-t border-white/5 pt-3">{stack}</pre>
+      )}
+    </div>
   );
 }

@@ -68,32 +68,13 @@ export function PluginsTab() {
   const updatesAvailable = plugins.filter((p) => p.updateAvailable).length;
   const installedIds = new Set(plugins.map((p) => p.id));
 
-  const headerActions = (
-    <>
-      <button
-        onClick={() => setShowHowTo(true)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors"
-        title="Plugin development guide"
-      >
-        <BookOpen className="w-4 h-4" />
-        <span className="hidden sm:inline">Docs</span>
-      </button>
-      <button
-        onClick={() => setShowRestartConfirm(true)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors"
-        title="Restart the server to pick up plugins dropped into packages/plugins by hand. Installs from Discover don't need this."
-      >
-        <RefreshCw className="w-4 h-4" />
-        <span className="hidden sm:inline">Reload</span>
-      </button>
-    </>
-  );
-
   const expandedPlugin = expandedInstall ? registry.find((p) => p.id === expandedInstall) ?? null : null;
 
   return (
-    <AdminTabLayout actions={headerActions}>
-      <div className="flex gap-2 mb-6 border-b border-white/5 pb-3">
+    <AdminTabLayout>
+      {/* Sub-tab selector + secondary actions share one row. Docs / Reload are pushed to the
+          right via `ml-auto` so they don't compete visually with Installed/Discover. */}
+      <div className="flex items-center gap-2 mb-6 border-b border-white/5 pb-3 flex-wrap">
         <button
           onClick={() => setSubTab('installed')}
           className={clsx(
@@ -124,6 +105,24 @@ export function PluginsTab() {
           <Download className="w-4 h-4" />
           Discover
         </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setShowHowTo(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors"
+            title="Plugin development guide"
+          >
+            <BookOpen className="w-4 h-4" />
+            <span className="hidden sm:inline">Docs</span>
+          </button>
+          <button
+            onClick={() => setShowRestartConfirm(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors"
+            title="Restart the server to pick up plugins dropped into packages/plugins by hand. Installs from Discover don't need this."
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span className="hidden sm:inline">Reload</span>
+          </button>
+        </div>
       </div>
 
       {showRestartConfirm && (

@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useState, useId, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Eye, EyeOff, Loader2, Plug, RefreshCw, Save } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Plug, RefreshCw, Save, KeyRound } from 'lucide-react';
 import api from '@/lib/api';
-import { toastApiError } from '@/utils/toast';
+import { toastApiError, showToast } from '@/utils/toast';
 import { useServiceSchemas, type ServiceData } from '@/hooks/useServiceSchemas';
+import { useModal } from '@/hooks/useModal';
+
+/** Mirrors backend MASK — resubmitting this value tells the backend to keep the stored secret. */
+const MASK = '__MASKED__';
 
 interface ServiceModalProps {
   service: ServiceData | null;
@@ -19,6 +23,8 @@ export function ServiceModal({ service, onClose, onSaved }: ServiceModalProps) {
   const { t } = useTranslation();
   const { schemas: SERVICE_SCHEMAS } = useServiceSchemas();
   const isEdit = !!service;
+  const fieldId = useId();
+  const { dialogRef, titleId } = useModal({ open: true, onClose });
   const [type, setType] = useState(service?.type || 'radarr');
   const [name, setName] = useState(service?.name || '');
   const [config, setConfig] = useState<Record<string, string>>(service?.config || {});
@@ -35,15 +41,91 @@ export function ServiceModal({ service, onClose, onSaved }: ServiceModalProps) {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
 
-  const fetchPlexToken = async () => {
-    setFetchingPlexToken(true);
+  const promptPassword = (): string | null => {
+    const pwd = window.prompt(t('admin.services.reveal_password_prompt'));
+    return pwd && pwd.length > 0 ? pwd : null;
+  };
+
+  const revealSecret = async (key: string) => {
+    if (!service) return;
+    const password = promptPassword();
+    if (!password) return;
     try {
-      const { data } = await api.get('/admin/plex-token');
-      if (data.token) handleConfigChange('token', data.token);
+      const { data } = await api.post(`/admin/services/${service.id}/config/reveal`, { password });
+      const value = data?.config?.[key];
+      if (typeof value === 'string') {
+        handleConfigChange(key, value);
+        setShowSecrets((prev) => ({ ...prev, [key]: true }));
+      }
+    } catch (err) {
+      toastApiError(err, t('admin.services.reveal_failed'));
+    }
+  };
+
+  const copySecret = async (key: string) => {
+    if (!service) return;
+    const password = promptPassword();
+    if (!password) return;
+    try {
+      const { data } = await api.post(`/admin/services/${service.id}/config/reveal`, { password });
+      const value = data?.config?.[key];
+      if (typeof value === 'string') {
+        await navigator.clipboard.writeText(value);
+        showToast(t('common.copied'), 'success');
+      }
+    } catch (err) {
+      toastApiError(err, t('admin.services.reveal_failed'));
+    }
+  };
+
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const authWindowRef = useRef<Window | null>(null);
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  const stopPolling = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = null;
+    authWindowRef.current?.close();
+    authWindowRef.current = null;
+    setFetchingPlexToken(false);
+  };
+
+  const fetchPlexToken = async () => {
+    setModalError('');
+    setFetchingPlexToken(true);
+    // Popup must open synchronously on the user gesture or Safari blocks it.
+    authWindowRef.current = window.open('about:blank', 'PlexAuth', 'width=600,height=700');
+    try {
+      const { data } = await api.post<{ pin: { id: number }; authUrl: string }>('/admin/plex-pin');
+      if (authWindowRef.current) authWindowRef.current.location.href = data.authUrl;
+      let attempts = 0;
+      pollRef.current = setInterval(async () => {
+        attempts++;
+        if (attempts >= 120) {
+          stopPolling();
+          setModalError(t('admin.services.plex_token_error'));
+          return;
+        }
+        try {
+          const res = await api.post<{ token?: string }>('/admin/plex-check', { pinId: data.pin.id });
+          if (res.data.token) {
+            handleConfigChange('token', res.data.token);
+            stopPolling();
+          }
+        } catch (err) {
+          // 400 = PIN not yet validated → keep polling. Anything else (401 session expired,
+          // 403 CSRF, 404 bad pin, 429 rate-limit, 5xx) is terminal — stop + surface.
+          const status = (err as { response?: { status?: number } }).response?.status;
+          if (status !== undefined && status !== 400) {
+            stopPolling();
+            setModalError(t('admin.services.plex_token_error'));
+          }
+        }
+      }, 1000);
     } catch {
+      stopPolling();
       setModalError(t('admin.services.plex_token_error'));
-      setTimeout(() => setModalError(''), 5000);
-    } finally { setFetchingPlexToken(false); }
+    }
   };
 
   const detectMachineId = async () => {
@@ -78,13 +160,20 @@ export function ServiceModal({ service, onClose, onSaved }: ServiceModalProps) {
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onMouseDown={onClose}>
-      <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-ndp-text mb-5">{isEdit ? t('admin.services.edit_title') : t('admin.services.add_title')}</h2>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <h2 id={titleId} className="text-lg font-bold text-ndp-text mb-5">{isEdit ? t('admin.services.edit_title') : t('admin.services.add_title')}</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isEdit && (
             <div>
-              <label className="text-sm text-ndp-text mb-1.5 block">{t('admin.services.service_type')}</label>
-              <select value={type} onChange={(e) => { setType(e.target.value); setConfig({}); }} className="input w-full">
+              <label htmlFor={`${fieldId}-type`} className="text-sm text-ndp-text mb-1.5 block">{t('admin.services.service_type')}</label>
+              <select id={`${fieldId}-type`} value={type} onChange={(e) => { setType(e.target.value); setConfig({}); }} className="input w-full">
                 {Object.entries(SERVICE_SCHEMAS).map(([key, s]) => (
                   <option key={key} value={key}>{s.label}</option>
                 ))}
@@ -93,29 +182,53 @@ export function ServiceModal({ service, onClose, onSaved }: ServiceModalProps) {
           )}
 
           <div>
-            <label className="text-sm text-ndp-text mb-1.5 block">{t('common.name')}</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={`${schema?.label || type} Principal`} className="input w-full" required />
+            <label htmlFor={`${fieldId}-name`} className="text-sm text-ndp-text mb-1.5 block">{t('common.name')}</label>
+            <input id={`${fieldId}-name`} type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={`${schema?.label || type} Principal`} className="input w-full" required />
           </div>
 
-          {schema?.fields.map((field) => (
+          {schema?.fields.map((field) => {
+            const isMasked = field.type === 'password' && config[field.key] === MASK;
+            return (
             <div key={field.key}>
-              <label className="text-sm text-ndp-text mb-1.5 block">{t(field.labelKey)}</label>
+              <label htmlFor={`${fieldId}-${field.key}`} className="text-sm text-ndp-text mb-1.5 block">{t(field.labelKey)}</label>
               <div className="relative">
                 <input
+                  id={`${fieldId}-${field.key}`}
                   type={field.type === 'password' && !showSecrets[field.key] ? 'password' : 'text'}
-                  value={config[field.key] || ''}
+                  value={isMasked ? '' : (config[field.key] || '')}
                   onChange={(e) => handleConfigChange(field.key, e.target.value)}
-                  placeholder={field.placeholder}
-                  className="input w-full pr-10"
+                  onFocus={() => { if (isMasked) handleConfigChange(field.key, ''); }}
+                  placeholder={isMasked ? t('admin.services.secret_stored') : field.placeholder}
+                  className="input w-full pr-20"
                 />
                 {field.type === 'password' && (
-                  <button
-                    type="button"
-                    onClick={() => setShowSecrets((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text"
-                  >
-                    {showSecrets[field.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {isEdit && (
+                      <button
+                        type="button"
+                        onClick={() => copySecret(field.key)}
+                        className="p-1 text-ndp-text-dim hover:text-ndp-text"
+                        title={t('common.copy')}
+                        aria-label={t('common.copy')}
+                      >
+                        <KeyRound className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isMasked) {
+                          revealSecret(field.key);
+                        } else {
+                          setShowSecrets((prev) => ({ ...prev, [field.key]: !prev[field.key] }));
+                        }
+                      }}
+                      className="p-1 text-ndp-text-dim hover:text-ndp-text"
+                      aria-label={showSecrets[field.key] ? t('common.hide') : t('common.show')}
+                    >
+                      {showSecrets[field.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 )}
               </div>
               {type === 'plex' && field.key === 'token' && (
@@ -144,7 +257,8 @@ export function ServiceModal({ service, onClose, onSaved }: ServiceModalProps) {
                 </button>
               )}
             </div>
-          ))}
+            );
+          })}
 
           <label className="flex items-center gap-2 text-sm text-ndp-text-muted cursor-pointer">
             <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} className="rounded" />

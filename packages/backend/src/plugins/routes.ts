@@ -5,6 +5,7 @@ import { rm } from 'fs/promises';
 import { pluginEngine } from './engine.js';
 import { installPluginFromUrl } from './installer.js';
 import { prisma } from '../utils/prisma.js';
+import { scrubSecrets } from '../utils/logScrubber.js';
 
 // ── Registry cache (module scope) ───────────────────────────────────
 const REGISTRY_URL = 'https://raw.githubusercontent.com/arediss/Oscarr-Plugin-Registry/main/plugins.json';
@@ -148,6 +149,7 @@ export async function pluginRoutes(app: FastifyInstance) {
   app.post<{ Body: { url: string } }>(
     '/install',
     {
+      bodyLimit: 8 * 1024,
       schema: {
         body: {
           type: 'object',
@@ -175,7 +177,7 @@ export async function pluginRoutes(app: FastifyInstance) {
           },
         };
       } catch (err) {
-        request.log.error({ err, url }, '[plugins] Install failed');
+        request.log.error({ err, url: scrubSecrets(url) }, '[plugins] Install failed');
         // Rollback: if the tarball landed on disk but loadSingle threw (bad manifest,
         // incompatible version, bad entry…), the dir would otherwise be picked up
         // at the next boot. Remove it now so a failed install leaves no trace.

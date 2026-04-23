@@ -96,6 +96,12 @@ model Media {
 
   @@unique([tmdbId, mediaType])
   @@index([tvdbId])
+  @@index([status])
+  @@index([availableAt])
+  @@index([radarrId])
+  @@index([sonarrId])
+  @@index([contentRating])
+  @@index([status, availableAt])
 }
 
 model Season {
@@ -130,6 +136,7 @@ model MediaRequest {
 
   @@index([userId])
   @@index([mediaId])
+  @@index([status])
 }
 
 model SupportTicket {
@@ -180,6 +187,7 @@ model AppSettings {
   siteUrl               String?   // Public URL of the instance (e.g. https://oscarr.example.com) for notification links
   apiKey                String?   // API key for external access (health check, integrations)
   homepageLayout        String?   // JSON array of HomepageSection configs
+  setupChecklistDismissed Boolean @default(false)
   updatedAt             DateTime  @updatedAt
 }
 

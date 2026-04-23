@@ -5,7 +5,8 @@ import { requestRoutes } from '../routes/requests.js';
 import { mediaRoutes } from '../routes/media.js';
 import { radarrSonarrRoutes } from '../routes/radarr-sonarr.js';
 import { adminRoutes } from '../routes/admin/index.js';
-import { setupRoutes } from '../routes/setup.js';
+import { setupRoutes, setupStatusRoutes } from '../routes/setup.js';
+import { isInstalled } from '../utils/install.js';
 import { appRoutes } from '../routes/app.js';
 import { supportRoutes } from '../routes/support.js';
 import { notificationRoutes } from '../routes/notifications.js';
@@ -35,7 +36,10 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(mediaRoutes, { prefix: '/api/media' });
   await app.register(radarrSonarrRoutes, { prefix: '/api/services' });
   await app.register(adminRoutes, { prefix: '/api/admin' });
-  await app.register(setupRoutes, { prefix: '/api/setup' });
+  await app.register(setupStatusRoutes, { prefix: '/api/setup' });
+  if (!isInstalled()) {
+    await app.register(setupRoutes, { prefix: '/api/setup' });
+  }
   await app.register(appRoutes, { prefix: '/api/app' });
   await app.register(supportRoutes, { prefix: '/api/support' });
   await app.register(notificationRoutes, { prefix: '/api/notifications' });

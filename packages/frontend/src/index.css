@@ -43,24 +43,20 @@
     @apply bg-ndp-surface/80 backdrop-blur-xl border border-white/5;
   }
 
-  .glass-hover {
-    @apply hover:bg-ndp-surface-hover/80 transition-colors duration-200;
-  }
-
   .btn-primary {
-    @apply bg-ndp-accent hover:bg-ndp-accent-hover text-white font-medium px-6 py-2.5 rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-ndp-accent/25;
+    @apply bg-ndp-accent hover:bg-ndp-accent-hover text-white font-medium px-6 py-2.5 rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-ndp-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ndp-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-ndp-bg;
   }
 
   .btn-secondary {
-    @apply bg-ndp-surface-light hover:bg-ndp-surface-hover text-ndp-text font-medium px-6 py-2.5 rounded-xl transition-all duration-200 border border-white/5;
+    @apply bg-ndp-surface-light hover:bg-ndp-surface-hover text-ndp-text font-medium px-6 py-2.5 rounded-xl transition-all duration-200 border border-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ndp-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-ndp-bg;
   }
 
   .btn-danger {
-    @apply bg-ndp-danger/10 hover:bg-ndp-danger/20 text-ndp-danger font-medium px-6 py-2.5 rounded-xl transition-all duration-200;
+    @apply bg-ndp-danger/10 hover:bg-ndp-danger/20 text-ndp-danger font-medium px-6 py-2.5 rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ndp-danger/60 focus-visible:ring-offset-2 focus-visible:ring-offset-ndp-bg;
   }
 
   .btn-success {
-    @apply bg-ndp-success/10 hover:bg-ndp-success/20 text-ndp-success font-medium px-6 py-2.5 rounded-xl transition-all duration-200;
+    @apply bg-ndp-success/10 hover:bg-ndp-success/20 text-ndp-success font-medium px-6 py-2.5 rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ndp-success/60 focus-visible:ring-offset-2 focus-visible:ring-offset-ndp-bg;
   }
 
   .card {

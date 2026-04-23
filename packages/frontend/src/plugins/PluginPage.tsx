@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ComponentType } from 'react';
-import { loadPluginModule, hasLoaded, getCached, pluginFrontendUrl } from './pluginModuleCache';
+import { loadPluginModule, hasLoaded, getCached, pluginFrontendUrl, PLUGIN_SCOPE_ATTR } from './pluginModuleCache';
 import { PluginErrorBoundary } from './PluginErrorBoundary';
 
 export function PluginPage() {
@@ -62,8 +62,10 @@ export function PluginPage() {
     );
   }
   return (
-    <PluginErrorBoundary pluginId={pluginId}>
-      <Component />
-    </PluginErrorBoundary>
+    <div {...{ [PLUGIN_SCOPE_ATTR]: pluginId }}>
+      <PluginErrorBoundary pluginId={pluginId}>
+        <Component />
+      </PluginErrorBoundary>
+    </div>
   );
 }

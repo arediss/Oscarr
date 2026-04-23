@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +26,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useDownloadForMedia } from '@/hooks/useDownloads';
 import { localizedDate } from '@/i18n/formatters';
 import type { MediaRequest } from '@/types';
+import { useModal } from '@/hooks/useModal';
 
 const STATUS_CONFIG: Record<string, { labelKey: string; icon: typeof Clock; color: string; bg: string; dot: string }> = {
   pending: { labelKey: 'pending', icon: Clock, color: 'text-ndp-warning', bg: 'bg-ndp-warning', dot: 'bg-ndp-warning' },
@@ -79,6 +80,11 @@ export default function RequestsPage() {
   const [cleanupActions, setCleanupActions] = useState<Record<string, CleanupAction>>({});
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupResult, setCleanupResult] = useState<{ oscarr: number; service: number } | null>(null);
+  const [confirmDeleteRequest, setConfirmDeleteRequest] = useState<MediaRequest | null>(null);
+  const confirmDeleteModal = useModal({
+    open: confirmDeleteRequest !== null,
+    onClose: () => setConfirmDeleteRequest(null),
+  });
 
   const canAccessAdmin = hasPermission('admin.*');
 
@@ -138,7 +144,8 @@ export default function RequestsPage() {
     return () => observer.disconnect();
   }, [loadMore]);
 
-  const handleAction = async (id: number, action: 'approve' | 'decline', qualityOptionId?: number) => {
+  // Stable identity required — RequestCard is React.memo'd.
+  const handleAction = useCallback(async (id: number, action: 'approve' | 'decline', qualityOptionId?: number) => {
     setActionLoading(id);
     try {
       await api.post(`/requests/${id}/${action}`, qualityOptionId ? { qualityOptionId } : {});
@@ -149,9 +156,9 @@ export default function RequestsPage() {
     } finally {
       setActionLoading(null);
     }
-  };
+  }, [fetchRequests]);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     setActionLoading(id);
     try {
       await api.delete(`/requests/${id}`);
@@ -162,7 +169,12 @@ export default function RequestsPage() {
     } finally {
       setActionLoading(null);
     }
-  };
+  }, [fetchRequests]);
+
+  const onDeleteCard = useCallback((id: number) => {
+    const r = requests.find((x) => x.id === id);
+    if (r) setConfirmDeleteRequest(r);
+  }, [requests]);
 
   const getStatCount = (key: string): number => {
     if (!stats) return 0;
@@ -260,7 +272,7 @@ export default function RequestsPage() {
                       </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                         {pendingRequests.map((req, index) => (
-                          <RequestCard key={req.id} request={req} canApprove={hasPermission('requests.approve')} canDecline={hasPermission('requests.decline')} actionLoading={actionLoading} onAction={handleAction} onDelete={handleDelete} qualityOptions={qualityOptions} index={index} />
+                          <RequestCard key={req.id} request={req} canApprove={hasPermission('requests.approve')} canDecline={hasPermission('requests.decline')} actionLoading={actionLoading} onAction={handleAction} onDelete={onDeleteCard} qualityOptions={qualityOptions} index={index} />
                         ))}
                       </div>
                     </div>
@@ -275,7 +287,7 @@ export default function RequestsPage() {
                       )}
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                         {otherRequests.map((req, index) => (
-                          <RequestCard key={req.id} request={req} canApprove={hasPermission('requests.approve')} canDecline={hasPermission('requests.decline')} actionLoading={actionLoading} onAction={handleAction} onDelete={handleDelete} qualityOptions={qualityOptions} index={index} />
+                          <RequestCard key={req.id} request={req} canApprove={hasPermission('requests.approve')} canDecline={hasPermission('requests.decline')} actionLoading={actionLoading} onAction={handleAction} onDelete={onDeleteCard} qualityOptions={qualityOptions} index={index} />
                         ))}
                       </div>
                     </div>
@@ -295,6 +307,51 @@ export default function RequestsPage() {
         </>
       )}
 
+      {/* Delete confirmation modal */}
+      {confirmDeleteRequest && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in"
+          onClick={() => setConfirmDeleteRequest(null)}
+        >
+          <div
+            ref={confirmDeleteModal.dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={confirmDeleteModal.titleId}
+            className="card p-6 max-w-sm w-full mx-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id={confirmDeleteModal.titleId} className="text-lg font-bold text-ndp-text mb-2">
+              {t('requests.confirm_delete_title')}
+            </h3>
+            <p className="text-sm text-ndp-text-muted mb-1">
+              {t('requests.confirm_delete', { title: confirmDeleteRequest.media?.title || '' })}
+            </p>
+            <p className="text-xs text-ndp-text-dim mb-6">
+              {t('requests.confirm_delete_desc')}
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDeleteRequest(null)} className="btn-secondary text-sm flex-1">
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={async () => {
+                  const id = confirmDeleteRequest.id;
+                  setConfirmDeleteRequest(null);
+                  await handleDelete(id);
+                }}
+                disabled={actionLoading === confirmDeleteRequest.id}
+                className="btn-danger text-sm flex-1 flex items-center justify-center gap-2"
+              >
+                {actionLoading === confirmDeleteRequest.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {t('common.delete')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {/* Cleanup modal */}
       {showCleanup && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowCleanup(false); }}>
@@ -304,7 +361,7 @@ export default function RequestsPage() {
                 <Eraser className="w-4 h-4 text-ndp-text-muted" />
                 {t('requests.cleanup_title')}
               </h3>
-              <button onClick={() => setShowCleanup(false)} className="text-ndp-text-dim hover:text-ndp-text transition-colors">
+              <button onClick={() => setShowCleanup(false)} aria-label={t('common.close')} className="text-ndp-text-dim hover:text-ndp-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -391,16 +448,7 @@ export default function RequestsPage() {
   );
 }
 
-function RequestCard({
-  request: req,
-  canApprove,
-  canDecline,
-  actionLoading,
-  onAction,
-  onDelete,
-  qualityOptions,
-  index,
-}: {
+interface RequestCardProps {
   request: MediaRequest;
   canApprove: boolean;
   canDecline?: boolean;
@@ -409,7 +457,18 @@ function RequestCard({
   onDelete: (id: number) => void;
   qualityOptions: { id: number; label: string }[];
   index: number;
-}) {
+}
+
+function RequestCardInner({
+  request: req,
+  canApprove,
+  canDecline,
+  actionLoading,
+  onAction,
+  onDelete,
+  qualityOptions,
+  index,
+}: RequestCardProps) {
   const { t } = useTranslation();
   const [selectedQuality, setSelectedQuality] = useState<number | undefined>(req.qualityOptionId ?? undefined);
   const [showSettings, setShowSettings] = useState(false);
@@ -594,7 +653,7 @@ function RequestCard({
                 <Settings2 className="w-4 h-4 text-ndp-text-muted" />
                 {t('requests.request_settings')}
               </h3>
-              <button onClick={() => setShowSettings(false)} className="text-ndp-text-dim hover:text-ndp-text transition-colors">
+              <button onClick={() => setShowSettings(false)} aria-label={t('common.close')} className="text-ndp-text-dim hover:text-ndp-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -906,3 +965,5 @@ function RequestFilters({ filterUser, setFilterUser, filterMediaType, setFilterM
     </div>
   );
 }
+
+const RequestCard = memo(RequestCardInner);
