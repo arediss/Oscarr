@@ -27,17 +27,17 @@ export async function logEvent(level: LogLevel, label: string, message: string, 
   } else if (err != null) {
     body += `\n---\n${sanitizeLine(String(err))}`;
   }
-  // Single-line render for console/SIEM: a crafted stack or multi-line message would otherwise
-  // appear as separate log entries in a log aggregator. DB storage keeps the full multi-line
-  // form since it's a typed column, not a stream.
-  const consoleBody = body.replace(/\r/g, '').replace(/\n/g, ' ⏎ ').slice(0, 1000);
+  // JSON-encode before writing to a log stream: escapes every control char (incl. CRLF) and is
+  // on CodeQL's recognized sanitizer list for log-injection. DB storage keeps the raw body
+  // because it's a typed column, not a stream an aggregator will re-parse line-by-line.
+  const consoleLine = JSON.stringify({ label: safeLabel, body: body.slice(0, 2000) });
   if (level === 'debug') {
-    console.log(`[${safeLabel}]`, consoleBody);
+    console.log(consoleLine);
     if (process.env.DEBUG_LOGS !== 'true') return;
   }
   try {
     await prisma.appLog.create({ data: { level, label: safeLabel, message: body } });
   } catch (dbErr) {
-    console.error(`[logEvent:${level}] [${safeLabel}]`, consoleBody, dbErr);
+    console.error(`logEvent:${level} ${consoleLine}`, dbErr);
   }
 }
