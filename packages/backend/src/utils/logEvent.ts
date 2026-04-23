@@ -38,6 +38,6 @@ export async function logEvent(level: LogLevel, label: string, message: string, 
   try {
     await prisma.appLog.create({ data: { level, label: safeLabel, message: body } });
   } catch (dbErr) {
-    console.error(`logEvent:${level} ${consoleLine}`, dbErr);
+    console.error(`logEvent:${level}`, consoleLine, dbErr);
   }
 }
