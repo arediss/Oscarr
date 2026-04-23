@@ -14,6 +14,7 @@ interface WizardService {
   name: string;
   config: Record<string, string>;
   testStatus: 'idle' | 'testing' | 'ok' | 'error';
+  testError?: string;
   saved: boolean;
 }
 
@@ -125,12 +126,16 @@ export default function InstallPage() {
   const testService = async (id: string) => {
     const svc = services.find(s => s.id === id);
     if (!svc) return;
-    updateService(id, { testStatus: 'testing' });
+    updateService(id, { testStatus: 'testing', testError: undefined });
     try {
       await api.post('/setup/test-service', { type: svc.type, config: svc.config });
-      setServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'ok' as const } : s));
-    } catch {
-      setServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'error' as const } : s));
+      setServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'ok' as const, testError: undefined } : s));
+    } catch (err) {
+      // Backend returns { error: <code>, detail: <human message> } — show the detail so the
+      // user can distinguish refused / timeout / bad API key / DNS without reading server logs.
+      const resp = (err as { response?: { data?: { error?: string; detail?: string } } }).response?.data;
+      const message = resp?.detail || resp?.error || (err as Error)?.message || 'Test failed';
+      setServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'error' as const, testError: message } : s));
     }
   };
 
@@ -476,6 +481,9 @@ export default function InstallPage() {
                               <span className="flex items-center gap-1 text-xs text-ndp-danger"><XCircle className="w-3.5 h-3.5" /> {t('status.connection_failed')}</span>
                             )}
                           </div>
+                          {svc.testStatus === 'error' && svc.testError && (
+                            <p className="mt-2 text-xs text-ndp-danger/90 break-words">{svc.testError}</p>
+                          )}
                         </div>
                       </div>
                     </div>

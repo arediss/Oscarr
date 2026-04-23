@@ -4,6 +4,7 @@ import { logEvent } from '../utils/logEvent.js';
 import { runFullSync } from '../services/sync/index.js';
 import { initScheduler } from '../services/scheduler.js';
 import { isInstalled, markInstalled } from '../utils/install.js';
+import { classifyTestError } from '../utils/serviceTestError.js';
 
 const SETUP_SECRET = process.env.SETUP_SECRET || '';
 if (!SETUP_SECRET) {
@@ -98,8 +99,10 @@ export async function setupRoutes(app: FastifyInstance) {
 
     try {
       return await def.test(config);
-    } catch {
-      return reply.status(502).send({ error: 'Unable to reach the service' });
+    } catch (err) {
+      const info = classifyTestError(err);
+      logEvent('warn', 'Setup', `Service test failed (${type}): ${info.code} — ${info.message}`, err);
+      return reply.status(502).send({ error: info.code, detail: info.message });
     }
   });
 

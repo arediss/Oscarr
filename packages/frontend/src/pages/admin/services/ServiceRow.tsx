@@ -44,6 +44,14 @@ export function ServiceRow({
 
         {result && (() => {
           const blocked = !result.ok && result.errorCode === 'URL_BLOCKED_BY_SSRF_GUARD';
+          // Hovering the badge shows the full pre-rendered cause (e.g. "Connection refused at
+          // 192.168.1.50:7878 — nothing listening, or bound to localhost"). Keeps the row tight
+          // while still giving admins enough to diagnose without opening AppLog.
+          const title = blocked
+            ? t('admin.services.ssrf_blocked')
+            : !result.ok
+            ? result.errorDetail
+            : undefined;
           return (
             <span
               className={clsx(
@@ -54,7 +62,7 @@ export function ServiceRow({
                   ? 'bg-ndp-warning/10 text-ndp-warning'
                   : 'bg-ndp-danger/10 text-ndp-danger',
               )}
-              title={blocked ? t('admin.services.ssrf_blocked') : undefined}
+              title={title}
             >
               {result.ok
                 ? (result.version ? `v${result.version}` : t('status.connected'))

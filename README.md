@@ -165,6 +165,7 @@ Open `http://localhost:3456` and follow the setup wizard.
 > - Data (SQLite database, install config, backups) is persisted in the `oscarr-data` volume.
 > - A built-in TMDB read-access token is included — no signup needed. Override with `TMDB_API_TOKEN` if you prefer your own.
 > - Migrations run automatically at every boot (idempotent). No manual step required after an image update.
+> - **macOS Docker Desktop caveat:** containers can't reach LAN IPs (e.g. `192.168.1.x`) even with `--network host` — Docker Desktop runs in a VM and doesn't share the host network stack. Connectivity tests that work for Linux/NAS users will fail from your Mac. Use [Colima](https://github.com/abiosoft/colima) locally for a true Linux-like network, or deploy to a Linux host for end-to-end testing. Oscarr itself is unaffected — this is purely a local dev environment quirk.
 
 ---
 
