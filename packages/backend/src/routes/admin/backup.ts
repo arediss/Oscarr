@@ -98,7 +98,9 @@ export async function backupRoutes(app: FastifyInstance) {
   });
 
   // ─── Validate backup ───────────────────────────────────────────
-  app.post('/backup/validate', async (request, reply) => {
+  app.post('/backup/validate', {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     const body = request.body as { manifest?: { version: string; stats: Record<string, number>; migrations: string[] } };
     if (!body?.manifest) return reply.status(400).send({ error: 'Manifest required' });
 

@@ -149,7 +149,13 @@ export async function runAutoBackup(): Promise<{ filename: string; size: number 
   return { filename, size };
 }
 
-/** Write a DB buffer to the live path with a pre-restore safety copy for rollback. */
+/** Write a DB buffer to the live path with a pre-restore safety copy for rollback.
+ *  Trust chain (all enforced in `routes/admin/backup.ts` /backup/restore):
+ *    1. RBAC (admin.* permission) 2. CSRF header 3. rate-limit (3/min)
+ *    4. admin password re-auth   5. version-compat check                6. SQLite magic-header match
+ *    7. HMAC signature (or explicit BACKUP_ALLOW_UNSIGNED=true opt-in).
+ *  By the time the buffer reaches this function it's been validated 7 ways and is NOT untrusted
+ *  network data anymore — dbPath is also a constant derived from env/config, never from the body. */
 export function applyDbBuffer(dbBuffer: Buffer): { ok: boolean; safetyPath: string } {
   const dbPath = getDbPath();
   const safetyPath = `${dbPath}.pre-restore.bak`;

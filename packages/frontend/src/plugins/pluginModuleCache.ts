@@ -61,7 +61,7 @@ async function ensurePluginCss(pluginId: string): Promise<void> {
     document.head.appendChild(style);
     cssStyles.set(pluginId, style);
   } catch (err) {
-    if (import.meta.env.DEV) console.warn(`Failed to inject CSS for plugin "${pluginId}"`, err);
+    if (import.meta.env.DEV) console.warn('Failed to inject CSS for plugin', pluginId, err);
   }
 }
 
