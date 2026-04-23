@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useVirtualList } from '@/hooks/useVirtualList';
 import type { TFunction } from 'i18next';
 import { clsx } from 'clsx';
 import { Trash2, RefreshCw, ScrollText, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
@@ -120,9 +121,7 @@ export function LogsTab() {
       {loading && logs.length === 0 ? <Spinner /> : logs.length === 0 ? (
         <div className="text-center py-16"><ScrollText className="w-10 h-10 text-ndp-text-dim mx-auto mb-2" /><p className="text-sm text-ndp-text-dim">{t('admin.logs.no_logs')}</p></div>
       ) : (
-        <div className="space-y-2">
-          {logs.map((log) => <LogRow key={log.id} log={log} t={t} />)}
-        </div>
+        <LogList logs={logs} t={t} />
       )}
 
       {totalPages > 1 && (
@@ -134,6 +133,43 @@ export function LogsTab() {
       )}
       </div>
     </AdminTabLayout>
+  );
+}
+
+/** Virtualized log list — renders only the rows in viewport. Row heights are variable (the
+ *  stack trace expand ~doubles a row), so we use `measureElement` instead of a fixed size.
+ *  Viewport is capped at 70dvh so the browser's own scroll drives the surrounding page. */
+function LogList({ logs, t }: { logs: LogEntry[]; t: TFunction }) {
+  const { parentRef, rowVirtualizer, items } = useVirtualList({
+    count: logs.length,
+    estimateSize: 64, // collapsed row; measureElement corrects after first paint
+  });
+
+  return (
+    <div ref={parentRef} className="max-h-[70dvh] overflow-auto">
+      <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
+        {items.map((v) => {
+          const log = logs[v.index];
+          return (
+            <div
+              key={log.id}
+              ref={rowVirtualizer.measureElement}
+              data-index={v.index}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                transform: `translateY(${v.start}px)`,
+                paddingBottom: '0.5rem',
+              }}
+            >
+              <LogRow log={log} t={t} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
