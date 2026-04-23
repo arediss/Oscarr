@@ -1,5 +1,5 @@
-import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
-import { isRetryable } from '../utils/fetchWithRetry.js';
+import axios from 'axios';
+import { attachAxiosRetry } from '../utils/fetchWithRetry.js';
 import { getCached, setCache } from '../utils/cache.js';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
@@ -66,17 +66,8 @@ export function getTmdbApi(lang = DEFAULT_LANG) {
       language: toTmdbLocale(lang),
     },
   });
-  // Transient-error retry on the TMDB edge: a 503 or cloudflare hiccup doesn't kill the
-  // homepage row that's waiting for it. 4xx (401, 404) bubbles immediately — no retry.
-  instance.interceptors.response.use(undefined, async (err: AxiosError & { config?: InternalAxiosRequestConfig & { __retried?: boolean } }) => {
-    if (!err.config || err.config.__retried || !isRetryable(err)) throw err;
-    err.config.__retried = true;
-    // eslint-disable-next-line no-console
-    console.warn('[TMDB] retryable failure, retrying in 500ms', err.response?.status ?? err.code);
-    await new Promise((r) => setTimeout(r, 500));
-    return instance.request(err.config);
-  });
-  return instance;
+  // Transient-error retry: a 503 or cloudflare hiccup doesn't kill the waiting row.
+  return attachAxiosRetry(instance, 'TMDB');
 }
 
 // Type contracts moved to @oscarr/shared (TmdbCollection, TmdbMovie, TmdbTv, TmdbSeason,

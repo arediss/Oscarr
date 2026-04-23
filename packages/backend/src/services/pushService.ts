@@ -1,4 +1,5 @@
 import webpush from 'web-push';
+import { withRetry } from '../utils/fetchWithRetry.js';
 import { prisma } from '../utils/prisma.js';
 
 /** Web-push VAPID setup + fan-out. Consumed by routes (one-way dependency). */
@@ -29,14 +30,20 @@ export async function sendPushToUsers(
 
   for (const sub of subscriptions) {
     try {
-      await webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        payloadStr,
+      // Retry on transient push-endpoint failures (mozilla/google brief 5xx during rollouts).
+      // 404/410 bubble as-is since they indicate a permanently-dead subscription we clean up.
+      await withRetry(
+        () => webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          payloadStr,
+        ),
+        { label: 'WebPush' },
       );
     } catch (err: unknown) {
       const statusCode = (err as { statusCode?: number })?.statusCode;
       if (statusCode === 410 || statusCode === 404) {
-        await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+        await prisma.pushSubscription.delete({ where: { id: sub.id } })
+          .catch((dbErr) => console.warn('[WebPush] stale subscription cleanup failed', dbErr));
       }
     }
   }

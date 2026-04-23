@@ -18,6 +18,8 @@ interface RetryOptions {
 
 interface LooseErrorResponse {
   response?: { status?: number };
+  /** web-push style — error exposes the HTTP status directly on the error object. */
+  statusCode?: number;
   code?: string;
   name?: string;
 }
@@ -25,7 +27,7 @@ interface LooseErrorResponse {
 /** True if the error looks transient — worth one retry. Network / DNS / timeout / 5xx. */
 export function isRetryable(err: unknown): boolean {
   const e = err as LooseErrorResponse;
-  const status = e?.response?.status;
+  const status = e?.response?.status ?? e?.statusCode;
   if (typeof status === 'number') {
     return status >= 500 && status <= 599;
   }
@@ -53,4 +55,23 @@ export async function withRetry<T>(fn: () => Promise<T>, opts: RetryOptions = {}
     await new Promise((resolve) => setTimeout(resolve, backoffMs));
     return fn();
   }
+}
+
+/** Response interceptor for an axios instance: single retry on transient 5xx / network.
+ *  `config.__retried` marker prevents infinite loops if the retry itself also fails. */
+export function attachAxiosRetry<I extends {
+  interceptors: { response: { use: (a: undefined, b: (err: unknown) => unknown) => number } };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  request: (config: any) => Promise<unknown>;
+}>(instance: I, label: string, backoffMs = 500): I {
+  instance.interceptors.response.use(undefined, async (err: unknown) => {
+    const e = err as { config?: { __retried?: boolean } };
+    if (!e.config || e.config.__retried || !isRetryable(err)) throw err;
+    e.config.__retried = true;
+    // eslint-disable-next-line no-console
+    console.warn(`[${label}] retryable failure, retrying in ${backoffMs}ms`, (err as LooseErrorResponse).response?.status ?? (err as LooseErrorResponse).code);
+    await new Promise((r) => setTimeout(r, backoffMs));
+    return instance.request(e.config);
+  });
+  return instance;
 }

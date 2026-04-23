@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AuthHelpers, AuthProvider, Provider } from '../types.js';
 import { getProviderConfig, isProviderEnabled } from '../authSettings.js';
 import { resolveOAuthCallbackUrl } from '../../utils/publicUrl.js';
+import { withRetry } from '../../utils/fetchWithRetry.js';
 
 const AUTHORIZE_URL = 'https://discord.com/oauth2/authorize';
 const TOKEN_URL = 'https://discord.com/api/oauth2/token';
@@ -160,29 +161,44 @@ const discordAuth: AuthProvider = {
 
         // Discord enforces that the redirect_uri on the token exchange matches the one we
         // sent in the authorize request. Re-derive from the same helper so they're identical.
+        // withRetry retries once on a transient 5xx so a brief Discord outage mid-OAuth
+        // doesn't force a full re-auth from the user — the guild-membership gate below stays
+        // fail-closed (no retry) since it's security-critical.
         const redirectUri = resolveOAuthCallbackUrl(request, 'discord');
-        const tokenRes = await fetch(TOKEN_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            client_id: cfg.clientId,
-            client_secret: cfg.clientSecret,
-            grant_type: 'authorization_code',
-            code,
-            redirect_uri: redirectUri,
-          }),
-          redirect: 'error',
-          signal: AbortSignal.timeout(10000),
-        });
+        const tokenRes = await withRetry(async () => {
+          const r = await fetch(TOKEN_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: cfg.clientId,
+              client_secret: cfg.clientSecret,
+              grant_type: 'authorization_code',
+              code,
+              redirect_uri: redirectUri,
+            }),
+            redirect: 'error',
+            signal: AbortSignal.timeout(10000),
+          });
+          if (r.status >= 500 && r.status < 600) {
+            throw Object.assign(new Error(`Discord token ${r.status}`), { response: { status: r.status } });
+          }
+          return r;
+        }, { label: 'DiscordToken' });
         if (!tokenRes.ok) return reply.redirect('/login?error=DISCORD_ERROR');
         const tokenPayload = (await tokenRes.json()) as { access_token?: string };
         if (!tokenPayload.access_token) return reply.redirect('/login?error=DISCORD_ERROR');
 
-        const userRes = await fetch(USER_URL, {
-          headers: { Authorization: `Bearer ${tokenPayload.access_token}` },
-          redirect: 'error',
-          signal: AbortSignal.timeout(10000),
-        });
+        const userRes = await withRetry(async () => {
+          const r = await fetch(USER_URL, {
+            headers: { Authorization: `Bearer ${tokenPayload.access_token}` },
+            redirect: 'error',
+            signal: AbortSignal.timeout(10000),
+          });
+          if (r.status >= 500 && r.status < 600) {
+            throw Object.assign(new Error(`Discord user ${r.status}`), { response: { status: r.status } });
+          }
+          return r;
+        }, { label: 'DiscordUser' });
         if (!userRes.ok) return reply.redirect('/login?error=DISCORD_ERROR');
         const profile = (await userRes.json()) as {
           id: string;

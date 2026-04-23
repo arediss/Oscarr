@@ -59,15 +59,47 @@ export async function syncArrService(serviceType: string, since?: Date | null): 
     const externalIds = filtered.map((i) => i.externalId).filter((id): id is number => Number.isFinite(id));
     const existingByExternalId = await bulkFetchExisting(client.mediaType, externalIds);
 
+    // Phase 2 N+1 kill: collect season writes for TV updates here so we can batch them into
+    // a single deleteMany+createMany after the loop instead of N upserts per TV item. The
+    // create path for TV (brand-new media rows) already uses createMany inside processSingleMedia.
+    const pendingSeasons: { mediaId: number; seasons: typeof filtered[number]['seasons'] }[] = [];
+
     for (const item of filtered) {
       try {
-        const result = await processSingleMedia(item, client, existingByExternalId.get(item.externalId));
+        const existing = existingByExternalId.get(item.externalId);
+        const result = await processSingleMedia(item, client, existing);
         if (result === 'added') added++;
         else if (result === 'updated') updated++;
+        // Queue seasons for the update path only — creates already batched via createMany.
+        if (client.mediaType === 'tv' && result === 'updated' && existing && item.seasons?.length) {
+          pendingSeasons.push({ mediaId: existing.id, seasons: item.seasons });
+        }
       } catch (err) {
         errors++;
         logEvent('debug', 'Sync', `Error processing ${item.title}: ${err}`);
       }
+    }
+
+    // Single transaction replaces N upserts (~5 per TV media × 1000s of items = 5k+ queries).
+    // Season is a leaf model (no child FKs), so deleteMany+createMany preserves the same final
+    // state as the per-season upsert without cascading side effects.
+    if (pendingSeasons.length > 0) {
+      const mediaIds = pendingSeasons.map((p) => p.mediaId);
+      const rows = pendingSeasons.flatMap((p) =>
+        (p.seasons ?? [])
+          .filter((s) => s.seasonNumber > 0)
+          .map((s) => ({
+            mediaId: p.mediaId,
+            seasonNumber: s.seasonNumber,
+            episodeCount: s.totalEpisodeCount,
+            status: s.status,
+          })),
+      );
+      await prisma.$transaction([
+        prisma.season.deleteMany({ where: { mediaId: { in: mediaIds } } }),
+        prisma.season.createMany({ data: rows }),
+      ]);
+      logEvent('debug', 'Sync', `${serviceType}: bulk-synced seasons for ${mediaIds.length} TV items (${rows.length} season rows)`);
     }
 
     // Update last sync timestamp
@@ -205,6 +237,9 @@ async function processSingleMedia(
     if (existing.tmdbId < 0) updateData.tmdbId = -(item.externalId); // Keep consistent placeholder
   }
 
+  // Seasons are NOT written here — the caller collects them for a batched deleteMany+createMany
+  // after the main loop (phase 2 of H11). Keeping media update + request cascade in the same
+  // transaction since they're per-item semantics.
   await prisma.$transaction(async (tx) => {
     await tx.media.update({ where: { id: existing.id }, data: updateData });
 
@@ -213,16 +248,6 @@ async function processSingleMedia(
         where: { mediaId: existing.id, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
         data: { status: 'available' },
       });
-    }
-
-    if (client.mediaType === 'tv' && item.seasons?.length) {
-      for (const season of item.seasons.filter(s => s.seasonNumber > 0)) {
-        await tx.season.upsert({
-          where: { mediaId_seasonNumber: { mediaId: existing.id, seasonNumber: season.seasonNumber } },
-          update: { episodeCount: season.totalEpisodeCount, status: season.status },
-          create: { mediaId: existing.id, seasonNumber: season.seasonNumber, episodeCount: season.totalEpisodeCount, status: season.status },
-        });
-      }
     }
   });
 
