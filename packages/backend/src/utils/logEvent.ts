@@ -27,15 +27,17 @@ export async function logEvent(level: LogLevel, label: string, message: string, 
   } else if (err != null) {
     body += `\n---\n${sanitizeLine(String(err))}`;
   }
+  // Single-line render for console/SIEM: a crafted stack or multi-line message would otherwise
+  // appear as separate log entries in a log aggregator. DB storage keeps the full multi-line
+  // form since it's a typed column, not a stream.
+  const consoleBody = body.replace(/\r/g, '').replace(/\n/g, ' ⏎ ').slice(0, 1000);
   if (level === 'debug') {
-    // Pass body as a separate argument — console.log treats its first arg as a format spec,
-    // so user-controlled data in the format position could be interpreted as %s/%d tokens.
-    console.log(`[${safeLabel}]`, body);
+    console.log(`[${safeLabel}]`, consoleBody);
     if (process.env.DEBUG_LOGS !== 'true') return;
   }
   try {
     await prisma.appLog.create({ data: { level, label: safeLabel, message: body } });
   } catch (dbErr) {
-    console.error(`[logEvent:${level}] [${safeLabel}]`, body, dbErr);
+    console.error(`[logEvent:${level}] [${safeLabel}]`, consoleBody, dbErr);
   }
 }
