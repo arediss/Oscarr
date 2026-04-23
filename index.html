@@ -1,0 +1,1829 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Oscarr — Radarr & Sonarr are the source of truth. Oscarr is the interface.</title>
+<meta name="description" content="Self-hosted media request & management platform. Radarr and Sonarr are the source of truth. Oscarr is the interface. Plugin-driven, multi-auth, MIT." />
+<meta name="theme-color" content="#7c5cff" />
+
+<!-- Open Graph / Twitter -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Oscarr — The interface your *arr stack has been waiting for" />
+<meta property="og:description" content="Self-hosted. Plugin-driven. Multi-auth. Radarr and Sonarr are the source of truth. Oscarr is the interface." />
+<meta property="og:image" content="assets/home.png" />
+<meta property="og:url" content="https://arediss.github.io/Oscarr/" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Oscarr — The interface your *arr stack has been waiting for" />
+<meta name="twitter:description" content="Self-hosted. Plugin-driven. Multi-auth. MIT." />
+<meta name="twitter:image" content="assets/home.png" />
+
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="preload" as="image" href="assets/home.png" />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/lucide@0.454.0/dist/umd/lucide.min.js"></script>
+<style>
+  /* Lucide: default size inherits em; wrappers can override via width/height on svg */
+  i[data-lucide] { display: inline-block; width: 1em; height: 1em; }
+  :root {
+    --bg: #07070b;
+    --bg-2: #0c0c14;
+    --panel: #11111c;
+    --panel-2: #161624;
+    --line: rgba(255,255,255,0.06);
+    --line-strong: rgba(255,255,255,0.12);
+    --ink: #f3f0ff;
+    --ink-dim: #a9a6c4;
+    --ink-muted: #6d6a88;
+    --violet: #7c5cff;
+    --violet-2: #9d7bff;
+    --violet-bright: #a88bff;
+    --violet-glow: #6a43ff;
+    --accent-cyan: #5de6ff;
+    --green: #2ee6a8;
+    --amber: #ffb85c;
+    --red: #ff5c7a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: 'Geist', system-ui, -apple-system, Segoe UI, sans-serif;
+    font-feature-settings: "ss01","cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+
+  /* ===== Ambient grain ===== */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.35;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.08 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  .container { max-width: 1240px; margin: 0 auto; padding: 0 32px; }
+  .narrow { max-width: 980px; margin: 0 auto; padding: 0 32px; }
+
+  /* ===== Nav ===== */
+  nav.top {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    display: flex; justify-content: center;
+    padding: 18px 24px;
+    transition: background 0.3s, backdrop-filter 0.3s;
+  }
+  nav.top.scrolled {
+    background: rgba(7,7,11,0.72);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner {
+    width: 100%; max-width: 1240px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 32px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 600; font-size: 17px; letter-spacing: -0.01em;
+  }
+  .brand-mark {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--violet) 0%, var(--violet-bright) 100%);
+    display: grid; place-items: center;
+    box-shadow: 0 8px 24px -4px rgba(124,92,255,0.5), inset 0 1px 0 rgba(255,255,255,0.3);
+    position: relative;
+  }
+  .brand-mark svg { width: 16px; height: 16px; color: #fff; }
+  .nav-links { display: flex; gap: 30px; font-size: 14px; color: var(--ink-dim); }
+  .nav-links a { transition: color 0.2s; }
+  .nav-links a:hover { color: var(--ink); }
+  .nav-cta { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    font-family: inherit;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 500;
+    border: 1px solid transparent; cursor: pointer; transition: all 0.2s;
+    background: transparent; color: var(--ink);
+  }
+  .btn.ghost { border-color: var(--line-strong); color: var(--ink-dim); }
+  .btn.ghost:hover { color: var(--ink); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.04); }
+  .btn.primary {
+    background: linear-gradient(180deg, var(--violet-bright), var(--violet));
+    color: #fff;
+    box-shadow: 0 4px 14px -2px rgba(124,92,255,0.5), inset 0 1px 0 rgba(255,255,255,0.22);
+  }
+  .btn.primary:hover { transform: translateY(-1px); box-shadow: 0 8px 22px -4px rgba(124,92,255,0.7), inset 0 1px 0 rgba(255,255,255,0.3); }
+  .btn svg { width: 14px; height: 14px; }
+
+  /* ===== Hero ===== */
+  .hero {
+    position: relative;
+    padding: 160px 0 80px;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .hero-bg {
+    position: absolute; inset: 0; z-index: -2;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(124,92,255,0.28), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 20% 30%, rgba(93,230,255,0.08), transparent 60%),
+      radial-gradient(ellipse 50% 50% at 80% 20%, rgba(168,139,255,0.15), transparent 60%),
+      var(--bg);
+  }
+  .hero-grid {
+    position: absolute; inset: 0; z-index: -1;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 60% 80% at 50% 30%, #000 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 60% 80% at 50% 30%, #000 30%, transparent 75%);
+  }
+
+  .hero-tag {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 6px 14px 6px 6px;
+    border-radius: 100px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--line-strong);
+    font-size: 12.5px; color: var(--ink-dim);
+    margin-bottom: 24px;
+  }
+  .hero-tag .pill {
+    background: linear-gradient(180deg, var(--violet-bright), var(--violet));
+    color: #fff; font-weight: 600; font-size: 11px;
+    padding: 3px 9px; border-radius: 100px;
+    letter-spacing: 0.03em; text-transform: uppercase;
+  }
+
+  .hero h1 {
+    font-size: clamp(44px, 6.5vw, 88px);
+    font-weight: 600;
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+    margin: 0 0 28px;
+    max-width: 14ch;
+  }
+  .hero h1 em {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-weight: 400;
+    background: linear-gradient(180deg, #c7b4ff 0%, var(--violet-bright) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    letter-spacing: -0.01em;
+  }
+  .hero .sub {
+    font-size: clamp(17px, 1.4vw, 20px);
+    color: var(--ink-dim);
+    max-width: 58ch;
+    line-height: 1.55;
+    margin: 0 0 40px;
+    letter-spacing: -0.005em;
+  }
+  .hero .sub strong { color: var(--ink); font-weight: 500; }
+
+  .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .docker-cmd {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: 'Geist Mono', ui-monospace, monospace; font-size: 13px;
+    background: rgba(255,255,255,0.035);
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    padding: 9px 12px 9px 14px;
+    color: var(--ink-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .docker-cmd:hover { background: rgba(255,255,255,0.06); color: var(--ink); }
+  .docker-cmd .prompt { color: var(--violet-bright); }
+  .docker-cmd .copy-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 6px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--line);
+    margin-left: 4px;
+    transition: all 0.15s;
+  }
+  .docker-cmd.copied .copy-btn { background: rgba(46,230,168,0.15); border-color: rgba(46,230,168,0.4); }
+  .docker-cmd .copy-btn svg { width: 13px; height: 13px; }
+
+  /* Hero meta strip */
+  .hero-meta {
+    margin-top: 56px;
+    display: flex; gap: 40px; flex-wrap: wrap;
+    padding-top: 28px;
+    border-top: 1px solid var(--line);
+    font-size: 13px; color: var(--ink-muted);
+  }
+  .hero-meta span strong { color: var(--ink); font-weight: 500; margin-right: 6px; }
+
+  /* ===== Hero product preview ===== */
+  .hero-preview {
+    position: relative;
+    margin-top: 80px;
+    perspective: 1800px;
+  }
+  .hero-preview-inner {
+    position: relative;
+    transform: rotateX(8deg);
+    transform-origin: 50% 100%;
+    transition: transform 0.1s linear;
+  }
+  .browser {
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid var(--line-strong);
+    background: var(--panel);
+    box-shadow:
+      0 0 0 1px rgba(124,92,255,0.08),
+      0 40px 80px -30px rgba(0,0,0,0.8),
+      0 60px 160px -40px rgba(124,92,255,0.35);
+  }
+  .browser-chrome {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 16px;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--line);
+  }
+  .browser-dots { display: flex; gap: 6px; }
+  .browser-dots i { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,0.12); }
+  .browser-dots i:nth-child(1) { background: #ff5c5c; }
+  .browser-dots i:nth-child(2) { background: #ffbd2e; }
+  .browser-dots i:nth-child(3) { background: #28c840; }
+  .browser-url {
+    flex: 1; max-width: 460px; margin: 0 auto;
+    font-family: 'Geist Mono', monospace; font-size: 11.5px;
+    background: rgba(0,0,0,0.3);
+    padding: 6px 12px; border-radius: 7px;
+    color: var(--ink-muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .browser-url svg { width: 11px; height: 11px; color: var(--green); }
+  .browser-body { position: relative; aspect-ratio: 1000 / 520; background: #0a0a11; overflow: hidden; }
+  .browser-body img { width: 100%; height: auto; object-fit: contain; display: block; }
+
+  /* Floating UI cards */
+  .float-card {
+    position: absolute;
+    background: linear-gradient(180deg, rgba(26,26,42,0.95), rgba(18,18,30,0.95));
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: 0 20px 50px -20px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    z-index: 3;
+  }
+  .float-notif {
+    top: 12%; left: -4%;
+    min-width: 260px;
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .float-notif .icon {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--violet), var(--violet-bright));
+    display: grid; place-items: center; flex-shrink: 0;
+    box-shadow: 0 4px 14px -2px rgba(124,92,255,0.6);
+  }
+  .float-notif .icon svg { width: 16px; height: 16px; color: #fff; }
+  .float-notif .title { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+  .float-notif .desc { font-size: 11.5px; color: var(--ink-dim); line-height: 1.4; }
+  .float-notif .time { font-size: 10.5px; color: var(--ink-muted); margin-top: 4px; }
+
+  .float-req {
+    bottom: 18%; right: -3%;
+    min-width: 240px;
+  }
+  .float-req .label { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 8px; font-weight: 500; }
+  .float-req .row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .float-req .row:last-child { margin-bottom: 0; }
+  .float-req .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .float-req .dot.g { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .float-req .dot.v { background: var(--violet-bright); box-shadow: 0 0 10px var(--violet-bright); }
+  .float-req .dot.a { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+  .float-req .row span { font-size: 12.5px; flex: 1; }
+  .float-req .row small { font-size: 11px; color: var(--ink-muted); font-family: 'Geist Mono', monospace; }
+
+  .float-services {
+    top: 62%; left: -6%;
+    min-width: 230px;
+  }
+  .float-services .label { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 10px; font-weight: 500; }
+  .float-services .svc { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 12.5px; }
+  .float-services .svc .s-icon { width: 22px; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.06); display: grid; place-items: center; font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600; }
+  .float-services .svc.radarr .s-icon { background: rgba(255,184,92,0.15); color: var(--amber); }
+  .float-services .svc.sonarr .s-icon { background: rgba(46,230,168,0.15); color: var(--green); }
+  .float-services .svc.plex .s-icon { background: rgba(255,184,92,0.15); color: #e5a50a; }
+  .float-services .svc .name { flex: 1; font-weight: 500; }
+  .float-services .svc .ok { font-size: 10.5px; color: var(--green); display: flex; align-items: center; gap: 5px; }
+  .float-services .svc .ok::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  @keyframes float-a { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+  @keyframes float-b { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+  .float-notif { animation: float-a 6s ease-in-out infinite; }
+  .float-req { animation: float-b 7s ease-in-out infinite 0.5s; }
+  .float-services { animation: float-a 8s ease-in-out infinite 1s; }
+
+  /* ===== Logo marquee ===== */
+  .marquee-section {
+    padding: 60px 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: rgba(255,255,255,0.015);
+  }
+  .marquee-label {
+    text-align: center; font-size: 12px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-muted); margin-bottom: 32px;
+  }
+  .marquee {
+    overflow: hidden;
+    mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  }
+  .marquee-track {
+    display: flex; gap: 72px; align-items: center;
+    animation: marquee 35s linear infinite;
+    width: max-content;
+  }
+  @keyframes marquee { to { transform: translateX(-50%); } }
+  .marquee-item {
+    color: var(--ink-dim);
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    opacity: 0.85;
+    transition: opacity 0.2s, color 0.2s;
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+  }
+  .marquee-item:hover { opacity: 1; color: var(--violet-bright); }
+  .marquee-sep {
+    color: var(--ink-muted);
+    font-size: 20px;
+    opacity: 0.4;
+  }
+
+  /* ===== Section header ===== */
+  .sec { padding: 120px 0; position: relative; }
+  .sec-head { margin-bottom: 64px; max-width: 720px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--violet-bright); font-weight: 500; margin-bottom: 20px;
+  }
+  .eyebrow::before { content: ""; width: 24px; height: 1px; background: var(--violet-bright); }
+  .sec h2 {
+    font-size: clamp(36px, 4.2vw, 56px);
+    font-weight: 500;
+    line-height: 1.02;
+    letter-spacing: -0.032em;
+    margin: 0 0 20px;
+  }
+  .sec h2 em {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--violet-bright);
+  }
+  .sec p.lede {
+    font-size: 18px;
+    color: var(--ink-dim);
+    line-height: 1.55;
+    max-width: 60ch;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+
+  /* ===== Why cards ===== */
+  .why-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    overflow: hidden;
+  }
+  .why-card {
+    background: var(--bg);
+    padding: 36px 32px 32px;
+    position: relative;
+    transition: background 0.3s;
+    cursor: default;
+  }
+  .why-card:hover { background: rgba(124,92,255,0.04); }
+  .why-card .why-num {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px; color: var(--ink-muted); letter-spacing: 0.08em;
+    margin-bottom: 24px;
+  }
+  .why-card .why-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: linear-gradient(135deg, rgba(124,92,255,0.2), rgba(157,123,255,0.08));
+    border: 1px solid rgba(124,92,255,0.2);
+    display: grid; place-items: center;
+    margin-bottom: 22px;
+    color: var(--violet-bright);
+  }
+  .why-card .why-icon svg { width: 20px; height: 20px; }
+  .why-card h3 {
+    font-size: 19px; font-weight: 500; letter-spacing: -0.015em;
+    margin: 0 0 10px;
+  }
+  .why-card p {
+    font-size: 14.5px; color: var(--ink-dim); line-height: 1.55;
+    margin: 0;
+  }
+  .why-card .why-reveal {
+    margin-top: 18px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11.5px; color: var(--violet-bright);
+    max-height: 0; overflow: hidden;
+    transition: max-height 0.4s ease, margin-top 0.4s ease;
+    opacity: 0;
+  }
+  .why-card:hover .why-reveal {
+    max-height: 80px;
+    opacity: 1;
+  }
+
+  /* ===== Product tour tabs ===== */
+  .tour { position: relative; }
+  .tour-tabs {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    margin-bottom: 32px;
+  }
+  .tour-tab {
+    font-family: inherit;
+    padding: 10px 16px;
+    border-radius: 9px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ink-dim);
+    font-size: 13.5px; font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .tour-tab:hover { color: var(--ink); background: rgba(255,255,255,0.03); }
+  .tour-tab.active {
+    background: linear-gradient(180deg, rgba(124,92,255,0.18), rgba(124,92,255,0.08));
+    border-color: rgba(124,92,255,0.35);
+    color: var(--violet-bright);
+    box-shadow: 0 0 0 1px rgba(124,92,255,0.1) inset;
+  }
+  .tour-tab svg { width: 14px; height: 14px; }
+
+  .tour-stage {
+    display: grid; grid-template-columns: 1.3fr 2fr; gap: 32px;
+    align-items: stretch;
+  }
+  .tour-copy {
+    padding: 8px 4px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .tour-copy .tour-num {
+    font-family: 'Geist Mono', monospace;
+    font-size: 12px; color: var(--violet-bright); letter-spacing: 0.08em;
+    margin-bottom: 18px;
+  }
+  .tour-copy h3 {
+    font-size: 32px; font-weight: 500; letter-spacing: -0.025em; line-height: 1.1;
+    margin: 0 0 16px;
+  }
+  .tour-copy p {
+    font-size: 15.5px; color: var(--ink-dim); line-height: 1.6;
+    margin: 0 0 24px;
+  }
+  .tour-copy .tour-bullets { list-style: none; padding: 0; margin: 0; }
+  .tour-copy .tour-bullets li {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 0;
+    font-size: 14px; color: var(--ink);
+    border-top: 1px solid var(--line);
+  }
+  .tour-copy .tour-bullets li:first-child { border-top: none; padding-top: 0; }
+  .tour-copy .tour-bullets li svg { width: 16px; height: 16px; color: var(--violet-bright); margin-top: 2px; flex-shrink: 0; }
+
+  .tour-screen {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--line-strong);
+    background: var(--panel);
+    box-shadow: 0 40px 80px -30px rgba(0,0,0,0.7), 0 0 60px -20px rgba(124,92,255,0.25);
+    
+    display: flex; flex-direction: column;
+  }
+  .tour-screen .browser-chrome { padding: 9px 12px; }
+  .tour-screen .browser-body { aspect-ratio: 1000 / 500; position: relative; background: #0a0a11; overflow: hidden; }
+  .tour-screen .browser-body img {
+    width: 100%; height: auto;
+    opacity: 0; transition: opacity 0.4s;
+    position: absolute; top: 0; left: 0; right: 0;
+    display: block;
+  }
+  .tour-screen .browser-body img.active { opacity: 1; }
+  .tour-panel { display: none; }
+  .tour-panel.active { display: block; animation: fadeSlide 0.5s ease; }
+  @keyframes fadeSlide { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ===== Features split ===== */
+  .split {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+  }
+  .split-col {
+    background: linear-gradient(180deg, var(--panel) 0%, rgba(17,17,28,0.5) 100%);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .split-col::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(124,92,255,0.5), transparent);
+  }
+  .split-col .col-label {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-dim); font-weight: 500;
+    padding: 5px 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 100px;
+    margin-bottom: 20px;
+  }
+  .split-col h3 {
+    font-size: 28px; font-weight: 500; letter-spacing: -0.02em;
+    margin: 0 0 28px;
+  }
+  .feature-list { list-style: none; padding: 0; margin: 0; }
+  .feature-list li {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 14px 0;
+    border-top: 1px solid var(--line);
+    transition: padding-left 0.25s;
+    cursor: default;
+  }
+  .feature-list li:first-child { border-top: none; }
+  .feature-list li:hover { padding-left: 6px; }
+  .feature-list li .fi {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: rgba(124,92,255,0.1);
+    border: 1px solid rgba(124,92,255,0.22);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    color: var(--violet-bright);
+  }
+  .feature-list li .fi svg { width: 14px; height: 14px; }
+  .feature-list li .ft { font-size: 14.5px; font-weight: 500; margin-bottom: 2px; }
+  .feature-list li .fd { font-size: 13px; color: var(--ink-dim); line-height: 1.45; }
+
+  /* ===== Plugin grid ===== */
+  .plugins-wrap { position: relative; }
+  .plugin-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+  .plugin {
+    position: relative;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 20px;
+    transition: all 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+    overflow: hidden;
+    cursor: default;
+  }
+  .plugin::before {
+    content: ""; position: absolute; inset: -1px;
+    background: linear-gradient(135deg, transparent, var(--plugin-color, var(--violet)), transparent);
+    border-radius: 15px;
+    opacity: 0; z-index: -1;
+    transition: opacity 0.3s;
+  }
+  .plugin:hover {
+    transform: translateY(-4px);
+    border-color: var(--plugin-color, var(--violet));
+    box-shadow: 0 20px 40px -20px var(--plugin-color, var(--violet));
+  }
+  .plugin .p-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .plugin .p-icon {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--plugin-color, var(--violet)), color-mix(in oklab, var(--plugin-color, var(--violet)) 60%, #000));
+    display: grid; place-items: center;
+    font-family: 'Geist Mono', monospace; font-size: 15px; font-weight: 600;
+    color: #fff;
+    box-shadow: 0 4px 12px -2px var(--plugin-color, var(--violet));
+  }
+  .plugin .p-meta { flex: 1; min-width: 0; }
+  .plugin .p-name { font-size: 14px; font-weight: 500; letter-spacing: -0.01em; }
+  .plugin .p-ver { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-muted); }
+  .plugin .p-desc { font-size: 12.5px; color: var(--ink-dim); line-height: 1.45; margin-bottom: 14px; min-height: 2.9em; }
+  .plugin .p-footer { display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
+  .plugin .p-tag { font-family: 'Geist Mono', monospace; color: var(--ink-muted); font-size: 10.5px; }
+  .plugin .p-toggle {
+    width: 32px; height: 18px; border-radius: 100px;
+    background: rgba(255,255,255,0.08);
+    position: relative; transition: background 0.2s;
+  }
+  .plugin .p-toggle::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #666; transition: all 0.2s;
+  }
+  .plugin.on .p-toggle { background: var(--violet); }
+  .plugin.on .p-toggle::after { left: 16px; background: #fff; }
+
+  .plugin-add {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px;
+    background: transparent;
+    border: 1px dashed var(--line-strong);
+    color: var(--ink-muted);
+    text-align: center;
+    padding: 20px;
+    min-height: 180px;
+  }
+  .plugin-add:hover {
+    border-color: var(--violet-bright);
+    color: var(--violet-bright);
+    background: rgba(124,92,255,0.03);
+  }
+  .plugin-add svg { width: 24px; height: 24px; }
+  .plugin-add .pa-title { font-size: 13px; font-weight: 500; }
+  .plugin-add .pa-desc { font-size: 11.5px; }
+
+  /* ===== Docker quickstart ===== */
+  .docker-wrap {
+    display: grid; grid-template-columns: 1fr 1.4fr; gap: 48px;
+    align-items: center;
+  }
+  .docker-terminal {
+    background: #08080d;
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 40px 80px -30px rgba(0,0,0,0.7), 0 0 60px -20px rgba(124,92,255,0.15);
+    font-family: 'Geist Mono', monospace;
+    font-size: 13px;
+  }
+  .docker-terminal .t-chrome {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 14px;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--line);
+  }
+  .docker-terminal .t-chrome .t-title {
+    flex: 1; text-align: center; font-size: 11.5px; color: var(--ink-muted);
+  }
+  .docker-terminal .t-chrome .t-copy {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 9px; border-radius: 6px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--line-strong);
+    color: var(--ink-dim);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .docker-terminal .t-chrome .t-copy:hover { color: var(--ink); background: rgba(255,255,255,0.07); }
+  .docker-terminal.copied .t-chrome .t-copy { background: rgba(46,230,168,0.12); border-color: rgba(46,230,168,0.35); color: var(--green); }
+  .docker-terminal .t-chrome .t-copy svg { width: 11px; height: 11px; }
+  .docker-terminal .t-body {
+    padding: 22px 24px;
+    line-height: 1.65;
+    color: #d8d4f0;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .docker-terminal .t-comment { color: #5c5a7a; }
+  .docker-terminal .t-prompt { color: var(--violet-bright); }
+  .docker-terminal .t-flag { color: var(--accent-cyan); }
+  .docker-terminal .t-str { color: #ffb85c; }
+  .docker-terminal .t-key { color: #b8a9ff; }
+  .docker-terminal .t-line { white-space: pre; overflow-x: auto; }
+
+  .docker-steps { display: grid; gap: 18px; }
+  .docker-step {
+    display: grid; grid-template-columns: 42px 1fr; gap: 16px; align-items: flex-start;
+  }
+  .docker-step .s-num {
+    font-family: 'Geist Mono', monospace;
+    width: 34px; height: 34px; border-radius: 9px;
+    display: grid; place-items: center;
+    background: rgba(124,92,255,0.12);
+    border: 1px solid rgba(124,92,255,0.3);
+    color: var(--violet-bright);
+    font-size: 13px; font-weight: 600;
+  }
+  .docker-step .s-body h4 { margin: 4px 0 4px; font-size: 16px; font-weight: 500; letter-spacing: -0.01em; }
+  .docker-step .s-body p { margin: 0; font-size: 13.5px; color: var(--ink-dim); line-height: 1.55; }
+  .docker-step .s-body code {
+    font-family: 'Geist Mono', monospace;
+    font-size: 12px;
+    background: rgba(124,92,255,0.08);
+    border: 1px solid rgba(124,92,255,0.18);
+    padding: 2px 6px; border-radius: 5px;
+    color: var(--violet-bright);
+  }
+
+  /* ===== Vision ===== */
+  .vision {
+    position: relative;
+    padding: 100px 0 120px;
+    overflow: hidden;
+  }
+  .vision-bg {
+    position: absolute; inset: 0; z-index: -1;
+    background:
+      radial-gradient(ellipse 70% 50% at 50% 60%, rgba(124,92,255,0.22), transparent 60%),
+      radial-gradient(ellipse 40% 30% at 20% 30%, rgba(93,230,255,0.08), transparent 60%);
+  }
+  .vision .quote {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: clamp(42px, 5.5vw, 72px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-weight: 400;
+    max-width: 18ch;
+    margin: 0 auto 40px;
+    text-align: center;
+  }
+  .vision .quote em {
+    background: linear-gradient(180deg, #e8dfff 0%, var(--violet-bright) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .vision .principles {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    overflow: hidden;
+    max-width: 920px;
+    margin: 60px auto 0;
+  }
+  .vision .principles .pr {
+    background: var(--bg);
+    padding: 28px 28px;
+    display: flex; gap: 14px;
+  }
+  .vision .principles .pr .pnum {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px; color: var(--violet-bright); letter-spacing: 0.08em;
+    margin-top: 4px;
+    min-width: 28px;
+  }
+  .vision .principles .pr h4 { margin: 0 0 6px; font-size: 16px; font-weight: 500; letter-spacing: -0.01em; }
+  .vision .principles .pr p { margin: 0; font-size: 13.5px; color: var(--ink-dim); line-height: 1.5; }
+
+  /* ===== CTA / footer ===== */
+  .big-cta {
+    position: relative;
+    margin: 80px 0 0;
+    padding: 90px 40px;
+    background: linear-gradient(180deg, rgba(124,92,255,0.08), rgba(124,92,255,0.02));
+    border: 1px solid rgba(124,92,255,0.2);
+    border-radius: 24px;
+    overflow: hidden;
+    text-align: center;
+  }
+  .big-cta::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 50% 70% at 50% 0%, rgba(124,92,255,0.35), transparent 70%),
+      radial-gradient(ellipse 40% 60% at 50% 100%, rgba(124,92,255,0.2), transparent 70%);
+    pointer-events: none;
+  }
+  .big-cta h2 {
+    font-size: clamp(36px, 5vw, 56px);
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    margin: 0 0 16px;
+    position: relative;
+  }
+  .big-cta h2 em {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic; font-weight: 400;
+    color: var(--violet-bright);
+  }
+  .big-cta p {
+    font-size: 17px; color: var(--ink-dim);
+    max-width: 52ch; margin: 0 auto 36px;
+    line-height: 1.5;
+    position: relative;
+  }
+  .big-cta .ctas { display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center; position: relative; }
+
+  footer {
+    padding: 60px 0 40px;
+    border-top: 1px solid var(--line);
+    margin-top: 80px;
+  }
+  .foot-grid {
+    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 48px;
+    margin-bottom: 60px;
+  }
+  .foot-brand .brand { margin-bottom: 12px; }
+  .foot-brand p { color: var(--ink-dim); font-size: 14px; line-height: 1.55; max-width: 32ch; }
+  .foot-col h5 {
+    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-muted); font-weight: 500;
+    margin: 0 0 16px;
+  }
+  .foot-col a {
+    display: block; padding: 5px 0; font-size: 13.5px; color: var(--ink-dim);
+    transition: color 0.15s;
+  }
+  .foot-col a:hover { color: var(--ink); }
+  .foot-bottom {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-top: 28px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px; color: var(--ink-muted);
+  }
+  .foot-bottom .rhs { display: flex; gap: 18px; }
+
+  /* ===== Scroll reveal ===== */
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.9s cubic-bezier(0.2,0.8,0.3,1), transform 0.9s cubic-bezier(0.2,0.8,0.3,1); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 1000px) {
+    .why-grid { grid-template-columns: 1fr 1fr; }
+    .tour-stage { grid-template-columns: 1fr; }
+    .split { grid-template-columns: 1fr; }
+    .plugin-grid { grid-template-columns: repeat(3, 1fr); }
+    .docker-wrap { grid-template-columns: 1fr; }
+    .foot-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
+    .vision .principles { grid-template-columns: 1fr; }
+    .float-notif, .float-req, .float-services { display: none; }
+  }
+  @media (max-width: 640px) {
+    .container, .narrow { padding: 0 20px; }
+    .nav-links { display: none; }
+    .hero { padding-top: 120px; }
+    .why-grid { grid-template-columns: 1fr; }
+    .plugin-grid { grid-template-columns: 1fr 1fr; }
+    .hero-meta { gap: 16px; }
+  }
+
+
+  /* ===== Rebuilt floating cards (clean version) ===== */
+  .fcard-head {
+    display: flex; align-items: center; gap: 8px;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+  }
+  .fcard-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .fcard-title { font-weight: 500; color: var(--ink); flex: 1; letter-spacing: -0.005em; }
+  .fcard-time { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-muted); }
+
+  .float-req { bottom: 18%; right: -3%; min-width: 248px; }
+  .sync-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 0;
+    font-size: 12.5px;
+  }
+  .sync-row .sync-name { color: var(--ink-dim); }
+  .sync-row .sync-val { color: var(--ink); font-family: 'Geist Mono', monospace; font-size: 11px; }
+  .sync-row.syncing .sync-val { color: var(--violet-bright); }
+  .sync-row .sync-val.sync-amber { color: var(--amber); }
+
+  .float-services { top: 62%; left: -6%; min-width: 240px; }
+  .svc-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 0;
+  }
+  .svc-row + .svc-row { border-top: 1px solid var(--line); }
+  .svc-mark {
+    width: 24px; height: 24px; border-radius: 7px;
+    display: grid; place-items: center;
+    font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 600;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .svc-mark.r { background: linear-gradient(135deg, #ffb85c, #e59442); }
+  .svc-mark.s { background: linear-gradient(135deg, #2ee6a8, #1fa078); }
+  .svc-mark.p { background: linear-gradient(135deg, #e5a50a, #b57e00); }
+  .svc-info { flex: 1; min-width: 0; }
+  .svc-name { font-size: 12.5px; font-weight: 500; line-height: 1.2; }
+  .svc-ver { font-size: 10.5px; color: var(--ink-muted); font-family: 'Geist Mono', monospace; }
+  .svc-ok {
+    width: 14px; height: 14px;
+    color: var(--green);
+    stroke-width: 3;
+    background: rgba(46,230,168,0.12);
+    border-radius: 50%;
+    padding: 2px;
+  }
+
+  /* ===== Lucide global sizing ===== */
+  .btn svg, .btn i[data-lucide] svg { width: 14px; height: 14px; }
+  .brand-mark svg, .brand-mark i[data-lucide] svg { width: 15px; height: 15px; color: #fff; stroke-width: 2.2; }
+  .docker-cmd .copy-btn svg { width: 13px; height: 13px; }
+  .why-card .why-icon svg { width: 20px; height: 20px; stroke-width: 1.8; }
+  .tour-tab svg { width: 14px; height: 14px; }
+  .browser-url svg { width: 11px; height: 11px; color: var(--green); stroke-width: 2.5; }
+  .float-notif .icon svg { width: 16px; height: 16px; color: #fff; stroke-width: 2.2; }
+  .float-services .svc-ok svg { width: 10px; height: 10px; }
+  .feature-list li .fi svg { width: 14px; height: 14px; color: var(--violet-bright); stroke-width: 2; }
+  .tour-copy .tour-bullets li svg { width: 14px; height: 14px; color: var(--violet-bright); stroke-width: 2.5; margin-top: 3px; }
+  .plugin-add svg { width: 24px; height: 24px; }
+  .t-chrome .t-copy svg { width: 11px; height: 11px; }
+
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="top" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#">
+      <span class="brand-mark">
+        <i data-lucide="award"></i>
+      </span>
+      Oscarr
+    </a>
+    <div class="nav-links">
+      <a href="#why">Why Oscarr</a>
+      <a href="#tour">Product</a>
+      <a href="#plugins">Plugins</a>
+      <a href="#install">Install</a>
+      <a href="#vision">Vision</a>
+    </div>
+    <div class="nav-cta">
+      <a class="btn ghost" href="https://github.com/arediss/Oscarr" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.73 1.27 3.4.97.1-.76.4-1.27.74-1.56-2.55-.29-5.23-1.28-5.23-5.7 0-1.26.45-2.3 1.19-3.1-.12-.3-.52-1.49.11-3.1 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.64 1.61.24 2.8.12 3.1.74.8 1.19 1.84 1.19 3.1 0 4.44-2.69 5.41-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5z"/></svg>
+        GitHub
+      </a>
+      <a class="btn primary" href="#install">
+        <i data-lucide="package"></i>
+        Deploy
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="container">
+    <div class="hero-tag">
+      <span class="pill">v0.6.3</span>
+      <span>Self-hosted · MIT · Plugin-driven</span>
+    </div>
+    <h1>The interface your <em>*arr stack</em><br/>has been waiting for.</h1>
+    <p class="sub">
+      <strong>Radarr and Sonarr are the source of truth.</strong> Oscarr syncs directly with your *arr instances —
+      what's available, what's downloading, what's requested — and wraps it in an interface
+      your family will actually use.
+    </p>
+    <div class="hero-ctas">
+      <a class="btn primary" href="#install">
+        <i data-lucide="cloud-download"></i>
+        Deploy with Docker
+      </a>
+      <button class="docker-cmd" id="heroCmd" type="button" title="Copy to clipboard">
+        <span class="prompt">$</span>
+        <span id="heroCmdText">docker run -d --network host -v oscarr-data:/data ghcr.io/arediss/oscarr:latest</span>
+        <span class="copy-btn">
+          <i data-lucide="copy"></i>
+        </span>
+      </button>
+    </div>
+
+    <div class="hero-meta">
+      <span><strong>1 container.</strong> Zero config to start.</span>
+      <span><strong>SQLite.</strong> Backups are a single file.</span>
+      <span><strong>Plugins.</strong> Extend without forking.</span>
+      <span><strong>5 auth providers.</strong> Plex, Discord, Jellyfin, Emby, email.</span>
+    </div>
+
+    <!-- Hero product preview -->
+    <div class="hero-preview">
+      <div class="hero-preview-inner" id="heroTilt">
+        <div class="browser">
+          <div class="browser-chrome">
+            <div class="browser-dots"><i></i><i></i><i></i></div>
+            <div class="browser-url">
+              <i data-lucide="lock"></i>
+              oscarr.local / home
+            </div>
+            <div style="width: 56px;"></div>
+          </div>
+          <div class="browser-body">
+            <img src="assets/home.png" alt="Oscarr home with cinematic hero carousel" />
+          </div>
+        </div>
+
+        <!-- Floating cards -->
+        <div class="float-card float-notif">
+          <div class="icon">
+            <i data-lucide="check-circle-2"></i>
+          </div>
+          <div>
+            <div class="title">Inception · Available</div>
+            <div class="desc">Grabbed by Radarr 4K · 2160p · HDR10</div>
+            <div class="time">Just now</div>
+          </div>
+        </div>
+
+        <div class="float-card float-req">
+          <div class="fcard-head">
+            <span class="fcard-dot"></span>
+            <span class="fcard-title">Live sync</span>
+            <span class="fcard-time">now</span>
+          </div>
+          <div class="sync-row"><span class="sync-name">Radarr 4K</span><span class="sync-val">1,086 titles</span></div>
+          <div class="sync-row"><span class="sync-name">Radarr FR</span><span class="sync-val">412 titles</span></div>
+          <div class="sync-row syncing"><span class="sync-name">Sonarr Anime</span><span class="sync-val">syncing…</span></div>
+          <div class="sync-row"><span class="sync-name">Download queue</span><span class="sync-val sync-amber">3 active</span></div>
+        </div>
+
+        <div class="float-card float-services">
+          <div class="fcard-head">
+            <span class="fcard-dot"></span>
+            <span class="fcard-title">Services</span>
+            <span class="fcard-time">4 connected</span>
+          </div>
+          <div class="svc-row"><span class="svc-mark r">R</span><div class="svc-info"><div class="svc-name">Radarr</div><div class="svc-ver">v6.1.10.360</div></div><i data-lucide="check" class="svc-ok"></i></div>
+          <div class="svc-row"><span class="svc-mark s">S</span><div class="svc-info"><div class="svc-name">Sonarr</div><div class="svc-ver">v4.0.17.292</div></div><i data-lucide="check" class="svc-ok"></i></div>
+          <div class="svc-row"><span class="svc-mark p">P</span><div class="svc-info"><div class="svc-name">Plex</div><div class="svc-ver">connected</div></div><i data-lucide="check" class="svc-ok"></i></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MARQUEE -->
+<section class="marquee-section">
+  <div class="marquee-label">Built to sit at the center of your homelab</div>
+  <div class="marquee">
+    <div class="marquee-track">
+      <div class="marquee-item">Radarr</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Sonarr</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Plex</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">TMDB</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Discord</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Telegram</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Jellyfin</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Emby</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Tautulli</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Resend</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Prisma</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Fastify</div>
+      <div class="marquee-sep">·</div>
+      <!-- repeat -->
+      <div class="marquee-item">Radarr</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Sonarr</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Plex</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">TMDB</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Discord</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Telegram</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Jellyfin</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Emby</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Tautulli</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Resend</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Prisma</div>
+      <div class="marquee-sep">·</div>
+      <div class="marquee-item">Fastify</div>
+      <div class="marquee-sep">·</div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY -->
+<section class="sec" id="why">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Why Oscarr</div>
+      <h2>Built on the premise that your <em>*arr stack</em> already knows the answer.</h2>
+      <p class="lede">
+        There are great tools for managing media requests. Oscarr offers a different vision of what
+        this kind of tool can be — one where your <em>*arr stack</em> is the source of truth, and your media server is just one of many rooms it opens.
+      </p>
+    </div>
+
+    <div class="why-grid reveal">
+      <div class="why-card">
+        <div class="why-num">01</div>
+        <div class="why-icon">
+          <i data-lucide="layout-grid"></i>
+        </div>
+        <h3>Multi-service native</h3>
+        <p>Connect as many Radarr and Sonarr instances as you need. Priority-based folder routing figures out where each request belongs by genre, language, country, role.</p>
+        <div class="why-reveal">→ A 4K library, an anime Sonarr, a regional Radarr — coexisting naturally.</div>
+      </div>
+      <div class="why-card">
+        <div class="why-num">02</div>
+        <div class="why-icon">
+          <i data-lucide="sparkles"></i>
+        </div>
+        <h3>Quality the user picks</h3>
+        <p>Your users choose between SD, HD, 4K, or 4K HDR when requesting. Each quality maps to the right profile per service — nothing lands in the wrong folder.</p>
+        <div class="why-reveal">→ 4 quality tiers → N profiles × M services, handled.</div>
+      </div>
+      <div class="why-card">
+        <div class="why-num">03</div>
+        <div class="why-icon">
+          <i data-lucide="puzzle"></i>
+        </div>
+        <h3>Plugin system at the core</h3>
+        <p>Backend routes, frontend pages, scheduled jobs, notification channels, UI contributions — all from a simple manifest. Build what you need without forking.</p>
+        <div class="why-reveal">→ manifest.json → drop-in directory → live reload.</div>
+      </div>
+      <div class="why-card">
+        <div class="why-num">04</div>
+        <div class="why-icon">
+          <i data-lucide="toggle-right"></i>
+        </div>
+        <h3>Every section is optional</h3>
+        <p>Don't need the calendar? Turn it off. Support tickets? Toggle it. Every feature is a switch in the admin panel — composable in real time.</p>
+        <div class="why-reveal">→ Feature flags, not forks.</div>
+      </div>
+      <div class="why-card">
+        <div class="why-num">05</div>
+        <div class="why-icon">
+          <i data-lucide="key-round"></i>
+        </div>
+        <h3>Bring your own identity</h3>
+        <p>Plex, Discord, Jellyfin, Emby, or plain email — enable any combination. Users sign in with what they already have; none of it is required, all of it is optional.</p>
+        <div class="why-reveal">→ 5 providers, schema-driven config, one toggle each.</div>
+      </div>
+      <div class="why-card">
+        <div class="why-num">06</div>
+        <div class="why-icon">
+          <i data-lucide="zap"></i>
+        </div>
+        <h3>React 19 · Vite · Fastify</h3>
+        <p>Modern stack, dark by default, responsive, snappy. Built to feel like a product, not a homelab utility.</p>
+        <div class="why-reveal">→ SQLite, zero config. Single-file backups.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRODUCT TOUR -->
+<section class="sec" id="tour">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Product tour</div>
+      <h2>Every surface you need, <em>nothing you don't.</em></h2>
+      <p class="lede">Click through the actual interface. No mocks, no placeholders — this is what the app looks like running on your machine.</p>
+    </div>
+
+    <div class="tour reveal">
+      <div class="tour-tabs" id="tourTabs">
+        <button class="tour-tab active" data-tour="home">
+          <i data-lucide="home"></i>
+          Discover
+        </button>
+        <button class="tour-tab" data-tour="requests">
+          <i data-lucide="file-text"></i>
+          Requests
+        </button>
+        <button class="tour-tab" data-tour="calendar">
+          <i data-lucide="calendar"></i>
+          Calendar
+        </button>
+        <button class="tour-tab" data-tour="services">
+          <i data-lucide="database"></i>
+          Services
+        </button>
+        <button class="tour-tab" data-tour="homepage">
+          <i data-lucide="list"></i>
+          Homepage editor
+        </button>
+        <button class="tour-tab" data-tour="jobs">
+          <i data-lucide="refresh-cw"></i>
+          Jobs & sync
+        </button>
+        <button class="tour-tab" data-tour="auth">
+          <i data-lucide="lock"></i>
+          Auth
+        </button>
+        <button class="tour-tab" data-tour="system">
+          <i data-lucide="settings-2"></i>
+          System
+        </button>
+      </div>
+
+      <div class="tour-stage">
+        <div class="tour-copy">
+          <!-- Home -->
+          <div class="tour-panel active" data-panel="home">
+            <div class="tour-num">01 / Discover</div>
+            <h3>A home screen that looks like a streaming service.</h3>
+            <p>Trending, popular, upcoming — pulled live from TMDB, stitched onto the current state of your library. Custom sections, drag-to-reorder, toggle on/off.</p>
+            <ul class="tour-bullets">
+              <li><i data-lucide="check"></i>Cinematic hero carousel, rotating weekly</li>
+              <li><i data-lucide="check"></i>Multi-language: EN / FR with TMDB metadata</li>
+              <li><i data-lucide="check"></i>Audio & subtitle badges per title</li>
+            </ul>
+          </div>
+          <!-- Requests -->
+          <div class="tour-panel" data-panel="requests">
+            <div class="tour-num">02 / Requests</div>
+            <h3>Every request, tracked end-to-end.</h3>
+            <p>Every request lives in one place — pending, approved, downloading, available, declined. Filter, bulk-act, clean up orphans. Real-time status from Radarr and Sonarr.</p>
+            <ul class="tour-bullets">
+              <li><i data-lucide="check"></i>Status synced live from *arr webhooks</li>
+              <li><i data-lucide="check"></i>Season-level tracking for series</li>
+              <li><i data-lucide="check"></i>Auto-approve for trusted communities</li>
+            </ul>
+          </div>
+          <!-- Calendar -->
+          <div class="tour-panel" data-panel="calendar">
+            <div class="tour-num">03 / Calendar</div>
+            <h3>See what's coming out, before it lands.</h3>
+            <p>Upcoming releases rolled up by day — episodes, premieres, movies. Your users check the calendar before bugging you in Discord.</p>
+            <ul class="tour-bullets">
+              <li><i data-lucide="check"></i>Grid and list views, preference saved per user</li>
+              <li><i data-lucide="check"></i>Links into the request detail in one click</li>
+              <li><i data-lucide="check"></i>Localized dates, per-day episode grouping</li>
+            </ul>
+          </div>
+          <!-- Services -->
+          <div class="tour-panel" data-panel="services">
+            <div class="tour-num">04 / Services</div>
+            <h3>Every instance, one panel.</h3>
+            <p>Radarr, Sonarr, Plex, Tautulli — each with live health checks, version pinning, and test-connection in place. Add as many as you want.</p>
+            <ul class="tour-bullets">
+              <li><i data-lucide="check"></i>Priority-based folder routing per service</li>
+              <li><i data-lucide="check"></i>Quality-profile mappings, per instance</li>
+              <li><i data-lucide="check"></i>Hot-reload on URL / API key changes</li>
+            </ul>
+          </div>
+          <!-- Homepage editor -->
+          <div class="tour-panel" data-panel="homepage">
+            <div class="tour-num">05 / Homepage editor</div>
+            <h3>Compose the home screen, no code.</h3>
+            <p>Drag sections to reorder. Toggle visibility. Add custom sections powered by any TMDB endpoint, plugin, or saved filter.</p>
+            <ul class="tour-bullets">
+              <li><i data-lucide="check"></i>Built-in sections + custom TMDB query builder</li>
+              <li><i data-lucide="check"></i>Raw endpoint sections for plugins or your own API</li>
+              <li><i data-lucide="check"></i>Reset to default, always</li>
+            </ul>
+          </div>
+          <!-- Jobs -->
+          <div class="tour-panel" data-panel="jobs">
+            <div class="tour-num">06 / Jobs & sync</div>
+            <h3>Every job, timed to the second.</h3>
+            <p>Full syncs, TMDB cache, genre backdrops, orphan cleanup, retry failed requests, auto-backup — core jobs plus every job shipped by a plugin, each with its own CRON, last-run timing, and one-click manual trigger.</p>
+            <ul class="tour-bullets">
+              <li><i data-lucide="check"></i>node-cron under the hood, CRON syntax supported</li>
+              <li><i data-lucide="check"></i>Last-run duration surfaced on every row</li>
+              <li><i data-lucide="check"></i>Plugin jobs register the same way core ones do</li>
+            </ul>
+          </div>
+          <!-- Auth -->
+          <div class="tour-panel" data-panel="auth">
+            <div class="tour-num">07 / Authentication</div>
+            <h3>Five providers, any combination.</h3>
+            <p>Plex, Discord, Jellyfin, Emby, or email credentials — flip on whichever your community uses. None is required; all are optional. Schema-driven config, masked secrets, per-provider signup control.</p>
+            <ul class="tour-bullets">
+              <li><i data-lucide="check"></i>JWT sessions with role-based access control</li>
+              <li><i data-lucide="check"></i>Per-provider signup toggle and OAuth callback URLs</li>
+              <li><i data-lucide="check"></i>Plex server access verified when Plex is enabled</li>
+            </ul>
+          </div>
+          <!-- System -->
+          <div class="tour-panel" data-panel="system">
+            <div class="tour-num">08 / System</div>
+            <h3>Instance, backups, logs — one keystroke away.</h3>
+            <p>Site name, language, banner, API key. One-click backup of the SQLite database. Label-filtered logs, change log, danger zone.</p>
+            <ul class="tour-bullets">
+              <li><i data-lucide="check"></i>Single-file SQLite backups, restorable</li>
+              <li><i data-lucide="check"></i>API key for external monitors and plugins</li>
+              <li><i data-lucide="check"></i>Maintenance banner, site-wide, real time</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="tour-screen">
+          <div class="browser-chrome">
+            <div class="browser-dots"><i></i><i></i><i></i></div>
+            <div class="browser-url">
+              <i data-lucide="lock"></i>
+              <span id="tourUrl">oscarr.local / home</span>
+            </div>
+            <div style="width: 56px;"></div>
+          </div>
+          <div class="browser-body" id="tourBody">
+            <img src="assets/home.png" class="active" data-img="home" alt="Home" />
+            <img src="assets/requests.png" data-img="requests" alt="Requests" />
+            <img src="assets/calendar.png" data-img="calendar" alt="Calendar" />
+            <img src="assets/services.png" data-img="services" alt="Services" />
+            <img src="assets/homepage.png" data-img="homepage" alt="Homepage editor" />
+            <img src="assets/jobs.png" data-img="jobs" alt="Jobs & sync" />
+            <img src="assets/auth.png" data-img="auth" alt="Authentication" />
+            <img src="assets/system.png" data-img="system" alt="System" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURE SPLIT -->
+<section class="sec" id="features">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Features</div>
+      <h2>For the users who request, and the admins who run the show.</h2>
+    </div>
+
+    <div class="split reveal">
+      <div class="split-col">
+        <span class="col-label">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          For users
+        </span>
+        <h3>Request flow that doesn't feel like a form.</h3>
+        <ul class="feature-list">
+          <li>
+            <span class="fi"><i data-lucide="search"></i></span>
+            <div><div class="ft">Search movies & TV, instantly</div><div class="fd">TMDB-powered, multilingual, instant results.</div></div>
+          </li>
+          <li>
+            <span class="fi"><i data-lucide="check"></i></span>
+            <div><div class="ft">Quality selection per request</div><div class="fd">SD, HD, 4K, 4K HDR — mapped to the right profile.</div></div>
+          </li>
+          <li>
+            <span class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg></span>
+            <div><div class="ft">Upcoming releases calendar</div><div class="fd">See what's coming out and when, right from the app.</div></div>
+          </li>
+          <li>
+            <span class="fi"><i data-lucide="list-checks"></i></span>
+            <div><div class="ft">Episode-level tracking</div><div class="fd">Per season: what's downloaded, upcoming, or missing.</div></div>
+          </li>
+          <li>
+            <span class="fi"><i data-lucide="clock"></i></span>
+            <div><div class="ft">Real-time request status</div><div class="fd">Pending → downloading → available, live.</div></div>
+          </li>
+          <li>
+            <span class="fi"><i data-lucide="layers"></i></span>
+            <div><div class="ft">Complete the collection</div><div class="fd">Own 3 of 5 in a saga? One click to request the rest.</div></div>
+          </li>
+          <li>
+            <span class="fi"><i data-lucide="message-square"></i></span>
+            <div><div class="ft">Support tickets, built-in</div><div class="fd">Users reach admins without leaving the app.</div></div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="split-col">
+        <span class="col-label">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          For admins
+        </span>
+        <h3>Run five *arr instances like they're one.</h3>
+        <ul class="feature-list">
+          <li>
+            <span class="fi"><i data-lucide="database"></i></span>
+            <div><div class="ft">Multi-instance Radarr & Sonarr</div><div class="fd">4K, regional, anime — all coexisting naturally.</div></div>
+          </li>
+          <li>
+            <span class="fi"><i data-lucide="folder-tree"></i></span>
+            <div><div class="ft">Condition-based folder routing</div><div class="fd">Genre, language, country, user, role, keyword tag.</div></div>
+          </li>
+          <li>
+            <span class="fi"><i data-lucide="star"></i></span>
+            <div><div class="ft">Quality-profile mappings</div><div class="fd">Per-service profile assignment, per quality tier.</div></div>
+          </li>
+          <li>
+            <span class="fi"><i data-lucide="users"></i></span>
+            <div><div class="ft">Multi-provider authentication</div><div class="fd">Plex, Discord, Jellyfin, Emby, email — enable any mix.</div></div>
+          </li>
+          <li>
+            <span class="fi"><i data-lucide="bell"></i></span>
+            <div><div class="ft">Notification matrix</div><div class="fd">Discord, Telegram, Email — per event type.</div></div>
+          </li>
+          <li>
+            <span class="fi"><i data-lucide="shield-check"></i></span>
+            <div><div class="ft">Signed backups & restore</div><div class="fd">One-click DB export; HMAC-verified restore.</div></div>
+          </li>
+          <li>
+            <span class="fi"><i data-lucide="sliders-horizontal"></i></span>
+            <div><div class="ft">Feature toggles + incident banners</div><div class="fd">Every section optional. Site-wide messages, real time.</div></div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PLUGINS -->
+<section class="sec" id="plugins">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Plugin ecosystem</div>
+      <h2>Build what you need, <em>don't fork the project.</em></h2>
+      <p class="lede">Every non-core integration ships as a plugin. A folder, a <code style="font-family: 'Geist Mono', monospace; background: rgba(124,92,255,0.12); padding: 2px 6px; border-radius: 4px; color: var(--violet-bright); font-size: 0.9em;">manifest.json</code>, an entry file — and it registers routes, pages, jobs, and UI contributions.</p>
+    </div>
+
+    <div class="plugins-wrap reveal">
+      <div class="plugin-grid">
+        <div class="plugin on" style="--plugin-color: #7c5cff;">
+          <div class="p-head">
+            <div class="p-icon">C</div>
+            <div class="p-meta"><div class="p-name">Communication</div><div class="p-ver">v0.1.0 · Arediss</div></div>
+          </div>
+          <div class="p-desc">Broadcast markdown announcements to your users — scheduled publishing, role targeting, severity levels.</div>
+          <div class="p-footer"><span class="p-tag">frontend · jobs</span><span class="p-toggle"></span></div>
+        </div>
+        <div class="plugin" style="--plugin-color: #5de6ff;">
+          <div class="p-head">
+            <div class="p-icon">D</div>
+            <div class="p-meta"><div class="p-name">Dev Tools</div><div class="p-ver">v0.1.0 · Arediss</div></div>
+          </div>
+          <div class="p-desc">Dev-only utilities for testing Oscarr locally — user impersonation, etc. Do not enable in production.</div>
+          <div class="p-footer"><span class="p-tag">routes · admin</span><span class="p-toggle"></span></div>
+        </div>
+        <div class="plugin on" style="--plugin-color: #5865F2;">
+          <div class="p-head">
+            <div class="p-icon">L</div>
+            <div class="p-meta"><div class="p-name">Leonarr</div><div class="p-ver">v0.1.0 · Kodz</div></div>
+          </div>
+          <div class="p-desc">Discord bot bridging Oscarr: Plex login, media search and request from Discord.</div>
+          <div class="p-footer"><span class="p-tag">bot · jobs · notif</span><span class="p-toggle"></span></div>
+        </div>
+        <div class="plugin" style="--plugin-color: #ffb85c;">
+          <div class="p-head">
+            <div class="p-icon">R</div>
+            <div class="p-meta"><div class="p-name">Radarr Manager</div><div class="p-ver">v0.1.0 · Arediss</div></div>
+          </div>
+          <div class="p-desc">Library browser, quality monitoring, releases, analytics and file management.</div>
+          <div class="p-footer"><span class="p-tag">frontend · routes</span><span class="p-toggle"></span></div>
+        </div>
+        <div class="plugin on" style="--plugin-color: #2ee6a8;">
+          <div class="p-head">
+            <div class="p-icon">S</div>
+            <div class="p-meta"><div class="p-name">Sonarr Manager</div><div class="p-ver">v0.1.0 · Arediss</div></div>
+          </div>
+          <div class="p-desc">Series browser, season/episode drill-down, quality monitoring, releases, analytics and files.</div>
+          <div class="p-footer"><span class="p-tag">frontend · routes</span><span class="p-toggle"></span></div>
+        </div>
+        <div class="plugin" style="--plugin-color: #ff5c7a;">
+          <div class="p-head">
+            <div class="p-icon">$</div>
+            <div class="p-meta"><div class="p-name">Subscription</div><div class="p-ver">v0.1.0 · Arediss</div></div>
+          </div>
+          <div class="p-desc">Track per-user subscription tiers with automatic role changes and expiration notifications.</div>
+          <div class="p-footer"><span class="p-tag">billing · jobs</span><span class="p-toggle"></span></div>
+        </div>
+        <div class="plugin on" style="--plugin-color: #a88bff;">
+          <div class="p-head">
+            <div class="p-icon">T</div>
+            <div class="p-meta"><div class="p-name">Tautulli Insights</div><div class="p-ver">v0.1.0 · Arediss</div></div>
+          </div>
+          <div class="p-desc">Live activity, top watchers, viewing trends and a leachers leaderboard — from your Tautulli server.</div>
+          <div class="p-footer"><span class="p-tag">frontend · analytics</span><span class="p-toggle"></span></div>
+        </div>
+        <div class="plugin plugin-add">
+          <i data-lucide="plus"></i>
+          <div class="pa-title">Build your own</div>
+          <div class="pa-desc">manifest.json → routes, pages, jobs, UI</div>
+        </div>
+      </div>
+
+      <!-- Plugin manifest example -->
+      <div style="margin-top: 40px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px 28px; font-family: 'Geist Mono', monospace; font-size: 13px; line-height: 1.7; color: #d8d4f0; max-width: 560px;">
+        <div style="color: var(--ink-muted); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px;">packages/plugins/my-plugin/manifest.json</div>
+<span style="color: #888;">{</span>
+<span style="color: #b8a9ff;">  "id"</span>: <span style="color: #ffb85c;">"my-plugin"</span>,
+<span style="color: #b8a9ff;">  "name"</span>: <span style="color: #ffb85c;">"My Plugin"</span>,
+<span style="color: #b8a9ff;">  "version"</span>: <span style="color: #ffb85c;">"1.0.0"</span>,
+<span style="color: #b8a9ff;">  "apiVersion"</span>: <span style="color: #ffb85c;">"v1"</span>,
+<span style="color: #b8a9ff;">  "entry"</span>: <span style="color: #ffb85c;">"index.js"</span>
+<span style="color: #888;">}</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section class="sec" id="install">
+  <div class="container">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Quick start</div>
+      <h2>One container. <em>Open your browser.</em></h2>
+      <p class="lede">No build step. No database setup. Paste the command, open localhost:3456, run through the setup wizard.</p>
+    </div>
+
+    <div class="docker-wrap reveal">
+      <div class="docker-steps">
+        <div class="docker-step">
+          <div class="s-num">1</div>
+          <div class="s-body">
+            <h4>Run the container</h4>
+            <p>Host networking so Oscarr can reach Radarr, Sonarr, Plex on your LAN. Data persists in <code>oscarr-data</code>.</p>
+          </div>
+        </div>
+        <div class="docker-step">
+          <div class="s-num">2</div>
+          <div class="s-body">
+            <h4>Open the setup wizard</h4>
+            <p>Go to <code>http://localhost:3456</code>. Create your admin, enable the auth providers you want, connect your *arr services.</p>
+          </div>
+        </div>
+        <div class="docker-step">
+          <div class="s-num">3</div>
+          <div class="s-body">
+            <h4>Add your *arr services</h4>
+            <p>Configuration → Services → Add. URL + API key. Oscarr syncs the library state on its own.</p>
+          </div>
+        </div>
+        <div class="docker-step">
+          <div class="s-num">4</div>
+          <div class="s-body">
+            <h4>(Optional) mount plugins</h4>
+            <p>Add <code>-v ./plugins:/app/packages/plugins</code> to drop in community plugins or your own.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="docker-terminal" id="dockerTerm">
+        <div class="t-chrome">
+          <div class="browser-dots"><i></i><i></i><i></i></div>
+          <div class="t-title">docker-compose.yml</div>
+          <button class="t-copy" id="dockerCopy" type="button">
+            <i data-lucide="copy"></i>
+            <span id="dockerCopyLabel">Copy</span>
+          </button>
+        </div>
+<div class="t-body"><span class="t-comment"># docker-compose.yml</span>
+<span class="t-key">services</span>:
+  <span class="t-key">oscarr</span>:
+    <span class="t-key">image</span>: <span class="t-str">ghcr.io/arediss/oscarr:latest</span>
+    <span class="t-key">container_name</span>: <span class="t-str">oscarr</span>
+    <span class="t-key">restart</span>: <span class="t-str">unless-stopped</span>
+    <span class="t-key">network_mode</span>: <span class="t-str">host</span>
+    <span class="t-key">volumes</span>:
+      - <span class="t-str">oscarr-data:/data</span>
+    <span class="t-key">environment</span>:
+      - <span class="t-str">JWT_SECRET=your_random_secret_key</span>
+
+<span class="t-key">volumes</span>:
+  <span class="t-key">oscarr-data</span>:
+
+<span class="t-comment"># then:</span>
+<span class="t-prompt">$</span> docker compose up <span class="t-flag">-d</span>
+<span class="t-comment"># open http://localhost:3456 →</span> <span class="t-str">setup wizard</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- VISION -->
+<section class="vision" id="vision">
+  <div class="vision-bg"></div>
+  <div class="narrow">
+    <div class="reveal">
+      <div class="eyebrow" style="justify-content: center; display: flex;">Vision</div>
+      <div class="quote">One app <em>to rule them all.</em></div>
+      <p style="text-align: center; font-size: 18px; color: var(--ink-dim); line-height: 1.6; max-width: 62ch; margin: 0 auto;">
+        Oscarr's ambition goes beyond media requests. The core is designed to be a unified dashboard for your entire homelab media stack — and plugins are how it gets there.
+      </p>
+    </div>
+
+    <div class="principles reveal">
+      <div class="pr">
+        <div class="pnum">01</div>
+        <div><h4>The core stays lean</h4><p>Authentication, UI shell, plugin engine, notification system. No hardcoded integrations that don't belong in every setup.</p></div>
+      </div>
+      <div class="pr">
+        <div class="pnum">02</div>
+        <div><h4>Plugins do the heavy lifting</h4><p>Each service integration is a self-contained plugin — routes, pages, jobs, settings. Add Jellyfin? Build a plugin, not a fork.</p></div>
+      </div>
+      <div class="pr">
+        <div class="pnum">03</div>
+        <div><h4>Modular by default</h4><p>Every feature is toggleable. Every integration is optional. You compose the app that fits your stack.</p></div>
+      </div>
+      <div class="pr">
+        <div class="pnum">04</div>
+        <div><h4>User-friendly always</h4><p>A fast, polished interface your non-technical users actually enjoy. No config files, no terminal commands.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BIG CTA + FOOTER -->
+<div class="container">
+  <div class="big-cta reveal">
+    <h2>Your <em>*arr stack</em>, finally<br/>with an interface worth showing.</h2>
+    <p>Open source. MIT-licensed. Built for the homelab crowd — by the homelab crowd. Star it, run it, break it, contribute back.</p>
+    <div class="ctas">
+      <a class="btn primary" href="#install">
+        <i data-lucide="cloud-download"></i>
+        Deploy with Docker
+      </a>
+      <a class="btn ghost" href="https://github.com/arediss/Oscarr" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.73 1.27 3.4.97.1-.76.4-1.27.74-1.56-2.55-.29-5.23-1.28-5.23-5.7 0-1.26.45-2.3 1.19-3.1-.12-.3-.52-1.49.11-3.1 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.64 1.61.24 2.8.12 3.1.74.8 1.19 1.84 1.19 3.1 0 4.44-2.69 5.41-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#">
+          <span class="brand-mark">
+            <i data-lucide="award"></i>
+          </span>
+          Oscarr
+        </a>
+        <p>Radarr & Sonarr are the source of truth. Oscarr is the interface. A modern, self-hosted media request & management platform.</p>
+      </div>
+      <div class="foot-col">
+        <h5>Product</h5>
+        <a href="#why">Why Oscarr</a>
+        <a href="#tour">Product tour</a>
+        <a href="#features">Features</a>
+        <a href="#plugins">Plugins</a>
+        <a href="#install">Install</a>
+      </div>
+      <div class="foot-col">
+        <h5>Resources</h5>
+        <a href="https://github.com/arediss/Oscarr" target="_blank" rel="noopener">GitHub repo</a>
+        <a href="https://github.com/arediss/Oscarr#readme" target="_blank" rel="noopener">Documentation</a>
+        <a href="https://github.com/arediss/Oscarr/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://github.com/arediss/Oscarr/pulls" target="_blank" rel="noopener">Pull requests</a>
+        <a href="#">Discord</a>
+      </div>
+      <div class="foot-col">
+        <h5>Community</h5>
+        <a href="#">Plugin gallery</a>
+        <a href="#">Contributing</a>
+        <a href="#">Changelog</a>
+        <a href="https://github.com/arediss/Oscarr/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <div>© 2026 Oscarr. Built by Arediss and the community.</div>
+      <div class="rhs">
+        <span>MIT License</span>
+        <span>v0.6.3</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green);"></span>All systems operational</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ===== Nav shadow on scroll =====
+  const nav = document.getElementById('nav');
+  const onScroll = () => {
+    nav.classList.toggle('scrolled', window.scrollY > 24);
+
+    // Hero parallax tilt
+    const tilt = document.getElementById('heroTilt');
+    if (tilt) {
+      const y = Math.min(window.scrollY, 400);
+      const deg = Math.max(0, 8 - (y / 400) * 8);
+      const ty = y * -0.08;
+      tilt.style.transform = `rotateX(${deg}deg) translateY(${ty}px)`;
+    }
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  // ===== Copy docker command (hero) =====
+  const heroCmd = document.getElementById('heroCmd');
+  heroCmd.addEventListener('click', async () => {
+    const text = document.getElementById('heroCmdText').textContent;
+    try { await navigator.clipboard.writeText(text); } catch(e) {}
+    heroCmd.classList.add('copied');
+    const btn = heroCmd.querySelector('.copy-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    setTimeout(() => { heroCmd.classList.remove('copied'); btn.innerHTML = orig; }, 1600);
+  });
+
+  // ===== Copy docker compose =====
+  const dockerCopy = document.getElementById('dockerCopy');
+  const dockerTerm = document.getElementById('dockerTerm');
+  const dockerLabel = document.getElementById('dockerCopyLabel');
+  const composeYaml = `services:
+  oscarr:
+    image: ghcr.io/arediss/oscarr:latest
+    container_name: oscarr
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - oscarr-data:/data
+    environment:
+      - JWT_SECRET=your_random_secret_key
+
+volumes:
+  oscarr-data:`;
+  dockerCopy.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(composeYaml); } catch(e) {}
+    dockerTerm.classList.add('copied');
+    dockerLabel.textContent = 'Copied';
+    setTimeout(() => { dockerTerm.classList.remove('copied'); dockerLabel.textContent = 'Copy'; }, 1800);
+  });
+
+  // ===== Product tour tabs =====
+  const tabs = document.querySelectorAll('.tour-tab');
+  const panels = document.querySelectorAll('.tour-panel');
+  const images = document.querySelectorAll('#tourBody img');
+  const urls = {
+    home: 'oscarr.local / home',
+    requests: 'oscarr.local / requests',
+    calendar: 'oscarr.local / calendar',
+    services: 'oscarr.local / admin / services',
+    homepage: 'oscarr.local / admin / homepage',
+    jobs: 'oscarr.local / admin / jobs',
+    auth: 'oscarr.local / admin / auth',
+    system: 'oscarr.local / admin / system',
+  };
+  const tourUrl = document.getElementById('tourUrl');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    const key = t.dataset.tour;
+    tabs.forEach(x => x.classList.toggle('active', x === t));
+    panels.forEach(p => p.classList.toggle('active', p.dataset.panel === key));
+    images.forEach(img => img.classList.toggle('active', img.dataset.img === key));
+    if (urls[key]) tourUrl.textContent = urls[key];
+  }));
+
+  // Auto-advance product tour
+  let tourIdx = 0;
+  const tourKeys = Array.from(tabs).map(t => t.dataset.tour);
+  let tourTimer;
+  const startTourTimer = () => {
+    clearInterval(tourTimer);
+    tourTimer = setInterval(() => {
+      tourIdx = (tourIdx + 1) % tourKeys.length;
+      tabs[tourIdx].click();
+    }, 5000);
+  };
+  startTourTimer();
+  // Reset timer on manual click
+  tabs.forEach((t, i) => t.addEventListener('click', () => { tourIdx = i; startTourTimer(); }));
+
+  // ===== Scroll reveal =====
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+
+  <script>if(window.lucide){window.lucide.createIcons();}</script>
+</body>
+</html>
