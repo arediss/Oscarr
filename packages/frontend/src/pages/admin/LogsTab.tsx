@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useVirtualList } from '@/hooks/useVirtualList';
 import type { TFunction } from 'i18next';
 import { clsx } from 'clsx';
-import { Trash2, RefreshCw, ScrollText, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
+import { Trash2, RefreshCw, ScrollText, ChevronDown, ChevronRight, ChevronLeft, Copy, Check } from 'lucide-react';
 import { localizedDateTime } from '@/i18n/formatters';
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
@@ -83,15 +83,13 @@ export function LogsTab() {
 
   const uniqueLabels = [...new Set(logs.map((l) => l.label))].sort((a, b) => a.localeCompare(b));
 
+  // 4 icon-only action buttons share the same visual shape: rounded-lg, 2.5×2.5rem hit area,
+  // hover-bg on white/5. Keeps the toolbar visually tight when there's a lot of labels in
+  // the filter row.
+  const iconBtn = 'p-2 rounded-lg text-ndp-text-muted hover:text-ndp-text hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed';
+
   return (
-    <AdminTabLayout
-      title={t('admin.tab.logs')}
-      actions={
-        <button onClick={clearLogs} className="btn-danger text-sm flex items-center gap-2 px-4 py-2">
-          <Trash2 className="w-4 h-4" /> {t('admin.logs.clear')}
-        </button>
-      }
-    >
+    <AdminTabLayout>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {['', 'info', 'warn', 'error'].map((lvl) => (
@@ -112,25 +110,56 @@ export function LogsTab() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={fetchLogs} className="btn-secondary text-xs flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5" /> {t('common.refresh')}</button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {totalPages > 1 && (
+            <>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                aria-label={t('common.previous')}
+                title={t('common.previous')}
+                className={iconBtn}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs text-ndp-text-dim tabular-nums px-1">{page}/{totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                aria-label={t('common.next')}
+                title={t('common.next')}
+                className={iconBtn}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <div className="w-px h-5 bg-white/10 mx-1" />
+            </>
+          )}
+          <button
+            onClick={fetchLogs}
+            aria-label={t('common.refresh')}
+            title={t('common.refresh')}
+            className={iconBtn}
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={clearLogs}
+            aria-label={t('admin.logs.clear')}
+            title={t('admin.logs.clear')}
+            className={clsx(iconBtn, 'hover:bg-ndp-danger/10 hover:text-ndp-danger')}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
       <div className="mt-4">
-      {loading && logs.length === 0 ? <Spinner /> : logs.length === 0 ? (
-        <div className="text-center py-16"><ScrollText className="w-10 h-10 text-ndp-text-dim mx-auto mb-2" /><p className="text-sm text-ndp-text-dim">{t('admin.logs.no_logs')}</p></div>
-      ) : (
-        <LogList logs={logs} t={t} />
-      )}
-
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="btn-secondary text-xs">← {t('common.previous')}</button>
-          <span className="text-xs text-ndp-text-dim self-center">{page}/{totalPages}</span>
-          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="btn-secondary text-xs">{t('common.next')} →</button>
-        </div>
-      )}
+        {loading && logs.length === 0 ? <Spinner /> : logs.length === 0 ? (
+          <div className="text-center py-16"><ScrollText className="w-10 h-10 text-ndp-text-dim mx-auto mb-2" /><p className="text-sm text-ndp-text-dim">{t('admin.logs.no_logs')}</p></div>
+        ) : (
+          <LogList logs={logs} t={t} />
+        )}
       </div>
     </AdminTabLayout>
   );
