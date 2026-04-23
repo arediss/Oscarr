@@ -38,7 +38,7 @@ export function UserCluster({
 
   useEffect(() => {
     if (canManageRoles) {
-      api.get('/admin/roles').then(({ data }) => setAvailableRoles(data)).catch(() => {});
+      api.get('/admin/roles').then(({ data }) => setAvailableRoles(data)).catch((err) => console.warn("[UserCluster] roles fetch failed", err));
     }
   }, [canManageRoles]);
 

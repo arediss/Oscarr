@@ -27,7 +27,7 @@ async function fetchNotifications() {
     cachedUnreadCount = (countRes.data as { count: number }).count;
     lastFetch = Date.now();
     listeners.forEach((cb) => cb());
-  } catch { /* ignore */ }
+  } catch (err) { console.warn("[useNotifications] poll failed", err); }
 }
 
 let interval: ReturnType<typeof setInterval> | null = null;

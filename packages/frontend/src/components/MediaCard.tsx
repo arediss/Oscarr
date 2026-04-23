@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import type { TmdbMedia } from '@/types';
 import { clsx } from 'clsx';
 import { useNsfwFilter } from '@/hooks/useNsfwFilter';
+import { toastApiError } from '@/utils/toast';
 
 interface MediaCardProps {
   media: TmdbMedia;
@@ -41,7 +42,9 @@ export default function MediaCard({ media, className, availability, index = 0 }:
     try {
       await api.post('/requests', { tmdbId: media.id, mediaType: type });
       setRequested(true);
-    } catch { /* already requested or error */ }
+    } catch (err) {
+      toastApiError(err, t('status.request_send_failed'));
+    }
     finally { setRequesting(false); }
   };
 

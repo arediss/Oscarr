@@ -40,7 +40,7 @@ export function useServiceSchemas(endpoint = '/admin/service-schemas', enabled =
       for (const s of data as ServiceSchema[]) map[s.id] = s;
       cachedSchemas = map;
       setSchemas(map);
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch((err) => console.warn("[useServiceSchemas] failed", err)).finally(() => setLoading(false));
   }, [endpoint, enabled]);
 
   return { schemas, loading };

@@ -31,7 +31,7 @@ export default function CollectionSection({ collection }: Props) {
               ids: movies.map((m: TmdbMedia) => ({ tmdbId: m.id, mediaType: 'movie' })),
             });
             setStatuses(statusData);
-          } catch { /* ignore */ }
+          } catch (err) { console.warn("[CollectionSection] batch-status item failed", err); }
         }
       })
       .catch(console.error)

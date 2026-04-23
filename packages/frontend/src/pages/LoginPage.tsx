@@ -29,7 +29,7 @@ export default function LoginPage() {
   const flowRef = useRef<PlexPinFlowHandle | null>(null);
 
   useEffect(() => {
-    api.get('/auth/providers').then(({ data }) => setProviders(data)).catch(() => {});
+    api.get('/auth/providers').then(({ data }) => setProviders(data)).catch((err) => console.warn('[LoginPage] /auth/providers failed', err));
     return () => flowRef.current?.cancel();
   }, []);
 
