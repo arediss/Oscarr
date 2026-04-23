@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { prisma } from '../../utils/prisma.js';
-import { getPlexUser, createPlexPin, checkPlexPin, getSharedServerUsers } from '../../services/plex.js';
+import { getPlexUser, createPlexPin, checkPlexPin, getSharedServerUsers } from './client.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { parseServiceConfig } from '../../utils/services.js';
 import type { Provider, AuthProvider, AuthHelpers } from '../types.js';

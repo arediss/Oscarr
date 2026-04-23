@@ -127,11 +127,17 @@ export function createArrClient(type: string, config: Record<string, string>): A
   return def.createClient(config);
 }
 
-const MEDIA_TYPE_TO_SERVICE: Record<string, string> = { movie: 'radarr', tv: 'sonarr' };
+/** Resolves which service type owns a given media type (e.g. `movie` → `radarr`) by scanning
+ *  `ALL_PROVIDERS` for the first service whose `handlesMediaTypes` includes the requested
+ *  value. New providers (e.g. lidarr for music) just declare the field on their ServiceDefinition
+ *  — no hardcoded lookup to patch. */
 export function getServiceTypeForMedia(mediaType: string): string {
-  const type = MEDIA_TYPE_TO_SERVICE[mediaType];
-  if (!type) throw new Error(`No service type for media type "${mediaType}"`);
-  return type;
+  for (const provider of ALL_PROVIDERS) {
+    if (provider.service?.handlesMediaTypes?.includes(mediaType)) {
+      return provider.service.id;
+    }
+  }
+  throw new Error(`No service type for media type "${mediaType}"`);
 }
 
 // Re-export types

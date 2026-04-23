@@ -3,7 +3,7 @@ import { prisma } from '../../utils/prisma.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { parseId } from '../../utils/params.js';
 import { getPlexToken } from '../../providers/plex/index.js';
-import { getSharedServerUsers, removeSharedServer } from '../../services/plex.js';
+import { getSharedServerUsers, removeSharedServer } from '../../providers/plex/client.js';
 
 export async function plexAdminRoutes(app: FastifyInstance) {
   app.delete('/plex/shared/:userId', {

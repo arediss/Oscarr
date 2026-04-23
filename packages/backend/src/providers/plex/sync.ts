@@ -1,7 +1,7 @@
 import { prisma } from '../../utils/prisma.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { invalidateUserStateCache } from '../../middleware/rbac.js';
-import { getSharedServerUsers } from '../../services/plex.js';
+import { getSharedServerUsers } from './client.js';
 import type { SyncResult } from '../types.js';
 
 /**
