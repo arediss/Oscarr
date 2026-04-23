@@ -386,6 +386,7 @@
   "admin.setup_checklist.progress": "{{done}} étape(s) requise(s) sur {{total}} effectuée(s)",
   "admin.setup_checklist.all_required_done": "Toutes les étapes requises sont faites — {{done}} sur {{total}} au total",
   "admin.setup_checklist.optional": "Optionnel",
+  "admin.setup_checklist.dismiss": "Ne plus afficher",
   "admin.setup_checklist.items.media-server.title": "Connecter un serveur média",
   "admin.setup_checklist.items.media-server.desc": "Plex, Jellyfin ou Emby — requis pour détecter ce qui est déjà dans votre bibliothèque.",
   "admin.setup_checklist.items.radarr.title": "Ajouter une instance Radarr",
