@@ -76,6 +76,10 @@ export default function RequestsPage() {
   const [total, setTotal] = useState(0);
   const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string }[]>([]);
   const [showCleanup, setShowCleanup] = useState(false);
+  const cleanupModal = useModal({
+    open: showCleanup,
+    onClose: () => setShowCleanup(false),
+  });
   type CleanupAction = 'keep' | 'remove' | 'remove_with_service';
   const [cleanupActions, setCleanupActions] = useState<Record<string, CleanupAction>>({});
   const [cleanupLoading, setCleanupLoading] = useState(false);
@@ -355,9 +359,16 @@ export default function RequestsPage() {
       {/* Cleanup modal */}
       {showCleanup && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowCleanup(false); }}>
-          <div className="bg-ndp-surface border border-white/10 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={cleanupModal.dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={cleanupModal.titleId}
+            className="bg-ndp-surface border border-white/10 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-bold text-ndp-text flex items-center gap-2">
+              <h3 id={cleanupModal.titleId} className="text-base font-bold text-ndp-text flex items-center gap-2">
                 <Eraser className="w-4 h-4 text-ndp-text-muted" />
                 {t('requests.cleanup_title')}
               </h3>
@@ -498,12 +509,20 @@ function RequestCardInner({
   const isPending = req.status === 'pending';
 
   return (
-    <Link
-      to={mediaLink}
-      onClick={hasValidTmdbId ? undefined : (e) => e.preventDefault()}
+    // Card is a <div> (not <Link>) so nested <button>s are valid HTML.
+    // The clickable area is a sibling <Link className="absolute inset-0"> positioned under the
+    // buttons via z-index — screen readers announce one link + the buttons independently.
+    <div
       className="group relative rounded-2xl overflow-hidden h-[160px] flex transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-black/40 animate-fade-in border border-white/5"
       style={{ animationDelay: `${Math.min(index * 50, 400)}ms`, animationFillMode: 'backwards' }}
     >
+      {hasValidTmdbId && (
+        <Link
+          to={mediaLink}
+          className="absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ndp-accent/60 rounded-2xl"
+          aria-label={req.media?.title || t('requests.unknown_media')}
+        />
+      )}
 {/* No left bar — status shown inline */}
 
       {/* Background — subtle backdrop hint */}
@@ -814,7 +833,7 @@ function RequestCardInner({
         </div>,
         document.body
       )}
-    </Link>
+    </div>
   );
 }
 

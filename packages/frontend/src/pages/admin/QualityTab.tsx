@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { Loader2, Plus, X, Check, Trash2, Shield, Link2, CheckCircle, Clock } from 'lucide-react';
 import api from '@/lib/api';
 import { toastApiError } from '@/utils/toast';
+import { useModal } from '@/hooks/useModal';
 
 interface QualityMappingType {
   id: number;
@@ -41,7 +42,15 @@ export function QualityTab() {
   const [roles, setRoles] = useState<RoleType[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingOption, setEditingOption] = useState<number | null>(null);
+  const { dialogRef: optionDialogRef, titleId: optionTitleId } = useModal({
+    open: editingOption !== null,
+    onClose: () => setEditingOption(null),
+  });
   const [editingMapping, setEditingMapping] = useState<{ qualityOptionId: number; serviceId: number } | null>(null);
+  const { dialogRef: mappingDialogRef, titleId: mappingTitleId } = useModal({
+    open: editingMapping !== null,
+    onClose: () => setEditingMapping(null),
+  });
   const [profiles, setProfiles] = useState<{ id: number; name: string }[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [selectedProfiles, setSelectedProfiles] = useState<Set<number>>(new Set());
@@ -275,9 +284,16 @@ export function QualityTab() {
 
         return createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-            <div className="card p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div
+              ref={optionDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={optionTitleId}
+              className="card p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[85vh] flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold text-ndp-text">{opt.label}</h3>
+                <h3 id={optionTitleId} className="text-lg font-bold text-ndp-text">{opt.label}</h3>
                 <div className="flex items-center gap-1">
                   <button onClick={() => { deleteOption(opt.id); setEditingOption(null); }} aria-label={t('common.delete')} className="p-1.5 rounded-lg text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors">
                     <Trash2 className="w-4 h-4" />
@@ -373,8 +389,15 @@ export function QualityTab() {
       {/* Profile select modal */}
       {editingMapping && createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onMouseDown={() => setEditingMapping(null)}>
-          <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-ndp-text mb-1">{t('admin.quality.select_profile')}</h3>
+          <div
+            ref={mappingDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={mappingTitleId}
+            className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h3 id={mappingTitleId} className="text-lg font-bold text-ndp-text mb-1">{t('admin.quality.select_profile')}</h3>
             <p className="text-xs text-ndp-text-dim mb-4">
               {options.find(o => o.id === editingMapping.qualityOptionId)?.label} → {services.find(s => s.id === editingMapping.serviceId)?.name}
             </p>
