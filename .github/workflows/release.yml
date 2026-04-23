@@ -201,10 +201,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@f713795cb21599bc4e5c4b58cbad1da852d7eeb9 # v3
 
       - name: Generate SBOM (SPDX)
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.manifest.outputs.first_tag || 'latest' }}
           format: spdx-json

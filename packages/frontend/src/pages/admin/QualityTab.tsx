@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useId } from 'react';
+import { useState, useEffect, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
