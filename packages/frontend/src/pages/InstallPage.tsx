@@ -21,7 +21,7 @@ interface WizardService {
 const TOTAL_STEPS = 5; // 0-4
 
 export default function InstallPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
@@ -85,6 +85,14 @@ export default function InstallPage() {
         email: adminEmail, password: adminPassword, displayName: adminDisplayName,
       });
       await login('', data.user);
+      // Pre-seed instanceLanguages from the browser's detected locale so the first TMDB sync
+      // pulls metadata in the admin's language straight away instead of downloading English
+      // and re-pulling later. Skipped for 'en' (schema default) and silently best-effort —
+      // if the PUT fails the admin can still adjust it in Instance settings.
+      const detectedLang = i18n.language.split('-')[0];
+      if (detectedLang && detectedLang !== 'en') {
+        api.put('/admin/settings', { instanceLanguages: [detectedLang] }).catch(() => {});
+      }
       setStep(2);
     } catch (err: unknown) {
       setError(extractApiError(err, t('login.error')));
