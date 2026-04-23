@@ -1,4 +1,5 @@
 import { useState, useId, useEffect, useRef } from 'react';
+import { startPlexPinFlow, type PlexPinFlowHandle } from '@/providers/plex/pinFlow';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff, Loader2, Plug, RefreshCw, Save, KeyRound } from 'lucide-react';
@@ -78,54 +79,28 @@ export function ServiceModal({ service, onClose, onSaved }: ServiceModalProps) {
     }
   };
 
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const authWindowRef = useRef<Window | null>(null);
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+  const flowRef = useRef<PlexPinFlowHandle | null>(null);
+  useEffect(() => () => flowRef.current?.cancel(), []);
 
-  const stopPolling = () => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = null;
-    authWindowRef.current?.close();
-    authWindowRef.current = null;
-    setFetchingPlexToken(false);
-  };
-
-  const fetchPlexToken = async () => {
+  const fetchPlexToken = () => {
     setModalError('');
     setFetchingPlexToken(true);
     // Popup must open synchronously on the user gesture or Safari blocks it.
-    authWindowRef.current = window.open('about:blank', 'PlexAuth', 'width=600,height=700');
-    try {
-      const { data } = await api.post<{ pin: { id: number }; authUrl: string }>('/admin/plex-pin');
-      if (authWindowRef.current) authWindowRef.current.location.href = data.authUrl;
-      let attempts = 0;
-      pollRef.current = setInterval(async () => {
-        attempts++;
-        if (attempts >= 120) {
-          stopPolling();
-          setModalError(t('admin.services.plex_token_error'));
-          return;
-        }
-        try {
-          const res = await api.post<{ token?: string }>('/admin/plex-check', { pinId: data.pin.id });
-          if (res.data.token) {
-            handleConfigChange('token', res.data.token);
-            stopPolling();
-          }
-        } catch (err) {
-          // 400 = PIN not yet validated → keep polling. Anything else (401 session expired,
-          // 403 CSRF, 404 bad pin, 429 rate-limit, 5xx) is terminal — stop + surface.
-          const status = (err as { response?: { status?: number } }).response?.status;
-          if (status !== undefined && status !== 400) {
-            stopPolling();
-            setModalError(t('admin.services.plex_token_error'));
-          }
-        }
-      }, 1000);
-    } catch {
-      stopPolling();
-      setModalError(t('admin.services.plex_token_error'));
-    }
+    const authWindow = window.open('about:blank', 'PlexAuth', 'width=600,height=700');
+    flowRef.current = startPlexPinFlow({
+      authWindow,
+      pinEndpoint: '/admin/plex-pin',
+      checkEndpoint: '/admin/plex-check',
+      extractToken: (res) => (res as { token?: string })?.token ?? null,
+      onToken: (token) => {
+        handleConfigChange('token', token);
+        setFetchingPlexToken(false);
+      },
+      onError: () => {
+        setFetchingPlexToken(false);
+        setModalError(t('admin.services.plex_token_error'));
+      },
+    });
   };
 
   const detectMachineId = async () => {

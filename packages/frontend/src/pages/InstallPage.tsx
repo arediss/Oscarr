@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { startPlexPinFlow, type PlexPinFlowHandle } from '@/providers/plex/pinFlow';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
@@ -46,7 +47,6 @@ export default function InstallPage() {
 
   // Plex OAuth helpers
   const [plexPolling, setPlexPolling] = useState<string | null>(null); // service id being polled
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Step 3: Sync
   const [syncing, setSyncing] = useState(false);
@@ -62,9 +62,7 @@ export default function InstallPage() {
       .catch(() => setChecking(false));
   }, [navigate]);
 
-  useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+  useEffect(() => () => flowRef.current?.cancel(), []);
 
   // ─── Step 1: Admin account ──────────────────────────────────────────
 
@@ -154,51 +152,30 @@ export default function InstallPage() {
     } catch { /* ignore */ }
   };
 
-  const handlePlexTokenReceived = async (serviceId: string, token: string) => {
-    clearInterval(pollRef.current!);
-    pollRef.current = null;
-    setPlexPolling(null);
-    setServices(prev => prev.map(s => s.id === serviceId
-      ? { ...s, config: { ...s.config, token }, testStatus: 'idle' as const }
-      : s
-    ));
-    await autoDetectMachineId(serviceId, token);
-  };
-
-  const handlePollAttempt = async (serviceId: string, pinId: string, attempts: number) => {
-    if (attempts >= 120) {
-      clearInterval(pollRef.current!);
-      pollRef.current = null;
-      setPlexPolling(null);
-      setError(t('login.expired'));
-      return;
-    }
-    try {
-      const { data: checkData } = await api.post('/setup/plex-check', { pinId });
-      if (checkData.token) {
-        await handlePlexTokenReceived(serviceId, checkData.token);
-      }
-    } catch { /* keep polling */ }
-  };
+  const flowRef = useRef<PlexPinFlowHandle | null>(null);
 
   const startPlexOAuth = (serviceId: string) => {
     setPlexPolling(serviceId);
     setError('');
-    // Open popup BEFORE the async call — Safari blocks window.open() after await
     const authWindow = window.open('about:blank', 'PlexAuth', 'width=600,height=700');
-    api.post('/auth/plex/pin').then(({ data }) => {
-      const { pin, authUrl } = data;
-      if (authWindow) authWindow.location.href = authUrl;
-
-      let attempts = 0;
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(() => {
-        attempts++;
-        handlePollAttempt(serviceId, pin.id, attempts);
-      }, 1000);
-    }).catch(() => {
-      setPlexPolling(null);
-      setError(t('login.error'));
+    flowRef.current?.cancel();
+    flowRef.current = startPlexPinFlow({
+      authWindow,
+      pinEndpoint: '/auth/plex/pin',
+      checkEndpoint: '/setup/plex-check',
+      extractToken: (res) => (res as { token?: string })?.token ?? null,
+      onToken: async (token) => {
+        setPlexPolling(null);
+        setServices(prev => prev.map(s => s.id === serviceId
+          ? { ...s, config: { ...s.config, token }, testStatus: 'idle' as const }
+          : s
+        ));
+        await autoDetectMachineId(serviceId, token);
+      },
+      onError: () => {
+        setPlexPolling(null);
+        setError(t('login.expired'));
+      },
     });
   };
 

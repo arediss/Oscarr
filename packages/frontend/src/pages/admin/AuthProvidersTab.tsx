@@ -8,6 +8,7 @@ import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import { extractApiError } from '@/utils/toast';
 import { useModal } from '@/hooks/useModal';
+import { getProviderBadgeClass } from '@/providers/colors';
 
 interface AuthProviderField {
   key: string;
@@ -35,15 +36,6 @@ interface AuthProviderRow {
 }
 
 const MASK = '__MASKED__';
-
-/** Per-provider badge color so they're visually distinguishable at a glance. */
-const PROVIDER_ACCENT: Record<string, string> = {
-  plex: 'bg-[#e5a00d]/15 text-[#e5a00d]',
-  discord: 'bg-[#5865F2]/15 text-[#8692ff]',
-  jellyfin: 'bg-[#00a4dc]/15 text-[#00a4dc]',
-  emby: 'bg-[#52b54b]/15 text-[#52b54b]',
-  email: 'bg-white/10 text-ndp-text-muted',
-};
 
 export function AuthProvidersTab() {
   const { t } = useTranslation();
@@ -123,7 +115,7 @@ function ProviderRow({
   // server-side but the login wouldn't, so we signal unavailability without hiding the entry.
   const unavailable = provider.requiresService && !provider.serviceAvailable;
   const hasSettings = provider.configSchema.length > 0;
-  const accent = PROVIDER_ACCENT[provider.id] ?? 'bg-ndp-accent/15 text-ndp-accent';
+  const accent = getProviderBadgeClass(provider.id);
 
   return (
     <div className={clsx('card', unavailable && 'opacity-50')}>
