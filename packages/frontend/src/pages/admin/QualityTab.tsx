@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
@@ -37,6 +37,7 @@ interface RoleType {
 
 export function QualityTab() {
   const { t } = useTranslation();
+  const groupId = useId();
   const [options, setOptions] = useState<QualityOptionType[]>([]);
   const [services, setServices] = useState<ServiceType[]>([]);
   const [roles, setRoles] = useState<RoleType[]>([]);
@@ -305,9 +306,9 @@ export function QualityTab() {
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-5">
-                {/* Mappings */}
-                <div>
-                  <label className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.mapping_title')}</label>
+                {/* Mappings — group of service → profile chips, no single input so labelled via aria */}
+                <div role="group" aria-labelledby={`${groupId}-mappings`}>
+                  <span id={`${groupId}-mappings`} className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.mapping_title')}</span>
                   <div className="flex flex-wrap gap-2">
                     {opt.mappings.map((m) => (
                       <span key={m.id} className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-ndp-success/10 text-ndp-success font-medium">
@@ -326,9 +327,9 @@ export function QualityTab() {
                   </div>
                 </div>
 
-                {/* Roles — checkbox list like RBAC */}
-                <div>
-                  <label className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.allowed_roles')}</label>
+                {/* Roles — checkbox list group */}
+                <div role="group" aria-labelledby={`${groupId}-roles`}>
+                  <span id={`${groupId}-roles`} className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.allowed_roles')}</span>
                   <div className="space-y-0.5">
                     {roles.map((role) => {
                       const isAllowed = allowedRoles.includes(role.name);
@@ -351,9 +352,9 @@ export function QualityTab() {
                   </p>
                 </div>
 
-                {/* Approval — segmented control like cleanup */}
-                <div>
-                  <label className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.approval_mode')}</label>
+                {/* Approval — segmented control (radiogroup-like) */}
+                <div role="group" aria-labelledby={`${groupId}-approval`}>
+                  <span id={`${groupId}-approval`} className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.approval_mode')}</span>
                   <div className="flex gap-1 bg-ndp-surface-light rounded-lg p-1">
                     {([
                       { value: null, labelKey: 'admin.quality.approval_inherit', style: 'bg-white/10 text-ndp-text shadow-sm' },

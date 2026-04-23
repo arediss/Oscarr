@@ -11,6 +11,7 @@ import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import { useModal } from '@/hooks/useModal';
 import { getProviderBadgeClass, getProviderHex } from '@/providers/colors';
+import { startPlexPinFlow, type PlexPinFlowHandle } from '@/providers/plex/pinFlow';
 
 type UserSort = 'username' | 'date' | 'role';
 
@@ -50,7 +51,7 @@ export function UsersTab() {
   } | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [selectedImportIds, setSelectedImportIds] = useState<Set<string>>(new Set());
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const flowRef = useRef<PlexPinFlowHandle | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -106,42 +107,27 @@ export function UsersTab() {
     }
   };
 
-  useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+  useEffect(() => () => flowRef.current?.cancel(), []);
 
-  const handleLinkPlex = async (userId: number) => {
+  const handleLinkPlex = (userId: number) => {
     setLinkingUser(userId);
-    // Open popup BEFORE the async call — Safari blocks window.open() after await
     const authWindow = window.open('about:blank', 'PlexAuth', 'width=600,height=700');
-    try {
-      const { data } = await api.post('/auth/plex/pin');
-      const { pin, authUrl } = data;
-      if (authWindow) authWindow.location.href = authUrl;
-
-      let attempts = 0;
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
-        attempts++;
-        if (attempts >= 120) {
-          clearInterval(pollRef.current!);
-          pollRef.current = null;
-          setLinkingUser(null);
-          return;
-        }
-        try {
-          const { data: linkData } = await api.post(`/admin/users/${userId}/link-provider`, { provider: 'plex', pinId: pin.id });
-          if (linkData.success) {
-            clearInterval(pollRef.current!);
-            pollRef.current = null;
-            setLinkingUser(null);
-            fetchUsers();
-          }
-        } catch { /* keep polling */ }
-      }, 1000);
-    } catch {
-      setLinkingUser(null);
-    }
+    flowRef.current?.cancel();
+    flowRef.current = startPlexPinFlow({
+      authWindow,
+      pinEndpoint: '/auth/plex/pin',
+      checkEndpoint: `/admin/users/${userId}/link-provider`,
+      checkPayload: { provider: 'plex' },
+      // link-provider returns { success: true } once the link is created, not a token. The
+      // helper interprets a non-null return as success — so we return the sentinel string
+      // when linkData.success flips.
+      extractToken: (res) => ((res as { success?: boolean })?.success ? 'ok' : null),
+      onToken: () => {
+        setLinkingUser(null);
+        fetchUsers();
+      },
+      onError: () => setLinkingUser(null),
+    });
   };
 
   const handleLinkCredentials = async () => {
