@@ -42,9 +42,14 @@ export async function setupRoutes(app: FastifyInstance) {
     await requireSetupSecret(request, reply);
   });
 
-  // Verify setup secret — lightweight check for the frontend
+  // Verify setup secret — lightweight check for the frontend.
+  // Also reports whether an admin already exists: the wizard may have been interrupted between
+  // account creation (step 1) and final sync (step 4), so a returning user needs to sign in
+  // with the existing admin credentials instead of re-registering. adminExists drives the UI
+  // branch in step 1 of InstallPage.
   app.post('/verify-secret', async () => {
-    return { ok: true };
+    const adminExists = (await prisma.user.count({ where: { role: 'admin' } })) > 0;
+    return { ok: true, adminExists };
   });
 
   // Service schemas — used by wizard to build dynamic forms

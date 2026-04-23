@@ -27,6 +27,10 @@ export default function InstallPage() {
   const [checking, setChecking] = useState(true);
   const [setupSecret, setSetupSecret] = useState('');
   const [secretValid, setSecretValid] = useState(false);
+  // The wizard can be resumed after it crashed between steps 1 and 4. If an admin is already
+  // on record we swap the register form for a login form — user re-authenticates, cookie gets
+  // set, wizard resumes at step 2.
+  const [adminExists, setAdminExists] = useState(false);
   const { schemas: SERVICE_SCHEMAS } = useServiceSchemas('/setup/service-schemas', secretValid);
   const [secretShake, setSecretShake] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -80,6 +84,26 @@ export default function InstallPage() {
       const { data } = await api.post('/auth/register', {
         email: adminEmail, password: adminPassword, displayName: adminDisplayName,
       });
+      await login('', data.user);
+      setStep(2);
+    } catch (err: unknown) {
+      setError(extractApiError(err, t('login.error')));
+    } finally { setSaving(false); }
+  };
+
+  const handleResumeAsAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const { data } = await api.post('/auth/login', { email: adminEmail, password: adminPassword });
+      // Defense-in-depth: /verify-secret only returns adminExists=true when an admin row exists,
+      // but nothing stops a non-admin with email creds from logging in here. The wizard needs
+      // an admin session to mutate services, so refuse non-admin users and tell them to clear.
+      if (data.user?.role !== 'admin') {
+        setError(t('install.admin_required', 'This account is not an admin — the wizard needs an admin to continue.'));
+        return;
+      }
       await login('', data.user);
       setStep(2);
     } catch (err: unknown) {
@@ -306,7 +330,8 @@ export default function InstallPage() {
               sessionStorage.setItem('setup-secret', setupSecret);
               setError('');
               try {
-                await api.post('/setup/verify-secret');
+                const { data } = await api.post('/setup/verify-secret');
+                setAdminExists(Boolean(data?.adminExists));
                 setSecretValid(true);
               } catch {
                 setError(t('install.setup_secret_invalid', 'Invalid setup secret.'));
@@ -345,8 +370,29 @@ export default function InstallPage() {
             </div>
           )}
 
-          {/* Step 1: Create admin account */}
-          {step === 1 && (
+          {/* Step 1: Create admin account — or resume as existing admin when the wizard was
+              interrupted after account creation (DB already has an admin row). */}
+          {step === 1 && adminExists && (
+            <form onSubmit={handleResumeAsAdmin} className="space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold text-ndp-text mb-1">{t('install.resume_title', 'Sign in to resume')}</h2>
+                <p className="text-xs text-ndp-text-dim">{t('install.resume_desc', 'An admin account already exists. Sign in to continue the installation from where you left off.')}</p>
+              </div>
+              <input type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder={t('login.email_placeholder')} required className="input w-full" autoFocus />
+              <div className="relative">
+                <input type={showPassword ? 'text' : 'password'} value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder={t('login.password_placeholder')} required className="input w-full pr-10" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? t('common.hide') : t('common.show')} className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <button type="submit" disabled={saving} className="btn-primary w-full flex items-center justify-center gap-2 text-sm">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                {t('install.resume_login', 'Sign in and continue')}
+              </button>
+            </form>
+          )}
+
+          {step === 1 && !adminExists && (
             <form onSubmit={handleCreateAdmin} className="space-y-4">
               <div>
                 <h2 className="text-sm font-semibold text-ndp-text mb-1">{t('install.admin_title')}</h2>
