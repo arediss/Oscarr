@@ -9,6 +9,7 @@ import { sendUserNotification } from '../../services/userNotifications.js';
 import { getArrClient } from '../../providers/index.js';
 import type { ArrClient } from '../../providers/types.js';
 import { searchMulti, getMovieDetails, getTvDetails } from '../../services/tmdb.js';
+import { createUserRequest } from '../../services/requestService.js';
 import type {
   PluginTmdbSearchPage,
   PluginMedia,
@@ -444,9 +445,30 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
           },
         }));
       },
-      async create(_input) {
+      async create(input) {
         req('requests:write', 'requests.create');
-        throw new Error('ctx.requests.create: not implemented (Phase 1 P4)');
+        // Delegates to the same createUserRequest pipeline the HTTP route uses — pluginGuard
+        // + blacklist + dedup + quality gate + sendToService + safeNotify all honoured.
+        // Target user's role (loaded from DB inside createUserRequest) drives auto-approve;
+        // plugins cannot escalate by passing a userId they don't "own" — they always act as
+        // that user would act via the HTTP API.
+        const result = await createUserRequest({
+          userId: input.userId,
+          tmdbId: input.tmdbId,
+          mediaType: input.mediaType,
+          seasons: input.seasons,
+          rootFolder: input.rootFolder,
+          qualityOptionId: input.qualityOptionId,
+          skipPluginGuard: input.skipPluginGuard,
+        });
+        if (!result.ok) return { ok: false, code: result.code, error: result.error };
+        return {
+          ok: true,
+          requestId: result.request.id,
+          status: result.request.status,
+          autoApproved: result.request.status === 'approved' || result.request.status === 'searching',
+          sendFailed: result.sendFailed,
+        };
       },
     },
     async listFolderRules(_options?) {
