@@ -357,7 +357,7 @@ export class SonarrClient implements ArrClient {
   }
 
   parseWebhookPayload(body: unknown): ArrWebhookEvent | null {
-    const payload = body as { eventType?: string; series?: { tvdbId?: number; title?: string }; episodes?: { seasonNumber?: number; episodeNumber?: number }[] };
+    const payload = body as { eventType?: string; series?: { id?: number; tvdbId?: number; title?: string }; episodes?: { seasonNumber?: number; episodeNumber?: number }[] };
     if (!payload.eventType) return null;
     if (payload.eventType === 'Test') return { type: 'test', externalId: 0, title: 'Test' };
     if (!payload.series?.tvdbId) return null;
@@ -366,6 +366,7 @@ export class SonarrClient implements ArrClient {
     return {
       type: typeMap[payload.eventType] || 'unknown',
       externalId: payload.series.tvdbId,
+      internalId: payload.series.id,
       title: payload.series.title || 'Unknown',
       seasonNumber: ep?.seasonNumber,
       episodeNumber: ep?.episodeNumber,

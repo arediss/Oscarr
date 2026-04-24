@@ -101,8 +101,16 @@ export interface PluginUserNotificationCreatedV1 {
   v: 1;
   userId: number;
   type: string;
+  /** Raw value as stored in the DB. May be an i18n key (`notifications.msg.*`) or a literal
+   *  string (e.g. a media title). Plugins should prefer `titleText` / `messageText` for
+   *  display; these raw fields are kept on the contract so subscribers that want to
+   *  re-translate against a per-user locale can do so. */
   title: string;
   message: string;
+  /** Pre-translated text resolved against the instance language at emit time. Same shape
+   *  the web frontend ultimately renders. Plugins should display these directly. */
+  titleText?: string;
+  messageText?: string;
   metadata: Record<string, unknown>;
   createdAt: string;
 }
