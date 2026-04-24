@@ -176,6 +176,28 @@ export interface PluginContext {
     getById(mediaId: number): Promise<PluginMedia | null>;
   };
 
+  /** Escape hatch for calling the host's own HTTP API. Useful for endpoints that don't have
+   *  a typed ctx wrapper yet (e.g. plugin-specific admin surfaces, legacy routes). The engine
+   *  resolves `localhost:${PORT}` and — when `asUserId` is passed — mints a short-lived auth
+   *  cookie scoped to that user so the call passes RBAC as if the user made it themselves.
+   *  No capability bucket: internalFetch is always available, but the target route's own RBAC
+   *  rules still apply (hitting an admin route without `asUserId` pointing to an admin
+   *  returns 401/403). */
+  app: {
+    internalFetch(
+      path: string,
+      init?: {
+        method?: string;
+        headers?: Record<string, string>;
+        body?: unknown;
+        /** When set, the call is authenticated as this user (same session a browser would
+         *  get by logging in). Omitted → call runs unauthenticated, only reaches public
+         *  routes like `/api/app/features`. */
+        asUserId?: number;
+      },
+    ): Promise<Response>;
+  };
+
   /** Request pipeline access. Read methods gated by `requests:read`; `create` gated by
    *  `requests:write`. */
   requests: {

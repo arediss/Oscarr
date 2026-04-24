@@ -479,6 +479,42 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
         };
       },
     },
+    app: {
+      async internalFetch(path, init) {
+        // Resolve port once per call — PORT is set at boot by index.ts, no caching needed.
+        // The CSRF gate (@fastify/helmet + x-requested-with check on mutations) passes because
+        // we always set the marker header; RBAC enforcement is the target route's job.
+        const port = process.env.PORT || '3001';
+        const base = `http://localhost:${port}`;
+        const url = base + (path.startsWith('/') ? path : `/${path}`);
+        const headers: Record<string, string> = {
+          'x-requested-with': 'oscarr',
+          ...init?.headers,
+        };
+        if (init?.asUserId !== undefined) {
+          const user = await prisma.user.findUnique({
+            where: { id: init.asUserId },
+            select: { id: true, email: true, role: true },
+          });
+          if (!user) throw new Error(`internalFetch asUserId=${init.asUserId}: user not found`);
+          // `token` is the cookie name set by routes/auth.ts + read by @fastify/jwt's
+          // cookie extractor (bootstrap/security.ts). Minting via signAuthToken keeps the
+          // plugin path identical to a normal login from RBAC's perspective.
+          const jwt = deps.signAuthToken({ id: user.id, email: user.email, role: user.role });
+          headers.cookie = `token=${jwt}`;
+        }
+        let body: BodyInit | undefined;
+        if (init?.body !== undefined) {
+          if (typeof init.body === 'string' || init.body instanceof Uint8Array || init.body instanceof URLSearchParams) {
+            body = init.body as BodyInit;
+          } else {
+            body = JSON.stringify(init.body);
+            if (!headers['content-type']) headers['content-type'] = 'application/json';
+          }
+        }
+        return fetch(url, { method: init?.method ?? 'GET', headers, body });
+      },
+    },
     async listFolderRules(options?): Promise<PluginFolderRule[]> {
       req('settings:app', 'listFolderRules');
       const rows = await prisma.folderRule.findMany({
