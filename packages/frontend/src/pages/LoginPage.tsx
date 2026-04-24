@@ -12,23 +12,25 @@ import { startPlexPinFlow, type PlexPinFlowHandle } from '@/providers/plex/pinFl
 /** Validates a `?next=` query param. Returns the safe destination, or `null` if the value
  *  is missing, malformed, or points to a foreign origin (open-redirect protection).
  *
- *  Accepted shapes:
- *    - relative path  : `/foo`, `/api/bar?baz=1` (must start with a single `/`)
- *    - absolute URL   : matching `window.location.origin` exactly
- *
- *  Rejected shapes:
- *    - protocol-relative URLs (`//evil.com/…`) — would let an attacker phish
- *    - absolute URLs to other origins
- *    - anything that doesn't parse as a URL */
+ *  Implementation: parse every input through `new URL(raw, window.location.origin)` and
+ *  reject anything whose computed origin doesn't match. This catches the obvious foreign
+ *  hosts AND the WHATWG-normalised tricks browsers do behind the scenes:
+ *    - `//evil.com/…`     → URL parses to `http://evil.com/` → reject
+ *    - `/\evil.com`       → backslashes normalise to `/`, parses to `http://evil.com/` → reject
+ *    - `/\t//evil.com`    → tab/control-char tricks fall through the same way
+ *    - `data:` / `javascript:` URIs → wrong origin → reject
+ *  Relying on the URL parser instead of hand-rolled `startsWith` checks keeps us in lockstep
+ *  with the browser's own resolution, so anything `window.location.assign` would interpret
+ *  as foreign is what we reject. */
 function resolveSafeNext(raw: string | null): string | null {
   if (!raw) return null;
-  if (raw.startsWith('//')) return null;
-  if (raw.startsWith('/')) return raw;
   try {
-    const u = new URL(raw);
-    if (u.origin === window.location.origin) return u.pathname + u.search + u.hash;
-  } catch { /* fall through */ }
-  return null;
+    const u = new URL(raw, window.location.origin);
+    if (u.origin !== window.location.origin) return null;
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return null;
+  }
 }
 
 export default function LoginPage() {
@@ -85,7 +87,7 @@ export default function LoginPage() {
     if (dest) {
       window.location.assign(dest);
     } else {
-      redirectAfterLogin();
+      navigate('/', { replace: true });
     }
   };
 

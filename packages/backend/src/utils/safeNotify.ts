@@ -3,7 +3,8 @@ import { sendUserNotification as _sendUserNotification } from '../services/userN
 import { prisma } from './prisma.js';
 import { pluginEventBus } from '../plugins/eventBus.js';
 import { logEvent } from './logEvent.js';
-import type { PluginUserNotificationCreatedV1 } from '@oscarr/shared';
+import type { PluginUserNotificationCreatedV1, NotificationLocale } from '@oscarr/shared';
+import { renderNotificationTemplate } from '@oscarr/shared';
 
 let _siteUrl: string | null = null;
 let _siteUrlFetched = false;
@@ -49,42 +50,14 @@ async function getInstanceLanguage(): Promise<string> {
   return _instanceLang;
 }
 
-// ─── Notification i18n ──────────────────────────────────────────────
-//
-// Mirror of the `notifications.msg.*` + `notifications.title.*` keys from the frontend
-// translation bundles, vendored here so the backend can pre-translate the event-bus payload
-// without depending on the frontend at runtime. Keep this in sync with
-// packages/frontend/src/i18n/locales/<lang>/translation.json — five-ish keys, manual sync
-// is fine, and a typo would only fall back to the raw key.
-const NOTIF_I18N: Record<string, Record<string, string>> = {
-  en: {
-    'notifications.msg.request_auto_approved': 'Your request for "{{title}}" has been auto-approved.',
-    'notifications.msg.request_approved':      'Your request for "{{title}}" has been approved.',
-    'notifications.msg.request_declined':      'Your request for "{{title}}" has been declined.',
-    'notifications.msg.media_available':       '"{{title}}" is now available.',
-    'notifications.msg.support_reply':         'Reply on your ticket #{{ticketId}}',
-  },
-  fr: {
-    'notifications.msg.request_auto_approved': 'Votre demande pour "{{title}}" a été approuvée automatiquement.',
-    'notifications.msg.request_approved':      'Votre demande pour "{{title}}" a été approuvée.',
-    'notifications.msg.request_declined':      'Votre demande pour "{{title}}" a été refusée.',
-    'notifications.msg.media_available':       '"{{title}}" est maintenant disponible.',
-    'notifications.msg.support_reply':         'Réponse sur votre ticket #{{ticketId}}',
-  },
-};
-
+/** Translate a notification title/message field. Pass-through for literal strings (a raw
+ *  media title, etc.); only `notifications.*` keys go through the @oscarr/shared template
+ *  table that the frontend NotificationBell renders against — single source of truth, no
+ *  drift between backend pre-translation and frontend per-user-language render. */
 function translateNotif(value: string, lang: string, params: Record<string, unknown>): string {
-  // Only translate strings that look like our canonical i18n keys; everything else is
-  // already a literal title (e.g. a media title from the request flow) and should pass
-  // through untouched.
   if (!value.startsWith('notifications.')) return value;
-  const bundle = NOTIF_I18N[lang] ?? NOTIF_I18N.en;
-  const fallback = NOTIF_I18N.en;
-  const template = bundle[value] ?? fallback[value];
-  if (!template) return value; // unknown key — keep as-is so a typo is visible
-  return template.replace(/\{\{(\w+)\}\}/g, (_, k: string) => (
-    params[k] !== undefined ? String(params[k]) : `{{${k}}}`
-  ));
+  const locale: NotificationLocale = lang === 'fr' ? 'fr' : 'en';
+  return renderNotificationTemplate(value, locale, params);
 }
 
 /** Fire-and-forget notification — logs errors without crashing */
