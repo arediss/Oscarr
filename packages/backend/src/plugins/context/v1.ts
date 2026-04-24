@@ -6,7 +6,8 @@ import { scrubSecrets } from '../../utils/logScrubber.js';
 import { notificationRegistry } from '../../notifications/index.js';
 import type { NotificationPayload } from '../../notifications/types.js';
 import { sendUserNotification } from '../../services/userNotifications.js';
-import { getArrClient } from '../../providers/index.js';
+import { getArrClient, createArrClient } from '../../providers/index.js';
+import { getAllServices } from '../../utils/services.js';
 import type { ArrClient } from '../../providers/types.js';
 import { searchMulti, getMovieDetails, getTvDetails } from '../../services/tmdb.js';
 import { createUserRequest } from '../../services/requestService.js';
@@ -16,6 +17,7 @@ import type {
   PluginMediaRequest,
   PluginMediaBatchKey,
   PluginMediaBatchStatus,
+  PluginFolderRule,
 } from '@oscarr/shared';
 import { ACTIVE_REQUEST_STATUSES } from '@oscarr/shared';
 import {
@@ -324,8 +326,14 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
     // Stubs throw with a recognisable error so any accidental call before its phase lands
     // surfaces loudly instead of silently returning undefined.
 
-    async getArrClients(_serviceType: string): Promise<ArrClient[]> {
-      throw new Error('ctx.getArrClients: not implemented (Phase 2)');
+    async getArrClients(serviceType: string): Promise<ArrClient[]> {
+      // Pluriel of getArrClient: returns every enabled instance for the type. ACL check is
+      // shared with the singular form (services[] manifest declaration).
+      if (!checkServiceAccess(pluginId, allowedServices, serviceType, aclLogger)) {
+        throw new Error(`Plugin "${pluginId}" is not allowed to access service "${serviceType}" — declare it in manifest.services`);
+      }
+      const services = await getAllServices(serviceType);
+      return services.map(s => createArrClient(serviceType, s.config));
     },
     tmdb: {
       // `lang` omitted → backend's `normalizeLang` picks the instance default from AppSettings,
@@ -471,8 +479,31 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
         };
       },
     },
-    async listFolderRules(_options?) {
-      throw new Error('ctx.listFolderRules: not implemented (Phase 2)');
+    async listFolderRules(options?): Promise<PluginFolderRule[]> {
+      req('settings:app', 'listFolderRules');
+      const rows = await prisma.folderRule.findMany({
+        where: options?.enabled !== undefined ? { enabled: options.enabled } : undefined,
+        orderBy: { priority: 'asc' },
+      });
+      return rows.map((r): PluginFolderRule => ({
+        id: r.id,
+        name: r.name,
+        priority: r.priority,
+        mediaType: r.mediaType,
+        // conditions is stored as JSON string; parse here so the plugin API returns a real
+        // array (matching PluginFolderRule's shape). Defensive fallback: [] on malformed JSON
+        // — admin-typed data, but we'd rather return nothing than crash the plugin.
+        conditions: (() => {
+          try {
+            const parsed = JSON.parse(r.conditions);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch { return []; }
+        })(),
+        folderPath: r.folderPath,
+        seriesType: r.seriesType,
+        serviceId: r.serviceId,
+        enabled: r.enabled,
+      }));
     },
   };
 }

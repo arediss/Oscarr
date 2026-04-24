@@ -1,7 +1,9 @@
 import { prisma } from '../../utils/prisma.js';
 import { safeNotify, safeUserNotify } from '../../utils/safeNotify.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '@oscarr/shared';
+import type { PluginMediaAvailableV1 } from '@oscarr/shared';
 import { sendPushToUsers } from '../pushService.js';
+import { pluginEventBus } from '../../plugins/eventBus.js';
 
 export interface SyncResult {
   added: number;
@@ -29,6 +31,20 @@ export function sendAvailabilityNotifications(
 
     // External broadcast (Discord / Telegram / Email configured by admins)
     safeNotify('media_available', { title, mediaType, posterPath });
+
+    // Plugin event bus — broadcast form for plugins that want to push to a channel
+    // (e.g. "new drop!" Discord post). Per-user equivalent is already fired by
+    // safeUserNotify below via user.notification.created.
+    const event: PluginMediaAvailableV1 = {
+      v: 1,
+      mediaId,
+      tmdbId,
+      mediaType,
+      title,
+      posterPath,
+      requesterUserIds: [...new Set(requests.map(r => r.userId))],
+    };
+    pluginEventBus.emit('media.available', event).catch(err => console.error('[PluginEvent media.available] Failed:', err));
 
     // In-app bell — one per requester
     for (const req of requests) {
