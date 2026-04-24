@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hero progress bar fill — keyframe lives outside Tailwind so it works even on a cold
+   dev-server that hasn't reprocessed tailwind.preset.js yet. Matches the 8s auto-advance
+   interval in HomePage.tsx. */
+@keyframes heroProgress {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+
 @layer base {
   * {
     scrollbar-width: thin;

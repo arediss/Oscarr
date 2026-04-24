@@ -105,6 +105,10 @@ function HeroCarousel({ trending, loading }: { trending: TmdbMedia[]; loading: b
   const { t } = useTranslation();
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroVisible, setHeroVisible] = useState(true);
+  // `progressKey` remounts the active progress-bar fill on each advance/click so the CSS
+  // animation restarts from 0% — without this, cycling back to the same index leaves the
+  // old `animation: heroProgress` in its finished state.
+  const [progressKey, setProgressKey] = useState(0);
   const prevHeroRef = useRef(0);
   const scrollFadeRef = useRef<HTMLDivElement>(null);
 
@@ -126,6 +130,7 @@ function HeroCarousel({ trending, loading }: { trending: TmdbMedia[]; loading: b
       prevHeroRef.current = prev;
       return (prev + 1) % Math.min(trending.length, 5);
     });
+    setProgressKey((k) => k + 1);
     setHeroVisible(true);
   }, [trending.length]);
 
@@ -145,6 +150,7 @@ function HeroCarousel({ trending, loading }: { trending: TmdbMedia[]; loading: b
     setTimeout(() => {
       prevHeroRef.current = heroIndex;
       setHeroIndex(i);
+      setProgressKey((k) => k + 1);
       setHeroVisible(true);
     }, 400);
   };
@@ -234,16 +240,34 @@ function HeroCarousel({ trending, loading }: { trending: TmdbMedia[]; loading: b
               </div>
             </div>
 
-            {/* Hero dots */}
-            <div className="flex gap-2 mt-6">
+            {/* Hero progress bars — Instagram-stories style: equal-width traits, the active
+                one fills over the 8s auto-advance interval, past ones stay full, future ones
+                empty. Click jumps + restarts the animation on the new active bar. */}
+            <div className="flex gap-1.5 mt-6 w-48">
               {trending.slice(0, 5).map((_, i) => (
                 <button
                   key={i}
                   onClick={() => changeHero(i)}
-                  className={`h-2 rounded-full transition-all duration-500 ${
-                    i === heroIndex ? 'bg-ndp-accent w-6' : 'bg-white/30 hover:bg-white/50 w-2'
-                  }`}
-                />
+                  aria-label={t('home.goto_slide', { n: i + 1 })}
+                  className="relative flex-1 h-1.5 rounded-full bg-white/20 hover:bg-white/30 overflow-hidden transition-colors"
+                >
+                  {i === heroIndex ? (
+                    // `progressKey` forces a fresh mount on each advance/click so the
+                    // heroProgress keyframe restarts from 0%. Inline animation declaration
+                    // (not a Tailwind class) so it works regardless of whether the dev
+                    // server has picked up the preset's animation entry.
+                    <div
+                      key={progressKey}
+                      className="absolute inset-y-0 left-0 bg-ndp-accent"
+                      style={{ width: '0%', animation: 'heroProgress 8s linear forwards' }}
+                    />
+                  ) : (
+                    <div
+                      className="absolute inset-y-0 left-0 bg-ndp-accent"
+                      style={{ width: i < heroIndex ? '100%' : '0%' }}
+                    />
+                  )}
+                </button>
               ))}
             </div>
           </div>

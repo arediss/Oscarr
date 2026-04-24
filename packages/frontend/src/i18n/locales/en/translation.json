@@ -122,6 +122,7 @@
   "genre.unknown": "Unknown genre",
   "home.trending_type": "{{type}} trending",
   "home.more_info": "More info",
+  "home.goto_slide": "Go to slide {{n}}",
   "home.recently_added": "Recently added",
   "home.trending_week": "Trending this week",
   "home.popular_movies": "Popular movies",
