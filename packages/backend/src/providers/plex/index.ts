@@ -217,7 +217,7 @@ export const plexProvider: Provider = {
   service: {
     id: 'plex',
     label: 'Plex',
-    icon: 'https://www.vectorlogo.zone/logos/plextv/plextv-tile.svg',
+    icon: '/providers/plex.svg',
     category: 'media-server',
     fields: [
       { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:32400' },

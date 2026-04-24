@@ -6,7 +6,7 @@ export const radarrProvider: Provider = {
   service: {
     id: 'radarr',
     label: 'Radarr',
-    icon: 'https://raw.githubusercontent.com/NX211/homer-icons/b005204c18b7bf2c4cdbc1009b6d98dab65b7517/svg/radarr.svg',
+    icon: '/providers/radarr.svg',
     category: 'arr',
     handlesMediaTypes: ['movie'],
     fields: [

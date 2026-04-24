@@ -6,7 +6,7 @@ export const sonarrProvider: Provider = {
   service: {
     id: 'sonarr',
     label: 'Sonarr',
-    icon: 'https://raw.githubusercontent.com/NX211/homer-icons/b005204c18b7bf2c4cdbc1009b6d98dab65b7517/svg/sonarr-radarr.svg',
+    icon: '/providers/sonarr.svg',
     category: 'arr',
     handlesMediaTypes: ['tv'],
     fields: [
