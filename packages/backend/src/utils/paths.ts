@@ -21,4 +21,8 @@ export const PROJECT_ROOT = resolve(BACKEND_ROOT, '../..');
 export const PROJECT_PACKAGE_JSON = resolve(PROJECT_ROOT, 'package.json');
 export const PROJECT_ENV_FILE = resolve(PROJECT_ROOT, '.env');
 export const FRONTEND_DIST = resolve(PROJECT_ROOT, 'packages/frontend/dist');
-export const PLUGINS_DIR = resolve(PROJECT_ROOT, 'plugins');
+// packages/plugins sits next to packages/{backend,frontend,shared} — one directory per
+// plugin (symlinks in dev, real folders when hot-installed by the engine). Kept here rather
+// than at PROJECT_ROOT/plugins to match the monorepo layout and the existing `.gitignore`
+// ignore rule developers already have in place.
+export const PLUGINS_DIR = resolve(BACKEND_ROOT, '../plugins');

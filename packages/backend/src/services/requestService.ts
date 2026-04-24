@@ -6,6 +6,8 @@ import { logEvent } from '../utils/logEvent.js';
 import { getServiceById, getAllServices } from '../utils/services.js';
 import { VALID_MEDIA_TYPES } from '../utils/params.js';
 import { ACTIVE_REQUEST_STATUSES, COMPLETABLE_REQUEST_STATUSES } from '@oscarr/shared';
+import { safeNotify, safeUserNotify, buildSiteLink } from '../utils/safeNotify.js';
+import { pluginEngine } from '../plugins/engine.js';
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -230,6 +232,150 @@ export async function sendToService(
     logEvent('error', 'Request', `Failed to send "${media.title}" to ${getServiceTypeForMedia(mediaType)}: ${String(err)}`);
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Create-request pipeline (shared by POST /api/requests and ctx.requests.create)
+// ---------------------------------------------------------------------------
+
+/** Tagged union describing every way a request-create attempt can fail. The HTTP layer maps
+ *  each `status` to its response code; the plugin context just exposes `{ ok, code, error }`.
+ *  Extending with a new failure mode means adding one variant + its mapping — callers stay
+ *  exhaustive via the discriminant. */
+export type CreateRequestResult =
+  | { ok: true; status: 201 | 202; request: Awaited<ReturnType<typeof prisma.mediaRequest.create>>; sendFailed?: boolean }
+  | { ok: false; status: 400; code: 'INVALID_INPUT'; error: string }
+  | { ok: false; status: 403; code: 'BLOCKED_BY_GUARD'; error: string }
+  | { ok: false; status: 403; code: 'BLACKLISTED'; error: string }
+  | { ok: false; status: 409; code: 'DUPLICATE'; error: string }
+  | { ok: false; status: 403; code: 'QUALITY_NOT_ALLOWED'; error: string };
+
+export interface CreateRequestInput {
+  userId: number;
+  tmdbId: unknown;
+  mediaType: unknown;
+  seasons?: unknown;
+  rootFolder?: string;
+  qualityOptionId?: number;
+  /** When true, the pluginGuard pass is skipped even for non-admins. Used by
+   *  `ctx.requests.create` when the plugin author explicitly wants to avoid triggering other
+   *  plugins' `request.create` guards (which could loop if the calling plugin is itself a
+   *  guard owner). Defaults to false — HTTP route always runs guards for non-admins. */
+  skipPluginGuard?: boolean;
+}
+
+/** Unified create-request pipeline: validation → pluginGuard → blacklist → findOrCreateMedia
+ *  → dedup → quality gate → row create → sendToService (if autoApproved) → status flip →
+ *  safeNotify / safeUserNotify / logEvent. Shared by the HTTP handler and the plugin context
+ *  so the two paths cannot drift. */
+export async function createUserRequest(input: CreateRequestInput): Promise<CreateRequestResult> {
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { id: true, role: true, displayName: true },
+  });
+  if (!user) {
+    return { ok: false, status: 400, code: 'INVALID_INPUT', error: `User ${input.userId} not found` };
+  }
+
+  const validation = validateRequestBody({ tmdbId: input.tmdbId, mediaType: input.mediaType, seasons: input.seasons });
+  if (!validation.valid) {
+    return { ok: false, status: 400, code: 'INVALID_INPUT', error: validation.error };
+  }
+  const { tmdbId, mediaType, seasons: validSeasons } = validation;
+
+  if (user.role !== 'admin' && !input.skipPluginGuard) {
+    const guardResult = await pluginEngine.runGuards('request.create', user.id);
+    if (guardResult?.blocked) {
+      return { ok: false, status: (guardResult.statusCode || 403) as 403, code: 'BLOCKED_BY_GUARD', error: guardResult.error || 'Request blocked by plugin guard' };
+    }
+  }
+
+  const bl = await isBlacklisted(tmdbId, mediaType);
+  if (bl.blacklisted) {
+    return { ok: false, status: 403, code: 'BLACKLISTED', error: bl.reason || 'This media has been blocked by an administrator.' };
+  }
+
+  const media = await findOrCreateMedia(tmdbId, mediaType);
+
+  const existing = await prisma.mediaRequest.findFirst({
+    where: { mediaId: media.id, userId: user.id, status: { in: [...ACTIVE_REQUEST_STATUSES] } },
+  });
+  if (existing) {
+    return { ok: false, status: 409, code: 'DUPLICATE', error: 'You already have an active request for this media' };
+  }
+
+  const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+  let shouldAutoApprove = user.role === 'admin' || (settings?.autoApproveRequests ?? false);
+  if (input.qualityOptionId != null) {
+    const qualityOpt = await prisma.qualityOption.findUnique({ where: { id: input.qualityOptionId } });
+    if (qualityOpt?.allowedRoles && user.role !== 'admin') {
+      try {
+        const roles = JSON.parse(qualityOpt.allowedRoles) as string[];
+        if (roles.length > 0 && !roles.includes(user.role)) {
+          return { ok: false, status: 403, code: 'QUALITY_NOT_ALLOWED', error: 'QUALITY_NOT_ALLOWED' };
+        }
+      } catch (err) {
+        // Historical HTTP behaviour was permissive here, but silently opening a role-gated
+        // quality option on corrupt `allowedRoles` JSON is an ACL-bypass footgun. Keep the
+        // permissive fallback for compat, but surface the corruption so an admin can fix
+        // the bad row instead of learning about it via unexpected approvals.
+        logEvent('error', 'Request', `Malformed allowedRoles JSON on qualityOption ${input.qualityOptionId} — permissive fallback engaged: ${String(err)}`);
+      }
+    }
+    if (qualityOpt?.approvalMode === 'auto') shouldAutoApprove = true;
+    else if (qualityOpt?.approvalMode === 'manual') shouldAutoApprove = user.role === 'admin';
+  }
+
+  const mediaRequest = await prisma.mediaRequest.create({
+    data: {
+      mediaId: media.id,
+      userId: user.id,
+      mediaType,
+      seasons: validSeasons ? JSON.stringify(validSeasons) : null,
+      rootFolder: typeof input.rootFolder === 'string' ? input.rootFolder : null,
+      qualityOptionId: input.qualityOptionId ?? null,
+      status: shouldAutoApprove ? 'approved' : 'pending',
+      approvedById: shouldAutoApprove ? user.id : null,
+    },
+    include: { media: true, user: { select: { id: true, displayName: true, avatar: true } } },
+  });
+
+  let sendFailed = false;
+  if (shouldAutoApprove) {
+    const tagName = await getUserTagName(user.id);
+    const sent = await sendToService(media, mediaType, tagName, user.id, validSeasons, input.qualityOptionId);
+    if (sent) {
+      // Flip to 'searching' so the UI shows progress; preserve 'available' (quality-upgrade
+      // request) and 'processing' (TV partial — keep "request rest" CTA visible).
+      if (media.status !== 'available' && media.status !== 'processing') {
+        await prisma.media.update({
+          where: { id: media.id },
+          data: { status: 'searching' },
+        }).catch((err) => {
+          // The request row is already created, so this is observably non-fatal — but a
+          // silent swallow masks the "UI stuck on pending because DB update failed" class
+          // of bug (connection pool exhaustion, P2025 race with a delete, schema drift).
+          // Surface it to AppLog so the admin has a breadcrumb when support tickets come in.
+          logEvent('warn', 'Request', `Status-flip to 'searching' failed for media ${media.id} (request ${mediaRequest.id}): ${String(err)}`);
+        });
+      }
+    } else {
+      await prisma.mediaRequest.update({ where: { id: mediaRequest.id }, data: { status: 'failed' } });
+      sendFailed = true;
+    }
+  }
+
+  const username = user.displayName || 'User';
+  const mediaUrl = await buildSiteLink(`/${mediaType}/${media.tmdbId}`);
+  safeNotify('request_new', { title: media.title, mediaType, username, posterPath: media.posterPath, tmdbId: media.tmdbId, url: mediaUrl });
+  if (shouldAutoApprove && !sendFailed) {
+    safeUserNotify(user.id, { type: 'request_approved', title: media.title, message: 'notifications.msg.request_auto_approved', metadata: { mediaId: media.id, tmdbId: media.tmdbId, mediaType, posterPath: media.posterPath, msgParams: { title: media.title } } });
+  }
+  logEvent('info', 'Request', `${username} requested "${media.title}"`);
+
+  return sendFailed
+    ? { ok: true, status: 202, request: mediaRequest, sendFailed: true }
+    : { ok: true, status: 201, request: mediaRequest };
 }
 
 // ---------------------------------------------------------------------------

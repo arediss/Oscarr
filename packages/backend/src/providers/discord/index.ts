@@ -116,7 +116,13 @@ const discordAuth: AuthProvider = {
         try {
           await request.jwtVerify();
         } catch {
-          return reply.status(401).send({ error: 'Login required to link' });
+          // Plug-and-play UX: a logged-out user clicking a /link deep link (e.g. from a
+          // Discord bot plugin's "Link your account" button) shouldn't get a raw 401 JSON
+          // — bounce them through Oscarr's login page with `?next=<this URL>`. After auth,
+          // the LoginPage redirects them back here and the JWT cookie is now present, so
+          // jwtVerify succeeds and the link flow completes.
+          const fullUrl = request.url; // includes /api/auth/discord/authorize?action=link
+          return reply.redirect(`/login?next=${encodeURIComponent(fullUrl)}`);
         }
         userId = (request.user as { id: number }).id;
       }

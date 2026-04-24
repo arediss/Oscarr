@@ -269,7 +269,7 @@ export class RadarrClient implements ArrClient {
   }
 
   parseWebhookPayload(body: unknown): ArrWebhookEvent | null {
-    const payload = body as { eventType?: string; movie?: { tmdbId?: number; title?: string } };
+    const payload = body as { eventType?: string; movie?: { id?: number; tmdbId?: number; title?: string } };
     if (!payload.eventType) return null;
     // Test event has no movie data
     if (payload.eventType === 'Test') return { type: 'test', externalId: 0, title: 'Test' };
@@ -278,6 +278,7 @@ export class RadarrClient implements ArrClient {
     return {
       type: typeMap[payload.eventType] || 'unknown',
       externalId: payload.movie.tmdbId,
+      internalId: payload.movie.id,
       title: payload.movie.title || 'Unknown',
     };
   }

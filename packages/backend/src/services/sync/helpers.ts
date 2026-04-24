@@ -1,7 +1,10 @@
 import { prisma } from '../../utils/prisma.js';
 import { safeNotify, safeUserNotify } from '../../utils/safeNotify.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '@oscarr/shared';
+import type { PluginMediaAvailableV1 } from '@oscarr/shared';
 import { sendPushToUsers } from '../pushService.js';
+import { pluginEventBus } from '../../plugins/eventBus.js';
+import { logEvent } from '../../utils/logEvent.js';
 
 export interface SyncResult {
   added: number;
@@ -30,18 +33,41 @@ export function sendAvailabilityNotifications(
     // External broadcast (Discord / Telegram / Email configured by admins)
     safeNotify('media_available', { title, mediaType, posterPath });
 
-    // In-app bell — one per requester
-    for (const req of requests) {
-      safeUserNotify(req.userId, {
+    // Plugin event bus — broadcast form for plugins that want to push to a channel
+    // (e.g. "new drop!" Discord post). Per-user equivalent is already fired by
+    // safeUserNotify below via user.notification.created.
+    const event: PluginMediaAvailableV1 = {
+      v: 1,
+      mediaId,
+      tmdbId,
+      mediaType,
+      title,
+      posterPath,
+      requesterUserIds: [...new Set(requests.map(r => r.userId))],
+    };
+    pluginEventBus.emit('media.available', event).catch(err => {
+      logEvent('error', 'PluginEvent', `Subscriber of 'media.available' threw: ${String(err)}`);
+    });
+
+    // In-app bell + plugin event bus — one per **distinct** requester. A user with
+    // multiple matching requests on the same media (collection + standalone, re-request
+    // after a 'failed', etc.) was getting N copies of the same DM/notification because
+    // the loop iterated every row instead of deduping. Web push already handled this
+    // correctly below; bell now does too.
+    const userIds = [...new Set(requests.map(r => r.userId))];
+    for (const userId of userIds) {
+      safeUserNotify(userId, {
         type: 'media_available',
         title,
         message: 'notifications.msg.media_available',
-        metadata: { mediaId, tmdbId, mediaType, msgParams: { title } },
+        // posterPath here is forwarded into PluginUserNotificationCreatedV1.metadata so
+        // plugin subscribers (Leonarr Discord embed, etc.) can build a rich card without
+        // a second TMDB round-trip.
+        metadata: { mediaId, tmdbId, mediaType, posterPath, msgParams: { title } },
       });
     }
 
-    // Web push — deduped per user
-    const userIds = [...new Set(requests.map(r => r.userId))];
+    // Web push — already deduped per user via the same Set.
     const icon = posterPath ? `https://image.tmdb.org/t/p/w200${posterPath}` : undefined;
     // Fall back to /requests when the media has no real TMDB id yet
     // (e.g. webhook-imported TV series stored with negative tmdbId).
