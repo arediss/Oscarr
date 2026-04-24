@@ -8,6 +8,8 @@ import type { NotificationPayload } from '../../notifications/types.js';
 import { sendUserNotification } from '../../services/userNotifications.js';
 import { getArrClient } from '../../providers/index.js';
 import type { ArrClient } from '../../providers/types.js';
+import { searchMulti, getMovieDetails, getTvDetails } from '../../services/tmdb.js';
+import type { PluginTmdbSearchPage } from '@oscarr/shared';
 import {
   registerRoutePermission as rbacRegisterRoute,
   registerPluginPermission as rbacRegisterPermission,
@@ -318,17 +320,21 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       throw new Error('ctx.getArrClients: not implemented (Phase 2)');
     },
     tmdb: {
-      async search(_query: string) {
+      // `lang` omitted → backend's `normalizeLang` picks the instance default from AppSettings,
+      // so plugins get locale-consistent metadata out of the box. Responses are cached 1h
+      // (search) / 24h (details) by tmdb.ts — plugins don't need their own cache.
+      async search(query: string, options?: { page?: number; lang?: string }): Promise<PluginTmdbSearchPage> {
         req('tmdb:read', 'tmdb.search');
-        throw new Error('ctx.tmdb.search: not implemented (Phase 1 P2)');
+        const data = await searchMulti(query, options?.page ?? 1, options?.lang);
+        return data as PluginTmdbSearchPage;
       },
-      async movie(_tmdbId: number) {
+      async movie(tmdbId: number, options?: { lang?: string }) {
         req('tmdb:read', 'tmdb.movie');
-        throw new Error('ctx.tmdb.movie: not implemented (Phase 1 P2)');
+        return getMovieDetails(tmdbId, options?.lang);
       },
-      async tv(_tmdbId: number) {
+      async tv(tmdbId: number, options?: { lang?: string }) {
         req('tmdb:read', 'tmdb.tv');
-        throw new Error('ctx.tmdb.tv: not implemented (Phase 1 P2)');
+        return getTvDetails(tmdbId, options?.lang);
       },
     },
     media: {
