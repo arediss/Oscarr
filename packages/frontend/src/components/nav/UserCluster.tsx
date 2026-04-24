@@ -149,22 +149,29 @@ export function UserCluster({
             </div>
           )}
 
-          <div className="px-4 py-2.5 border-t border-white/5">
-            <div className="flex items-center gap-2.5">
-              <Globe className="w-4 h-4 text-ndp-text-dim flex-shrink-0" />
-              <select
-                value={i18n.language.split('-')[0]}
-                onChange={(e) => i18n.changeLanguage(e.target.value)}
-                className="flex-1 bg-white/5 border border-white/10 rounded-lg text-sm text-ndp-text px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-ndp-accent/40 cursor-pointer appearance-none"
-              >
-                {Object.keys(i18n.options.resources || {}).map((code) => (
-                  <option key={code} value={code}>
-                    {new Intl.DisplayNames([code], { type: 'language' }).of(code)}
-                  </option>
-                ))}
-              </select>
+          {/* Per-user language switch is dev-only. In prod the UI language follows the
+              instance-wide `instanceLanguages` setting (admin > Instance) so TMDB metadata is
+              pulled once in the right language and every user sees the same UI copy. Keeping
+              the switcher under `import.meta.env.DEV` preserves the i18n workflow locally —
+              translators still need to hot-swap locales without restarting the dev server. */}
+          {import.meta.env.DEV && (
+            <div className="px-4 py-2.5 border-t border-white/5">
+              <div className="flex items-center gap-2.5">
+                <Globe className="w-4 h-4 text-ndp-text-dim flex-shrink-0" />
+                <select
+                  value={i18n.language.split('-')[0]}
+                  onChange={(e) => i18n.changeLanguage(e.target.value)}
+                  className="flex-1 bg-white/5 border border-white/10 rounded-lg text-sm text-ndp-text px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-ndp-accent/40 cursor-pointer appearance-none"
+                >
+                  {Object.keys(i18n.options.resources || {}).map((code) => (
+                    <option key={code} value={code}>
+                      {new Intl.DisplayNames([code], { type: 'language' }).of(code)}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
+          )}
 
           <PluginSlot hookPoint="avatar.menu" context={{ user, isAdmin: hasPermission('admin.*'), hasPermission }} />
 
