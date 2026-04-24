@@ -369,7 +369,7 @@ export async function createUserRequest(input: CreateRequestInput): Promise<Crea
   const mediaUrl = await buildSiteLink(`/${mediaType}/${media.tmdbId}`);
   safeNotify('request_new', { title: media.title, mediaType, username, posterPath: media.posterPath, tmdbId: media.tmdbId, url: mediaUrl });
   if (shouldAutoApprove && !sendFailed) {
-    safeUserNotify(user.id, { type: 'request_approved', title: media.title, message: 'notifications.msg.request_auto_approved', metadata: { mediaId: media.id, tmdbId: media.tmdbId, mediaType, msgParams: { title: media.title } } });
+    safeUserNotify(user.id, { type: 'request_approved', title: media.title, message: 'notifications.msg.request_auto_approved', metadata: { mediaId: media.id, tmdbId: media.tmdbId, mediaType, posterPath: media.posterPath, msgParams: { title: media.title } } });
   }
   logEvent('info', 'Request', `${username} requested "${media.title}"`);
 
