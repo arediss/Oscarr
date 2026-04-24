@@ -57,6 +57,11 @@ export interface ArrEpisode {
 export interface ArrWebhookEvent {
   type: 'download' | 'grab' | 'added' | 'deleted' | 'test' | 'unknown';
   externalId: number;
+  /** *arr-internal id for the movie/series (Radarr's `movie.id`, Sonarr's `series.id`).
+   *  Persisted on the matching Media row as `radarrId` / `sonarrId` — the home's
+   *  "Recently added" query filters on those, so without it a webhook-only flow (admin
+   *  disables the sync job) leaves freshly-available media invisible on the home. */
+  internalId?: number;
   title: string;
   seasonNumber?: number;
   episodeNumber?: number;

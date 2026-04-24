@@ -306,7 +306,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <>
       {ADMIN_GROUPS.map(renderGroupButton)}
       {pluginTabItems.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-white/5">
+        <div className="!mt-3 pt-3 border-t border-white/5">
           <p className="text-[10px] text-ndp-text-dim uppercase tracking-wider px-3 mb-3 font-semibold">
             {pluginGroupLabel}
           </p>

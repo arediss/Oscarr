@@ -6,7 +6,20 @@ import { scrubSecrets } from '../../utils/logScrubber.js';
 import { notificationRegistry } from '../../notifications/index.js';
 import type { NotificationPayload } from '../../notifications/types.js';
 import { sendUserNotification } from '../../services/userNotifications.js';
-import { getArrClient } from '../../providers/index.js';
+import { getArrClient, createArrClient } from '../../providers/index.js';
+import { getAllServices } from '../../utils/services.js';
+import type { ArrClient } from '../../providers/types.js';
+import { searchMulti, getMovieDetails, getTvDetails } from '../../services/tmdb.js';
+import { createUserRequest } from '../../services/requestService.js';
+import type {
+  PluginTmdbSearchPage,
+  PluginMedia,
+  PluginMediaRequest,
+  PluginMediaBatchKey,
+  PluginMediaBatchStatus,
+  PluginFolderRule,
+} from '@oscarr/shared';
+import { ACTIVE_REQUEST_STATUSES } from '@oscarr/shared';
 import {
   registerRoutePermission as rbacRegisterRoute,
   registerPluginPermission as rbacRegisterPermission,
@@ -163,14 +176,21 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       req('users:read', 'getUser');
       return prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, email: true, displayName: true, role: true },
+        select: { id: true, email: true, displayName: true, role: true, avatar: true },
+      });
+    },
+    async findUserByEmail(email: string) {
+      req('users:read', 'findUserByEmail');
+      return prisma.user.findUnique({
+        where: { email },
+        select: { id: true, email: true, displayName: true, role: true, avatar: true },
       });
     },
     async findUserByProvider(provider: string, providerId: string) {
       req('users:read', 'findUserByProvider');
       const link = await prisma.userProvider.findUnique({
         where: { provider_providerId: { provider, providerId } },
-        include: { user: { select: { id: true, email: true, displayName: true, role: true } } },
+        include: { user: { select: { id: true, email: true, displayName: true, role: true, avatar: true } } },
       });
       return link?.user ?? null;
     },
@@ -298,6 +318,239 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
         req('events', 'events.emit');
         return pluginEventBus.emit(event, data);
       },
+    },
+
+    // ─── v1.1 additions — stubs filled in by subsequent phase commits ───
+    // Each method here is a typed placeholder so the `PluginContext` type is satisfied; the
+    // real implementation lands in the corresponding phase (see feat/plugin-ctx-v1.1 PR).
+    // Stubs throw with a recognisable error so any accidental call before its phase lands
+    // surfaces loudly instead of silently returning undefined.
+
+    async getArrClients(serviceType: string): Promise<ArrClient[]> {
+      // Pluriel of getArrClient: returns every enabled instance for the type. ACL check is
+      // shared with the singular form (services[] manifest declaration).
+      if (!checkServiceAccess(pluginId, allowedServices, serviceType, aclLogger)) {
+        throw new Error(`Plugin "${pluginId}" is not allowed to access service "${serviceType}" — declare it in manifest.services`);
+      }
+      const services = await getAllServices(serviceType);
+      return services.map(s => createArrClient(serviceType, s.config));
+    },
+    tmdb: {
+      // `lang` omitted → backend's `normalizeLang` picks the instance default from AppSettings,
+      // so plugins get locale-consistent metadata out of the box. Responses are cached 1h
+      // (search) / 24h (details) by tmdb.ts — plugins don't need their own cache.
+      async search(query: string, options?: { page?: number; lang?: string }): Promise<PluginTmdbSearchPage> {
+        req('tmdb:read', 'tmdb.search');
+        const data = await searchMulti(query, options?.page ?? 1, options?.lang);
+        return data as PluginTmdbSearchPage;
+      },
+      async movie(tmdbId: number, options?: { lang?: string }) {
+        req('tmdb:read', 'tmdb.movie');
+        return getMovieDetails(tmdbId, options?.lang);
+      },
+      async tv(tmdbId: number, options?: { lang?: string }) {
+        req('tmdb:read', 'tmdb.tv');
+        return getTvDetails(tmdbId, options?.lang);
+      },
+    },
+    media: {
+      async batchStatus(items, userId) {
+        req('requests:read', 'media.batchStatus');
+        if (items.length === 0) return {};
+        // Hard cap to prevent a bug (or malicious plugin) from generating a 10k-clause OR
+        // query that would pin SQLite's parser. Mirrors the `listForUser` pattern (max 200).
+        if (items.length > 500) {
+          throw new Error(`ctx.media.batchStatus: items length ${items.length} exceeds the 500 cap — slice your list or filter upstream`);
+        }
+        // Two-pass query so we don't fetch the whole Media table:
+        // 1. One findMany on the union of (tmdbId,mediaType) pairs → media status per item.
+        // 2. One findMany on MediaRequest filtered by userId + the same media ids → user state.
+        // This replaces an N+1 pattern a plugin would otherwise hit (loop per item calling
+        // getMediaByTmdb).
+        const mediaRows = await prisma.media.findMany({
+          where: {
+            OR: items.map(i => ({ tmdbId: i.tmdbId, mediaType: i.mediaType })),
+          },
+          select: { id: true, tmdbId: true, mediaType: true, status: true },
+        });
+        const mediaByKey = new Map<string, { id: number; status: string }>();
+        for (const m of mediaRows) mediaByKey.set(`${m.mediaType}:${m.tmdbId}`, { id: m.id, status: m.status });
+
+        const userRequestsByMediaId = new Map<number, string>();
+        if (userId !== undefined && mediaRows.length > 0) {
+          const reqs = await prisma.mediaRequest.findMany({
+            where: {
+              userId,
+              mediaId: { in: mediaRows.map(m => m.id) },
+              status: { in: [...ACTIVE_REQUEST_STATUSES] },
+            },
+            select: { mediaId: true, status: true },
+            orderBy: { createdAt: 'desc' },
+          });
+          // Keep the most recent active request per media (orderBy desc + Map.set overwrites).
+          for (const r of reqs) {
+            if (!userRequestsByMediaId.has(r.mediaId)) userRequestsByMediaId.set(r.mediaId, r.status);
+          }
+        }
+
+        const out: Record<PluginMediaBatchKey, PluginMediaBatchStatus> = {};
+        for (const item of items) {
+          const key: PluginMediaBatchKey = `${item.mediaType}:${item.tmdbId}`;
+          const m = mediaByKey.get(key);
+          const userStatus = m ? userRequestsByMediaId.get(m.id) ?? null : null;
+          out[key] = {
+            status: m?.status ?? 'unknown',
+            userRequestStatus: userStatus,
+            userHasActiveRequest: userStatus !== null,
+          };
+        }
+        return out;
+      },
+      async getById(mediaId: number) {
+        req('requests:read', 'media.getById');
+        const row = await prisma.media.findUnique({
+          where: { id: mediaId },
+          select: { id: true, tmdbId: true, tvdbId: true, mediaType: true, title: true, posterPath: true, status: true },
+        });
+        if (!row) return null;
+        return {
+          id: row.id,
+          tmdbId: row.tmdbId,
+          tvdbId: row.tvdbId,
+          mediaType: row.mediaType as 'movie' | 'tv',
+          title: row.title,
+          posterPath: row.posterPath,
+          status: row.status,
+        } satisfies PluginMedia;
+      },
+    },
+    requests: {
+      async listForUser(userId: number, options?: { limit?: number; status?: string }) {
+        req('requests:read', 'requests.listForUser');
+        const limit = Math.min(Math.max(options?.limit ?? 50, 1), 200);
+        const rows = await prisma.mediaRequest.findMany({
+          where: {
+            userId,
+            ...(options?.status ? { status: options.status } : {}),
+          },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          select: {
+            id: true, userId: true, mediaType: true, seasons: true, status: true, createdAt: true,
+            media: { select: { id: true, tmdbId: true, tvdbId: true, mediaType: true, title: true, posterPath: true, status: true } },
+          },
+        });
+        return rows.map((r): PluginMediaRequest => ({
+          id: r.id,
+          userId: r.userId,
+          mediaType: r.mediaType as 'movie' | 'tv',
+          seasons: r.seasons ? (JSON.parse(r.seasons) as number[]) : null,
+          status: r.status,
+          createdAt: r.createdAt.toISOString(),
+          media: {
+            id: r.media.id,
+            tmdbId: r.media.tmdbId,
+            tvdbId: r.media.tvdbId,
+            mediaType: r.media.mediaType as 'movie' | 'tv',
+            title: r.media.title,
+            posterPath: r.media.posterPath,
+            status: r.media.status,
+          },
+        }));
+      },
+      async create(input) {
+        req('requests:write', 'requests.create');
+        // Runtime validation at the boundary — TypeScript only guards compile-time callers,
+        // but plugins load plain JS from disk and can pass anything. Catch obvious garbage
+        // here rather than forwarding NaN into Prisma where the error becomes opaque.
+        if (!Number.isInteger(input?.userId) || (input.userId as number) < 1) {
+          return { ok: false, code: 'INVALID_INPUT', error: 'userId must be a positive integer' };
+        }
+        // Delegates to the same createUserRequest pipeline the HTTP route uses — pluginGuard
+        // + blacklist + dedup + quality gate + sendToService + safeNotify all honoured.
+        // Target user's role (loaded from DB inside createUserRequest) drives auto-approve;
+        // plugins cannot escalate by passing a userId they don't "own" — they always act as
+        // that user would act via the HTTP API.
+        const result = await createUserRequest({
+          userId: input.userId,
+          tmdbId: input.tmdbId,
+          mediaType: input.mediaType,
+          seasons: input.seasons,
+          rootFolder: input.rootFolder,
+          qualityOptionId: input.qualityOptionId,
+          skipPluginGuard: input.skipPluginGuard,
+        });
+        if (!result.ok) return { ok: false, code: result.code, error: result.error };
+        return {
+          ok: true,
+          requestId: result.request.id,
+          status: result.request.status,
+          autoApproved: result.request.status === 'approved' || result.request.status === 'searching',
+          sendFailed: result.sendFailed,
+        };
+      },
+    },
+    app: {
+      async internalFetch(path, init) {
+        // Resolve port once per call — PORT is set at boot by index.ts, no caching needed.
+        // The CSRF gate (@fastify/helmet + x-requested-with check on mutations) passes because
+        // we always set the marker header; RBAC enforcement is the target route's job.
+        const port = process.env.PORT || '3001';
+        const base = `http://localhost:${port}`;
+        const url = base + (path.startsWith('/') ? path : `/${path}`);
+        const headers: Record<string, string> = {
+          'x-requested-with': 'oscarr',
+          ...init?.headers,
+        };
+        if (init?.asUserId !== undefined) {
+          const user = await prisma.user.findUnique({
+            where: { id: init.asUserId },
+            select: { id: true, email: true, role: true },
+          });
+          if (!user) throw new Error(`internalFetch asUserId=${init.asUserId}: user not found`);
+          // `token` is the cookie name set by routes/auth.ts + read by @fastify/jwt's
+          // cookie extractor (bootstrap/security.ts). Minting via signAuthToken keeps the
+          // plugin path identical to a normal login from RBAC's perspective.
+          const jwt = deps.signAuthToken({ id: user.id, email: user.email, role: user.role });
+          headers.cookie = `token=${jwt}`;
+        }
+        let body: BodyInit | undefined;
+        if (init?.body !== undefined) {
+          if (typeof init.body === 'string' || init.body instanceof Uint8Array || init.body instanceof URLSearchParams) {
+            body = init.body as BodyInit;
+          } else {
+            body = JSON.stringify(init.body);
+            if (!headers['content-type']) headers['content-type'] = 'application/json';
+          }
+        }
+        return fetch(url, { method: init?.method ?? 'GET', headers, body });
+      },
+    },
+    async listFolderRules(options?): Promise<PluginFolderRule[]> {
+      req('settings:app', 'listFolderRules');
+      const rows = await prisma.folderRule.findMany({
+        where: options?.enabled !== undefined ? { enabled: options.enabled } : undefined,
+        orderBy: { priority: 'asc' },
+      });
+      return rows.map((r): PluginFolderRule => ({
+        id: r.id,
+        name: r.name,
+        priority: r.priority,
+        mediaType: r.mediaType,
+        // conditions is stored as JSON string; parse here so the plugin API returns a real
+        // array (matching PluginFolderRule's shape). Defensive fallback: [] on malformed JSON
+        // — admin-typed data, but we'd rather return nothing than crash the plugin.
+        conditions: (() => {
+          try {
+            const parsed = JSON.parse(r.conditions);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch { return []; }
+        })(),
+        folderPath: r.folderPath,
+        seriesType: r.seriesType,
+        serviceId: r.serviceId,
+        enabled: r.enabled,
+      }));
     },
   };
 }

@@ -310,21 +310,33 @@ export function register(ctx: PluginContext): PluginRegistration {
 
 The context object provides access to Oscarr's core functionality:
 
-| Method | Description |
-|--------|-------------|
-| `ctx.log` | Fastify logger instance (child logger with plugin context) |
-| `ctx.getUser(userId)` | Get a user by ID. Returns `{ id, email, displayName, role }` or `null` |
-| `ctx.getAppSettings()` | Get all app settings as `Record<string, unknown>` |
-| `ctx.getSetting(key)` | Get a plugin-specific setting value (cached in memory) |
-| `ctx.setSetting(key, value)` | Set a plugin-specific setting value (persists to DB + updates cache) |
-| `ctx.sendNotification(type, data)` | Send a system notification (Discord, Telegram, Email) |
-| `ctx.sendUserNotification(userId, payload)` | Send an in-app notification to a specific user |
-| `ctx.notificationRegistry` | Access to the notification registry |
-| `ctx.getArrClient(serviceType)` | Get an existing Arr client (Sonarr, Radarr, etc.) |
-| `ctx.getServiceConfig(serviceType)` | Get service config `{ url, apiKey }` or `null` for direct API access |
-| `ctx.registerRoutePermission(routeKey, rule)` | Register an RBAC rule for a route |
-| `ctx.registerPluginPermission(permission, description?)` | Declare a custom permission |
-| `ctx.events` | Event bus — see [Events](#events) |
+| Method | Description | Capability |
+|--------|-------------|-----------|
+| `ctx.log` | Fastify logger instance (child logger with plugin context) | _always_ |
+| `ctx.getUser(userId)` | Get a user by ID. Returns `{ id, email, displayName, role, avatar }` or `null` | `users:read` |
+| `ctx.findUserByEmail(email)` | Find a user by email (symmetric with `findUserByProvider`) | `users:read` |
+| `ctx.findUserByProvider(provider, providerId)` | Find a user linked to an external provider identity | `users:read` |
+| `ctx.getUserProviders(userId)` | List a user's linked external providers (identity only, no tokens) | `users:read` |
+| `ctx.setUserRole(userId, roleName)` / `setUserDisabled(userId, disabled)` / `issueAuthToken(userId)` | User-management mutations | `users:write` |
+| `ctx.getAppSettings()` | Get all app settings as `Record<string, unknown>` | `settings:app` |
+| `ctx.listFolderRules({ enabled? })` | Read-only enumeration of admin routing rules | `settings:app` |
+| `ctx.getSetting(key)` / `setSetting(key, value)` / `getPluginDataDir()` | Plugin-scoped settings + data dir | `settings:plugin` |
+| `ctx.sendNotification(type, data)` | Send a system notification (Discord, Telegram, Email) | `notifications` |
+| `ctx.sendUserNotification(userId, payload)` | Send an in-app notification to a specific user | `notifications` |
+| `ctx.notificationRegistry` | Access to the notification registry | `notifications` |
+| `ctx.getArrClient(serviceType)` | Get the default Arr client (Sonarr, Radarr, …) | _`services[]` ACL_ |
+| `ctx.getArrClients(serviceType)` | **Pluriel** — every enabled instance of a service type | _`services[]` ACL_ |
+| `ctx.getServiceConfig(serviceType)` / `getServiceConfigRaw(serviceType)` | Service config for direct API access | _`services[]` ACL_ |
+| `ctx.tmdb.search(query, { page?, lang? })` | TMDB multi-search (cached) | `tmdb:read` |
+| `ctx.tmdb.movie(tmdbId, { lang? })` / `tv(tmdbId, { lang? })` | TMDB movie/TV details (cached, `lang` falls back to instance) | `tmdb:read` |
+| `ctx.media.batchStatus(items, userId?)` | Bulk Oscarr status for N TMDB ids, with user's per-item request state | `requests:read` |
+| `ctx.media.getById(mediaId)` | Single-media lookup, trimmed `PluginMedia` projection | `requests:read` |
+| `ctx.requests.listForUser(userId, { limit?, status? })` | Owner-scoped request listing, default 50 / max 200 | `requests:read` |
+| `ctx.requests.create(input)` | Full create-request pipeline on behalf of a user | `requests:write` |
+| `ctx.app.internalFetch(path, { method?, headers?, body?, asUserId? })` | Escape hatch — call any Oscarr HTTP route; pass `asUserId` to authenticate | _always_ |
+| `ctx.registerRoutePermission(routeKey, rule)` | Register an RBAC rule for a route | `permissions` |
+| `ctx.registerPluginPermission(permission, description?)` | Declare a custom permission | `permissions` |
+| `ctx.events` | Event bus — see [Events](#events) | `events` |
 
 ### sendNotification
 
@@ -398,6 +410,39 @@ ctx.events.emit('myplugin.sync_complete', { count: 42 });
 ```
 
 > **Note:** The event bus is in-process only. Events are not persisted and will not survive a server restart.
+
+### Core-emitted events
+
+The host fires two events plugins can subscribe to without polling the DB. Payloads are versioned with a `v` field so future shape changes coexist with existing subscribers.
+
+| Event | Payload type (`@oscarr/shared`) | Fires when |
+|-------|---------------------------------|-----------|
+| `user.notification.created` | `PluginUserNotificationCreatedV1` | Every time `safeUserNotify` persists an in-app notification — auth events, request lifecycle, media availability, plugin-owned events. Replaces cron-polling `UserNotification`. |
+| `media.available` | `PluginMediaAvailableV1` | A piece of media moved to `available` and at least one user had an active request for it. Broadcast-style: includes every requester's userId so a plugin can post once to a channel instead of N times. |
+
+Example — react to "your request was approved" with a Discord DM:
+
+```typescript
+import type { PluginUserNotificationCreatedV1 } from '@oscarr/shared';
+
+async registerRoutes(app, ctx) {
+  ctx.events.on('user.notification.created', async (raw) => {
+    const ev = raw as PluginUserNotificationCreatedV1;
+    if (ev.v !== 1) return; // Future-proofing: ignore unknown versions
+    if (ev.type !== 'request_approved') return;
+
+    const user = await ctx.getUser(ev.userId);
+    if (!user) return;
+
+    // Find the Discord link for this Oscarr user
+    const links = await ctx.getUserProviders(ev.userId);
+    const discordId = links.find(l => l.provider === 'discord')?.providerId;
+    if (!discordId) return;
+
+    await myDiscordClient.sendDM(discordId, `✅ ${ev.title} was approved — it's on the way.`);
+  });
+}
+```
 
 ## Backend routes
 
@@ -950,13 +995,16 @@ Any ctx method outside of `log` and service-bound methods (`getServiceConfig*`, 
 
 | Bucket              | ctx methods                                                      | When to declare it                            |
 |---------------------|------------------------------------------------------------------|-----------------------------------------------|
-| `users:read`        | `getUser`, `getUserProviders`                                    | Lookup user profile or their linked providers |
+| `users:read`        | `getUser`, `findUserByEmail`, `findUserByProvider`, `getUserProviders` | Lookup user profile or their linked providers |
 | `users:write`       | `setUserRole`, `setUserDisabled`, `issueAuthToken`               | Change role, disable, impersonate             |
 | `settings:plugin`   | `getSetting`, `setSetting`, `getPluginDataDir`                   | Store plugin-scoped state or files            |
-| `settings:app`      | `getAppSettings`                                                 | Read Oscarr-wide settings (site name, etc.)   |
+| `settings:app`      | `getAppSettings`, `listFolderRules`                              | Read Oscarr-wide settings (site name, routing rules, etc.) |
 | `notifications`     | `sendNotification`, `sendUserNotification`                       | Send alerts to users or notification channels |
 | `permissions`       | `registerRoutePermission`, `registerPluginPermission`            | Declare RBAC rules for the plugin's routes    |
 | `events`            | `events.on / off / emit`                                         | Use the cross-plugin event bus                |
+| `tmdb:read`         | `tmdb.search`, `tmdb.movie`, `tmdb.tv`                           | Fetch TMDB metadata (cached + locale-aware)   |
+| `requests:read`     | `requests.listForUser`, `media.batchStatus`, `media.getById`     | Read the user's request state + Oscarr library status |
+| `requests:write`    | `requests.create`                                                | Create a media request on behalf of a user (full pipeline: validation → guard → blacklist → auto-approve → sendToService → notify) |
 
 `log` and service methods are gated separately:
 - **`log`** is always available. Secrets are scrubbed from `ctx.log.*(msg)` calls before persistence to avoid leaking tokens into the admin-visible `PluginLog` table.

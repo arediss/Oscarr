@@ -6,7 +6,7 @@ import { execFileSync } from 'child_process';
 import archiver from 'archiver';
 import { prisma } from '../utils/prisma.js';
 import { logEvent } from '../utils/logEvent.js';
-import { BACKEND_ROOT, PROJECT_PACKAGE_JSON } from '../utils/paths.js';
+import { BACKEND_PRISMA_DIR, PROJECT_PACKAGE_JSON } from '../utils/paths.js';
 
 /** Backup creation + HMAC signing + file rotation. Consumed by routes and scheduler. */
 
@@ -41,8 +41,13 @@ export function safeEqualHex(a: string, b: string): boolean {
 export function getDbPath(): string {
   const url = process.env.DATABASE_URL || 'file:../data/oscarr.db';
   const relativePath = url.replace('file:', '');
-  // DATABASE_URL is Prisma-relative to packages/backend/.
-  return resolve(BACKEND_ROOT, relativePath);
+  // Prisma resolves `file:` URLs relative to the schema's directory (packages/backend/
+  // prisma/), not the package root. The default `file:../data/oscarr.db` therefore points
+  // at packages/backend/data/oscarr.db — anchoring on BACKEND_PRISMA_DIR matches Prisma
+  // exactly. Anchoring on BACKEND_ROOT (an earlier version of this code) ended up at
+  // packages/data/oscarr.db, which doesn't exist → backup job failing with
+  // "Database file not found".
+  return resolve(BACKEND_PRISMA_DIR, relativePath);
 }
 
 export function getBackupDir(): string {

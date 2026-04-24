@@ -90,6 +90,7 @@ export async function webhookRoutes(app: FastifyInstance) {
         : await prisma.media.findFirst({ where: { mediaType: 'tv', tvdbId: event.externalId } });
 
       if (!existing) {
+        const arrIdField = serviceType === 'radarr' ? 'radarrId' : serviceType === 'sonarr' ? 'sonarrId' : null;
         await prisma.media.create({
           data: {
             tmdbId: mediaType === 'movie' ? event.externalId : -(event.externalId),
@@ -97,6 +98,13 @@ export async function webhookRoutes(app: FastifyInstance) {
             mediaType,
             title: sanitize(event.title),
             status: 'searching',
+            // Set the *arr internal id at creation time so the home's "Recently added"
+            // query (which gates on radarrId/sonarrId IS NOT NULL) picks the row up as
+            // soon as it later flips to `available`. See the matching backfill in the
+            // 'download' branch for the upgrade path on pre-existing rows.
+            ...(arrIdField && event.internalId !== undefined && event.internalId > 0
+              ? { [arrIdField]: event.internalId }
+              : {}),
           },
         });
         logEvent('info', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" added — created in Oscarr`);
@@ -154,6 +162,25 @@ export async function webhookRoutes(app: FastifyInstance) {
         );
         logEvent('info', 'Webhook', `"${sanitize(event.title)}" is now available (via ${sanitize(serviceType)} webhook)`);
         logEvent('debug', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" now available`);
+      }
+
+      // Backfill the *arr internal id when the sync job hasn't populated it (or has been
+      // disabled by the admin in favour of webhook-driven updates). Without this, the
+      // home's "Recently added" query (which filters on radarrId/sonarrId IS NOT NULL)
+      // skips webhook-only media even though they're correctly marked `available`.
+      if (event.internalId !== undefined && event.internalId > 0) {
+        const arrIdField = serviceType === 'radarr' ? 'radarrId' : serviceType === 'sonarr' ? 'sonarrId' : null;
+        if (arrIdField) {
+          const current = (media as Record<string, unknown>)[arrIdField];
+          if (current === null || current === undefined) {
+            await prisma.media.update({
+              where: { id: media.id },
+              data: { [arrIdField]: event.internalId },
+            }).catch((err) => {
+              logEvent('warn', 'Webhook', `Failed to backfill ${arrIdField}=${event.internalId} on media ${media.id}: ${String(err)}`);
+            });
+          }
+        }
       }
 
       return reply.send({ ok: true, message: 'Media updated' });

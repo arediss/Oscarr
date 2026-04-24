@@ -127,9 +127,13 @@ export async function settingsRoutes(app: FastifyInstance) {
       },
     });
 
-    // If instance language changed, clear all caches to force re-fetch in new language
+    // If instance language changed, clear all caches to force re-fetch in new language.
+    // invalidateSiteUrl flushes both the siteUrl AND the instance-language caches in
+    // safeNotify — without it, plugin event-bus subscribers keep receiving the old
+    // language's titleText/messageText until backend restart.
     if (body.instanceLanguages) {
       invalidateLanguageCache();
+      invalidateSiteUrl();
       await prisma.tmdbCache.deleteMany();
       logEvent('info', 'Settings', 'TMDB cache cleared due to language change');
     }

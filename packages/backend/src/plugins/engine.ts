@@ -208,11 +208,37 @@ export class PluginEngine {
     this.app = app;
     this.mountDispatcher(app);
 
+    // Routes register first (sync-ish, mostly local), then onEnable runs in parallel.
+    // Routes have to be sequential — they share the Fastify dispatcher mount — but
+    // onEnable is per-plugin background work (Discord bot login, websocket clients,
+    // mailbox poll loops …) where one slow plugin would otherwise block Oscarr's boot
+    // for the duration of every other plugin's startup combined.
     for (const plugin of this.plugins.values()) {
       if (!plugin.enabled || plugin.error) continue;
-      if (!plugin.registration.registerRoutes) continue;
-      await this._registerRoutes(plugin);
+      if (plugin.registration.registerRoutes) {
+        await this._registerRoutes(plugin);
+      }
     }
+
+    // Boot-time onEnable parity with togglePlugin: a plugin that's already enabled in the
+    // DB needs its onEnable to run on every Oscarr restart, otherwise plugins doing
+    // background work stay dormant until an admin toggles off+on. A plugin that does its
+    // boot work inside `register()` won't have an `onEnable` hook to begin with — no-op
+    // for them.
+    const enableTasks: Array<Promise<void>> = [];
+    for (const plugin of this.plugins.values()) {
+      if (!plugin.enabled || plugin.error) continue;
+      if (!plugin.registration.onEnable) continue;
+      const onEnable = plugin.registration.onEnable;
+      const ctx = createContext(plugin.manifest, this.getContextDeps());
+      enableTasks.push(
+        Promise.resolve(onEnable(ctx)).catch((err) => {
+          this.log('error', `Boot-time onEnable failed for "${plugin.manifest.id}": ${err}`);
+          plugin.error = `onEnable failed at boot: ${err}`;
+        }),
+      );
+    }
+    await Promise.allSettled(enableTasks);
   }
 
   getJobHandlers(): Record<string, () => Promise<unknown>> {

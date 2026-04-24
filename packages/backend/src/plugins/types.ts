@@ -3,6 +3,15 @@ import type { NotificationRegistry } from '../notifications/registry.js';
 import type { NotificationPayload } from '../notifications/types.js';
 import type { ArrClient } from '../providers/types.js';
 import type { PluginRouter } from './router.js';
+import type {
+  PluginMedia,
+  PluginMediaRequest,
+  PluginMediaBatchKey,
+  PluginMediaBatchStatus,
+  PluginTmdbSearchPage,
+  PluginFolderRule,
+} from '@oscarr/shared';
+import type { TmdbMovie, TmdbTv } from '@oscarr/shared';
 
 // ─── Plugin Manifest (manifest.json) ────────────────────────────────
 
@@ -13,7 +22,12 @@ export type PluginCapability =
   | 'settings:app'
   | 'notifications'
   | 'permissions'
-  | 'events';
+  | 'events'
+  // Added in v1.1 — scoped access to read/write the request pipeline + TMDB metadata.
+  // Each new bucket is opt-in via manifest.capabilities, checked at call-time in context/v1.ts.
+  | 'tmdb:read'
+  | 'requests:read'
+  | 'requests:write';
 
 export const ALL_CAPABILITIES: readonly PluginCapability[] = [
   'users:read',
@@ -23,6 +37,9 @@ export const ALL_CAPABILITIES: readonly PluginCapability[] = [
   'notifications',
   'permissions',
   'events',
+  'tmdb:read',
+  'requests:read',
+  'requests:write',
 ] as const;
 
 export interface PluginManifest {
@@ -82,7 +99,7 @@ export interface LoadedUIContribution extends UIContribution {
 
 export interface PluginContext {
   log: FastifyBaseLogger;
-  getUser(userId: number): Promise<{ id: number; email: string; displayName: string | null; role: string } | null>;
+  getUser(userId: number): Promise<{ id: number; email: string; displayName: string | null; role: string; avatar: string | null } | null>;
   /** Assign a role to a user. Throws if the role doesn't exist. */
   setUserRole(userId: number, roleName: string): Promise<void>;
   /** Enable or disable an Oscarr user. Disabled users are rejected at login per AppSettings.disabledLoginMode (friendly message vs silent block). Admins cannot be disabled via this method — throws if you try, to protect the server owner from accidental lockout. */
@@ -108,13 +125,107 @@ export interface PluginContext {
    * UserProvider row matches. Useful for plugins that receive events from external systems
    * (Discord bot webhooks, etc.) and need to resolve the Oscarr user behind an external ID.
    */
-  findUserByProvider(provider: string, providerId: string): Promise<{ id: number; email: string; displayName: string | null; role: string } | null>;
+  findUserByProvider(provider: string, providerId: string): Promise<{ id: number; email: string; displayName: string | null; role: string; avatar: string | null } | null>;
   registerRoutePermission(routeKey: string, rule: { permission: string; ownerScoped?: boolean }): void;
   registerPluginPermission(permission: string, description?: string): void;
   events: {
     on(event: string, handler: (data: unknown) => void | Promise<void>): void;
     off(event: string, handler: (data: unknown) => void | Promise<void>): void;
     emit(event: string, data: unknown): Promise<void>;
+  };
+
+  // ─── v1.1 additions (additive — existing plugins keep working unchanged) ───
+
+  /** Pluriel form of `getArrClient`: returns every enabled instance of the given service type
+   *  (e.g. two Radarrs). Use this when a plugin needs to fan out across multi-instance setups
+   *  instead of always targeting the default one. Gated by the existing `services[]` ACL —
+   *  the plugin must declare the service type in its manifest. */
+  getArrClients(serviceType: string): Promise<ArrClient[]>;
+
+  /** Find an Oscarr user by email. Symmetric to `findUserByProvider`. Useful for CSV imports,
+   *  cross-system reconciliation, or webhook payloads that only carry an email. */
+  findUserByEmail(email: string): Promise<{ id: number; email: string; displayName: string | null; role: string; avatar: string | null } | null>;
+
+  /** Read-only enumeration of the admin's routing rules. Plugins typically use this to offer
+   *  the same category picker as the web UI (Radarr "Movies / 4K / Anime" buckets). Optional
+   *  `enabled` filter matches the admin UI's default view. */
+  listFolderRules(options?: { enabled?: boolean }): Promise<PluginFolderRule[]>;
+
+  /** TMDB metadata bucket — wraps `services/tmdb.ts` with cache + lang-resolution respected.
+   *  Gated by `tmdb:read`. `lang` falls back to the instance default when omitted. */
+  tmdb: {
+    search(query: string, options?: { page?: number; lang?: string }): Promise<PluginTmdbSearchPage>;
+    movie(tmdbId: number, options?: { lang?: string }): Promise<TmdbMovie>;
+    tv(tmdbId: number, options?: { lang?: string }): Promise<TmdbTv>;
+  };
+
+  /** Oscarr-side media helpers. Kept separate from `requests` because `batchStatus` + `getById`
+   *  are read-only and useful on their own (enriching a TMDB result grid, rendering a
+   *  notification payload). Gated by `requests:read` — same bucket since both query the same
+   *  request-aware view of the library. */
+  media: {
+    /** Bulk lookup of Oscarr status for N TMDB ids. When `userId` is passed, also reports the
+     *  user's personal request status per item. Replaces N+1 patterns where a plugin would
+     *  otherwise loop `findByExternalId` per result. */
+    batchStatus(
+      items: Array<{ tmdbId: number; mediaType: 'movie' | 'tv' }>,
+      userId?: number,
+    ): Promise<Record<PluginMediaBatchKey, PluginMediaBatchStatus>>;
+    /** Single-media lookup by Oscarr id (not TMDB id). Returns null when the media row
+     *  doesn't exist — plugins can enrich a notification payload or confirm a reference. */
+    getById(mediaId: number): Promise<PluginMedia | null>;
+  };
+
+  /** Escape hatch for calling the host's own HTTP API. Useful for endpoints that don't have
+   *  a typed ctx wrapper yet (e.g. plugin-specific admin surfaces, legacy routes). The engine
+   *  resolves `localhost:${PORT}` and — when `asUserId` is passed — mints a short-lived auth
+   *  cookie scoped to that user so the call passes RBAC as if the user made it themselves.
+   *  No capability bucket: internalFetch is always available, but the target route's own RBAC
+   *  rules still apply (hitting an admin route without `asUserId` pointing to an admin
+   *  returns 401/403). */
+  app: {
+    internalFetch(
+      path: string,
+      init?: {
+        method?: string;
+        headers?: Record<string, string>;
+        body?: unknown;
+        /** When set, the call is authenticated as this user (same session a browser would
+         *  get by logging in). Omitted → call runs unauthenticated, only reaches public
+         *  routes like `/api/app/features`. */
+        asUserId?: number;
+      },
+    ): Promise<Response>;
+  };
+
+  /** Request pipeline access. Read methods gated by `requests:read`; `create` gated by
+   *  `requests:write`. */
+  requests: {
+    /** List the given user's requests. Useful for a "your pending requests" Discord command
+     *  or a queue-visualiser plugin. Optional `status` narrows to a specific status code.
+     *  `limit` caps the response (default 50, hard max 200) — pagination is intentionally
+     *  not exposed; plugins that need deeper slices should filter by `status` instead. */
+    listForUser(
+      userId: number,
+      options?: { limit?: number; status?: string },
+    ): Promise<PluginMediaRequest[]>;
+    /** Run the full create-request pipeline on behalf of `userId`: validation → pluginGuard
+     *  (skippable via `skipPluginGuard` for guard-owning plugins) → blacklist → dedup →
+     *  quality gate → row create → sendToService → safeNotify. No role escalation — the
+     *  pipeline loads the target user's role from the DB and behaves exactly as the HTTP
+     *  route would for that same user. */
+    create(input: {
+      userId: number;
+      tmdbId: number;
+      mediaType: 'movie' | 'tv';
+      seasons?: number[];
+      rootFolder?: string;
+      qualityOptionId?: number;
+      skipPluginGuard?: boolean;
+    }): Promise<
+      | { ok: true; requestId: number; status: string; autoApproved: boolean; sendFailed?: boolean }
+      | { ok: false; code: string; error: string }
+    >;
   };
 }
 
