@@ -210,8 +210,24 @@ export class PluginEngine {
 
     for (const plugin of this.plugins.values()) {
       if (!plugin.enabled || plugin.error) continue;
-      if (!plugin.registration.registerRoutes) continue;
-      await this._registerRoutes(plugin);
+      if (plugin.registration.registerRoutes) {
+        await this._registerRoutes(plugin);
+      }
+      // Boot-time onEnable parity with togglePlugin: a plugin that's already enabled in the
+      // DB needs its onEnable to run on every Oscarr restart, otherwise plugins doing
+      // background work (Discord bot login, websocket clients, mailbox poll loops…) stay
+      // dormant until an admin toggles off+on. A plugin that does its boot work inside
+      // `register()` won't have an `onEnable` hook to begin with — this is a no-op for
+      // them.
+      if (plugin.registration.onEnable) {
+        try {
+          const ctx = createContext(plugin.manifest, this.getContextDeps());
+          await plugin.registration.onEnable(ctx);
+        } catch (err) {
+          this.log('error', `Boot-time onEnable failed for "${plugin.manifest.id}": ${err}`);
+          plugin.error = `onEnable failed at boot: ${err}`;
+        }
+      }
     }
   }
 
