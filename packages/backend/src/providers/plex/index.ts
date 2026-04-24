@@ -20,6 +20,18 @@ export async function plexCheckPin(pinId: number): Promise<string | null> {
   return checkPlexPin(pinId, PLEX_CLIENT_ID);
 }
 
+/** Probe a Plex server's /identity endpoint from the backend. Called by setup + admin routes
+ *  to spare the browser from fetching the LAN Plex URL directly, which CSP connect-src 'self'
+ *  blocks in production. Returns just the machineIdentifier — callers don't need the rest. */
+export async function plexFetchMachineId(url: string, token: string): Promise<string | null> {
+  const trimmedUrl = url.replace(/\/$/, '');
+  const { data } = await axios.get(`${trimmedUrl}/identity`, {
+    headers: { 'X-Plex-Token': token, Accept: 'application/json' },
+    timeout: 5000,
+  });
+  return (data as { MediaContainer?: { machineIdentifier?: string } }).MediaContainer?.machineIdentifier ?? null;
+}
+
 export async function getPlexToken(adminUserId?: number): Promise<string | null> {
   const plexService = await prisma.service.findFirst({
     where: { type: 'plex', enabled: true },

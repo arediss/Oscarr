@@ -175,18 +175,14 @@ export default function InstallPage() {
     const svc = services.find(s => s.id === serviceId);
     if (!svc?.config.url) return;
     try {
-      const res = await fetch(`${svc.config.url}/identity`, {
-        headers: { 'X-Plex-Token': token, Accept: 'application/json' },
-      });
-      const json = await res.json();
-      const mid = json.MediaContainer?.machineIdentifier;
-      if (mid) {
+      const { data } = await api.post<{ machineId: string }>('/setup/plex-identity', { url: svc.config.url, token });
+      if (data.machineId) {
         setServices(prev => prev.map(s => s.id === serviceId
-          ? { ...s, config: { ...s.config, machineId: mid } }
+          ? { ...s, config: { ...s.config, machineId: data.machineId } }
           : s
         ));
       }
-    } catch { /* ignore */ }
+    } catch { /* ignore — user can still type it manually or retry via detect button */ }
   };
 
   const flowRef = useRef<PlexPinFlowHandle | null>(null);
@@ -220,18 +216,16 @@ export default function InstallPage() {
     const svc = services.find(s => s.id === serviceId);
     if (!svc?.config.url || !svc?.config.token) return;
     try {
-      const res = await fetch(`${svc.config.url}/identity`, {
-        headers: { 'X-Plex-Token': svc.config.token, Accept: 'application/json' },
+      const { data } = await api.post<{ machineId: string }>('/setup/plex-identity', {
+        url: svc.config.url, token: svc.config.token,
       });
-      const json = await res.json();
-      const mid = json.MediaContainer?.machineIdentifier;
-      if (mid) {
+      if (data.machineId) {
         setServices(prev => prev.map(s => s.id === serviceId
-          ? { ...s, config: { ...s.config, machineId: mid } }
+          ? { ...s, config: { ...s.config, machineId: data.machineId } }
           : s
         ));
       }
-    } catch { /* ignore */ }
+    } catch { /* ignore — manual retry possible */ }
   };
 
   const saveServices = async () => {

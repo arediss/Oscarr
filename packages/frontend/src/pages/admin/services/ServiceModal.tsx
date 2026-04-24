@@ -109,12 +109,9 @@ export function ServiceModal({ service, onClose, onSaved }: ServiceModalProps) {
     if (!url || !token) return;
     setDetectingMachineId(true);
     try {
-      const res = await fetch(`${url}/identity`, {
-        headers: { 'X-Plex-Token': token, Accept: 'application/json' },
-      });
-      const json = await res.json();
-      const machineId = json.MediaContainer?.machineIdentifier;
-      if (machineId) handleConfigChange('machineId', machineId);
+      // Proxied via backend — CSP connect-src 'self' blocks a direct fetch to the LAN Plex URL.
+      const { data } = await api.post<{ machineId: string }>('/admin/plex-identity', { url: String(url), token: String(token) });
+      if (data.machineId) handleConfigChange('machineId', data.machineId);
     } catch (err) { toastApiError(err, t('admin.services.detect_machine_id_failed')); }
     finally { setDetectingMachineId(false); }
   };

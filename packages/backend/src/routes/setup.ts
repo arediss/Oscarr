@@ -84,6 +84,32 @@ export async function setupRoutes(app: FastifyInstance) {
     return reply.send({ token: authToken });
   });
 
+  // Proxied Plex /identity probe — CSP connect-src 'self' blocks a direct browser fetch to the
+  // LAN Plex URL, so the wizard asks us to do it server-side and return just the machineId.
+  app.post('/plex-identity', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['url', 'token'],
+        properties: {
+          url: { type: 'string', description: 'Plex server URL (http://host:32400)' },
+          token: { type: 'string', description: 'Plex auth token (from /plex-check)' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { url, token } = request.body as { url: string; token: string };
+    const { plexFetchMachineId } = await import('../providers/plex/index.js');
+    try {
+      const machineId = await plexFetchMachineId(url, token);
+      if (!machineId) return reply.status(502).send({ error: 'Plex did not return a machineIdentifier' });
+      return reply.send({ machineId });
+    } catch (err) {
+      const info = classifyTestError(err);
+      return reply.status(502).send({ error: info.code, detail: info.message });
+    }
+  });
+
   // Test any service during setup (uses the service registry)
   app.post('/test-service', {
     schema: {

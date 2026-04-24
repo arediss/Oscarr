@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { getServiceById } from '../../../utils/services.js';
 import { getAuthProvider, getArrClient, createArrClient } from '../../../providers/index.js';
-import { plexCreatePin, plexCheckPin } from '../../../providers/plex/index.js';
+import { plexCreatePin, plexCheckPin, plexFetchMachineId } from '../../../providers/plex/index.js';
 import { parseId } from '../../../utils/params.js';
+import { classifyTestError } from '../../../utils/serviceTestError.js';
 
 /** Service-config helpers — Plex token passthrough + quality profile / root folder lookups.
  *
@@ -43,6 +44,32 @@ export async function servicesHelperRoutes(app: FastifyInstance) {
     const token = await plexCheckPin(pinId);
     if (!token) return reply.status(400).send({ error: 'PIN not validated' });
     return { token };
+  });
+
+  /** Proxied Plex /identity probe — same reason as /setup/plex-identity: CSP blocks the browser
+   *  from hitting the LAN Plex URL directly, so the admin ServiceModal asks us to fetch
+   *  machineIdentifier server-side. */
+  app.post('/plex-identity', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['url', 'token'],
+        properties: {
+          url: { type: 'string', description: 'Plex server URL (http://host:32400)' },
+          token: { type: 'string', description: 'Plex auth token' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { url, token } = request.body as { url: string; token: string };
+    try {
+      const machineId = await plexFetchMachineId(url, token);
+      if (!machineId) return reply.status(502).send({ error: 'Plex did not return a machineIdentifier' });
+      return { machineId };
+    } catch (err) {
+      const info = classifyTestError(err);
+      return reply.status(502).send({ error: info.code, detail: info.message });
+    }
   });
 
   app.get('/radarr/profiles', async (_request, reply) => {
