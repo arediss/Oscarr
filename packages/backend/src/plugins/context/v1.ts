@@ -9,7 +9,14 @@ import { sendUserNotification } from '../../services/userNotifications.js';
 import { getArrClient } from '../../providers/index.js';
 import type { ArrClient } from '../../providers/types.js';
 import { searchMulti, getMovieDetails, getTvDetails } from '../../services/tmdb.js';
-import type { PluginTmdbSearchPage } from '@oscarr/shared';
+import type {
+  PluginTmdbSearchPage,
+  PluginMedia,
+  PluginMediaRequest,
+  PluginMediaBatchKey,
+  PluginMediaBatchStatus,
+} from '@oscarr/shared';
+import { ACTIVE_REQUEST_STATUSES } from '@oscarr/shared';
 import {
   registerRoutePermission as rbacRegisterRoute,
   registerPluginPermission as rbacRegisterPermission,
@@ -338,19 +345,104 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       },
     },
     media: {
-      async batchStatus(_items, _userId) {
+      async batchStatus(items, userId) {
         req('requests:read', 'media.batchStatus');
-        throw new Error('ctx.media.batchStatus: not implemented (Phase 1 P3)');
+        if (items.length === 0) return {};
+        // Two-pass query so we don't fetch the whole Media table:
+        // 1. One findMany on the union of (tmdbId,mediaType) pairs → media status per item.
+        // 2. One findMany on MediaRequest filtered by userId + the same media ids → user state.
+        // This replaces an N+1 pattern a plugin would otherwise hit (loop per item calling
+        // getMediaByTmdb).
+        const mediaRows = await prisma.media.findMany({
+          where: {
+            OR: items.map(i => ({ tmdbId: i.tmdbId, mediaType: i.mediaType })),
+          },
+          select: { id: true, tmdbId: true, mediaType: true, status: true },
+        });
+        const mediaByKey = new Map<string, { id: number; status: string }>();
+        for (const m of mediaRows) mediaByKey.set(`${m.mediaType}:${m.tmdbId}`, { id: m.id, status: m.status });
+
+        const userRequestsByMediaId = new Map<number, string>();
+        if (userId !== undefined && mediaRows.length > 0) {
+          const reqs = await prisma.mediaRequest.findMany({
+            where: {
+              userId,
+              mediaId: { in: mediaRows.map(m => m.id) },
+              status: { in: [...ACTIVE_REQUEST_STATUSES] },
+            },
+            select: { mediaId: true, status: true },
+            orderBy: { createdAt: 'desc' },
+          });
+          // Keep the most recent active request per media (orderBy desc + Map.set overwrites).
+          for (const r of reqs) {
+            if (!userRequestsByMediaId.has(r.mediaId)) userRequestsByMediaId.set(r.mediaId, r.status);
+          }
+        }
+
+        const out: Record<PluginMediaBatchKey, PluginMediaBatchStatus> = {};
+        for (const item of items) {
+          const key: PluginMediaBatchKey = `${item.mediaType}:${item.tmdbId}`;
+          const m = mediaByKey.get(key);
+          const userStatus = m ? userRequestsByMediaId.get(m.id) ?? null : null;
+          out[key] = {
+            status: m?.status ?? 'unknown',
+            userRequestStatus: userStatus,
+            userHasActiveRequest: userStatus !== null,
+          };
+        }
+        return out;
       },
-      async getById(_mediaId: number) {
+      async getById(mediaId: number) {
         req('requests:read', 'media.getById');
-        throw new Error('ctx.media.getById: not implemented (Phase 1 P3)');
+        const row = await prisma.media.findUnique({
+          where: { id: mediaId },
+          select: { id: true, tmdbId: true, tvdbId: true, mediaType: true, title: true, posterPath: true, status: true },
+        });
+        if (!row) return null;
+        return {
+          id: row.id,
+          tmdbId: row.tmdbId,
+          tvdbId: row.tvdbId,
+          mediaType: row.mediaType as 'movie' | 'tv',
+          title: row.title,
+          posterPath: row.posterPath,
+          status: row.status,
+        } satisfies PluginMedia;
       },
     },
     requests: {
-      async listForUser(_userId: number) {
+      async listForUser(userId: number, options?: { limit?: number; status?: string }) {
         req('requests:read', 'requests.listForUser');
-        throw new Error('ctx.requests.listForUser: not implemented (Phase 1 P3)');
+        const limit = Math.min(Math.max(options?.limit ?? 50, 1), 200);
+        const rows = await prisma.mediaRequest.findMany({
+          where: {
+            userId,
+            ...(options?.status ? { status: options.status } : {}),
+          },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          select: {
+            id: true, userId: true, mediaType: true, seasons: true, status: true, createdAt: true,
+            media: { select: { id: true, tmdbId: true, tvdbId: true, mediaType: true, title: true, posterPath: true, status: true } },
+          },
+        });
+        return rows.map((r): PluginMediaRequest => ({
+          id: r.id,
+          userId: r.userId,
+          mediaType: r.mediaType as 'movie' | 'tv',
+          seasons: r.seasons ? (JSON.parse(r.seasons) as number[]) : null,
+          status: r.status,
+          createdAt: r.createdAt.toISOString(),
+          media: {
+            id: r.media.id,
+            tmdbId: r.media.tmdbId,
+            tvdbId: r.media.tvdbId,
+            mediaType: r.media.mediaType as 'movie' | 'tv',
+            title: r.media.title,
+            posterPath: r.media.posterPath,
+            status: r.media.status,
+          },
+        }));
       },
       async create(_input) {
         req('requests:write', 'requests.create');
