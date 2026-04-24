@@ -1,6 +1,8 @@
 import { notificationRegistry } from '../notifications/index.js';
 import { sendUserNotification as _sendUserNotification } from '../services/userNotifications.js';
 import { prisma } from './prisma.js';
+import { pluginEventBus } from '../plugins/eventBus.js';
+import type { PluginUserNotificationCreatedV1 } from '@oscarr/shared';
 
 let _siteUrl: string | null = null;
 let _siteUrlFetched = false;
@@ -29,7 +31,22 @@ export function safeNotify(type: string, data: Parameters<typeof notificationReg
   notificationRegistry.send(type, data).catch(err => console.error('[Notification] Failed:', err));
 }
 
-/** Fire-and-forget user notification — logs errors without crashing */
+/** Fire-and-forget user notification — logs errors without crashing. Also fans out a
+ *  `user.notification.created` event on the plugin bus so subscribers (Discord bots, Slack
+ *  pushers, analytics) can react without having to poll the UserNotification table. The
+ *  payload is the stable v1 envelope defined in `@oscarr/shared`. */
 export function safeUserNotify(userId: number, payload: Parameters<typeof _sendUserNotification>[1]): void {
   _sendUserNotification(userId, payload).catch(err => console.error('[UserNotification] Failed:', err));
+  const event: PluginUserNotificationCreatedV1 = {
+    v: 1,
+    userId,
+    type: payload.type,
+    title: payload.title,
+    message: payload.message,
+    metadata: payload.metadata ?? {},
+    createdAt: new Date().toISOString(),
+  };
+  // Event bus emit is sync-returning but handler resolution is awaited inside emit; fire and
+  // swallow so one misbehaving subscriber doesn't block the caller.
+  pluginEventBus.emit('user.notification.created', event).catch(err => console.error('[PluginEvent user.notification.created] Failed:', err));
 }
