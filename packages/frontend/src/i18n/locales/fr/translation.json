@@ -717,7 +717,7 @@
   "admin.danger.deleted_users_one": "{{count}} utilisateur supprimé",
   "admin.danger.deleted_users_other": "{{count}} utilisateurs supprimés",
   "admin.plugins.no_plugins": "Aucun plugin installé",
-  "admin.plugins.no_plugins_help": "Ajoutez des plugins dans <code>packages/plugins/</code>",
+  "admin.plugins.no_plugins_help": "Ajoutez des plugins dans",
   "plugin.not_found": "Plugin introuvable",
   "plugin.frontend_unavailable": "Plugin \"{{pluginId}}\" — frontend non disponible",
   "plugin.no_settings": "Ce plugin n'a pas de paramètres configurables.",

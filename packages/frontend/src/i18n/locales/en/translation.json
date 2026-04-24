@@ -717,7 +717,7 @@
   "admin.danger.deleted_users_one": "{{count}} user deleted",
   "admin.danger.deleted_users_other": "{{count}} users deleted",
   "admin.plugins.no_plugins": "No plugins installed",
-  "admin.plugins.no_plugins_help": "Add plugins in <code>packages/plugins/</code>",
+  "admin.plugins.no_plugins_help": "Add plugins in",
   "plugin.not_found": "Plugin not found",
   "plugin.frontend_unavailable": "Plugin \"{{pluginId}}\" — frontend not available",
   "plugin.no_settings": "This plugin has no configurable settings.",

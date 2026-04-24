@@ -5,6 +5,7 @@ import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import { PluginConsentModal } from './PluginConsentModal';
 import { usePluginsTab } from './plugins/usePluginsTab';
+import { usePluginsDir } from '@/hooks/usePluginsDir';
 import { InstalledList } from './plugins/InstalledList';
 import { DiscoverList } from './plugins/DiscoverList';
 import { ManualInstallModal } from './plugins/ManualInstallModal';
@@ -30,6 +31,7 @@ export function PluginsTab() {
   const [showHowTo, setShowHowTo] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const [expandedInstall, setExpandedInstall] = useState<string | null>(null);
+  const pluginsDir = usePluginsDir();
 
   /** Consent-first install: click Install → modal shows services + capabilities →
    *  admin confirms → Oscarr actually downloads the tarball (disabled by default). */
@@ -117,7 +119,7 @@ export function PluginsTab() {
           <button
             onClick={() => setShowRestartConfirm(true)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors"
-            title="Restart the server to pick up plugins dropped into packages/plugins by hand. Installs from Discover don't need this."
+            title={`Restart the server to pick up plugins dropped into ${pluginsDir} by hand. Installs from Discover don't need this.`}
           >
             <RefreshCw className="w-4 h-4" />
             <span className="hidden sm:inline">Reload</span>
@@ -130,7 +132,7 @@ export function PluginsTab() {
           <div className="card p-6 max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-ndp-text font-semibold mb-2">Reload plugins</h3>
             <p className="text-sm text-ndp-text-muted mb-4">
-              Restarts Oscarr to discover plugins you added to <code className="text-ndp-text bg-black/30 px-1 py-0.5 rounded text-xs">packages/plugins</code> by hand.
+              Restarts Oscarr to discover plugins you added to <code className="text-ndp-text bg-black/30 px-1 py-0.5 rounded text-xs">{pluginsDir}</code> by hand.
               Plugins installed from Discover are already live — you don't need this for those.
             </p>
             <div className="flex justify-end gap-3">
