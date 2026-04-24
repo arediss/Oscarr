@@ -4,6 +4,7 @@ import { getAuthProvider, getArrClient, createArrClient } from '../../../provide
 import { plexCreatePin, plexCheckPin, plexFetchMachineId } from '../../../providers/plex/index.js';
 import { parseId } from '../../../utils/params.js';
 import { classifyTestError } from '../../../utils/serviceTestError.js';
+import { assertPublicUrl, SsrfBlockedError } from '../../../utils/ssrfGuard.js';
 
 /** Service-config helpers — Plex token passthrough + quality profile / root folder lookups.
  *
@@ -62,6 +63,16 @@ export async function servicesHelperRoutes(app: FastifyInstance) {
     },
   }, async (request, reply) => {
     const { url, token } = request.body as { url: string; token: string };
+    // Same SSRF guard as /setup/plex-identity — admin-typed URL, permissive by default,
+    // strict mode (OSCARR_BLOCK_PRIVATE_SERVICES=true) refuses RFC1918 ranges.
+    try {
+      await assertPublicUrl(url);
+    } catch (err) {
+      if (err instanceof SsrfBlockedError) {
+        return reply.status(400).send({ error: 'URL_BLOCKED_BY_SSRF_GUARD', detail: err.message });
+      }
+      throw err;
+    }
     try {
       const machineId = await plexFetchMachineId(url, token);
       if (!machineId) return reply.status(502).send({ error: 'Plex did not return a machineIdentifier' });

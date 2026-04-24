@@ -5,6 +5,7 @@ import { runFullSync } from '../services/sync/index.js';
 import { initScheduler } from '../services/scheduler.js';
 import { isInstalled, markInstalled } from '../utils/install.js';
 import { classifyTestError } from '../utils/serviceTestError.js';
+import { assertPublicUrl, SsrfBlockedError } from '../utils/ssrfGuard.js';
 
 const SETUP_SECRET = process.env.SETUP_SECRET || '';
 if (!SETUP_SECRET) {
@@ -99,6 +100,17 @@ export async function setupRoutes(app: FastifyInstance) {
     },
   }, async (request, reply) => {
     const { url, token } = request.body as { url: string; token: string };
+    // SSRF guard: admin-typed URL goes straight to axios.get. Permissive by default for
+    // self-hosted LAN setups (OSCARR_BLOCK_PRIVATE_SERVICES !== 'true'), strict mode refuses
+    // private ranges so a shared-hosting operator can't be tricked into probing RFC1918.
+    try {
+      await assertPublicUrl(url);
+    } catch (err) {
+      if (err instanceof SsrfBlockedError) {
+        return reply.status(400).send({ error: 'URL_BLOCKED_BY_SSRF_GUARD', detail: err.message });
+      }
+      throw err;
+    }
     const { plexFetchMachineId } = await import('../providers/plex/index.js');
     try {
       const machineId = await plexFetchMachineId(url, token);
