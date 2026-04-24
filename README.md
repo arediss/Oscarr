@@ -165,6 +165,7 @@ Open `http://localhost:3456` and follow the setup wizard.
 > - Data (SQLite database, install config, backups) is persisted in the `oscarr-data` volume.
 > - A built-in TMDB read-access token is included — no signup needed. Override with `TMDB_API_TOKEN` if you prefer your own.
 > - Migrations run automatically at every boot (idempotent). No manual step required after an image update.
+> - **macOS Docker Desktop caveat:** containers can't reach LAN IPs (e.g. `192.168.1.x`) even with `--network host` — Docker Desktop runs in a VM and doesn't share the host network stack. Connectivity tests that work for Linux/NAS users will fail from your Mac. Use [Colima](https://github.com/abiosoft/colima) locally for a true Linux-like network, or deploy to a Linux host for end-to-end testing. Oscarr itself is unaffected — this is purely a local dev environment quirk.
 
 ---
 
@@ -326,6 +327,27 @@ Contributions are welcome! Whether it's a bug fix, a new feature, or a plugin �
 - [`CONTRIBUTORS.md`](CONTRIBUTORS.md) — everyone who's shipped code to Oscarr
 
 > **Development workflow** — This project uses [Claude Code](https://claude.com/claude-code) as a development assistant for code reviews, security audits, brainstorming, documentation, and issue/PR management. All architecture decisions and implementation are made by the maintainers — Claude serves as a quality and productivity tool, much like a linter or a CI pipeline.
+
+---
+
+## Verifying image provenance
+
+Published `ghcr.io/arediss/oscarr` images are keyless-signed by the GitHub Actions release
+workflow (Sigstore / cosign, via workflow OIDC — no long-lived keys to manage). Each signed
+manifest also carries an attached SPDX SBOM attestation.
+
+Verify before pulling into production:
+
+```bash
+cosign verify ghcr.io/arediss/oscarr:latest \
+  --certificate-identity-regexp 'https://github.com/arediss/Oscarr/.github/workflows/release.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+# Inspect the SBOM
+cosign download sbom ghcr.io/arediss/oscarr:latest > oscarr.sbom.spdx.json
+```
+
+Any image without a valid signature from this workflow is not an official Oscarr release.
 
 ---
 

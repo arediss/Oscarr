@@ -1,8 +1,8 @@
 import './env.js';
 import Fastify from 'fastify';
 import { execFileSync } from 'child_process';
-import { resolve } from 'path';
 import { prisma } from './utils/prisma.js';
+import { BACKEND_ROOT } from './utils/paths.js';
 import { loadInstallState } from './utils/install.js';
 import { logEvent } from './utils/logEvent.js';
 import { registerSecurity } from './bootstrap/security.js';
@@ -56,7 +56,7 @@ const app = Fastify({
  *  `git pull`. */
 async function ensureMigrated() {
   execFileSync('npx', ['prisma', 'migrate', 'deploy'], {
-    cwd: resolve(import.meta.dirname, '..'),
+    cwd: BACKEND_ROOT,
     stdio: 'inherit',
   });
   await prisma.$disconnect();

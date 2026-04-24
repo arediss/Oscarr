@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { ListChecks, CheckCircle2, Circle, ChevronRight, X } from 'lucide-react';
+import { ListChecks, CheckCircle2, Circle, ChevronRight, EyeOff } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -76,7 +76,13 @@ export default function SetupChecklistMenu({ dropdownDirection = 'below' }: Prop
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          // Re-fetch on every open so an admin who just completed an item (added a service,
+          // filled the default folders, …) sees the checklist reflect reality without having
+          // to reload the page. Cheap call — a single SQL COUNT round-trip.
+          if (!open) fetchData();
+          setOpen(!open);
+        }}
         className="relative p-2 text-ndp-accent hover:text-ndp-accent rounded-lg hover:bg-white/5 transition-colors"
         title={t('admin.setup_checklist.title')}
         aria-label={t('admin.setup_checklist.title')}
@@ -94,22 +100,13 @@ export default function SetupChecklistMenu({ dropdownDirection = 'below' }: Prop
           'absolute right-0 w-80 sm:w-96 card shadow-2xl shadow-black/50 border border-white/10 animate-fade-in overflow-hidden',
           dropdownDirection === 'below' ? 'top-full mt-2' : 'bottom-full mb-2',
         )}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-            <div>
-              <h3 className="text-sm font-semibold text-ndp-text">{t('admin.setup_checklist.title')}</h3>
-              <p className="text-xs text-ndp-text-dim mt-0.5">
-                {allRequiredDone
-                  ? t('admin.setup_checklist.all_required_done', { done: totalDone, total: data.items.length })
-                  : t('admin.setup_checklist.progress', { done: requiredDone, total: required.length })}
-              </p>
-            </div>
-            <button
-              onClick={dismiss}
-              aria-label={t('common.close')}
-              className="p-1 text-ndp-text-dim hover:text-ndp-text rounded hover:bg-white/5 transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+          <div className="px-4 py-3 border-b border-white/5">
+            <h3 className="text-sm font-semibold text-ndp-text">{t('admin.setup_checklist.title')}</h3>
+            <p className="text-xs text-ndp-text-dim mt-0.5">
+              {allRequiredDone
+                ? t('admin.setup_checklist.all_required_done', { done: totalDone, total: data.items.length })
+                : t('admin.setup_checklist.progress', { done: requiredDone, total: required.length })}
+            </p>
           </div>
 
           <ul className="max-h-96 overflow-y-auto py-1">
@@ -117,6 +114,18 @@ export default function SetupChecklistMenu({ dropdownDirection = 'below' }: Prop
               <ChecklistRow key={item.id} item={item} t={t} onNavigate={() => setOpen(false)} />
             ))}
           </ul>
+
+          {/* Explicit, full-width "stop reminding me" — previous design used a bare X icon in
+              the header that looked like a close-dropdown affordance but actually persisted
+              a dismissal. Users hit it by accident. Now: dropdown closes via outside-click or
+              clicking the bell again; permanent dismissal is this clearly-labeled button. */}
+          <button
+            onClick={dismiss}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 border-t border-white/5 transition-colors"
+          >
+            <EyeOff className="w-3.5 h-3.5" />
+            {t('admin.setup_checklist.dismiss', "Don't show again")}
+          </button>
         </div>
       )}
     </div>

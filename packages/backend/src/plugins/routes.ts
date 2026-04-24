@@ -3,6 +3,7 @@ import { join, extname, resolve, sep, relative } from 'path';
 import { existsSync, createReadStream } from 'fs';
 import { rm } from 'fs/promises';
 import { pluginEngine } from './engine.js';
+import { getPluginsDir } from './loader.js';
 import { installPluginFromUrl } from './installer.js';
 import { prisma } from '../utils/prisma.js';
 import { scrubSecrets } from '../utils/logScrubber.js';
@@ -111,6 +112,14 @@ async function runUpdateCheck(now: number): Promise<Record<string, UpdateInfo>> 
 const ALLOWED_EXTENSIONS = new Set(['.js', '.mjs', '.css', '.json', '.map', '.svg']);
 
 export async function pluginRoutes(app: FastifyInstance) {
+
+  // ── Resolved plugins directory ──────────────────────────────────
+  // Surfaces the absolute path the engine actually reads from — respects OSCARR_PLUGINS_DIR
+  // and falls back to <project-root>/plugins otherwise. UI uses this to show the correct
+  // hint instead of hardcoding `packages/plugins/` (wrong on Docker + self-hosted layouts).
+  app.get('/dir', async () => {
+    return { dir: getPluginsDir() };
+  });
 
   // ── List installed plugins ──────────────────────────────────────
   // Joins the engine's in-memory plugin list with PluginState so the caller gets

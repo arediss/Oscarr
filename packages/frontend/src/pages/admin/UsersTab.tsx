@@ -10,6 +10,8 @@ import type { AdminUser } from '@/types';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import { useModal } from '@/hooks/useModal';
+import { getProviderBadgeClass, getProviderHex } from '@/providers/colors';
+import { startPlexPinFlow, type PlexPinFlowHandle } from '@/providers/plex/pinFlow';
 
 type UserSort = 'username' | 'date' | 'role';
 
@@ -49,7 +51,7 @@ export function UsersTab() {
   } | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [selectedImportIds, setSelectedImportIds] = useState<Set<string>>(new Set());
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const flowRef = useRef<PlexPinFlowHandle | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -105,42 +107,27 @@ export function UsersTab() {
     }
   };
 
-  useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+  useEffect(() => () => flowRef.current?.cancel(), []);
 
-  const handleLinkPlex = async (userId: number) => {
+  const handleLinkPlex = (userId: number) => {
     setLinkingUser(userId);
-    // Open popup BEFORE the async call — Safari blocks window.open() after await
     const authWindow = window.open('about:blank', 'PlexAuth', 'width=600,height=700');
-    try {
-      const { data } = await api.post('/auth/plex/pin');
-      const { pin, authUrl } = data;
-      if (authWindow) authWindow.location.href = authUrl;
-
-      let attempts = 0;
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
-        attempts++;
-        if (attempts >= 120) {
-          clearInterval(pollRef.current!);
-          pollRef.current = null;
-          setLinkingUser(null);
-          return;
-        }
-        try {
-          const { data: linkData } = await api.post(`/admin/users/${userId}/link-provider`, { provider: 'plex', pinId: pin.id });
-          if (linkData.success) {
-            clearInterval(pollRef.current!);
-            pollRef.current = null;
-            setLinkingUser(null);
-            fetchUsers();
-          }
-        } catch { /* keep polling */ }
-      }, 1000);
-    } catch {
-      setLinkingUser(null);
-    }
+    flowRef.current?.cancel();
+    flowRef.current = startPlexPinFlow({
+      authWindow,
+      pinEndpoint: '/auth/plex/pin',
+      checkEndpoint: `/admin/users/${userId}/link-provider`,
+      checkPayload: { provider: 'plex' },
+      // link-provider returns { success: true } once the link is created, not a token. The
+      // helper interprets a non-null return as success — so we return the sentinel string
+      // when linkData.success flips.
+      extractToken: (res) => ((res as { success?: boolean })?.success ? 'ok' : null),
+      onToken: () => {
+        setLinkingUser(null);
+        fetchUsers();
+      },
+      onError: () => setLinkingUser(null),
+    });
   };
 
   const handleLinkCredentials = async () => {
@@ -385,13 +372,7 @@ export function UsersTab() {
                   {/* Group 1 — provider badges + request count */}
                   <span className="text-xs text-ndp-text-dim tabular-nums">{u.requestCount} {t('requests.title').toLowerCase()}</span>
                   {(u.providers || []).map((p) => (
-                    <span key={p.provider} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                      p.provider === 'plex' ? 'bg-[#e5a00d]/10 text-[#e5a00d]' :
-                      p.provider === 'jellyfin' ? 'bg-[#00a4dc]/10 text-[#00a4dc]' :
-                      p.provider === 'emby' ? 'bg-[#52b54b]/10 text-[#52b54b]' :
-                      p.provider === 'email' ? 'bg-ndp-accent/10 text-ndp-accent' :
-                      'bg-white/5 text-ndp-text-dim'
-                    }`} title={p.email && p.email !== u.email ? p.email : p.username || undefined}>
+                    <span key={p.provider} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${getProviderBadgeClass(p.provider)}`} title={p.email && p.email !== u.email ? p.email : p.username || undefined}>
                       {p.provider.charAt(0).toUpperCase() + p.provider.slice(1)}
                       {p.email && p.email !== u.email && <span className="ml-1 opacity-60">({p.email})</span>}
                     </span>
@@ -632,10 +613,6 @@ function RoleBadgeDropdown({ user, roles, disabled, loading, onSelect }: {
 
 // ─── Link Provider Dropdown ────────────────────────────────────────
 
-const PROVIDER_COLORS: Record<string, string> = {
-  plex: '#e5a00d', jellyfin: '#00a4dc', emby: '#52b54b',
-};
-
 function LinkProviderDropdown({ userId, userProviders, authProviders, linking, onLinkOAuth, onLinkCredentials }: {
   userId: number;
   userProviders: string[];
@@ -688,7 +665,7 @@ function LinkProviderDropdown({ userId, userProviders, authProviders, linking, o
           style={{ top: pos.top, left: pos.left }}
         >
           {unlinked.map(ap => {
-            const color = PROVIDER_COLORS[ap.id] || '#888';
+            const color = getProviderHex(ap.id);
             return (
               <button
                 key={ap.id}

@@ -1,10 +1,7 @@
 import semver from 'semver';
 import type { PluginManifest } from './types.js';
 import { readFileSync } from 'fs';
-import { dirname, resolve } from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { BACKEND_PACKAGE_JSON } from '../utils/paths.js';
 
 /**
  * 🟢 `verified`     — Oscarr's current version is listed in the plugin's testedAgainst.
@@ -17,9 +14,8 @@ export type CompatStatus = 'verified' | 'untested' | 'incompatible' | 'unknown';
 let cachedVersion: string | null = null;
 export function getOscarrVersion(): string {
   if (cachedVersion) return cachedVersion;
-  const pkgPath = resolve(__dirname, '../../package.json');
   try {
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
+    const pkg = JSON.parse(readFileSync(BACKEND_PACKAGE_JSON, 'utf-8')) as { version?: string };
     cachedVersion = pkg.version ?? '0.0.0';
   } catch {
     cachedVersion = '0.0.0';

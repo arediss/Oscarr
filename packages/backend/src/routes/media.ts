@@ -5,7 +5,7 @@ import { parseId, parsePage, VALID_MEDIA_TYPES } from '../utils/params.js';
 import { isMatureRating } from '../services/tmdb.js';
 import { normalizeLanguages } from '../utils/languages.js';
 import { performLiveCheckWithTimeout, cacheLanguageData, promoteMediaToAvailable, canSkipLiveCheck } from '../services/mediaService.js';
-import { COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
+import { COMPLETABLE_REQUEST_STATUSES } from '@oscarr/shared';
 
 /** Normalize episode info to { season, episode, title } regardless of source format */
 function normalizeEpisodeInfo(info: Record<string, unknown>): { season: number; episode: number; title: string } | null {

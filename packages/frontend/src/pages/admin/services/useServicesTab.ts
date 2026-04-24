@@ -10,6 +10,9 @@ export interface ServiceTestResult {
   /** Backend error token (UPPER_SNAKE) when !ok — lets the UI distinguish SSRF-blocked
    *  from actually unreachable services. */
   errorCode?: string;
+  /** Human-readable cause (e.g. "Connection refused at foo.bar:7878 …"). Pre-rendered by the
+   *  backend and surfaced alongside the code so admins can diagnose without reading logs. */
+  errorDetail?: string;
 }
 
 /**
@@ -100,8 +103,8 @@ export function useServicesTab() {
     } catch (err) {
       // Explicit user click — surface the backend error so the admin knows 401 / timeout / etc.
       toastApiError(err, t('admin.services.test_failed', { name: service.name }));
-      const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setTestResults((prev) => ({ ...prev, [service.id]: { ok: false, errorCode: code } }));
+      const body = (err as { response?: { data?: { error?: string; detail?: string } } })?.response?.data;
+      setTestResults((prev) => ({ ...prev, [service.id]: { ok: false, errorCode: body?.error, errorDetail: body?.detail } }));
     } finally {
       setTesting(null);
     }

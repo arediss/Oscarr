@@ -32,6 +32,11 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate --schema=packages/backend/prisma/schema.prisma
 
+      # backend + frontend both import from @oscarr/shared; its package.json main/types point to
+      # dist/, so the shared package has to be built before either side can typecheck.
+      - name: Build shared package
+        run: npm run build --workspace=packages/shared
+
       - name: Typecheck backend
         run: npx tsc --noEmit --project packages/backend/tsconfig.json
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { startPlexPinFlow, type PlexPinFlowHandle } from '@/providers/plex/pinFlow';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
@@ -13,18 +14,23 @@ interface WizardService {
   name: string;
   config: Record<string, string>;
   testStatus: 'idle' | 'testing' | 'ok' | 'error';
+  testError?: string;
   saved: boolean;
 }
 
 const TOTAL_STEPS = 5; // 0-4
 
 export default function InstallPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
   const [setupSecret, setSetupSecret] = useState('');
   const [secretValid, setSecretValid] = useState(false);
+  // The wizard can be resumed after it crashed between steps 1 and 4. If an admin is already
+  // on record we swap the register form for a login form — user re-authenticates, cookie gets
+  // set, wizard resumes at step 2.
+  const [adminExists, setAdminExists] = useState(false);
   const { schemas: SERVICE_SCHEMAS } = useServiceSchemas('/setup/service-schemas', secretValid);
   const [secretShake, setSecretShake] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -46,7 +52,6 @@ export default function InstallPage() {
 
   // Plex OAuth helpers
   const [plexPolling, setPlexPolling] = useState<string | null>(null); // service id being polled
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Step 3: Sync
   const [syncing, setSyncing] = useState(false);
@@ -62,9 +67,7 @@ export default function InstallPage() {
       .catch(() => setChecking(false));
   }, [navigate]);
 
-  useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+  useEffect(() => () => flowRef.current?.cancel(), []);
 
   // ─── Step 1: Admin account ──────────────────────────────────────────
 
@@ -81,6 +84,34 @@ export default function InstallPage() {
       const { data } = await api.post('/auth/register', {
         email: adminEmail, password: adminPassword, displayName: adminDisplayName,
       });
+      await login('', data.user);
+      // Pre-seed instanceLanguages from the browser's detected locale so the first TMDB sync
+      // pulls metadata in the admin's language straight away instead of downloading English
+      // and re-pulling later. Skipped for 'en' (schema default) and silently best-effort —
+      // if the PUT fails the admin can still adjust it in Instance settings.
+      const detectedLang = i18n.language.split('-')[0];
+      if (detectedLang && detectedLang !== 'en') {
+        api.put('/admin/settings', { instanceLanguages: [detectedLang] }).catch(() => {});
+      }
+      setStep(2);
+    } catch (err: unknown) {
+      setError(extractApiError(err, t('login.error')));
+    } finally { setSaving(false); }
+  };
+
+  const handleResumeAsAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const { data } = await api.post('/auth/login', { email: adminEmail, password: adminPassword });
+      // Defense-in-depth: /verify-secret only returns adminExists=true when an admin row exists,
+      // but nothing stops a non-admin with email creds from logging in here. The wizard needs
+      // an admin session to mutate services, so refuse non-admin users and tell them to clear.
+      if (data.user?.role !== 'admin') {
+        setError(t('install.admin_required', 'This account is not an admin — the wizard needs an admin to continue.'));
+        return;
+      }
       await login('', data.user);
       setStep(2);
     } catch (err: unknown) {
@@ -127,12 +158,16 @@ export default function InstallPage() {
   const testService = async (id: string) => {
     const svc = services.find(s => s.id === id);
     if (!svc) return;
-    updateService(id, { testStatus: 'testing' });
+    updateService(id, { testStatus: 'testing', testError: undefined });
     try {
       await api.post('/setup/test-service', { type: svc.type, config: svc.config });
-      setServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'ok' as const } : s));
-    } catch {
-      setServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'error' as const } : s));
+      setServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'ok' as const, testError: undefined } : s));
+    } catch (err) {
+      // Backend returns { error: <code>, detail: <human message> } — show the detail so the
+      // user can distinguish refused / timeout / bad API key / DNS without reading server logs.
+      const resp = (err as { response?: { data?: { error?: string; detail?: string } } }).response?.data;
+      const message = resp?.detail || resp?.error || (err as Error)?.message || 'Test failed';
+      setServices(prev => prev.map(s => s.id === id ? { ...s, testStatus: 'error' as const, testError: message } : s));
     }
   };
 
@@ -140,65 +175,40 @@ export default function InstallPage() {
     const svc = services.find(s => s.id === serviceId);
     if (!svc?.config.url) return;
     try {
-      const res = await fetch(`${svc.config.url}/identity`, {
-        headers: { 'X-Plex-Token': token, Accept: 'application/json' },
-      });
-      const json = await res.json();
-      const mid = json.MediaContainer?.machineIdentifier;
-      if (mid) {
+      const { data } = await api.post<{ machineId: string }>('/setup/plex-identity', { url: svc.config.url, token });
+      if (data.machineId) {
         setServices(prev => prev.map(s => s.id === serviceId
-          ? { ...s, config: { ...s.config, machineId: mid } }
+          ? { ...s, config: { ...s.config, machineId: data.machineId } }
           : s
         ));
       }
-    } catch { /* ignore */ }
+    } catch { /* ignore — user can still type it manually or retry via detect button */ }
   };
 
-  const handlePlexTokenReceived = async (serviceId: string, token: string) => {
-    clearInterval(pollRef.current!);
-    pollRef.current = null;
-    setPlexPolling(null);
-    setServices(prev => prev.map(s => s.id === serviceId
-      ? { ...s, config: { ...s.config, token }, testStatus: 'idle' as const }
-      : s
-    ));
-    await autoDetectMachineId(serviceId, token);
-  };
-
-  const handlePollAttempt = async (serviceId: string, pinId: string, attempts: number) => {
-    if (attempts >= 120) {
-      clearInterval(pollRef.current!);
-      pollRef.current = null;
-      setPlexPolling(null);
-      setError(t('login.expired'));
-      return;
-    }
-    try {
-      const { data: checkData } = await api.post('/setup/plex-check', { pinId });
-      if (checkData.token) {
-        await handlePlexTokenReceived(serviceId, checkData.token);
-      }
-    } catch { /* keep polling */ }
-  };
+  const flowRef = useRef<PlexPinFlowHandle | null>(null);
 
   const startPlexOAuth = (serviceId: string) => {
     setPlexPolling(serviceId);
     setError('');
-    // Open popup BEFORE the async call — Safari blocks window.open() after await
     const authWindow = window.open('about:blank', 'PlexAuth', 'width=600,height=700');
-    api.post('/auth/plex/pin').then(({ data }) => {
-      const { pin, authUrl } = data;
-      if (authWindow) authWindow.location.href = authUrl;
-
-      let attempts = 0;
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(() => {
-        attempts++;
-        handlePollAttempt(serviceId, pin.id, attempts);
-      }, 1000);
-    }).catch(() => {
-      setPlexPolling(null);
-      setError(t('login.error'));
+    flowRef.current?.cancel();
+    flowRef.current = startPlexPinFlow({
+      authWindow,
+      pinEndpoint: '/auth/plex/pin',
+      checkEndpoint: '/setup/plex-check',
+      extractToken: (res) => (res as { token?: string })?.token ?? null,
+      onToken: async (token) => {
+        setPlexPolling(null);
+        setServices(prev => prev.map(s => s.id === serviceId
+          ? { ...s, config: { ...s.config, token }, testStatus: 'idle' as const }
+          : s
+        ));
+        await autoDetectMachineId(serviceId, token);
+      },
+      onError: () => {
+        setPlexPolling(null);
+        setError(t('login.expired'));
+      },
     });
   };
 
@@ -206,18 +216,16 @@ export default function InstallPage() {
     const svc = services.find(s => s.id === serviceId);
     if (!svc?.config.url || !svc?.config.token) return;
     try {
-      const res = await fetch(`${svc.config.url}/identity`, {
-        headers: { 'X-Plex-Token': svc.config.token, Accept: 'application/json' },
+      const { data } = await api.post<{ machineId: string }>('/setup/plex-identity', {
+        url: svc.config.url, token: svc.config.token,
       });
-      const json = await res.json();
-      const mid = json.MediaContainer?.machineIdentifier;
-      if (mid) {
+      if (data.machineId) {
         setServices(prev => prev.map(s => s.id === serviceId
-          ? { ...s, config: { ...s.config, machineId: mid } }
+          ? { ...s, config: { ...s.config, machineId: data.machineId } }
           : s
         ));
       }
-    } catch { /* ignore */ }
+    } catch { /* ignore — manual retry possible */ }
   };
 
   const saveServices = async () => {
@@ -324,7 +332,8 @@ export default function InstallPage() {
               sessionStorage.setItem('setup-secret', setupSecret);
               setError('');
               try {
-                await api.post('/setup/verify-secret');
+                const { data } = await api.post('/setup/verify-secret');
+                setAdminExists(Boolean(data?.adminExists));
                 setSecretValid(true);
               } catch {
                 setError(t('install.setup_secret_invalid', 'Invalid setup secret.'));
@@ -363,8 +372,29 @@ export default function InstallPage() {
             </div>
           )}
 
-          {/* Step 1: Create admin account */}
-          {step === 1 && (
+          {/* Step 1: Create admin account — or resume as existing admin when the wizard was
+              interrupted after account creation (DB already has an admin row). */}
+          {step === 1 && adminExists && (
+            <form onSubmit={handleResumeAsAdmin} className="space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold text-ndp-text mb-1">{t('install.resume_title', 'Sign in to resume')}</h2>
+                <p className="text-xs text-ndp-text-dim">{t('install.resume_desc', 'An admin account already exists. Sign in to continue the installation from where you left off.')}</p>
+              </div>
+              <input type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder={t('login.email_placeholder')} required className="input w-full" autoFocus />
+              <div className="relative">
+                <input type={showPassword ? 'text' : 'password'} value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder={t('login.password_placeholder')} required className="input w-full pr-10" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? t('common.hide') : t('common.show')} className="absolute right-3 top-1/2 -translate-y-1/2 text-ndp-text-dim hover:text-ndp-text">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <button type="submit" disabled={saving} className="btn-primary w-full flex items-center justify-center gap-2 text-sm">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                {t('install.resume_login', 'Sign in and continue')}
+              </button>
+            </form>
+          )}
+
+          {step === 1 && !adminExists && (
             <form onSubmit={handleCreateAdmin} className="space-y-4">
               <div>
                 <h2 className="text-sm font-semibold text-ndp-text mb-1">{t('install.admin_title')}</h2>
@@ -499,6 +529,9 @@ export default function InstallPage() {
                               <span className="flex items-center gap-1 text-xs text-ndp-danger"><XCircle className="w-3.5 h-3.5" /> {t('status.connection_failed')}</span>
                             )}
                           </div>
+                          {svc.testStatus === 'error' && svc.testError && (
+                            <p className="mt-2 text-xs text-ndp-danger/90 break-words">{svc.testError}</p>
+                          )}
                         </div>
                       </div>
                     </div>

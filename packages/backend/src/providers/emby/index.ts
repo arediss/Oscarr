@@ -218,7 +218,7 @@ export const embyProvider: Provider = {
   service: {
     id: 'emby',
     label: 'Emby',
-    icon: 'https://emby.media/community/uploads/inline/44692/560bd2152e1ad_MB3_95_78.png',
+    icon: '/providers/emby.png',
     category: 'media-server',
     fields: [
       { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:8096' },

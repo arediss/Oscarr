@@ -78,7 +78,7 @@ export default function MessagesPage() {
       try {
         const { data } = await api.get(`/support/tickets/${activeTicket.id}/messages`);
         setMessages(data);
-      } catch { /* ignore */ }
+      } catch (err) { console.warn('[MessagesPage] ticket poll failed', err); }
     }, 10000);
     return () => clearInterval(interval);
   }, [activeTicket]);

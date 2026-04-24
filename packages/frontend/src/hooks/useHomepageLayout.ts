@@ -35,7 +35,7 @@ export function useHomepageLayout() {
           setSections(null); // malformed response -> fallback
         }
       })
-      .catch(() => setSections(null)) // fallback to null = use hardcoded default
+      .catch((err) => { console.warn("[useHomepageLayout] failed, using hardcoded default", err); setSections(null); }) // fallback to null = use hardcoded default
       .finally(() => setLoading(false));
   }, []);
 

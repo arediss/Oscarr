@@ -1,7 +1,7 @@
 import { prisma } from '../utils/prisma.js';
 import { getArrClient, getServiceTypeForMedia } from '../providers/index.js';
 import { normalizeLanguages } from '../utils/languages.js';
-import { COMPLETABLE_REQUEST_STATUSES } from '../utils/requestStatus.js';
+import { COMPLETABLE_REQUEST_STATUSES } from '@oscarr/shared';
 
 // ---------------------------------------------------------------------------
 // Types

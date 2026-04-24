@@ -50,7 +50,7 @@ export default function ChangelogModal({ open, onClose }: { open: boolean; onClo
     setLoading(true);
     api.get('/app/changelog')
       .then(({ data: d }) => setData(d))
-      .catch(() => {})
+      .catch((err) => console.warn("[ChangelogModal] failed to fetch changelog", err))
       .finally(() => setLoading(false));
   }, [open, data]);
 

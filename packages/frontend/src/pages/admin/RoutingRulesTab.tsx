@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, XCircle, Pencil, Copy, Power, GripVertical, AlertTriangle } from 'lucide-react';
 import api from '@/lib/api';
@@ -48,6 +48,7 @@ async function fetchRootFolders(arrServices: ServiceOption[]) {
 
 export function RoutingRulesTab() {
   const { t } = useTranslation();
+  const fieldId = useId();
   const [rules, setRules] = useState<FolderRule[]>([]);
   const [labeledFolders, setLabeledFolders] = useState<{ path: string; label: string; serviceId: number | null }[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
@@ -304,26 +305,26 @@ export function RoutingRulesTab() {
         <div className="card p-5 mt-4 border border-ndp-accent/20 space-y-4 animate-fade-in">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-ndp-text-dim block mb-1">{t('common.name')}</label>
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t('admin.paths.rule_name_placeholder')} className="input text-sm w-full" />
+              <label htmlFor={`${fieldId}-name`} className="text-xs text-ndp-text-dim block mb-1">{t('common.name')}</label>
+              <input id={`${fieldId}-name`} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t('admin.paths.rule_name_placeholder')} className="input text-sm w-full" />
             </div>
             <div>
-              <label className="text-xs text-ndp-text-dim block mb-1">{t('common.type')}</label>
-              <select value={newMediaType} onChange={(e) => { setNewMediaType(e.target.value); setNewFolder(''); setNewServiceId(''); }} className="input text-sm w-full">
+              <label htmlFor={`${fieldId}-type`} className="text-xs text-ndp-text-dim block mb-1">{t('common.type')}</label>
+              <select id={`${fieldId}-type`} value={newMediaType} onChange={(e) => { setNewMediaType(e.target.value); setNewFolder(''); setNewServiceId(''); }} className="input text-sm w-full">
                 <option value="tv">{t('common.series')}</option><option value="movie">{t('common.movie')}</option>
               </select>
             </div>
             <div>
-              <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.paths.sonarr_type')}</label>
-              <select value={newSeriesType} onChange={(e) => setNewSeriesType(e.target.value)} className="input text-sm w-full">
+              <label htmlFor={`${fieldId}-sonarr-type`} className="text-xs text-ndp-text-dim block mb-1">{t('admin.paths.sonarr_type')}</label>
+              <select id={`${fieldId}-sonarr-type`} value={newSeriesType} onChange={(e) => setNewSeriesType(e.target.value)} className="input text-sm w-full">
                 <option value="">{t('admin.paths.standard')}</option><option value="anime">{t('admin.paths.anime_rule')}</option><option value="daily">{t('admin.paths.daily')}</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-ndp-text-dim block mb-1">{t('admin.paths.target_folder')}</label>
-            <select value={newFolder} onChange={(e) => handleFolderChange(e.target.value)} className="input text-sm w-full">
+            <label htmlFor={`${fieldId}-folder`} className="text-xs text-ndp-text-dim block mb-1">{t('admin.paths.target_folder')}</label>
+            <select id={`${fieldId}-folder`} value={newFolder} onChange={(e) => handleFolderChange(e.target.value)} className="input text-sm w-full">
               <option value="">{t('common.choose')}</option>
               {labeledFolders
                 .filter(f => {
@@ -335,9 +336,9 @@ export function RoutingRulesTab() {
             </select>
           </div>
 
-          {/* Conditions */}
-          <div>
-            <label className="text-xs text-ndp-text-dim block mb-2">{t('admin.paths.conditions_help')}</label>
+          {/* Conditions — not a single input, so label the group via aria-labelledby. */}
+          <div role="group" aria-labelledby={`${fieldId}-conditions`}>
+            <span id={`${fieldId}-conditions`} className="text-xs text-ndp-text-dim block mb-2">{t('admin.paths.conditions_help')}</span>
             <div className="space-y-2">
               {newConditions.map((cond, i) => renderConditionRow(cond, i))}
             </div>

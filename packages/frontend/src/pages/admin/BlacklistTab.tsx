@@ -8,6 +8,7 @@ import { posterUrl } from '@/lib/api';
 import { toastApiError } from '@/utils/toast';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
+import { useModal } from '@/hooks/useModal';
 
 interface BlacklistEntry {
   id: number;
@@ -46,6 +47,10 @@ export function BlacklistTab() {
 
   // Confirm modal
   const [confirmMedia, setConfirmMedia] = useState<TmdbResult | null>(null);
+  const { dialogRef: confirmDialogRef, titleId: confirmTitleId } = useModal({
+    open: confirmMedia !== null,
+    onClose: () => setConfirmMedia(null),
+  });
   const [reason, setReason] = useState('');
   const [adding, setAdding] = useState(false);
 
@@ -181,13 +186,24 @@ export function BlacklistTab() {
       {/* Confirm modal */}
       {confirmMedia && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setConfirmMedia(null)}>
-          <div className="bg-ndp-surface border border-white/10 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={confirmDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={confirmTitleId}
+            className="bg-ndp-surface border border-white/10 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-ndp-text flex items-center gap-2">
+              <h3 id={confirmTitleId} className="text-base font-bold text-ndp-text flex items-center gap-2">
                 <ShieldBan className="w-4 h-4 text-ndp-danger" />
                 {t('admin.blacklist.confirm_title')}
               </h3>
-              <button onClick={() => setConfirmMedia(null)} className="text-ndp-text-dim hover:text-ndp-text">
+              <button
+                onClick={() => setConfirmMedia(null)}
+                className="text-ndp-text-dim hover:text-ndp-text"
+                aria-label={t('common.close')}
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>

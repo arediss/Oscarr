@@ -6,6 +6,8 @@ import { useFeatures } from '@/context/FeaturesContext';
 import { Film, Mail, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/api';
 import type { AuthProviderConfig } from '@/types';
+import { getProviderButtonClass } from '@/providers/colors';
+import { startPlexPinFlow, type PlexPinFlowHandle } from '@/providers/plex/pinFlow';
 
 export default function LoginPage() {
   const { t } = useTranslation();
@@ -24,13 +26,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [polling, setPolling] = useState(false);
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const flowRef = useRef<PlexPinFlowHandle | null>(null);
 
   useEffect(() => {
-    api.get('/auth/providers').then(({ data }) => setProviders(data)).catch(() => {});
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
+    api.get('/auth/providers').then(({ data }) => setProviders(data)).catch((err) => console.warn('[LoginPage] /auth/providers failed', err));
+    return () => flowRef.current?.cancel();
   }, []);
 
   // OAuth providers redirect back to `/login?error=<TOKEN>` on failure (see Discord callback).
@@ -128,51 +128,42 @@ export default function LoginPage() {
     if (providerId === 'plex') {
       setLoading(true);
       setError('');
-      // Open popup BEFORE the async call — Safari blocks window.open() after await
       const authWindow = window.open('about:blank', 'PlexAuth', 'width=600,height=700');
-      try {
-        const { data } = await api.post('/auth/plex/pin');
-        const { pin, authUrl } = data;
-        if (authWindow) authWindow.location.href = authUrl;
-
-        setPolling(true);
-        let attempts = 0;
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = setInterval(async () => {
-          attempts++;
-          if (attempts >= 120) {
-            clearInterval(pollIntervalRef.current!);
-            pollIntervalRef.current = null;
-            setPolling(false);
-            setLoading(false);
-            setError(t('login.expired'));
-            return;
-          }
+      setPolling(true);
+      flowRef.current?.cancel();
+      flowRef.current = startPlexPinFlow({
+        authWindow,
+        pinEndpoint: '/auth/plex/pin',
+        // Login's /callback returns { user, token }, not { token }. The helper treats a non-null
+        // return as "got a token" — we return the pinId encoded in the user object indirectly
+        // by returning a sentinel string when `user` is set. Caller reads `lastResponse` below.
+        checkEndpoint: '/auth/plex/callback',
+        extractToken: (res) => {
+          const user = (res as { user?: unknown })?.user;
+          return user ? 'ok' : null;
+        },
+        onToken: async () => {
+          // We need the actual user payload for `login()` — refetch /me after the cookie lands.
           try {
-            const { data: callbackData } = await api.post('/auth/plex/callback', { pinId: pin.id });
-            if (callbackData.user) {
-              clearInterval(pollIntervalRef.current!);
-              pollIntervalRef.current = null;
-              authWindow?.close();
-              login('', callbackData.user);
-              navigate('/', { replace: true });
-            }
-          } catch { /* keep polling */ }
-        }, 1000);
-      } catch {
-        setError(t('login.error'));
-        setLoading(false);
-        setPolling(false);
-      }
+            const { data } = await api.get('/auth/me');
+            login('', data);
+            navigate('/', { replace: true });
+          } catch {
+            setError(t('login.error'));
+          } finally {
+            setLoading(false);
+            setPolling(false);
+          }
+        },
+        onError: () => {
+          setLoading(false);
+          setPolling(false);
+          setError(t('login.expired'));
+        },
+      });
     }
   };
 
-  const PROVIDER_STYLES: Record<string, { bg: string; hover: string; text: string }> = {
-    plex: { bg: 'bg-[#e5a00d]', hover: 'hover:bg-[#cc8c00]', text: 'text-black' },
-    discord: { bg: 'bg-[#5865F2]', hover: 'hover:bg-[#4752C4]', text: 'text-white' },
-    jellyfin: { bg: 'bg-[#00a4dc]', hover: 'hover:bg-[#0090c4]', text: 'text-white' },
-    emby: { bg: 'bg-[#52b54b]', hover: 'hover:bg-[#429a3d]', text: 'text-white' },
-  };
 
   return (
     <div className="min-h-dvh bg-ndp-bg flex items-center justify-center relative overflow-hidden">
@@ -262,7 +253,7 @@ export default function LoginPage() {
               {activeCredProvider ? (() => {
                 const provider = credentialProviders.find(p => p.id === activeCredProvider);
                 if (!provider) return null;
-                const style = PROVIDER_STYLES[provider.id] || { bg: 'bg-white/10', hover: 'hover:bg-white/20', text: 'text-white' };
+                const buttonClass = getProviderButtonClass(provider.id);
                 return (
                   <div className="space-y-4">
                     <form onSubmit={e => { e.preventDefault(); handleCredentialLogin(provider.id); }} className="space-y-4">
@@ -284,7 +275,7 @@ export default function LoginPage() {
                       <button
                         type="submit"
                         disabled={loading || !credUsername || !credPassword}
-                        className={`w-full ${style.bg} ${style.hover} ${style.text} font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                        className={`w-full ${buttonClass} font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
                       >
                         {loading ? (
                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -348,7 +339,7 @@ export default function LoginPage() {
 
                   {/* All external providers as buttons */}
                   {[...oauthProviders, ...credentialProviders].map((provider) => {
-                    const style = PROVIDER_STYLES[provider.id] || { bg: 'bg-white/10', hover: 'hover:bg-white/20', text: 'text-white' };
+                    const buttonClass = getProviderButtonClass(provider.id);
                     const isOAuth = provider.type === 'oauth';
                     return (
                       <button
@@ -358,7 +349,7 @@ export default function LoginPage() {
                           else { setActiveCredProvider(provider.id); setCredUsername(''); setCredPassword(''); setError(''); }
                         }}
                         disabled={loading}
-                        className={`w-full flex items-center justify-center gap-3 ${style.bg} ${style.hover} ${style.text} font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed`}
+                        className={`w-full flex items-center justify-center gap-3 ${buttonClass} font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         {polling && provider.id === 'plex' ? (
                           <>

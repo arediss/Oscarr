@@ -5,7 +5,7 @@ export const qbittorrentProvider: Provider = {
   service: {
     id: 'qbittorrent',
     label: 'qBittorrent',
-    icon: 'https://upload.wikimedia.org/wikipedia/commons/6/66/New_qBittorrent_Logo.svg',
+    icon: '/providers/qbittorrent.svg',
     category: 'download-client',
     fields: [
       { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:8080' },

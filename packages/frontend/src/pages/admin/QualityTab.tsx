@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { Loader2, Plus, X, Check, Trash2, Shield, Link2, CheckCircle, Clock } from 'lucide-react';
 import api from '@/lib/api';
 import { toastApiError } from '@/utils/toast';
+import { useModal } from '@/hooks/useModal';
 
 interface QualityMappingType {
   id: number;
@@ -36,12 +37,21 @@ interface RoleType {
 
 export function QualityTab() {
   const { t } = useTranslation();
+  const groupId = useId();
   const [options, setOptions] = useState<QualityOptionType[]>([]);
   const [services, setServices] = useState<ServiceType[]>([]);
   const [roles, setRoles] = useState<RoleType[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingOption, setEditingOption] = useState<number | null>(null);
+  const { dialogRef: optionDialogRef, titleId: optionTitleId } = useModal({
+    open: editingOption !== null,
+    onClose: () => setEditingOption(null),
+  });
   const [editingMapping, setEditingMapping] = useState<{ qualityOptionId: number; serviceId: number } | null>(null);
+  const { dialogRef: mappingDialogRef, titleId: mappingTitleId } = useModal({
+    open: editingMapping !== null,
+    onClose: () => setEditingMapping(null),
+  });
   const [profiles, setProfiles] = useState<{ id: number; name: string }[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [selectedProfiles, setSelectedProfiles] = useState<Set<number>>(new Set());
@@ -275,9 +285,16 @@ export function QualityTab() {
 
         return createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-            <div className="card p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div
+              ref={optionDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={optionTitleId}
+              className="card p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[85vh] flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold text-ndp-text">{opt.label}</h3>
+                <h3 id={optionTitleId} className="text-lg font-bold text-ndp-text">{opt.label}</h3>
                 <div className="flex items-center gap-1">
                   <button onClick={() => { deleteOption(opt.id); setEditingOption(null); }} aria-label={t('common.delete')} className="p-1.5 rounded-lg text-ndp-text-dim hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors">
                     <Trash2 className="w-4 h-4" />
@@ -289,9 +306,9 @@ export function QualityTab() {
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-5">
-                {/* Mappings */}
-                <div>
-                  <label className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.mapping_title')}</label>
+                {/* Mappings — group of service → profile chips, no single input so labelled via aria */}
+                <div role="group" aria-labelledby={`${groupId}-mappings`}>
+                  <span id={`${groupId}-mappings`} className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.mapping_title')}</span>
                   <div className="flex flex-wrap gap-2">
                     {opt.mappings.map((m) => (
                       <span key={m.id} className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-ndp-success/10 text-ndp-success font-medium">
@@ -310,9 +327,9 @@ export function QualityTab() {
                   </div>
                 </div>
 
-                {/* Roles — checkbox list like RBAC */}
-                <div>
-                  <label className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.allowed_roles')}</label>
+                {/* Roles — checkbox list group */}
+                <div role="group" aria-labelledby={`${groupId}-roles`}>
+                  <span id={`${groupId}-roles`} className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.allowed_roles')}</span>
                   <div className="space-y-0.5">
                     {roles.map((role) => {
                       const isAllowed = allowedRoles.includes(role.name);
@@ -335,9 +352,9 @@ export function QualityTab() {
                   </p>
                 </div>
 
-                {/* Approval — segmented control like cleanup */}
-                <div>
-                  <label className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.approval_mode')}</label>
+                {/* Approval — segmented control (radiogroup-like) */}
+                <div role="group" aria-labelledby={`${groupId}-approval`}>
+                  <span id={`${groupId}-approval`} className="text-sm text-ndp-text mb-2 block font-medium">{t('admin.quality.approval_mode')}</span>
                   <div className="flex gap-1 bg-ndp-surface-light rounded-lg p-1">
                     {([
                       { value: null, labelKey: 'admin.quality.approval_inherit', style: 'bg-white/10 text-ndp-text shadow-sm' },
@@ -373,8 +390,15 @@ export function QualityTab() {
       {/* Profile select modal */}
       {editingMapping && createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onMouseDown={() => setEditingMapping(null)}>
-          <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-ndp-text mb-1">{t('admin.quality.select_profile')}</h3>
+          <div
+            ref={mappingDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={mappingTitleId}
+            className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h3 id={mappingTitleId} className="text-lg font-bold text-ndp-text mb-1">{t('admin.quality.select_profile')}</h3>
             <p className="text-xs text-ndp-text-dim mb-4">
               {options.find(o => o.id === editingMapping.qualityOptionId)?.label} → {services.find(s => s.id === editingMapping.serviceId)?.name}
             </p>

@@ -1,16 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { readFileSync } from 'fs';
-import { resolve } from 'path';
 import axios from 'axios';
 import crypto from 'crypto';
 import { prisma } from '../utils/prisma.js';
 import { pluginEngine } from '../plugins/engine.js';
 import { getArrClient } from '../providers/index.js';
 import { getServiceConfig } from '../utils/services.js';
+import { PROJECT_PACKAGE_JSON } from '../utils/paths.js';
 import { getHomepageLayout } from './admin/homepage.js';
 
 const APP_VERSION = JSON.parse(
-  readFileSync(resolve(import.meta.dirname, '../../../../package.json'), 'utf-8')
+  readFileSync(PROJECT_PACKAGE_JSON, 'utf-8')
 ).version as string;
 
 export async function appRoutes(app: FastifyInstance) {
@@ -122,16 +122,20 @@ export async function appRoutes(app: FastifyInstance) {
     };
   });
 
-  // Get feature flags (no auth — needed by Layout before auth check)
+  // Get feature flags (no auth — needed by Layout before auth check).
+  // `instanceLanguage` drives the frontend UI locale in prod: the user-facing language switcher
+  // is dev-only (see UserCluster), so the instance-wide setting is what everyone actually sees.
   app.get('/features', async () => {
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
     const pluginFeatures = pluginEngine.getAllFeatureFlags();
+    const languages: string[] = settings?.instanceLanguages ? JSON.parse(settings.instanceLanguages) : ['en'];
     return {
       requestsEnabled: settings?.requestsEnabled ?? true,
       supportEnabled: settings?.supportEnabled ?? true,
       calendarEnabled: settings?.calendarEnabled ?? true,
       siteName: settings?.siteName ?? 'Oscarr',
       nsfwBlurEnabled: settings?.nsfwBlurEnabled ?? true,
+      instanceLanguage: languages[0] ?? 'en',
       ...pluginFeatures,
     };
   });

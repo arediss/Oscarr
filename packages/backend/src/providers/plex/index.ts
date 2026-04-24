@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { prisma } from '../../utils/prisma.js';
-import { getPlexUser, createPlexPin, checkPlexPin, getSharedServerUsers } from '../../services/plex.js';
+import { getPlexUser, createPlexPin, checkPlexPin, getSharedServerUsers } from './client.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { parseServiceConfig } from '../../utils/services.js';
 import type { Provider, AuthProvider, AuthHelpers } from '../types.js';
@@ -18,6 +18,18 @@ export async function plexCreatePin() {
 
 export async function plexCheckPin(pinId: number): Promise<string | null> {
   return checkPlexPin(pinId, PLEX_CLIENT_ID);
+}
+
+/** Probe a Plex server's /identity endpoint from the backend. Called by setup + admin routes
+ *  to spare the browser from fetching the LAN Plex URL directly, which CSP connect-src 'self'
+ *  blocks in production. Returns just the machineIdentifier — callers don't need the rest. */
+export async function plexFetchMachineId(url: string, token: string): Promise<string | null> {
+  const trimmedUrl = url.replace(/\/$/, '');
+  const { data } = await axios.get(`${trimmedUrl}/identity`, {
+    headers: { 'X-Plex-Token': token, Accept: 'application/json' },
+    timeout: 5000,
+  });
+  return (data as { MediaContainer?: { machineIdentifier?: string } }).MediaContainer?.machineIdentifier ?? null;
 }
 
 export async function getPlexToken(adminUserId?: number): Promise<string | null> {
@@ -217,7 +229,7 @@ export const plexProvider: Provider = {
   service: {
     id: 'plex',
     label: 'Plex',
-    icon: 'https://www.vectorlogo.zone/logos/plextv/plextv-tile.svg',
+    icon: '/providers/plex.svg',
     category: 'media-server',
     fields: [
       { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:32400' },

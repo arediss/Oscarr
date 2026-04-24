@@ -5,6 +5,7 @@ import { logEvent } from '../../../utils/logEvent.js';
 import { parseId } from '../../../utils/params.js';
 import { assertPublicUrl, SsrfBlockedError } from '../../../utils/ssrfGuard.js';
 import { verifyPassword } from '../../../utils/password.js';
+import { classifyTestError } from '../../../utils/serviceTestError.js';
 
 const MASK = '__MASKED__';
 
@@ -237,8 +238,10 @@ export async function servicesCrudRoutes(app: FastifyInstance) {
 
     try {
       return await def.test(config);
-    } catch {
-      return reply.status(502).send({ error: 'Unable to reach the service' });
+    } catch (err) {
+      const info = classifyTestError(err);
+      logEvent('warn', 'Service', `Test failed for "${service.name}" (${service.type}): ${info.code} — ${info.message}`, err);
+      return reply.status(502).send({ error: info.code, detail: info.message });
     }
   });
 }

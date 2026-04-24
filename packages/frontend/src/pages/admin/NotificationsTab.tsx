@@ -6,6 +6,7 @@ import { Loader2, Save, CheckCircle, Send, Eye, EyeOff, Pencil, Power } from 'lu
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
+import { useModal } from '@/hooks/useModal';
 
 // ─── Types from registry API ────────────────────────────
 
@@ -53,6 +54,10 @@ export function NotificationsTab() {
 
   // Modal state
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
+  const { dialogRef: providerDialogRef, titleId: providerTitleId } = useModal({
+    open: editingProvider !== null,
+    onClose: () => setEditingProvider(null),
+  });
   const [editSettings, setEditSettings] = useState<Record<string, string>>({});
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
 
@@ -193,8 +198,15 @@ export function NotificationsTab() {
     if (!provider) return null;
     return createPortal(
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onMouseDown={() => setEditingProvider(null)}>
-        <div className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in" onMouseDown={(e) => e.stopPropagation()}>
-          <h3 className="text-lg font-bold text-ndp-text mb-4">{t(provider.nameKey)}</h3>
+        <div
+          ref={providerDialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={providerTitleId}
+          className="card p-6 w-full max-w-md border border-white/10 shadow-2xl animate-fade-in"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <h3 id={providerTitleId} className="text-lg font-bold text-ndp-text mb-4">{t(provider.nameKey)}</h3>
           <div className="space-y-4">
             {provider.settingsSchema.map((field) => {
               const inputId = `notif-${provider.id}-${field.key}`;

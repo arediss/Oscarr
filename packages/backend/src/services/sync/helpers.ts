@@ -1,6 +1,6 @@
 import { prisma } from '../../utils/prisma.js';
 import { safeNotify, safeUserNotify } from '../../utils/safeNotify.js';
-import { COMPLETABLE_REQUEST_STATUSES } from '../../utils/requestStatus.js';
+import { COMPLETABLE_REQUEST_STATUSES } from '@oscarr/shared';
 import { sendPushToUsers } from '../pushService.js';
 
 export interface SyncResult {
