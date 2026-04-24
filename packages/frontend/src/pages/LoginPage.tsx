@@ -9,6 +9,28 @@ import type { AuthProviderConfig } from '@/types';
 import { getProviderButtonClass } from '@/providers/colors';
 import { startPlexPinFlow, type PlexPinFlowHandle } from '@/providers/plex/pinFlow';
 
+/** Validates a `?next=` query param. Returns the safe destination, or `null` if the value
+ *  is missing, malformed, or points to a foreign origin (open-redirect protection).
+ *
+ *  Accepted shapes:
+ *    - relative path  : `/foo`, `/api/bar?baz=1` (must start with a single `/`)
+ *    - absolute URL   : matching `window.location.origin` exactly
+ *
+ *  Rejected shapes:
+ *    - protocol-relative URLs (`//evil.com/…`) — would let an attacker phish
+ *    - absolute URLs to other origins
+ *    - anything that doesn't parse as a URL */
+function resolveSafeNext(raw: string | null): string | null {
+  if (!raw) return null;
+  if (raw.startsWith('//')) return null;
+  if (raw.startsWith('/')) return raw;
+  try {
+    const u = new URL(raw);
+    if (u.origin === window.location.origin) return u.pathname + u.search + u.hash;
+  } catch { /* fall through */ }
+  return null;
+}
+
 export default function LoginPage() {
   const { t } = useTranslation();
   const { login, user } = useAuth();
@@ -46,9 +68,31 @@ export default function LoginPage() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, t]);
 
+  /** `?next=` post-login redirect — supports plug-and-play link flows (e.g. a Discord bot
+   *  plugin's "Link your account" button bouncing through `/api/auth/discord/authorize?action=link`
+   *  → 302 to /login?next=<that URL> → user logs in → we send them back to the original URL).
+   *
+   *  Same-origin guard: only relative paths (or full URLs matching window.location.origin)
+   *  are honoured. Protocol-relative `//evil.com` and absolute foreign URLs are dropped to
+   *  prevent open-redirect phishing.
+   *
+   *  We use `window.location.assign` instead of react-router `navigate` because `next` may
+   *  point at a backend route (`/api/auth/discord/authorize`) that the SPA router can't
+   *  resolve — a full browser navigation is the right thing here.
+   */
+  const redirectAfterLogin = () => {
+    const dest = resolveSafeNext(searchParams.get('next'));
+    if (dest) {
+      window.location.assign(dest);
+    } else {
+      redirectAfterLogin();
+    }
+  };
+
   useEffect(() => {
-    if (user) navigate('/', { replace: true });
-  }, [user, navigate]);
+    if (user) redirectAfterLogin();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const hasEmailProvider = providers.some((p) => p.id === 'email');
   const oauthProviders = providers.filter((p) => p.type === 'oauth');
@@ -72,7 +116,7 @@ export default function LoginPage() {
     try {
       const { data } = await api.post(`/auth/${providerId}/login`, { username: credUsername, password: credPassword });
       await login('', data.user);
-      navigate('/', { replace: true });
+      redirectAfterLogin();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setError(translateAuthError(msg));
@@ -88,7 +132,7 @@ export default function LoginPage() {
     try {
       const { data } = await api.post('/auth/login', { email, password });
       await login('', data.user);
-      navigate('/', { replace: true });
+      redirectAfterLogin();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setError(translateAuthError(msg));
@@ -108,7 +152,7 @@ export default function LoginPage() {
     try {
       const { data } = await api.post('/auth/register', { email, password, displayName });
       await login('', data.user);
-      navigate('/', { replace: true });
+      redirectAfterLogin();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setError(translateAuthError(msg));
@@ -147,7 +191,7 @@ export default function LoginPage() {
           try {
             const { data } = await api.get('/auth/me');
             login('', data);
-            navigate('/', { replace: true });
+            redirectAfterLogin();
           } catch {
             setError(t('login.error'));
           } finally {
