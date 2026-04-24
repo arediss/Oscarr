@@ -240,30 +240,16 @@ function HeroCarousel({ trending, loading }: { trending: TmdbMedia[]; loading: b
               </div>
             </div>
 
-            {/* Hero progress bars — Instagram-stories style: equal-width traits, the active
-                one fills over the 8s auto-advance interval, past ones stay full, future ones
-                empty. Click jumps + restarts the animation on the new active bar. */}
             <div className="flex items-center gap-1.5 mt-6 w-48">
               {trending.slice(0, 5).map((_, i) => (
                 <button
                   key={i}
                   onClick={() => changeHero(i)}
                   aria-label={t('home.goto_slide', { n: i + 1 })}
-                  // Subtle pop on the active trait (scale 1.15, both axes) — transform-only
-                  // so flex slots don't reflow as the active index changes; sibling traits
-                  // keep their place. Centered via the parent's items-center so the pop
-                  // grows symmetrically vs. the row baseline.
                   style={{ transform: i === heroIndex ? 'scale(1.15)' : 'scale(1)' }}
                   className="relative flex-1 h-1.5 rounded-full bg-white/20 hover:bg-white/30 overflow-hidden transition-[transform,background-color] duration-300 ease-out"
                 >
                   {i === heroIndex ? (
-                    // `progressKey` forces a fresh mount on each advance/click so the
-                    // heroProgress keyframe restarts from 0% — without it, cycling back to
-                    // the same index leaves the DOM node at scaleX(1).
-                    // The fill spans the rail (`inset-0`) + scales from the left via
-                    // `transform: scaleX`. GPU-composited, no per-frame layout — animation
-                    // stays smooth even under load and costs less than the previous
-                    // width-based version.
                     <div
                       key={progressKey}
                       className="absolute inset-0 bg-ndp-accent origin-left"
