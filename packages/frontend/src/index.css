@@ -4,10 +4,14 @@
 
 /* Hero progress bar fill — keyframe lives outside Tailwind so it works even on a cold
    dev-server that hasn't reprocessed tailwind.preset.js yet. Matches the 8s auto-advance
-   interval in HomePage.tsx. */
+   interval in HomePage.tsx.
+   `transform: scaleX` runs on the compositor thread (GPU-accelerated, no layout invalidation)
+   — was originally `width: 0% → 100%` which forced a per-frame reflow and rendered as a
+   visible staircase even on a fast machine. Combined with `transform-origin: left` on the
+   element, the visual is identical but smooth. */
 @keyframes heroProgress {
-  from { width: 0%; }
-  to   { width: 100%; }
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
 }
 
 @layer base {

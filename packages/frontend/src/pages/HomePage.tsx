@@ -253,18 +253,21 @@ function HeroCarousel({ trending, loading }: { trending: TmdbMedia[]; loading: b
                 >
                   {i === heroIndex ? (
                     // `progressKey` forces a fresh mount on each advance/click so the
-                    // heroProgress keyframe restarts from 0%. Inline animation declaration
-                    // (not a Tailwind class) so it works regardless of whether the dev
-                    // server has picked up the preset's animation entry.
+                    // heroProgress keyframe restarts from 0% — without it, cycling back to
+                    // the same index leaves the DOM node at scaleX(1).
+                    // The fill spans the rail (`inset-0`) + scales from the left via
+                    // `transform: scaleX`. GPU-composited, no per-frame layout — animation
+                    // stays smooth even under load and costs less than the previous
+                    // width-based version.
                     <div
                       key={progressKey}
-                      className="absolute inset-y-0 left-0 bg-ndp-accent"
-                      style={{ width: '0%', animation: 'heroProgress 8s linear forwards' }}
+                      className="absolute inset-0 bg-ndp-accent origin-left"
+                      style={{ transform: 'scaleX(0)', animation: 'heroProgress 8s linear forwards' }}
                     />
                   ) : (
                     <div
-                      className="absolute inset-y-0 left-0 bg-ndp-accent"
-                      style={{ width: i < heroIndex ? '100%' : '0%' }}
+                      className="absolute inset-0 bg-ndp-accent origin-left"
+                      style={{ transform: i < heroIndex ? 'scaleX(1)' : 'scaleX(0)' }}
                     />
                   )}
                 </button>
