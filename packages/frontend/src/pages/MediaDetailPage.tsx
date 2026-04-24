@@ -31,7 +31,7 @@ import { useMediaDetailData } from '@/hooks/useMediaDetailData';
 import { useMediaRequestActions } from '@/hooks/useMediaRequestActions';
 import { useEpisodeModal } from '@/hooks/useEpisodeModal';
 import type { TmdbMedia, Media, TmdbCast, TmdbCrew } from '@/types';
-import { ACTIVE_REQUEST_STATUSES } from '@/utils/requestStatus';
+import { ACTIVE_REQUEST_STATUSES } from '@oscarr/shared';
 import { resolveButtonState } from '@/utils/resolveButtonState';
 import ActionButton from '@/components/ActionButton';
 

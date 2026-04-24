@@ -1,8 +1,7 @@
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import type { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
+import { FRONTEND_DIST } from '../utils/paths.js';
 
 /**
  * Production-only: serve the built frontend and fall back to `index.html` for unknown non-API
@@ -11,8 +10,7 @@ import fastifyStatic from '@fastify/static';
 export async function registerStatic(app: FastifyInstance) {
   if (process.env.NODE_ENV !== 'production') return;
 
-  const __dirname = dirname(fileURLToPath(import.meta.url));
-  const frontendDir = resolve(__dirname, '../../../frontend/dist');
+  const frontendDir = FRONTEND_DIST;
   // Operators sometimes deploy the backend image without the frontend stage (headless / API-only
   // setup, broken multi-stage Dockerfile, wrong volume mount). A silent no-op here leaves the
   // admin puzzled by a 404 on /. Surface it loudly so the boot log makes the cause obvious.

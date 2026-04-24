@@ -39,89 +39,13 @@ export interface QualityProfile {
   name: string;
 }
 
-export interface TmdbCollectionRef {
-  id: number;
-  name: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-}
-
-export interface TmdbMedia {
-  id: number;
-  title?: string;
-  name?: string;
-  original_title?: string;
-  original_name?: string;
-  overview: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  release_date?: string;
-  first_air_date?: string;
-  vote_average: number;
-  vote_count: number;
-  media_type?: string;
-  lastEpisodeInfo?: { season: number; episode: number; title: string } | null;
-  genre_ids?: number[];
-  genres?: { id: number; name: string }[];
-  runtime?: number;
-  number_of_seasons?: number;
-  number_of_episodes?: number;
-  status?: string;
-  tagline?: string;
-  belongs_to_collection?: TmdbCollectionRef | null;
-  seasons?: TmdbSeason[];
-  credits?: { cast: TmdbCast[]; crew: TmdbCrew[] };
-  external_ids?: { imdb_id: string; tvdb_id: number };
-  videos?: { results: TmdbVideo[] };
-}
-
-export interface TmdbSeason {
-  id: number;
-  season_number: number;
-  episode_count: number;
-  name: string;
-  overview: string;
-  poster_path: string | null;
-  air_date: string;
-}
-
-export interface TmdbCast {
-  id: number;
-  name: string;
-  character: string;
-  profile_path: string | null;
-  order: number;
-}
-
-export interface TmdbCrew {
-  id: number;
-  name: string;
-  job: string;
-  department: string;
-  profile_path: string | null;
-}
-
-export interface TmdbPerson {
-  id: number;
-  name: string;
-  biography: string;
-  birthday: string | null;
-  deathday: string | null;
-  place_of_birth: string | null;
-  profile_path: string | null;
-  known_for_department: string;
-  combined_credits: {
-    cast: (TmdbMedia & { character: string; release_date?: string; first_air_date?: string })[];
-    crew: (TmdbMedia & { job: string; department: string; release_date?: string; first_air_date?: string })[];
-  };
-}
-
-export interface TmdbVideo {
-  key: string;
-  site: string;
-  type: string;
-  name: string;
-}
+// TMDB response types moved to @oscarr/shared. Re-exported here so existing
+// `import { TmdbMedia } from '@/types'` sites keep working; new code should import directly
+// from '@oscarr/shared' where possible.
+export type {
+  TmdbCollection, TmdbCollectionRef, TmdbMovie, TmdbTv, TmdbMedia, TmdbSeason, TmdbCast,
+  TmdbCrew, TmdbPerson, TmdbVideo,
+} from '@oscarr/shared';
 
 export interface Media {
   id: number;

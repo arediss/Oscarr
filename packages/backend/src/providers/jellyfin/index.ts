@@ -218,7 +218,7 @@ export const jellyfinProvider: Provider = {
   service: {
     id: 'jellyfin',
     label: 'Jellyfin',
-    icon: 'https://raw.githubusercontent.com/jellyfin/jellyfin-ux/master/branding/SVG/icon-transparent.svg',
+    icon: '/providers/jellyfin.svg',
     category: 'media-server',
     fields: [
       { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:8096' },

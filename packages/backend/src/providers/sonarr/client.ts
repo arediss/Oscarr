@@ -3,6 +3,7 @@ import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem,
 import { extractImageFromArr } from '../types.js';
 import type { SonarrSeries, SonarrSeason, SonarrQueueItem, SonarrEpisode, SonarrEpisodeFile, SonarrHistoryRecord } from './types.js';
 import { logEvent } from '../../utils/logEvent.js';
+import { attachAxiosRetry } from '../../utils/fetchWithRetry.js';
 
 export class SonarrClient implements ArrClient {
   readonly mediaType = 'tv' as const;
@@ -13,11 +14,11 @@ export class SonarrClient implements ArrClient {
   private api: AxiosInstance;
 
   constructor(url: string, apiKey: string) {
-    this.api = axios.create({
+    this.api = attachAxiosRetry(axios.create({
       baseURL: `${url}/api/v3`,
       params: { apikey: apiKey },
       timeout: 5000,
-    });
+    }), 'Sonarr');
   }
 
   async getSeries(): Promise<SonarrSeries[]> {

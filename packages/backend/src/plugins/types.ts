@@ -57,13 +57,9 @@ export interface PluginManifest {
   };
 }
 
-export interface PluginSettingDef {
-  key: string;
-  label: string;
-  type: 'string' | 'number' | 'boolean' | 'password';
-  required?: boolean;
-  default?: unknown;
-}
+// PluginSettingDef moved to @oscarr/shared (shared wire contract with the frontend).
+export type { PluginSettingDef } from '@oscarr/shared';
+import type { PluginSettingDef } from '@oscarr/shared';
 
 export interface PluginJobDef {
   key: string;
@@ -152,29 +148,5 @@ export interface LoadedPlugin {
   error?: string;
 }
 
-/** Public shape returned by getPluginList() — consumed by the frontend */
-export interface PluginInfo {
-  id: string;
-  name: string;
-  version: string;
-  description?: string;
-  author?: string;
-  enabled: boolean;
-  hasSettings: boolean;
-  hasFrontend: boolean;
-  error?: string;
-  compat?: {
-    status: 'verified' | 'untested' | 'incompatible' | 'unknown';
-    range?: string;
-    oscarrVersion: string;
-    reason?: string;
-  };
-  /** Latest version seen by the last `/updates` check — populated from PluginState, null if never checked. */
-  latestVersion?: string | null;
-  lastUpdateCheck?: string | null;
-  updateAvailable?: boolean;
-  /** Surfaced from manifest so the admin UI can render the consent prompt before an enable. */
-  services?: string[];
-  capabilities?: string[];
-  capabilityReasons?: Partial<Record<string, string>>;
-}
+// PluginInfo (the public shape returned by getPluginList()) moved to @oscarr/shared.
+export type { PluginInfo } from '@oscarr/shared';

@@ -38,7 +38,7 @@ async function fetchDownloads() {
     cachedDownloads = data;
     lastFetch = Date.now();
     listeners.forEach((cb) => cb());
-  } catch { /* ignore */ }
+  } catch (err) { console.warn("[useDownloads] poll failed", err); }
 }
 
 // Shared polling: starts when first listener subscribes, stops when last unsubscribes

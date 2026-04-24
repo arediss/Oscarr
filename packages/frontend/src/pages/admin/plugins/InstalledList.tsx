@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import { Download, ExternalLink, Plug, Trash2 } from 'lucide-react';
 import type { PluginInfo } from '@/plugins/types';
 import { PluginInitial } from './PluginCardChrome';
+import { usePluginsDir } from '@/hooks/usePluginsDir';
 import type { RegistryPlugin } from './constants';
 
 interface InstalledListProps {
@@ -24,6 +25,7 @@ export function InstalledList({
 }: InstalledListProps) {
   const { t } = useTranslation();
   const [uninstallConfirm, setUninstallConfirm] = useState<string | null>(null);
+  const pluginsDir = usePluginsDir();
 
   // Registry lookup for the "View update" link — we don't care about the version here (the
   // backend decides updateAvailable), only the GitHub URL where the changelog lives.
@@ -34,7 +36,10 @@ export function InstalledList({
       <div className="card p-10 text-center">
         <Plug className="w-12 h-12 text-ndp-text-dim mx-auto mb-4 opacity-50" />
         <p className="text-ndp-text font-medium">{t('admin.plugins.no_plugins')}</p>
-        <p className="text-sm text-ndp-text-dim mt-1.5 max-w-md mx-auto">{t('admin.plugins.no_plugins_help')}</p>
+        <p className="text-sm text-ndp-text-dim mt-1.5 max-w-md mx-auto">
+          {t('admin.plugins.no_plugins_help')}{' '}
+          <code className="text-ndp-text bg-black/30 px-1.5 py-0.5 rounded text-xs">{pluginsDir}</code>
+        </p>
         <button
           onClick={onBrowse}
           className="mt-5 px-5 py-2.5 bg-ndp-accent text-white rounded-xl text-sm font-medium hover:bg-ndp-accent/90 transition-colors inline-flex items-center gap-2"

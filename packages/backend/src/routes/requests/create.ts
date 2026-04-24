@@ -3,7 +3,7 @@ import { prisma } from '../../utils/prisma.js';
 import { getCollection } from '../../services/tmdb.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { safeNotify, safeUserNotify, buildSiteLink } from '../../utils/safeNotify.js';
-import { ACTIVE_REQUEST_STATUSES } from '../../utils/requestStatus.js';
+import { ACTIVE_REQUEST_STATUSES } from '@oscarr/shared';
 import {
   validateRequestBody,
   findOrCreateMedia,

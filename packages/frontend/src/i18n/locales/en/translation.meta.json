@@ -319,7 +319,7 @@
   "admin.features.calendar_desc": "Description of the calendar feature",
 
   "admin.plugins.no_plugins": "Empty state title when no plugins are installed",
-  "admin.plugins.no_plugins_help": "Help text explaining where to add plugins. Contains HTML <code> tag",
+  "admin.plugins.no_plugins_help": "Help text prefix shown before the plugins directory path (caller renders the path separately in a <code> tag)",
 
   "plugin.not_found": "Error message when a plugin page is accessed but the plugin does not exist",
   "plugin.frontend_unavailable": "Error message when a plugin exists but has no frontend component. {{pluginId}} is the plugin identifier",

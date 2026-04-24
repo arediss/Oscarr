@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CopyButton } from './PluginCardChrome';
 import { useModal } from '@/hooks/useModal';
+import { usePluginsDir } from '@/hooks/usePluginsDir';
 import type { RegistryPlugin } from './constants';
 
 interface ManualInstallModalProps {
@@ -14,8 +15,9 @@ interface ManualInstallModalProps {
 export function ManualInstallModal({ plugin, onClose }: ManualInstallModalProps) {
   const { t } = useTranslation();
   const { dialogRef, titleId } = useModal({ open: true, onClose });
-  const installCmd = `cd packages/plugins && git clone ${plugin.url}.git ${plugin.id}`;
-  const npmCmd = `cd packages/plugins/${plugin.id} && npm install --production`;
+  const pluginsDir = usePluginsDir();
+  const installCmd = `cd ${pluginsDir} && git clone ${plugin.url}.git ${plugin.id}`;
+  const npmCmd = `cd ${pluginsDir}/${plugin.id} && npm install --production`;
 
   return (
     <div

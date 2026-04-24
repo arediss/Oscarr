@@ -22,7 +22,12 @@ function loadQualityOptions(): Promise<QualityOption[]> {
   if (qualityOptionsInFlight) return qualityOptionsInFlight;
   qualityOptionsInFlight = api.get<QualityOption[]>('/app/quality-options')
     .then(({ data }) => { qualityOptionsCache = data; return data; })
-    .catch(() => [] as QualityOption[])
+    .catch((err) => {
+      // Silent fallback keeps the UI alive (cards still render without quality chips), but a
+      // warn lets an admin notice if the endpoint is flat-out broken in their deployment.
+      console.warn('[useMediaDetailData] /app/quality-options failed', err);
+      return [] as QualityOption[];
+    })
     .finally(() => { qualityOptionsInFlight = null; });
   return qualityOptionsInFlight;
 }
@@ -80,15 +85,21 @@ export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv')
 
     const dbPromise = api.get(`/media/tmdb/${id}/${type}`)
       .then(({ data }) => { applyDbData(data); if (!data.id) setDbMedia(null); })
-      .catch(() => { setDbMedia(null); });
+      .catch((err) => {
+        console.warn('[useMediaDetailData] /media/tmdb lookup failed', err);
+        setDbMedia(null);
+      });
 
     api.get(`/admin/blacklist/check?tmdbId=${id}&mediaType=${type}`)
       .then(({ data }) => setBlacklisted({ blocked: data.blacklisted, reason: data.reason }))
-      .catch(() => setBlacklisted({ blocked: false, reason: null }));
+      .catch((err) => {
+        console.warn('[useMediaDetailData] blacklist/check failed', err);
+        setBlacklisted({ blocked: false, reason: null });
+      });
     api.get(`/tmdb/${type}/${id}/recommendations`).then(({ data }) => {
       setRecommendations(data.results?.map((r: TmdbMedia) => ({ ...r, media_type: type })) || []);
       if (data.nsfwTmdbIds?.length) addNsfwIds(data.nsfwTmdbIds);
-    }).catch(() => {});
+    }).catch((err) => console.warn('[useMediaDetailData] /recommendations failed', err));
 
     void tmdbPromise; void dbPromise;
   }, [id, type, applyDbData]);
@@ -98,7 +109,9 @@ export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv')
     try {
       const { data } = await api.get(`/media/tmdb/${id}/${type}`);
       applyDbData(data);
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.warn('[useMediaDetailData] refreshDbData failed', err);
+    }
   }, [id, type, applyDbData]);
 
   const download = useDownloadForMedia(media?.id, type);
@@ -124,7 +137,7 @@ export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv')
           retries++;
           retryTimerRef.current = setTimeout(check, 5000);
         }
-      }).catch(() => {});
+      }).catch((err) => console.warn('[useMediaDetailData] post-download check failed', err));
     };
     check();
   });

@@ -4,6 +4,8 @@ import { logEvent } from '../utils/logEvent.js';
 import { runFullSync } from '../services/sync/index.js';
 import { initScheduler } from '../services/scheduler.js';
 import { isInstalled, markInstalled } from '../utils/install.js';
+import { classifyTestError } from '../utils/serviceTestError.js';
+import { assertPublicUrl, SsrfBlockedError } from '../utils/ssrfGuard.js';
 
 const SETUP_SECRET = process.env.SETUP_SECRET || '';
 if (!SETUP_SECRET) {
@@ -41,9 +43,14 @@ export async function setupRoutes(app: FastifyInstance) {
     await requireSetupSecret(request, reply);
   });
 
-  // Verify setup secret — lightweight check for the frontend
+  // Verify setup secret — lightweight check for the frontend.
+  // Also reports whether an admin already exists: the wizard may have been interrupted between
+  // account creation (step 1) and final sync (step 4), so a returning user needs to sign in
+  // with the existing admin credentials instead of re-registering. adminExists drives the UI
+  // branch in step 1 of InstallPage.
   app.post('/verify-secret', async () => {
-    return { ok: true };
+    const adminExists = (await prisma.user.count({ where: { role: 'admin' } })) > 0;
+    return { ok: true, adminExists };
   });
 
   // Service schemas — used by wizard to build dynamic forms
@@ -78,6 +85,43 @@ export async function setupRoutes(app: FastifyInstance) {
     return reply.send({ token: authToken });
   });
 
+  // Proxied Plex /identity probe — CSP connect-src 'self' blocks a direct browser fetch to the
+  // LAN Plex URL, so the wizard asks us to do it server-side and return just the machineId.
+  app.post('/plex-identity', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['url', 'token'],
+        properties: {
+          url: { type: 'string', description: 'Plex server URL (http://host:32400)' },
+          token: { type: 'string', description: 'Plex auth token (from /plex-check)' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { url, token } = request.body as { url: string; token: string };
+    // SSRF guard: admin-typed URL goes straight to axios.get. Permissive by default for
+    // self-hosted LAN setups (OSCARR_BLOCK_PRIVATE_SERVICES !== 'true'), strict mode refuses
+    // private ranges so a shared-hosting operator can't be tricked into probing RFC1918.
+    try {
+      await assertPublicUrl(url);
+    } catch (err) {
+      if (err instanceof SsrfBlockedError) {
+        return reply.status(400).send({ error: 'URL_BLOCKED_BY_SSRF_GUARD', detail: err.message });
+      }
+      throw err;
+    }
+    const { plexFetchMachineId } = await import('../providers/plex/index.js');
+    try {
+      const machineId = await plexFetchMachineId(url, token);
+      if (!machineId) return reply.status(502).send({ error: 'Plex did not return a machineIdentifier' });
+      return reply.send({ machineId });
+    } catch (err) {
+      const info = classifyTestError(err);
+      return reply.status(502).send({ error: info.code, detail: info.message });
+    }
+  });
+
   // Test any service during setup (uses the service registry)
   app.post('/test-service', {
     schema: {
@@ -98,8 +142,10 @@ export async function setupRoutes(app: FastifyInstance) {
 
     try {
       return await def.test(config);
-    } catch {
-      return reply.status(502).send({ error: 'Unable to reach the service' });
+    } catch (err) {
+      const info = classifyTestError(err);
+      logEvent('warn', 'Setup', `Service test failed (${type}): ${info.code} — ${info.message}`, err);
+      return reply.status(502).send({ error: info.code, detail: info.message });
     }
   });
 

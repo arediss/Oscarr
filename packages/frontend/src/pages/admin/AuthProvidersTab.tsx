@@ -7,6 +7,8 @@ import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import { extractApiError } from '@/utils/toast';
+import { useModal } from '@/hooks/useModal';
+import { getProviderBadgeClass } from '@/providers/colors';
 
 interface AuthProviderField {
   key: string;
@@ -34,15 +36,6 @@ interface AuthProviderRow {
 }
 
 const MASK = '__MASKED__';
-
-/** Per-provider badge color so they're visually distinguishable at a glance. */
-const PROVIDER_ACCENT: Record<string, string> = {
-  plex: 'bg-[#e5a00d]/15 text-[#e5a00d]',
-  discord: 'bg-[#5865F2]/15 text-[#8692ff]',
-  jellyfin: 'bg-[#00a4dc]/15 text-[#00a4dc]',
-  emby: 'bg-[#52b54b]/15 text-[#52b54b]',
-  email: 'bg-white/10 text-ndp-text-muted',
-};
 
 export function AuthProvidersTab() {
   const { t } = useTranslation();
@@ -122,7 +115,7 @@ function ProviderRow({
   // server-side but the login wouldn't, so we signal unavailability without hiding the entry.
   const unavailable = provider.requiresService && !provider.serviceAvailable;
   const hasSettings = provider.configSchema.length > 0;
-  const accent = PROVIDER_ACCENT[provider.id] ?? 'bg-ndp-accent/15 text-ndp-accent';
+  const accent = getProviderBadgeClass(provider.id);
 
   return (
     <div className={clsx('card', unavailable && 'opacity-50')}>
@@ -215,6 +208,7 @@ function ProviderConfigModal({
   onSaved: () => void;
 }) {
   const { t } = useTranslation();
+  const { dialogRef, titleId } = useModal({ open: true, onClose });
   const [config, setConfig] = useState<Record<string, string | boolean>>(provider.config);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -244,10 +238,17 @@ function ProviderConfigModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
       onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}
     >
-      <div className="card w-full max-w-lg shadow-2xl shadow-black/50" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="card w-full max-w-lg shadow-2xl shadow-black/50"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-ndp-text">{provider.label}</h2>
+            <h2 id={titleId} className="text-base font-semibold text-ndp-text">{provider.label}</h2>
             <p className="text-xs text-ndp-text-dim mt-0.5">
               {provider.type === 'oauth' ? 'OAuth 2.0' : 'Credentials'} · {t('admin.authProviders.configure')}
             </p>
@@ -255,7 +256,7 @@ function ProviderConfigModal({
           <button
             onClick={() => !saving && onClose()}
             className="p-1.5 -mt-1 -mr-1 rounded-lg text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors flex-shrink-0"
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             <X className="w-4 h-4" />
           </button>

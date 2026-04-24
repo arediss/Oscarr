@@ -35,7 +35,7 @@ export function useNsfwFilterProvider() {
   useEffect(() => {
     api.get<number[]>('/media/nsfw-ids')
       .then(({ data }) => setNsfwSet(new Set(data)))
-      .catch(() => {})
+      .catch((err) => console.warn("[useNsfwFilter] failed", err))
       .finally(() => setLoaded(true));
   }, []);
 

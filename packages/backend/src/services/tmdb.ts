@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { attachAxiosRetry } from '../utils/fetchWithRetry.js';
 import { getCached, setCache } from '../utils/cache.js';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
@@ -55,7 +56,7 @@ function toTmdbLocale(lang: string): string {
 }
 
 export function getTmdbApi(lang = DEFAULT_LANG) {
-  return axios.create({
+  const instance = axios.create({
     baseURL: TMDB_BASE,
     timeout: 10000,
     headers: {
@@ -65,66 +66,19 @@ export function getTmdbApi(lang = DEFAULT_LANG) {
       language: toTmdbLocale(lang),
     },
   });
+  // Transient-error retry: a 503 or cloudflare hiccup doesn't kill the waiting row.
+  return attachAxiosRetry(instance, 'TMDB');
 }
 
-export interface TmdbCollection {
-  id: number;
-  name: string;
-  overview: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  parts: TmdbMovie[];
-}
-
-export interface TmdbMovie {
-  id: number;
-  title: string;
-  original_title: string;
-  overview: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  release_date: string;
-  vote_average: number;
-  vote_count: number;
-  genre_ids?: number[];
-  genres?: { id: number; name: string }[];
-  media_type?: string;
-  runtime?: number;
-  status?: string;
-  tagline?: string;
-  belongs_to_collection?: { id: number; name: string; poster_path: string | null; backdrop_path: string | null } | null;
-  credits?: { cast: TmdbCast[]; crew: TmdbCrew[] };
-  external_ids?: { imdb_id: string; tvdb_id: number };
-  videos?: { results: TmdbVideo[] };
-  keywords?: { keywords: { id: number; name: string }[] };
-  release_dates?: { results: { iso_3166_1: string; release_dates: { certification: string; type: number }[] }[] };
-}
-
-export interface TmdbTv {
-  id: number;
-  name: string;
-  original_name: string;
-  overview: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  first_air_date: string;
-  vote_average: number;
-  vote_count: number;
-  genre_ids?: number[];
-  genres?: { id: number; name: string }[];
-  media_type?: string;
-  number_of_seasons: number;
-  number_of_episodes: number;
-  status?: string;
-  origin_country?: string[];
-  original_language?: string;
-  seasons?: TmdbSeason[];
-  credits?: { cast: TmdbCast[]; crew: TmdbCrew[] };
-  external_ids?: { imdb_id: string; tvdb_id: number };
-  videos?: { results: TmdbVideo[] };
-  keywords?: { results: { id: number; name: string }[] };
-  content_ratings?: { results: { iso_3166_1: string; rating: string }[] };
-}
+// Type contracts moved to @oscarr/shared (TmdbCollection, TmdbMovie, TmdbTv, TmdbSeason,
+// TmdbCast, TmdbCrew, TmdbVideo, TmdbPerson, TmdbMediaResult, TmdbCollectionRef, TmdbMedia).
+// This file re-exports them so legacy `import { TmdbMovie } from 'services/tmdb.js'` paths
+// keep working; direct @oscarr/shared imports are encouraged in new code.
+export type {
+  TmdbCollection, TmdbCollectionRef, TmdbMovie, TmdbTv, TmdbSeason, TmdbCast, TmdbCrew,
+  TmdbVideo, TmdbMedia, TmdbMediaResult, TmdbPerson,
+} from '@oscarr/shared';
+import type { TmdbMovie, TmdbTv, TmdbMediaResult, TmdbPerson, TmdbCollection } from '@oscarr/shared';
 
 const ANIME_COUNTRIES = ['JP', 'KR', 'CN', 'TW'];
 const ANIMATION_GENRE_ID = 16;
@@ -204,40 +158,8 @@ export function isMatureRating(rating: string | null): boolean {
   return MATURE_RATINGS.has(rating);
 }
 
-export interface TmdbSeason {
-  id: number;
-  season_number: number;
-  episode_count: number;
-  name: string;
-  overview: string;
-  poster_path: string | null;
-  air_date: string;
-}
-
-export interface TmdbCast {
-  id: number;
-  name: string;
-  character: string;
-  profile_path: string | null;
-  order: number;
-}
-
-export interface TmdbCrew {
-  id: number;
-  name: string;
-  job: string;
-  department: string;
-  profile_path: string | null;
-}
-
-export interface TmdbVideo {
-  key: string;
-  site: string;
-  type: string;
-  name: string;
-}
-
-export type TmdbMediaResult = (TmdbMovie | TmdbTv) & { media_type: string };
+// TmdbSeason, TmdbCast, TmdbCrew, TmdbVideo, TmdbMediaResult: moved to @oscarr/shared
+// (re-exported at the top of this file for legacy callers).
 
 async function cachedRequest<T>(cacheKey: string, fetcher: () => Promise<T>, ttlHours = 24): Promise<T> {
   const cached = await getCached<T>(cacheKey);
@@ -303,20 +225,9 @@ export async function searchMulti(query: string, page = 1, lang?: string) {
   }, 1);
 }
 
-export interface TmdbPerson {
-  id: number;
-  name: string;
-  biography: string;
-  birthday: string | null;
-  deathday: string | null;
-  place_of_birth: string | null;
-  profile_path: string | null;
-  known_for_department: string;
-  combined_credits: {
-    cast: (TmdbMovie & TmdbTv & { media_type: string; character: string })[];
-    crew: (TmdbMovie & TmdbTv & { media_type: string; job: string; department: string })[];
-  };
-}
+// TmdbPerson: moved to @oscarr/shared. The shared definition uses the loose `TmdbMedia`
+// shape in combined_credits.{cast,crew} instead of `TmdbMovie & TmdbTv & …` — more honest
+// about the fact that those entries carry mixed movie+tv rows with partial data.
 
 export async function getPersonDetails(personId: number, lang?: string): Promise<TmdbPerson> {
   const l = normalizeLang(lang);

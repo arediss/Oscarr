@@ -138,6 +138,9 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'GET:/api/plugins/ui/:hookPoint':      { permission: AUTH },
   'GET:/api/plugins/:id/logs':           { permission: 'admin.plugins' },
   'GET:/api/plugins/:id/frontend/*':     { permission: AUTH },
+  // Reveals the absolute plugins directory on the host — admin-only. Consumed by the
+  // admin PluginsTab / PluginDocsModal / ManualInstallModal to show the correct path hint.
+  'GET:/api/plugins/dir':                { permission: 'admin.plugins' },
   'GET:/api/plugins/features':           { permission: PUBLIC },
   'GET:/api/plugins/registry':           { permission: AUTH },  // Plugin discovery — any authenticated user
   // Admin-only side of the plugin engine — install + updates must NOT fall through

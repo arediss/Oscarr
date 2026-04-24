@@ -57,7 +57,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    api.get('/app/banner').then(({ data }) => setBanner(data.banner)).catch(() => {});
+    api.get('/app/banner').then(({ data }) => setBanner(data.banner)).catch((err) => console.warn("[Layout] banner fetch failed", err));
   }, []);
 
   const navItems = ALL_NAV.filter(({ feature }) => !feature || features[feature]);

@@ -1,6 +1,7 @@
 import { BookOpen, ExternalLink, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useModal } from '@/hooks/useModal';
+import { usePluginsDir } from '@/hooks/usePluginsDir';
 
 interface PluginDocsModalProps {
   onClose: () => void;
@@ -11,6 +12,7 @@ interface PluginDocsModalProps {
 export function PluginDocsModal({ onClose }: PluginDocsModalProps) {
   const { t } = useTranslation();
   const { dialogRef, titleId } = useModal({ open: true, onClose });
+  const pluginsDir = usePluginsDir();
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
@@ -39,7 +41,7 @@ export function PluginDocsModal({ onClose }: PluginDocsModalProps) {
         <div className="px-6 pb-6 space-y-4 text-sm text-ndp-text-muted overflow-y-auto">
           <p>
             Oscarr plugins are Node.js modules that extend the backend and/or frontend.
-            Each one lives in its own folder under <code className="text-ndp-text bg-black/30 px-1.5 py-0.5 rounded text-xs">packages/plugins/</code>.
+            Each one lives in its own folder under <code className="text-ndp-text bg-black/30 px-1.5 py-0.5 rounded text-xs">{pluginsDir}</code>.
           </p>
           <div>
             <p className="text-ndp-text font-medium mb-2 text-xs uppercase tracking-wider">Minimal structure</p>

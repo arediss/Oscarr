@@ -1,6 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import { X, Server, Shield, HelpCircle } from 'lucide-react';
+import { useModal } from '@/hooks/useModal';
 
 /** Shape shared by RegistryPlugin (pre-install) and PluginInfo (post-install). */
 export interface ConsentablePlugin {
@@ -45,6 +47,8 @@ const RISK_LABEL: Record<'low' | 'medium' | 'high', string> = {
 };
 
 export function PluginConsentModal({ plugin, open, busy, mode, onCancel, onConfirm }: Props) {
+  const { t } = useTranslation();
+  const { dialogRef, titleId } = useModal({ open: open && plugin !== null, onClose: onCancel });
   if (!open || !plugin) return null;
 
   const services = plugin.services ?? [];
@@ -61,10 +65,16 @@ export function PluginConsentModal({ plugin, open, busy, mode, onCancel, onConfi
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}
     >
-      <div className="card w-full max-w-lg flex flex-col shadow-2xl shadow-black/50">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="card w-full max-w-lg flex flex-col shadow-2xl shadow-black/50"
+      >
         <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 flex-shrink-0">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-ndp-text truncate">{title}</h2>
+            <h2 id={titleId} className="text-base font-semibold text-ndp-text truncate">{title}</h2>
             <p className="text-xs text-ndp-text-dim mt-0.5">
               v{plugin.version}{plugin.author ? ` · ${plugin.author}` : ''}
             </p>
@@ -72,7 +82,7 @@ export function PluginConsentModal({ plugin, open, busy, mode, onCancel, onConfi
           <button
             onClick={() => !busy && onCancel()}
             className="p-1.5 -mt-1 -mr-1 rounded-lg text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors flex-shrink-0"
-            aria-label="Cancel"
+            aria-label={t('common.cancel')}
           >
             <X className="w-4 h-4" />
           </button>

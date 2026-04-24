@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../utils/prisma.js';
 import { parseId, parsePage } from '../../utils/params.js';
-import { REQUEST_STATUSES } from '../../utils/requestStatus.js';
+import { REQUEST_STATUSES } from '@oscarr/shared';
 import { promoteStaleStatuses, resolveServiceContext } from '../../services/requestService.js';
 
 const VALID_STATUSES: string[] = [...REQUEST_STATUSES];

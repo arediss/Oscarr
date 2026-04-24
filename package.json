@@ -6,10 +6,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev": "concurrently -n shared,backend,frontend -c cyan,green,blue \"npm:dev:shared\" \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:shared": "npm run dev --workspace=packages/shared",
     "dev:backend": "npm run dev --workspace=packages/backend",
     "dev:frontend": "npm run dev --workspace=packages/frontend",
-    "build": "npm run build --workspace=packages/backend && npm run build --workspace=packages/frontend",
+    "build": "npm run build --workspace=packages/shared && npm run build --workspace=packages/backend && npm run build --workspace=packages/frontend",
+    "build:shared": "npm run build --workspace=packages/shared",
     "db:migrate": "npm run db:migrate --workspace=packages/backend",
     "db:push": "npm run db:push --workspace=packages/backend",
     "db:generate": "npm run db:generate --workspace=packages/backend",

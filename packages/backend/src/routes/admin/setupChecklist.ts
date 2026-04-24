@@ -25,7 +25,7 @@ async function computeItems(): Promise<ChecklistItem[]> {
     { id: 'radarr', required: true, done: radarr > 0, href: '/admin?tab=services' },
     { id: 'sonarr', required: true, done: sonarr > 0, href: '/admin?tab=services' },
     { id: 'quality-options', required: true, done: quality > 0, href: '/admin?tab=quality' },
-    { id: 'default-folders', required: true, done: hasDefaultFolder, href: '/admin?tab=rules' },
+    { id: 'default-folders', required: true, done: hasDefaultFolder, href: '/admin?tab=paths' },
     { id: 'routing-rule', required: false, done: rules > 0, href: '/admin?tab=rules' },
     { id: 'notification-provider', required: false, done: notifProviders > 0, href: '/admin?tab=notifications' },
   ];

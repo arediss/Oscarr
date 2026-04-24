@@ -5,7 +5,7 @@ import { Check, Loader2, Plus, Film } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { posterUrl } from '@/lib/api';
-import { ACTIVE_REQUEST_STATUSES } from '@/utils/requestStatus';
+import { ACTIVE_REQUEST_STATUSES } from '@oscarr/shared';
 import type { TmdbMedia } from '@/types';
 
 interface Props {
@@ -31,7 +31,7 @@ export default function CollectionSection({ collection }: Props) {
               ids: movies.map((m: TmdbMedia) => ({ tmdbId: m.id, mediaType: 'movie' })),
             });
             setStatuses(statusData);
-          } catch { /* ignore */ }
+          } catch (err) { console.warn("[CollectionSection] batch-status item failed", err); }
         }
       })
       .catch(console.error)

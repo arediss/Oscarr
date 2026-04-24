@@ -8,7 +8,7 @@ export const tautulliProvider: Provider = {
   service: {
     id: 'tautulli',
     label: 'Tautulli',
-    icon: 'https://raw.githubusercontent.com/Tautulli/Tautulli/master/data/interfaces/default/images/logo-tautulli.svg',
+    icon: '/providers/tautulli.svg',
     category: 'monitoring',
     fields: [
       { key: 'url', labelKey: 'common.url', type: 'text', placeholder: 'http://localhost:8181' },

@@ -12,6 +12,7 @@ import { parseManifest } from './manifestSchema.js';
 import { getPluginsDir } from './loader.js';
 import type { PluginManifest } from './types.js';
 import { isPrivateIPv4, isPrivateIPv6, isPrivateAddress, normalizeHost } from '../utils/ssrfGuard.js';
+import { withRetry } from '../utils/fetchWithRetry.js';
 
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 // Hard cap on plugin tarballs. Oscarr plugins are small (a few hundred KB once bundled); 50 MB
@@ -85,11 +86,21 @@ async function downloadToFile(url: string, destPath: string): Promise<void> {
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const parsed = new URL(currentUrl);
     const { agent } = await buildPinnedAgent(parsed.hostname);
-    const hopRes = await undiciFetch(currentUrl, {
-      dispatcher: agent,
-      redirect: 'manual',
-      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
-    });
+    // Retry the hop on transient failures before giving up — a brief 503 from GitHub /
+    // codeload shouldn't abort a plugin install. undici's fetch resolves on 5xx (doesn't
+    // throw), so we translate 5xx into a thrown error so withRetry's retryability check
+    // catches it; network errors (ECONNRESET, etc.) throw natively.
+    const hopRes = await withRetry(async () => {
+      const r = await undiciFetch(currentUrl, {
+        dispatcher: agent,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+      });
+      if (r.status >= 500 && r.status < 600) {
+        throw Object.assign(new Error(`Upstream ${r.status}`), { response: { status: r.status } });
+      }
+      return r;
+    }, { label: 'PluginDownload' });
     if (hopRes.status >= 300 && hopRes.status < 400) {
       const location = hopRes.headers.get('location');
       if (!location) throw new Error(`Redirect ${hopRes.status} without Location header`);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import api, { posterUrl } from '@/lib/api';
@@ -70,6 +70,7 @@ const LANGUAGE_OPTIONS = [
 
 export function QueryBuilder({ query, onChange, previewResults, previewLoading }: QueryBuilderProps) {
   const { t } = useTranslation();
+  const fieldId = useId();
   const [genres, setGenres] = useState<Genre[]>([]);
   const [genresLoading, setGenresLoading] = useState(false);
 
@@ -110,11 +111,11 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Media type toggle */}
-      <div>
-        <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+      {/* Media type toggle — group of buttons, labelled by a sibling span */}
+      <div role="group" aria-labelledby={`${fieldId}-media-type`}>
+        <span id={`${fieldId}-media-type`} className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
           {t('admin.homepage.media_type', 'Media type')}
-        </label>
+        </span>
         <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 3, width: 'fit-content' }}>
           <button
             type="button"
@@ -153,11 +154,11 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
         </div>
       </div>
 
-      {/* Genres */}
-      <div>
-        <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+      {/* Genres — group of toggle chips */}
+      <div role="group" aria-labelledby={`${fieldId}-genres`}>
+        <span id={`${fieldId}-genres`} className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
           {t('admin.homepage.genres', 'Genres')}
-        </label>
+        </span>
         {genresLoading ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 0' }}>
             <Loader2 className="w-4 h-4 animate-spin text-ndp-text-dim" />
@@ -195,10 +196,11 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
       {/* Release window + Year range + Rating + Votes row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 12 }}>
         <div>
-          <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+          <label htmlFor={`${fieldId}-release-window`} className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
             {t('admin.homepage.release_window', 'Released within')}
           </label>
           <select
+            id={`${fieldId}-release-window`}
             className="input"
             value={query.releasedWithin || ''}
             onChange={e => {
@@ -214,10 +216,11 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
           </select>
         </div>
         <div>
-          <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+          <label htmlFor={`${fieldId}-year-from`} className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
             {t('admin.homepage.year_from', 'Year from')}
           </label>
           <input
+            id={`${fieldId}-year-from`}
             className="input"
             type="number"
             placeholder="2020"
@@ -228,10 +231,11 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
           />
         </div>
         <div>
-          <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+          <label htmlFor={`${fieldId}-year-to`} className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
             {t('admin.homepage.year_to', 'Year to')}
           </label>
           <input
+            id={`${fieldId}-year-to`}
             className="input"
             type="number"
             placeholder="2026"
@@ -242,10 +246,11 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
           />
         </div>
         <div>
-          <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+          <label htmlFor={`${fieldId}-min-rating`} className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
             {t('admin.homepage.min_rating', 'Min. rating')}
           </label>
           <input
+            id={`${fieldId}-min-rating`}
             className="input"
             type="number"
             min={0}
@@ -258,10 +263,11 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
           />
         </div>
         <div>
-          <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+          <label htmlFor={`${fieldId}-min-votes`} className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
             {t('admin.homepage.min_votes', 'Min. votes')}
           </label>
           <input
+            id={`${fieldId}-min-votes`}
             className="input"
             type="number"
             min={0}
@@ -277,10 +283,11 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
       {/* Sort + Language row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div>
-          <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+          <label htmlFor={`${fieldId}-sort`} className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
             {t('admin.homepage.sort_by', 'Sort by')}
           </label>
           <select
+            id={`${fieldId}-sort`}
             className="input"
             value={query.sortBy || 'popularity.desc'}
             onChange={e => onChange({ ...query, sortBy: e.target.value })}
@@ -292,10 +299,11 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
           </select>
         </div>
         <div>
-          <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
+          <label htmlFor={`${fieldId}-language`} className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 6 }}>
             {t('admin.homepage.language', 'Language')}
           </label>
           <select
+            id={`${fieldId}-language`}
             className="input"
             value={query.language || ''}
             onChange={e => onChange({ ...query, language: e.target.value || undefined })}
@@ -308,14 +316,14 @@ export function QueryBuilder({ query, onChange, previewResults, previewLoading }
         </div>
       </div>
 
-      {/* Preview */}
-      <div>
-        <label className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 8 }}>
+      {/* Preview — region of results, labelled via aria. Not a form control. */}
+      <div role="region" aria-labelledby={`${fieldId}-preview`}>
+        <span id={`${fieldId}-preview`} className="text-xs font-medium text-ndp-text-dim" style={{ display: 'block', marginBottom: 8 }}>
           {t('admin.homepage.preview', 'Preview')}
           {previewLoading && (
             <Loader2 className="w-3 h-3 animate-spin inline-block ml-2" style={{ verticalAlign: 'middle' }} />
           )}
-        </label>
+        </span>
         {previewResults.length > 0 ? (
           <div
             style={{
