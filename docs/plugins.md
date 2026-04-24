@@ -950,13 +950,16 @@ Any ctx method outside of `log` and service-bound methods (`getServiceConfig*`, 
 
 | Bucket              | ctx methods                                                      | When to declare it                            |
 |---------------------|------------------------------------------------------------------|-----------------------------------------------|
-| `users:read`        | `getUser`, `getUserProviders`                                    | Lookup user profile or their linked providers |
+| `users:read`        | `getUser`, `findUserByEmail`, `findUserByProvider`, `getUserProviders` | Lookup user profile or their linked providers |
 | `users:write`       | `setUserRole`, `setUserDisabled`, `issueAuthToken`               | Change role, disable, impersonate             |
 | `settings:plugin`   | `getSetting`, `setSetting`, `getPluginDataDir`                   | Store plugin-scoped state or files            |
-| `settings:app`      | `getAppSettings`                                                 | Read Oscarr-wide settings (site name, etc.)   |
+| `settings:app`      | `getAppSettings`, `listFolderRules`                              | Read Oscarr-wide settings (site name, routing rules, etc.) |
 | `notifications`     | `sendNotification`, `sendUserNotification`                       | Send alerts to users or notification channels |
 | `permissions`       | `registerRoutePermission`, `registerPluginPermission`            | Declare RBAC rules for the plugin's routes    |
 | `events`            | `events.on / off / emit`                                         | Use the cross-plugin event bus                |
+| `tmdb:read`         | `tmdb.search`, `tmdb.movie`, `tmdb.tv`                           | Fetch TMDB metadata (cached + locale-aware)   |
+| `requests:read`     | `requests.listForUser`, `media.batchStatus`, `media.getById`     | Read the user's request state + Oscarr library status |
+| `requests:write`    | `requests.create`                                                | Create a media request on behalf of a user (full pipeline: validation → guard → blacklist → auto-approve → sendToService → notify) |
 
 `log` and service methods are gated separately:
 - **`log`** is always available. Secrets are scrubbed from `ctx.log.*(msg)` calls before persistence to avoid leaking tokens into the admin-visible `PluginLog` table.

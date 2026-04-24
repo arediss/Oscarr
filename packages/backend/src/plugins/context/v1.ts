@@ -7,6 +7,7 @@ import { notificationRegistry } from '../../notifications/index.js';
 import type { NotificationPayload } from '../../notifications/types.js';
 import { sendUserNotification } from '../../services/userNotifications.js';
 import { getArrClient } from '../../providers/index.js';
+import type { ArrClient } from '../../providers/types.js';
 import {
   registerRoutePermission as rbacRegisterRoute,
   registerPluginPermission as rbacRegisterPermission,
@@ -163,14 +164,21 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       req('users:read', 'getUser');
       return prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, email: true, displayName: true, role: true },
+        select: { id: true, email: true, displayName: true, role: true, avatar: true },
+      });
+    },
+    async findUserByEmail(email: string) {
+      req('users:read', 'findUserByEmail');
+      return prisma.user.findUnique({
+        where: { email },
+        select: { id: true, email: true, displayName: true, role: true, avatar: true },
       });
     },
     async findUserByProvider(provider: string, providerId: string) {
       req('users:read', 'findUserByProvider');
       const link = await prisma.userProvider.findUnique({
         where: { provider_providerId: { provider, providerId } },
-        include: { user: { select: { id: true, email: true, displayName: true, role: true } } },
+        include: { user: { select: { id: true, email: true, displayName: true, role: true, avatar: true } } },
       });
       return link?.user ?? null;
     },
@@ -298,6 +306,53 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
         req('events', 'events.emit');
         return pluginEventBus.emit(event, data);
       },
+    },
+
+    // ─── v1.1 additions — stubs filled in by subsequent phase commits ───
+    // Each method here is a typed placeholder so the `PluginContext` type is satisfied; the
+    // real implementation lands in the corresponding phase (see feat/plugin-ctx-v1.1 PR).
+    // Stubs throw with a recognisable error so any accidental call before its phase lands
+    // surfaces loudly instead of silently returning undefined.
+
+    async getArrClients(_serviceType: string): Promise<ArrClient[]> {
+      throw new Error('ctx.getArrClients: not implemented (Phase 2)');
+    },
+    tmdb: {
+      async search(_query: string) {
+        req('tmdb:read', 'tmdb.search');
+        throw new Error('ctx.tmdb.search: not implemented (Phase 1 P2)');
+      },
+      async movie(_tmdbId: number) {
+        req('tmdb:read', 'tmdb.movie');
+        throw new Error('ctx.tmdb.movie: not implemented (Phase 1 P2)');
+      },
+      async tv(_tmdbId: number) {
+        req('tmdb:read', 'tmdb.tv');
+        throw new Error('ctx.tmdb.tv: not implemented (Phase 1 P2)');
+      },
+    },
+    media: {
+      async batchStatus(_items, _userId) {
+        req('requests:read', 'media.batchStatus');
+        throw new Error('ctx.media.batchStatus: not implemented (Phase 1 P3)');
+      },
+      async getById(_mediaId: number) {
+        req('requests:read', 'media.getById');
+        throw new Error('ctx.media.getById: not implemented (Phase 1 P3)');
+      },
+    },
+    requests: {
+      async listForUser(_userId: number) {
+        req('requests:read', 'requests.listForUser');
+        throw new Error('ctx.requests.listForUser: not implemented (Phase 1 P3)');
+      },
+      async create(_input) {
+        req('requests:write', 'requests.create');
+        throw new Error('ctx.requests.create: not implemented (Phase 1 P4)');
+      },
+    },
+    async listFolderRules(_options?) {
+      throw new Error('ctx.listFolderRules: not implemented (Phase 2)');
     },
   };
 }
