@@ -314,7 +314,13 @@ export async function createUserRequest(input: CreateRequestInput): Promise<Crea
         if (roles.length > 0 && !roles.includes(user.role)) {
           return { ok: false, status: 403, code: 'QUALITY_NOT_ALLOWED', error: 'QUALITY_NOT_ALLOWED' };
         }
-      } catch { /* malformed JSON — permissive fallback matches historical HTTP behavior */ }
+      } catch (err) {
+        // Historical HTTP behaviour was permissive here, but silently opening a role-gated
+        // quality option on corrupt `allowedRoles` JSON is an ACL-bypass footgun. Keep the
+        // permissive fallback for compat, but surface the corruption so an admin can fix
+        // the bad row instead of learning about it via unexpected approvals.
+        logEvent('error', 'Request', `Malformed allowedRoles JSON on qualityOption ${input.qualityOptionId} — permissive fallback engaged: ${String(err)}`);
+      }
     }
     if (qualityOpt?.approvalMode === 'auto') shouldAutoApprove = true;
     else if (qualityOpt?.approvalMode === 'manual') shouldAutoApprove = user.role === 'admin';
@@ -345,7 +351,13 @@ export async function createUserRequest(input: CreateRequestInput): Promise<Crea
         await prisma.media.update({
           where: { id: media.id },
           data: { status: 'searching' },
-        }).catch(() => { /* non-fatal — the request row is already created */ });
+        }).catch((err) => {
+          // The request row is already created, so this is observably non-fatal — but a
+          // silent swallow masks the "UI stuck on pending because DB update failed" class
+          // of bug (connection pool exhaustion, P2025 race with a delete, schema drift).
+          // Surface it to AppLog so the admin has a breadcrumb when support tickets come in.
+          logEvent('warn', 'Request', `Status-flip to 'searching' failed for media ${media.id} (request ${mediaRequest.id}): ${String(err)}`);
+        });
       }
     } else {
       await prisma.mediaRequest.update({ where: { id: mediaRequest.id }, data: { status: 'failed' } });

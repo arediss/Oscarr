@@ -357,6 +357,11 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       async batchStatus(items, userId) {
         req('requests:read', 'media.batchStatus');
         if (items.length === 0) return {};
+        // Hard cap to prevent a bug (or malicious plugin) from generating a 10k-clause OR
+        // query that would pin SQLite's parser. Mirrors the `listForUser` pattern (max 200).
+        if (items.length > 500) {
+          throw new Error(`ctx.media.batchStatus: items length ${items.length} exceeds the 500 cap — slice your list or filter upstream`);
+        }
         // Two-pass query so we don't fetch the whole Media table:
         // 1. One findMany on the union of (tmdbId,mediaType) pairs → media status per item.
         // 2. One findMany on MediaRequest filtered by userId + the same media ids → user state.
@@ -455,6 +460,12 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       },
       async create(input) {
         req('requests:write', 'requests.create');
+        // Runtime validation at the boundary — TypeScript only guards compile-time callers,
+        // but plugins load plain JS from disk and can pass anything. Catch obvious garbage
+        // here rather than forwarding NaN into Prisma where the error becomes opaque.
+        if (!Number.isInteger(input?.userId) || (input.userId as number) < 1) {
+          return { ok: false, code: 'INVALID_INPUT', error: 'userId must be a positive integer' };
+        }
         // Delegates to the same createUserRequest pipeline the HTTP route uses — pluginGuard
         // + blacklist + dedup + quality gate + sendToService + safeNotify all honoured.
         // Target user's role (loaded from DB inside createUserRequest) drives auto-approve;

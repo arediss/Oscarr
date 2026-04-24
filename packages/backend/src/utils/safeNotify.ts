@@ -2,6 +2,7 @@ import { notificationRegistry } from '../notifications/index.js';
 import { sendUserNotification as _sendUserNotification } from '../services/userNotifications.js';
 import { prisma } from './prisma.js';
 import { pluginEventBus } from '../plugins/eventBus.js';
+import { logEvent } from './logEvent.js';
 import type { PluginUserNotificationCreatedV1 } from '@oscarr/shared';
 
 let _siteUrl: string | null = null;
@@ -47,6 +48,10 @@ export function safeUserNotify(userId: number, payload: Parameters<typeof _sendU
     createdAt: new Date().toISOString(),
   };
   // Event bus emit is sync-returning but handler resolution is awaited inside emit; fire and
-  // swallow so one misbehaving subscriber doesn't block the caller.
-  pluginEventBus.emit('user.notification.created', event).catch(err => console.error('[PluginEvent user.notification.created] Failed:', err));
+  // swallow so one misbehaving subscriber doesn't block the caller. Route failures to AppLog
+  // (not console.error) — plugins are this code path's consumers, and admins need a
+  // persisted breadcrumb when a subscriber throws.
+  pluginEventBus.emit('user.notification.created', event).catch(err => {
+    logEvent('error', 'PluginEvent', `Subscriber of 'user.notification.created' threw: ${String(err)}`);
+  });
 }

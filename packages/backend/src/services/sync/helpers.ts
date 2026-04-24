@@ -4,6 +4,7 @@ import { COMPLETABLE_REQUEST_STATUSES } from '@oscarr/shared';
 import type { PluginMediaAvailableV1 } from '@oscarr/shared';
 import { sendPushToUsers } from '../pushService.js';
 import { pluginEventBus } from '../../plugins/eventBus.js';
+import { logEvent } from '../../utils/logEvent.js';
 
 export interface SyncResult {
   added: number;
@@ -44,7 +45,9 @@ export function sendAvailabilityNotifications(
       posterPath,
       requesterUserIds: [...new Set(requests.map(r => r.userId))],
     };
-    pluginEventBus.emit('media.available', event).catch(err => console.error('[PluginEvent media.available] Failed:', err));
+    pluginEventBus.emit('media.available', event).catch(err => {
+      logEvent('error', 'PluginEvent', `Subscriber of 'media.available' threw: ${String(err)}`);
+    });
 
     // In-app bell — one per requester
     for (const req of requests) {

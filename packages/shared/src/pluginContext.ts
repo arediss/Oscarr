@@ -89,7 +89,14 @@ export interface PluginFolderRule {
 // ─── Event bus payloads ─────────────────────────────────────────────
 
 /** Versioned envelope: plugins subscribe to a stable `v: 1` contract. Future payload changes
- *  emit alongside `v: 2` etc. — no silent breakage. */
+ *  emit alongside `v: 2` etc. — no silent breakage.
+ *
+ *  **Metadata contract (important):** `metadata` is forwarded verbatim from whatever the
+ *  caller of `safeUserNotify` passed in — it reaches every plugin subscribed to the event,
+ *  regardless of that plugin's `users:read` / `requests:read` capabilities. Core callers must
+ *  treat metadata as plugin-visible: no PII, no secrets, no raw error objects. Current core
+ *  payloads (`{ mediaId, tmdbId, mediaType, msgParams }`) are safe; keep future additions on
+ *  the same side of the line. */
 export interface PluginUserNotificationCreatedV1 {
   v: 1;
   userId: number;
@@ -103,7 +110,11 @@ export interface PluginUserNotificationCreatedV1 {
 /** Emitted when a piece of media becomes available in the library (post-sync confirm). The
  *  `requesterUserIds` list enumerates every user whose request was fulfilled by this event,
  *  so broadcast-style plugins can translate one "media available" fact into N per-user
- *  side-effects without extra DB queries. */
+ *  side-effects without extra DB queries.
+ *
+ *  **Privacy:** subscribers receive raw user IDs regardless of their capability declarations.
+ *  Treat them as confidential — don't log them to external systems or expose them through
+ *  plugin APIs without explicit admin opt-in. */
 export interface PluginMediaAvailableV1 {
   v: 1;
   mediaId: number;
