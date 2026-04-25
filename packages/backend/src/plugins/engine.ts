@@ -10,6 +10,7 @@ import { updateJobSchedule } from '../services/scheduler.js';
 import { createContext, clearLogRateCounter, type ContextFactoryDeps } from './context/index.js';
 import { PluginRouter } from './router.js';
 import { enforcePluginRoutePermission, unregisterPluginRbac } from '../middleware/rbac.js';
+import { pluginEventBus } from './eventBus.js';
 import type {
   LoadedPlugin,
   LoadedUIContribution,
@@ -86,7 +87,17 @@ export class PluginEngine {
     }
 
     if (registration.registerNotificationProviders) {
-      registration.registerNotificationProviders(notificationRegistry);
+      // Wrap so providers registered by this plugin are auto-tagged for cleanup on disable/uninstall.
+      const scoped = new Proxy(notificationRegistry, {
+        get(target, prop, receiver) {
+          if (prop === 'registerProvider') {
+            return (provider: Parameters<typeof target.registerProvider>[0]) =>
+              target.registerProvider(provider, manifest.id);
+          }
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+      registration.registerNotificationProviders(scoped);
     }
 
     const loaded: LoadedPlugin = { manifest, registration, dir, enabled: state.enabled };
@@ -342,9 +353,9 @@ export class PluginEngine {
 
     // Drop routes first so no in-flight request can still hit a handler whose module is about to die.
     this.routers.delete(id);
-    // RBAC overrides + declared permissions are module-scoped; without this they'd outlive the
-    // plugin and keep affecting routing until process restart.
     unregisterPluginRbac(id);
+    pluginEventBus.removeAllForPlugin(id);
+    notificationRegistry.removeAllForPlugin(id);
 
     await prisma.pluginState.update({ where: { pluginId: id }, data: { enabled: false } })
       .catch((err) => this.log('warn', `Failed to mark plugin "${id}" disabled during uninstall: ${err}`));
@@ -396,6 +407,13 @@ export class PluginEngine {
         this.routers.delete(id);
         unregisterPluginRbac(id);
       }
+    }
+
+    // On disable: drop event-bus listeners + notif providers the plugin registered. Re-running
+    // the lifecycle on re-enable will rebuild them — without this they leaked across toggles.
+    if (!enabled) {
+      pluginEventBus.removeAllForPlugin(id);
+      notificationRegistry.removeAllForPlugin(id);
     }
 
     // Stop or restart plugin cron jobs
