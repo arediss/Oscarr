@@ -37,27 +37,33 @@ export function ServiceHealthWidget() {
 
   const sorted = useMemo(() => services ? [...services].sort((a, b) => a.name.localeCompare(b.name)) : [], [services]);
 
-  if (!services) return <p className="text-xs text-ndp-text-dim">Loading…</p>;
-  if (services.length === 0) return <p className="text-xs text-ndp-text-dim">No services configured.</p>;
+  if (!services) {
+    return <div className="card p-4 h-full"><p className="text-xs text-ndp-text-dim">Loading…</p></div>;
+  }
+  if (services.length === 0) {
+    return <div className="card p-4 h-full"><p className="text-xs text-ndp-text-dim">No services configured.</p></div>;
+  }
 
   return (
-    <ul className="space-y-2">
-      {sorted.map((s) => {
-        const h = health[s.id];
-        return (
-          <li key={s.id} className="flex items-center justify-between gap-3 rounded-md bg-white/5 px-3 py-2">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-ndp-text">{s.name}</p>
-              <p className="text-[11px] text-ndp-text-dim uppercase">{s.type}</p>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              {h?.status === 'loading' && <Loader2 className="h-3.5 w-3.5 animate-spin text-ndp-text-dim" />}
-              {h?.status === 'ok' && <><CheckCircle2 className="h-3.5 w-3.5 text-ndp-success" /><span className="text-ndp-text-dim">{h.version || 'OK'}</span></>}
-              {h?.status === 'error' && <><AlertCircle className="h-3.5 w-3.5 text-ndp-danger" /><span className="text-ndp-danger">{h.error || 'Error'}</span></>}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="card p-4 h-full overflow-auto">
+      <ul className="space-y-2">
+        {sorted.map((s) => {
+          const h = health[s.id];
+          return (
+            <li key={s.id} className="flex items-center justify-between gap-3 rounded-md bg-white/5 px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-ndp-text">{s.name}</p>
+                <p className="text-[11px] text-ndp-text-dim uppercase">{s.type}</p>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                {h?.status === 'loading' && <Loader2 className="h-3.5 w-3.5 animate-spin text-ndp-text-dim" />}
+                {h?.status === 'ok' && <><CheckCircle2 className="h-3.5 w-3.5 text-ndp-success" /><span className="text-ndp-text-dim">{h.version || 'OK'}</span></>}
+                {h?.status === 'error' && <><AlertCircle className="h-3.5 w-3.5 text-ndp-danger" /><span className="text-ndp-danger">{h.error || 'Error'}</span></>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

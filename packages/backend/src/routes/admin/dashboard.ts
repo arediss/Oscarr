@@ -5,9 +5,9 @@ import { logEvent } from '../../utils/logEvent.js';
 const DEFAULT_LAYOUT = {
   version: 1,
   items: [
-    { i: 'builtin:stats-counters', x: 0, y: 0, w: 12, h: 1 },
-    { i: 'builtin:service-health', x: 0, y: 1, w: 6,  h: 3 },
-    { i: 'builtin:system',         x: 6, y: 1, w: 6,  h: 3 },
+    { i: 'builtin:stats-counters', x: 0, y: 0, w: 12, h: 2 },
+    { i: 'builtin:service-health', x: 0, y: 2, w: 6,  h: 5 },
+    { i: 'builtin:system',         x: 6, y: 2, w: 6,  h: 3 },
   ],
 } as const;
 
