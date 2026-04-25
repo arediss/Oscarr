@@ -11,6 +11,10 @@ export interface ArrRootFolder { id: number; path: string; freeSpace: number }
 export interface ArrMediaItem {
   serviceMediaId: number;
   externalId: number;
+  /** TMDB id when the upstream provider exposes it (Sonarr v3 ships it on each series).
+   *  Lets the sync write the real `tmdbId` on TV rows instead of the negative `-tvdbId`
+   *  placeholder, so home-page batch-status queries (which key by positive tmdbId) match. */
+  tmdbId?: number;
   title: string;
   status: string;
   posterPath: string | null;
