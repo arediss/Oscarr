@@ -248,12 +248,9 @@ jobs:
             if [ -z "$FIRST_TAG" ]; then FIRST_TAG="$TAG"; fi
           done
           # Capture the manifest digest for cosign sign + SBOM attach (immutable, unlike tags).
-          # Previously we sha256'd the raw inspect output — that happens to match the registry
-          # digest today but would silently break if buildx ever tweaks the --raw formatting
-          # (pretty-print, trailing newline, etc.) and cosign would then sign a non-existent ref.
-          # `--format '{{json .Manifest}}' | jq -r .digest` reads the digest buildx itself
-          # computed from the registry manifest, so the two stay in lockstep by construction.
-          DIGEST=$(docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${FIRST_TAG}" --format '{{json .Manifest}}' | jq -r .digest)
+          # Use buildx's own templating to extract the digest directly — no jq dependency on
+          # the runner. Format strings: {{.Manifest.Digest}} on imagetools inspect.
+          DIGEST=$(docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${FIRST_TAG}" --format '{{.Manifest.Digest}}')
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
           echo "first_tag=${FIRST_TAG}" >> "$GITHUB_OUTPUT"
         env:
