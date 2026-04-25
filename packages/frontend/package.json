@@ -1,6 +1,6 @@
 {
   "name": "@oscarr/frontend",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
     "@oscarr/shared": "*",
     "@tanstack/react-virtual": "^3.13.24",
     "axios": "^1.15.0",
