@@ -2,6 +2,7 @@ import { notificationRegistry } from './registry.js';
 import { discordProvider } from './providers/discord.js';
 import { telegramProvider } from './providers/telegram.js';
 import { emailProvider } from './providers/email.js';
+import { logEvent } from '../utils/logEvent.js';
 import type { NotificationEventType } from './types.js';
 
 const CORE_EVENT_TYPES: NotificationEventType[] = [
@@ -21,7 +22,7 @@ export function initNotifications(): void {
   // Register core event types
   notificationRegistry.registerEventTypes(CORE_EVENT_TYPES);
 
-  console.log('[Notifications] Initialized with core providers: discord, telegram, email');
+  logEvent('debug', 'Notifications', 'Initialized with core providers: discord, telegram, email');
 }
 
 // Re-exports for convenience

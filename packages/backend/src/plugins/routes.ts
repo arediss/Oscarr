@@ -368,7 +368,7 @@ export async function pluginRoutes(app: FastifyInstance) {
   );
 
   // ── Plugin registry (Discover) ──────────────────────────────────
-  app.get('/registry', async (_request, reply) => {
+  app.get('/registry', async (request, reply) => {
     try {
       const now = Date.now();
       if (registryCache && now - registryCache.timestamp < REGISTRY_TTL) {
@@ -393,7 +393,7 @@ export async function pluginRoutes(app: FastifyInstance) {
       const validRepo = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
       const validEntries = registry.plugins.filter(entry => {
         if (!validRepo.test(entry.repository)) {
-          console.warn(`[Registry] Skipping invalid repository: ${entry.repository}`);
+          request.log.warn({ repository: entry.repository }, '[Registry] Skipping invalid repository');
           return false;
         }
         return true;

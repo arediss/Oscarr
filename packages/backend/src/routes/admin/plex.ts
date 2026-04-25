@@ -19,10 +19,7 @@ export async function plexAdminRoutes(app: FastifyInstance) {
     const targetId = parseId(userId);
     if (!targetId) return reply.status(400).send({ error: 'Invalid userId' });
 
-    const requester = (request as unknown as { user?: { id: number } }).user;
-    if (!requester?.id) return reply.status(401).send({ error: 'Unauthenticated' });
-
-    const token = await getPlexToken(requester.id);
+    const token = await getPlexToken(request.user.id);
     if (!token) return reply.status(400).send({ error: 'No Plex admin token available' });
 
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
@@ -73,7 +70,7 @@ export async function plexAdminRoutes(app: FastifyInstance) {
       return reply.status(502).send({ error: 'Plex rejected the unshare request' });
     }
 
-    logEvent('info', 'Plex', `Admin #${requester.id} unshared Plex access for user #${targetId} (Plex userID ${targetPlexId})`);
+    logEvent('info', 'Plex', `Admin #${request.user.id} unshared Plex access for user #${targetId} (Plex userID ${targetPlexId})`);
     return { ok: true };
   });
 }

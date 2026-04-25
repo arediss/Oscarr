@@ -53,7 +53,6 @@ export async function usersRoutes(app: FastifyInstance) {
       if (msg === 'NO_TOKEN') return reply.status(400).send({ error: `No ${providerId} token found. Configure the service in settings.` });
       if (msg === 'NO_MACHINE_ID') return reply.status(400).send({ error: `No ${providerId} server configured.` });
       const safeProviderId = providerId.replace(/[\r\n\t]/g, '');
-      console.error('Failed to import %s users:', safeProviderId, err);
       logEvent('error', 'User', `${safeProviderId} import failed: ${String(err)}`);
       return reply.status(502).send({ error: `Unable to retrieve ${providerId} users` });
     }
@@ -86,7 +85,6 @@ export async function usersRoutes(app: FastifyInstance) {
       if (msg === 'NO_TOKEN') return reply.status(400).send({ error: 'NO_AUTH_TOKEN', detail: `No ${providerId} token — configure the service first.` });
       if (msg === 'NO_MACHINE_ID') return reply.status(400).send({ error: 'NO_AUTH_SERVER', detail: `No ${providerId} server configured.` });
       const safeProviderId = providerId.replace(/[\r\n\t]/g, '');
-      console.error('Failed to sync %s users:', safeProviderId, err);
       logEvent('error', 'User', `${safeProviderId} sync failed: ${String(err)}`);
       return reply.status(502).send({ error: 'AUTH_SYNC_FAILED', detail: `Unable to sync ${providerId} users` });
     }
@@ -230,8 +228,7 @@ export async function usersRoutes(app: FastifyInstance) {
 
     const { disabled } = request.body as { disabled: boolean };
 
-    const requester = (request as unknown as { user?: { id: number } }).user;
-    if (requester?.id === userId && disabled) {
+    if (request.user.id === userId && disabled) {
       return reply.status(400).send({ error: 'You cannot disable your own account' });
     }
 
