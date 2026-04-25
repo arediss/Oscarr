@@ -1,7 +1,8 @@
 import './env.js';
 import Fastify from 'fastify';
 import { execFileSync } from 'child_process';
-import { join } from 'path';
+import { createRequire } from 'module';
+import { dirname, join } from 'path';
 import { prisma } from './utils/prisma.js';
 import { BACKEND_ROOT } from './utils/paths.js';
 import { loadInstallState } from './utils/install.js';
@@ -53,11 +54,15 @@ const app = Fastify({
 });
 
 /** Always apply pending Prisma migrations at boot. Idempotent — zero-ops when the DB is
- *  already current. Calls the local prisma binary directly instead of `npx` to avoid pulling
- *  the npm CLI into the prod image (its bundled deps periodically ship CVEs we don't need). */
+ *  already current. Resolves the prisma CLI via Node's module resolution so it works both in
+ *  dev (npm workspaces hoist to <root>/node_modules) and in the prod image (deps live under
+ *  packages/backend/node_modules) — without depending on `npx`. */
 async function ensureMigrated() {
-  const prismaBin = join(BACKEND_ROOT, 'node_modules', '.bin', 'prisma');
-  execFileSync(prismaBin, ['migrate', 'deploy'], {
+  const requireFn = createRequire(import.meta.url);
+  const pkgPath = requireFn.resolve('prisma/package.json');
+  const pkg = requireFn('prisma/package.json') as { bin: Record<string, string> };
+  const prismaCli = join(dirname(pkgPath), pkg.bin.prisma);
+  execFileSync(process.execPath, [prismaCli, 'migrate', 'deploy'], {
     cwd: BACKEND_ROOT,
     stdio: 'inherit',
   });
