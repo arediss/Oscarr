@@ -44,7 +44,9 @@ export async function discoverPlugins(): Promise<DiscoveredPlugin[]> {
       const manifest = parseManifest(data, entryPath) as PluginManifest;
       plugins.push({ dir: entryPath, manifest });
     } catch (err) {
-      console.error(`[PluginLoader] Failed to load manifest from ${entryPath}:`, err);
+      const { logEvent } = await import('../utils/logEvent.js');
+      logEvent('error', 'PluginLoader', `Failed to load manifest from ${entryPath}: ${String(err)}`)
+        .catch(() => { /* boot-time, AppLog may not be ready yet */ });
     }
   }
 

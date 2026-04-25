@@ -1,6 +1,7 @@
 import webpush from 'web-push';
 import { withRetry } from '../utils/fetchWithRetry.js';
 import { prisma } from '../utils/prisma.js';
+import { logEvent } from '../utils/logEvent.js';
 
 /** Web-push VAPID setup + fan-out. Consumed by routes (one-way dependency). */
 
@@ -43,7 +44,7 @@ export async function sendPushToUsers(
       const statusCode = (err as { statusCode?: number })?.statusCode;
       if (statusCode === 410 || statusCode === 404) {
         await prisma.pushSubscription.delete({ where: { id: sub.id } })
-          .catch((dbErr) => console.warn('[WebPush] stale subscription cleanup failed', dbErr));
+          .catch((dbErr) => logEvent('warn', 'WebPush', `stale subscription cleanup failed: ${String(dbErr)}`));
       }
     }
   }

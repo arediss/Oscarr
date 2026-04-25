@@ -45,7 +45,10 @@ export class PluginEventBus {
       try {
         await handler(data);
       } catch (err) {
-        console.error(`[EventBus] Handler error for "${event}":`, err);
+        // Lazy import to break potential circular deps with plugin loaders.
+        void import('../utils/logEvent.js').then(({ logEvent }) =>
+          logEvent('error', 'EventBus', `Handler for "${event}" threw: ${String(err)}`)
+        ).catch(() => { /* logEvent should never crash the bus */ });
       }
     }
   }

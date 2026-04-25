@@ -205,7 +205,9 @@ async function loadRolesFromDb(): Promise<void> {
     roleCache = map;
     roleCacheReady = true;
   } catch (err) {
-    console.warn('[RBAC] Failed to load roles from DB, using fallback:', err);
+    void import('../utils/logEvent.js').then(({ logEvent }) =>
+      logEvent('warn', 'RBAC', `Failed to load roles from DB, using fallback: ${String(err)}`)
+    ).catch(() => { /* never mask the auth path */ });
     roleCache = { ...FALLBACK_ROLES };
   }
 }
