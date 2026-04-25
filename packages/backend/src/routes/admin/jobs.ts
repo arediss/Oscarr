@@ -1,14 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../utils/prisma.js';
-import { triggerJob, updateJobSchedule } from '../../services/scheduler.js';
+import { triggerJob, updateJobSchedule, isJobRunning } from '../../services/scheduler.js';
+import { logEvent } from '../../utils/logEvent.js';
 import nodeSchedule from 'node-cron';
 
 export async function jobsRoutes(app: FastifyInstance) {
   // === CRON JOBS ===
 
   app.get('/jobs', async (request, reply) => {
-
-    return prisma.cronJob.findMany({ orderBy: { key: 'asc' } });
+    const jobs = await prisma.cronJob.findMany({ orderBy: { key: 'asc' } });
+    return jobs.map((j) => ({ ...j, running: isJobRunning(j.key) }));
   });
 
   app.put('/jobs/:key', {
@@ -62,12 +63,13 @@ export async function jobsRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
 
     const { key } = request.params as { key: string };
-    try {
-      const result = await triggerJob(key);
-      const job = await prisma.cronJob.findUnique({ where: { key } });
-      return { ok: true, result, job };
-    } catch (err) {
-      return reply.status(500).send({ error: 'Job failed', details: String(err) });
+    if (isJobRunning(key)) {
+      return reply.status(409).send({ error: 'already_running', message: `Job "${key}" is already running` });
     }
+    // Fire-and-forget — front polls /jobs for lastStatus/lastResult.
+    triggerJob(key).catch((err) => {
+      logEvent('error', 'Job', `Background job "${key}" failed: ${String(err)}`);
+    });
+    return reply.status(202).send({ ok: true, started: true });
   });
 }

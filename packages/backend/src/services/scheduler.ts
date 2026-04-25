@@ -43,7 +43,13 @@ const DEFAULT_JOBS = [
 
 const activeTasks = new Map<string, ScheduledTask>();
 const pluginJobKeys = new Set<string>(); // Track which job keys belong to plugins
+// Per-key mutex — same job can't double-run (manual + cron tick collision).
+const runningJobs = new Set<string>();
 let _pluginEngine: PluginEngine | null = null;
+
+export type RunJobOutcome =
+  | { skipped: true; reason: 'already_running' | 'unknown_job' | 'plugin_disabled' }
+  | { skipped: false; result: unknown };
 
 async function seedJobs() {
   for (const job of DEFAULT_JOBS) {
@@ -56,9 +62,9 @@ async function seedJobs() {
   }
 }
 
-async function runJob(key: string) {
+async function runJob(key: string): Promise<RunJobOutcome> {
   const handler = JOB_HANDLERS[key];
-  if (!handler) return;
+  if (!handler) return { skipped: true, reason: 'unknown_job' };
 
   // Guard: skip plugin jobs if their plugin is disabled
   if (pluginJobKeys.has(key) && _pluginEngine) {
@@ -68,9 +74,15 @@ async function runJob(key: string) {
     );
     if (ownerPlugin && !ownerPlugin.enabled) {
       logEvent('debug', 'Job', `Skipping job "${sanitize(key)}" — plugin "${ownerPlugin.id}" is disabled`);
-      return;
+      return { skipped: true, reason: 'plugin_disabled' };
     }
   }
+
+  if (runningJobs.has(key)) {
+    logEvent('debug', 'Job', `Job "${sanitize(key)}" already running, skipping concurrent trigger`);
+    return { skipped: true, reason: 'already_running' };
+  }
+  runningJobs.add(key);
 
   const wasFirstSync = !(await hasCompletedFirstSync());
 
@@ -95,7 +107,7 @@ async function runJob(key: string) {
       await startAllJobs();
     }
 
-    return result;
+    return { skipped: false, result };
   } catch (err) {
     const duration = Date.now() - start;
     await prisma.cronJob.update({
@@ -109,6 +121,8 @@ async function runJob(key: string) {
     });
     logEvent('error', 'Job', `Job "${sanitize(key)}" failed`, err);
     throw err;
+  } finally {
+    runningJobs.delete(key);
   }
 }
 
@@ -189,7 +203,12 @@ export async function updateJobSchedule(key: string, cronExpression: string, ena
   }
 }
 
-export async function triggerJob(key: string) {
+export async function triggerJob(key: string): Promise<RunJobOutcome> {
   return runJob(key);
+}
+
+/** True when `key` is currently mid-run (manual or cron-triggered). Read-only — for status APIs. */
+export function isJobRunning(key: string): boolean {
+  return runningJobs.has(key);
 }
 

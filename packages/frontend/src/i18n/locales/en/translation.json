@@ -588,6 +588,8 @@
   "admin.jobs.run": "Run",
   "admin.jobs.job_done": "Job \"{{key}}\" completed",
   "admin.jobs.job_failed": "Job \"{{key}}\" failed",
+  "admin.jobs.job_started": "Job \"{{key}}\" started",
+  "admin.jobs.job_already_running": "Job \"{{key}}\" is already running",
   "admin.jobs.toast.radarr_sync": "Radarr: +{{added}} added, {{updated}} updated ({{duration}}s)",
   "admin.jobs.toast.sonarr_sync": "Sonarr: +{{added}} added, {{updated}} updated ({{duration}}s)",
   "admin.jobs.toast.radarr_requests": "Radarr: {{imported}} imported, {{skipped}} skipped",
