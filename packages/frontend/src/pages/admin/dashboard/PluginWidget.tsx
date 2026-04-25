@@ -1,9 +1,10 @@
-import { usePluginUI } from '@/plugins/usePlugins';
 import { PluginHookComponent } from '@/plugins/PluginHookComponent';
+import type { PluginUIContribution } from '@/plugins/types';
 
 interface PluginWidgetProps {
-  /** Layout 'i' value. Format: 'plugin:<pluginId>:<widgetId>'. */
-  layoutI: string;
+  pluginId: string;
+  widgetId: string;
+  contribution: PluginUIContribution;
 }
 
 interface ParsedId { pluginId: string; widgetId: string }
@@ -16,23 +17,12 @@ function parsePluginLayoutI(i: string): ParsedId | null {
   return { pluginId: rest.slice(0, sep), widgetId: rest.slice(sep + 1) };
 }
 
-export function PluginWidget({ layoutI }: PluginWidgetProps) {
-  const parsed = parsePluginLayoutI(layoutI);
-  const { contributions } = usePluginUI('admin.dashboard.widget');
-
-  if (!parsed) {
-    return <p className="text-xs text-ndp-text-dim">Invalid plugin widget id</p>;
-  }
-  const contribution = contributions.find(
-    (c) => c.pluginId === parsed.pluginId && c.props?.id === parsed.widgetId,
-  );
-  if (!contribution) return null;  // ghost case — handled by DashboardGrid
-
+export function PluginWidget({ pluginId, widgetId, contribution }: PluginWidgetProps) {
   return (
     <PluginHookComponent
-      pluginId={parsed.pluginId}
+      pluginId={pluginId}
       hookPoint="admin.dashboard.widget"
-      context={{ widgetId: parsed.widgetId }}
+      context={{ widgetId }}
       contribution={contribution}
     />
   );
