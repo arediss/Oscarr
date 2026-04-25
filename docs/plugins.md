@@ -147,6 +147,56 @@ ln -s ~/my-plugins/hello-oscarr ~/Oscarr/app/packages/plugins/hello-oscarr
 
 Restart Oscarr once to discover it (hot-install from the UI only applies when pulling from the Discover tab). The plugin shows up in **Admin → Plugins → Installed** — toggle it on and hit `GET /api/plugins/hello-oscarr/hello` to verify.
 
+## Releasing a plugin
+
+When an admin clicks **Install** in the Discover tab, Oscarr resolves the tarball URL in this order:
+
+1. **GitHub Release asset** — the latest release's first `.tar.gz` asset that isn't a `.sha256` companion. **Recommended** — repo stays source-only, the prebuilt `dist/` ships in the asset, install always works.
+2. **Source tarball** (`tarball/HEAD`) — fallback for plugins that commit `dist/` to their repo (legacy pattern; works but pollutes git history with build artifacts).
+
+**Recommended workflow** — drop this `.github/workflows/release.yml` in your plugin repo. It runs on every `v*` tag push, builds your plugin, and publishes a tarball asset on the corresponding GitHub Release:
+
+```yaml
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - name: Pack artifact
+        run: |
+          ID=$(jq -r .id manifest.json)
+          VER="${GITHUB_REF_NAME#v}"
+          tar -czf "${ID}-${VER}.tar.gz" manifest.json package.json dist frontend
+          sha256sum "${ID}-${VER}.tar.gz" > "${ID}-${VER}.tar.gz.sha256"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.tar.gz
+            *.sha256
+```
+
+Adjust the `tar` line to match what your plugin actually ships (drop `frontend` if you don't have one, add `assets` if you have static files). The asset must include:
+
+- `manifest.json` at the root
+- `package.json` at the root
+- The `dist/` directory containing the built `entry` from your manifest
+
+The `.sha256` companion is optional today but Oscarr will likely consume it for asset integrity in a future release — keeping it now costs nothing.
+
+To cut a release: `git tag v0.1.2 && git push origin v0.1.2`. The workflow runs, the release page gets the asset, and Oscarr admins immediately see "update available" in their Plugins tab.
+
 ## Getting started
 
 ### File structure
