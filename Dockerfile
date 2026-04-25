@@ -47,8 +47,12 @@ WORKDIR /app
 # Install ONLY the runtime externals (Prisma + native modules) from a trimmed manifest.
 # Everything else (fastify, axios, archiver, swagger, zod, …) is inlined in dist/server.js.
 # This is the 500+ MB image-slimming win vs shipping the full `npm ci --omit=dev` tree.
+# We then strip the bundled npm CLI: ensureMigrated() now calls node_modules/.bin/prisma
+# directly (not via npx), so npm isn't needed at runtime — and its transitive deps regularly
+# ship vulns the scanner picks up.
 COPY --chown=oscarr:oscarr packages/backend/package.prod.json packages/backend/package.json
-RUN cd packages/backend && npm install --omit=dev --no-audit --no-fund
+RUN cd packages/backend && npm install --omit=dev --no-audit --no-fund \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Bundled backend server + its sourcemap (keeps stack traces useful in prod logs).
 COPY --from=builder --chown=oscarr:oscarr /app/packages/backend/dist/server.js packages/backend/dist/server.js

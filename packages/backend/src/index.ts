@@ -1,6 +1,7 @@
 import './env.js';
 import Fastify from 'fastify';
 import { execFileSync } from 'child_process';
+import { join } from 'path';
 import { prisma } from './utils/prisma.js';
 import { BACKEND_ROOT } from './utils/paths.js';
 import { loadInstallState } from './utils/install.js';
@@ -52,10 +53,11 @@ const app = Fastify({
 });
 
 /** Always apply pending Prisma migrations at boot. Idempotent — zero-ops when the DB is
- *  already current, skips the noise, and catches both fresh installs and schema drift after
- *  `git pull`. */
+ *  already current. Calls the local prisma binary directly instead of `npx` to avoid pulling
+ *  the npm CLI into the prod image (its bundled deps periodically ship CVEs we don't need). */
 async function ensureMigrated() {
-  execFileSync('npx', ['prisma', 'migrate', 'deploy'], {
+  const prismaBin = join(BACKEND_ROOT, 'node_modules', '.bin', 'prisma');
+  execFileSync(prismaBin, ['migrate', 'deploy'], {
     cwd: BACKEND_ROOT,
     stdio: 'inherit',
   });
