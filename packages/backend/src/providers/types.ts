@@ -95,6 +95,12 @@ export interface ArrClient {
   // Sync
   getAllMedia(): Promise<ArrMediaItem[]>;
 
+  /** Fetch a single media row by its *arr internal id (Radarr movie.id / Sonarr series.id).
+   *  Returns the same shape as `getAllMedia()` items so webhooks can enrich a freshly-added
+   *  row with poster / quality / seasons without scanning the whole library. Null when the
+   *  service returns 404 (already deleted, etc.). */
+  getMediaById(serviceMediaId: number): Promise<ArrMediaItem | null>;
+
   // Live check
   checkAvailability(externalId: number): Promise<ArrAvailabilityResult>;
 

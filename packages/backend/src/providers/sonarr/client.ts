@@ -187,9 +187,8 @@ export class SonarrClient implements ArrClient {
     return 'unknown';
   }
 
-  async getAllMedia(): Promise<ArrMediaItem[]> {
-    const series = await this.getSeries();
-    return series.map(show => ({
+  private seriesToArrItem(show: SonarrSeries): ArrMediaItem {
+    return {
       serviceMediaId: show.id,
       externalId: show.tvdbId,
       tmdbId: show.tmdbId && show.tmdbId > 0 ? show.tmdbId : undefined,
@@ -211,7 +210,22 @@ export class SonarrClient implements ArrClient {
           percentComplete: s.statistics?.percentOfEpisodes ?? 0,
           status: this.getSeasonStatus(s),
         })),
-    }));
+    };
+  }
+
+  async getAllMedia(): Promise<ArrMediaItem[]> {
+    const series = await this.getSeries();
+    return series.map((s) => this.seriesToArrItem(s));
+  }
+
+  async getMediaById(serviceMediaId: number): Promise<ArrMediaItem | null> {
+    try {
+      const series = await this.getSeriesById(serviceMediaId);
+      return series ? this.seriesToArrItem(series) : null;
+    } catch (err) {
+      if ((err as { response?: { status?: number } })?.response?.status === 404) return null;
+      throw err;
+    }
   }
 
   async checkAvailability(tvdbId: number): Promise<ArrAvailabilityResult> {
