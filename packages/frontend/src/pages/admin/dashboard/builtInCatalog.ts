@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { StatsCountersWidget } from './widgets/StatsCountersWidget';
 import { ServiceHealthWidget } from './widgets/ServiceHealthWidget';
+import { SystemWidget } from './widgets/SystemWidget';
 
 export interface BuiltInWidget {
   id: string;
@@ -27,6 +28,14 @@ export const BUILT_IN_WIDGETS: Record<string, BuiltInWidget> = {
     defaultSize: { w: 6, h: 3 },
     minSize: { w: 4, h: 2 },
     Component: ServiceHealthWidget,
+  },
+  'system': {
+    id: 'system',
+    title: 'System',
+    icon: 'Info',
+    defaultSize: { w: 6, h: 3 },
+    minSize: { w: 4, h: 2 },
+    Component: SystemWidget,
   },
 };
 
