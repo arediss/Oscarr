@@ -20,22 +20,18 @@ export function sendAvailabilityNotifications(
   mediaId: number,
   tmdbId: number,
 ): void {
-  // Only notify when at least one Oscarr user has an active request for this
-  // media — otherwise the event comes from a direct *arr import nobody asked
-  // for, and external channels (Discord/Telegram/Email) would be spammed with
-  // irrelevant "media available" pings.
+  // Skip when no Oscarr user has an active request — direct *arr imports shouldn't trigger
+  // external channels for media nobody asked for.
   prisma.mediaRequest.findMany({
     where: { mediaId, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
     select: { userId: true },
   }).then(requests => {
     if (requests.length === 0) return;
 
-    // External broadcast (Discord / Telegram / Email configured by admins)
     safeNotify('media_available', { title, mediaType, posterPath });
 
-    // Plugin event bus — broadcast form for plugins that want to push to a channel
-    // (e.g. "new drop!" Discord post). Per-user equivalent is already fired by
-    // safeUserNotify below via user.notification.created.
+    const userIds = [...new Set(requests.map(r => r.userId))];
+
     const event: PluginMediaAvailableV1 = {
       v: 1,
       mediaId,
@@ -43,40 +39,32 @@ export function sendAvailabilityNotifications(
       mediaType,
       title,
       posterPath,
-      requesterUserIds: [...new Set(requests.map(r => r.userId))],
+      requesterUserIds: userIds,
     };
     pluginEventBus.emit('media.available', event).catch(err => {
       logEvent('error', 'PluginEvent', `Subscriber of 'media.available' threw: ${String(err)}`);
     });
 
-    // In-app bell + plugin event bus — one per **distinct** requester. A user with
-    // multiple matching requests on the same media (collection + standalone, re-request
-    // after a 'failed', etc.) was getting N copies of the same DM/notification because
-    // the loop iterated every row instead of deduping. Web push already handled this
-    // correctly below; bell now does too.
-    const userIds = [...new Set(requests.map(r => r.userId))];
     for (const userId of userIds) {
       safeUserNotify(userId, {
         type: 'media_available',
         title,
         message: 'notifications.msg.media_available',
-        // posterPath here is forwarded into PluginUserNotificationCreatedV1.metadata so
-        // plugin subscribers (Leonarr Discord embed, etc.) can build a rich card without
-        // a second TMDB round-trip.
         metadata: { mediaId, tmdbId, mediaType, posterPath, msgParams: { title } },
       });
     }
 
-    // Web push — already deduped per user via the same Set.
     const icon = posterPath ? `https://image.tmdb.org/t/p/w200${posterPath}` : undefined;
-    // Fall back to /requests when the media has no real TMDB id yet
-    // (e.g. webhook-imported TV series stored with negative tmdbId).
     const url = tmdbId > 0 ? `/${mediaType}/${tmdbId}` : '/requests';
     sendPushToUsers(userIds, {
       title: `${title} is available!`,
       body: 'Your requested media is now ready to watch.',
       icon,
       url,
-    }).catch(() => {}); // fire-and-forget
-  }).catch(() => {});
+    }).catch((err) => {
+      logEvent('warn', 'Notif', `Web push fan-out failed for media ${mediaId}: ${String(err)}`);
+    });
+  }).catch((err) => {
+    logEvent('error', 'Notif', `sendAvailabilityNotifications failed for media ${mediaId}: ${String(err)}`);
+  });
 }

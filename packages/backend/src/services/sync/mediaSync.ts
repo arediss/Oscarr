@@ -155,61 +155,138 @@ async function bulkFetchExisting(
   return map;
 }
 
+/** True iff the error is a P2002 unique-constraint violation on `(tmdbId, mediaType)`. */
+function isTmdbMediaTypeConflict(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: string; meta?: { target?: unknown } };
+  if (e.code !== 'P2002') return false;
+  const target = e.meta?.target;
+  if (Array.isArray(target)) return target.includes('tmdbId') && target.includes('mediaType');
+  return typeof target === 'string' && target.includes('tmdbId');
+}
+
+async function createMedia(item: ArrMediaItem, client: ArrClient): Promise<void> {
+  if (client.mediaType === 'movie') {
+    await prisma.media.create({
+      data: {
+        tmdbId: item.externalId,
+        mediaType: 'movie',
+        title: item.title,
+        posterPath: item.posterPath,
+        backdropPath: item.backdropPath,
+        status: item.status,
+        radarrId: item.serviceMediaId,
+        qualityProfileId: item.qualityProfileId,
+        ...(item.status === 'available' ? { availableAt: new Date() } : {}),
+      },
+    });
+    return;
+  }
+  // TV: use Sonarr's real tmdbId when present so batch-status (keyed by positive tmdbId) matches.
+  const realTmdbId = item.tmdbId && item.tmdbId > 0 ? item.tmdbId : null;
+  const created = await prisma.media.create({
+    data: {
+      tmdbId: realTmdbId ?? -(item.externalId),
+      tvdbId: item.externalId,
+      mediaType: 'tv',
+      title: item.title,
+      posterPath: item.posterPath,
+      backdropPath: item.backdropPath,
+      status: item.status,
+      sonarrId: item.serviceMediaId,
+      qualityProfileId: item.qualityProfileId,
+      ...(item.status === 'available' ? { availableAt: new Date() } : {}),
+    },
+  });
+  if (item.seasons?.length) {
+    await prisma.season.createMany({
+      data: item.seasons
+        .filter(s => s.seasonNumber > 0)
+        .map(s => ({
+          mediaId: created.id,
+          seasonNumber: s.seasonNumber,
+          episodeCount: s.totalEpisodeCount,
+          status: s.status,
+        })),
+    });
+  }
+}
+
+async function applyUpdate(
+  existing: Media,
+  updateData: Record<string, unknown>,
+  becameAvailable: boolean,
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.media.update({ where: { id: existing.id }, data: updateData });
+    if (becameAvailable) {
+      await tx.mediaRequest.updateMany({
+        where: { mediaId: existing.id, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
+        data: { status: 'available' },
+      });
+    }
+  });
+}
+
+/** Merge a placeholder TV row into the canonical positive-tmdbId row, deleting the placeholder.
+ *  Dedups requests by userId so re-parenting doesn't multiply rows when both sides already had
+ *  one for the same user. Atomic: races on the unique key are resolved by retrying merge from
+ *  the caller's catch, never by leaving the DB partially merged. */
+async function mergeIntoCanonical(
+  placeholder: Media,
+  canonicalId: number,
+  item: ArrMediaItem,
+  updateData: Record<string, unknown>,
+  becameAvailable: boolean,
+): Promise<void> {
+  const seasonRows = (item.seasons ?? [])
+    .filter((s) => s.seasonNumber > 0)
+    .map((s) => ({
+      mediaId: canonicalId,
+      seasonNumber: s.seasonNumber,
+      episodeCount: s.totalEpisodeCount,
+      status: s.status,
+    }));
+  const { tmdbId: _drop, ...mergeData } = updateData;
+
+  await prisma.$transaction(async (tx) => {
+    const canonicalRequesters = await tx.mediaRequest.findMany({
+      where: { mediaId: canonicalId },
+      select: { userId: true },
+    });
+    const dupUserIds = canonicalRequesters.map((r) => r.userId);
+    if (dupUserIds.length > 0) {
+      await tx.mediaRequest.deleteMany({
+        where: { mediaId: placeholder.id, userId: { in: dupUserIds } },
+      });
+    }
+    await tx.mediaRequest.updateMany({ where: { mediaId: placeholder.id }, data: { mediaId: canonicalId } });
+    await tx.season.deleteMany({ where: { mediaId: placeholder.id } });
+    await tx.media.delete({ where: { id: placeholder.id } });
+    await tx.media.update({ where: { id: canonicalId }, data: mergeData });
+    if (seasonRows.length > 0) {
+      await tx.season.deleteMany({ where: { mediaId: canonicalId } });
+      await tx.season.createMany({ data: seasonRows });
+    }
+    if (becameAvailable) {
+      await tx.mediaRequest.updateMany({
+        where: { mediaId: canonicalId, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
+        data: { status: 'available' },
+      });
+    }
+  });
+  logEvent('debug', 'Sync', `Merged placeholder TV row ${placeholder.id} into canonical row ${canonicalId} (tvdb:${item.externalId})`);
+}
+
 async function processSingleMedia(
   item: ArrMediaItem,
   client: ArrClient,
   existing: Media | undefined,
 ): Promise<'added' | 'updated' | 'skipped' | 'merged'> {
-  // Skip items with no valid external ID (e.g. TV shows not yet in TVDB)
   if (client.mediaType === 'tv' && !item.externalId) return 'skipped';
 
   if (!existing) {
-    // Create new media
-    if (client.mediaType === 'movie') {
-      await prisma.media.create({
-        data: {
-          tmdbId: item.externalId,
-          mediaType: 'movie',
-          title: item.title,
-          posterPath: item.posterPath,
-          backdropPath: item.backdropPath,
-          status: item.status,
-          radarrId: item.serviceMediaId,
-          qualityProfileId: item.qualityProfileId,
-          ...(item.status === 'available' ? { availableAt: new Date() } : {}),
-        },
-      });
-    } else {
-      // Use Sonarr's tmdbId when present so batch-status (keyed by positive tmdbId) matches.
-      // Fall back to -(tvdbId) when Sonarr can't resolve it — collision-free since tvdbId is unique.
-      const realTmdbId = item.tmdbId && item.tmdbId > 0 ? item.tmdbId : null;
-      const created = await prisma.media.create({
-        data: {
-          tmdbId: realTmdbId ?? -(item.externalId),
-          tvdbId: item.externalId,
-          mediaType: 'tv',
-          title: item.title,
-          posterPath: item.posterPath,
-          backdropPath: item.backdropPath,
-          status: item.status,
-          sonarrId: item.serviceMediaId,
-          qualityProfileId: item.qualityProfileId,
-          ...(item.status === 'available' ? { availableAt: new Date() } : {}),
-        },
-      });
-      if (item.seasons?.length) {
-        await prisma.season.createMany({
-          data: item.seasons
-            .filter(s => s.seasonNumber > 0)
-            .map(s => ({
-              mediaId: created.id,
-              seasonNumber: s.seasonNumber,
-              episodeCount: s.totalEpisodeCount,
-              status: s.status,
-            })),
-        });
-      }
-    }
+    await createMedia(item, client);
     return 'added';
   }
 
@@ -225,7 +302,6 @@ async function processSingleMedia(
     );
   }
 
-  // Build update data — always write back tvdbId and serviceId
   const updateData: Record<string, unknown> = {
     [client.dbIdField]: item.serviceMediaId,
     status: item.status,
@@ -235,78 +311,30 @@ async function processSingleMedia(
     ...(item.backdropPath && !existing.backdropPath ? { backdropPath: item.backdropPath } : {}),
     ...(becameAvailable && !existing.availableAt ? { availableAt: new Date() } : {}),
   };
-  // TV: always write tvdbId, upgrade the negative placeholder to Sonarr's real tmdbId when
-  // available so home-page pills (`/media/batch-status`, keyed by positive tmdbId) match.
-  // When a conflicting positive-tmdbId row already exists (e.g. created at click time by
-  // trackKeywordsFromDetails before keyword-merge logic landed), merge the placeholder into
-  // it and delete the placeholder so the user ends up with one canonical row.
-  let mergeIntoId: number | null = null;
+
+  // TV placeholder upgrade: try to write Sonarr's real tmdbId; fall back to merge on P2002.
+  // Probe-then-act would race against findOrCreateMedia / trackKeywordsFromDetails / webhook.
   if (client.mediaType === 'tv') {
     updateData.tvdbId = item.externalId;
-    if (existing.tmdbId < 0) {
-      const realTmdbId = item.tmdbId && item.tmdbId > 0 ? item.tmdbId : null;
-      if (realTmdbId) {
-        const conflict = await prisma.media.findFirst({
+    const realTmdbId = existing.tmdbId < 0 && item.tmdbId && item.tmdbId > 0 ? item.tmdbId : null;
+    if (realTmdbId) {
+      try {
+        await applyUpdate(existing, { ...updateData, tmdbId: realTmdbId }, becameAvailable);
+        return 'updated';
+      } catch (err) {
+        if (!isTmdbMediaTypeConflict(err)) throw err;
+        const canonical = await prisma.media.findFirst({
           where: { tmdbId: realTmdbId, mediaType: 'tv', NOT: { id: existing.id } },
           select: { id: true },
         });
-        if (conflict) {
-          mergeIntoId = conflict.id;
-        } else {
-          updateData.tmdbId = realTmdbId;
-        }
-      } else {
-        updateData.tmdbId = -(item.externalId);
+        if (!canonical) throw err;
+        await mergeIntoCanonical(existing, canonical.id, item, updateData, becameAvailable);
+        return 'merged';
       }
     }
+    if (existing.tmdbId < 0) updateData.tmdbId = -(item.externalId);
   }
 
-  // Seasons are NOT written here — the caller collects them for a batched deleteMany+createMany
-  // after the main loop (phase 2 of H11). Keeping media update + request cascade in the same
-  // transaction since they're per-item semantics. The merge branch handles seasons inline since
-  // its target row id changes (the queued batch wouldn't know about the swap).
-  if (mergeIntoId !== null) {
-    const seasonRows = (item.seasons ?? [])
-      .filter((s) => s.seasonNumber > 0)
-      .map((s) => ({
-        mediaId: mergeIntoId!,
-        seasonNumber: s.seasonNumber,
-        episodeCount: s.totalEpisodeCount,
-        status: s.status,
-      }));
-    await prisma.$transaction(async (tx) => {
-      // Re-parent requests + seasons from placeholder onto the canonical row, then drop placeholder.
-      await tx.mediaRequest.updateMany({ where: { mediaId: existing.id }, data: { mediaId: mergeIntoId! } });
-      await tx.season.deleteMany({ where: { mediaId: existing.id } });
-      await tx.media.delete({ where: { id: existing.id } });
-      // Write the sync update onto the canonical row, then refresh seasons + cascade.
-      const { tmdbId: _drop, ...mergeData } = updateData;
-      await tx.media.update({ where: { id: mergeIntoId! }, data: mergeData });
-      if (seasonRows.length > 0) {
-        await tx.season.deleteMany({ where: { mediaId: mergeIntoId! } });
-        await tx.season.createMany({ data: seasonRows });
-      }
-      if (becameAvailable) {
-        await tx.mediaRequest.updateMany({
-          where: { mediaId: mergeIntoId!, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
-          data: { status: 'available' },
-        });
-      }
-    });
-    logEvent('debug', 'Sync', `Merged placeholder TV row ${existing.id} into canonical row ${mergeIntoId} (tvdb:${item.externalId})`);
-    return 'merged';
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.media.update({ where: { id: existing.id }, data: updateData });
-
-    if (becameAvailable) {
-      await tx.mediaRequest.updateMany({
-        where: { mediaId: existing.id, status: { in: [...COMPLETABLE_REQUEST_STATUSES] } },
-        data: { status: 'available' },
-      });
-    }
-  });
-
+  await applyUpdate(existing, updateData, becameAvailable);
   return 'updated';
 }
