@@ -187,6 +187,7 @@ model AppSettings {
   siteUrl               String?   // Public URL of the instance (e.g. https://oscarr.example.com) for notification links
   apiKey                String?   // API key for external access (health check, integrations)
   homepageLayout        String?   // JSON array of HomepageSection configs
+  adminDashboardLayout  String?   // JSON: { version, items[{ i, x, y, w, h }] } — null = use defaults
   setupChecklistDismissed Boolean @default(false)
   updatedAt             DateTime  @updatedAt
 }
