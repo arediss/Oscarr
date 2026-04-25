@@ -14,11 +14,18 @@ export async function registerSecurity(app: FastifyInstance) {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'blob:', 'https://image.tmdb.org'],
+        // The sha256 hash matches the static importmap in packages/frontend/index.html — needed
+        // for plugin runtime resolution (react, react-dom, @oscarr/sdk). Update if the importmap changes.
+        scriptSrc: ["'self'", "'sha256-faXwVQbBGEbFozbVLtyhAzVuniTmTwA/WN/tTKNJ88g='"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        imgSrc: [
+          "'self'", 'data:', 'blob:',
+          'https://image.tmdb.org',
+          'https://plex.tv', 'https://*.plex.tv',
+          'https://cdn.discordapp.com',
+        ],
         connectSrc: ["'self'", 'https://api.themoviedb.org', 'https://image.tmdb.org'],
-        fontSrc: ["'self'", 'data:'],
+        fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
         frameAncestors: ["'none'"],
         formAction: ["'self'"],
         baseUri: ["'self'"],
