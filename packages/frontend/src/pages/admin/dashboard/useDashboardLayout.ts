@@ -9,9 +9,15 @@ export interface LayoutItem {
   h: number;
 }
 
-export interface DashboardLayout {
-  version: number;
+export interface DashboardTab {
+  id: string;
+  name: string;
   items: LayoutItem[];
+}
+
+export interface DashboardLayout {
+  version: 2;
+  tabs: DashboardTab[];
 }
 
 interface UseDashboardLayoutResult {
