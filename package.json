@@ -29,6 +29,7 @@
   },
   "overrides": {
     "serialize-javascript": ">=7.0.5",
-    "follow-redirects": ">=1.16.0"
+    "follow-redirects": ">=1.16.0",
+    "picomatch": ">=4.0.4"
   }
 }
