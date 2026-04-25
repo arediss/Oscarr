@@ -388,34 +388,37 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </header>
   );
 
-  /** Desktop topbar — wordmark (siteName) on the left, admin-wide search in the middle, icons
-   *  on the right. The search floats a results dropdown below the input when a query is active. */
+  /** Desktop topbar — wordmark on the left, viewport-centered search, icons on the right.
+   *  Search is absolutely positioned so the wordmark length doesn't shift it (matches the
+   *  /home topbar layout). */
   const desktopTopBar = (
     <header className="h-14 flex-shrink-0">
       <div
-        className="h-full flex items-center gap-4 pl-3 sm:pl-4"
+        className="h-full relative flex items-center gap-4 pl-3 sm:pl-4"
         style={{ paddingRight: 'max(1rem, calc((100vw - 1800px) / 2 + 1.5rem))' }}
       >
-        <p className="text-lg font-bold text-ndp-text tracking-tight flex-shrink-0" role="presentation">
+        <p className="text-lg font-bold text-ndp-text tracking-tight flex-shrink-0 relative z-10" role="presentation">
           {features.siteName || 'Oscarr'}
         </p>
-        <div className="relative flex-1 max-w-md">
-          {searchInput}
-          {searchResults !== null && (
-            <div className="absolute left-0 right-0 top-full mt-2 card shadow-2xl shadow-black/50 border border-white/10 animate-fade-in overflow-hidden z-50">
-              <div className="max-h-96 overflow-y-auto py-1 px-1 space-y-0.5">
-                {searchResults.length === 0 ? (
-                  <p className="px-3 py-6 text-xs text-ndp-text-dim text-center">
-                    {t('admin.sidebar.search_no_results', 'Aucun résultat')}
-                  </p>
-                ) : (
-                  searchResults.map(renderSearchResult)
-                )}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="relative w-full max-w-md px-4 pointer-events-auto">
+            {searchInput}
+            {searchResults !== null && (
+              <div className="absolute left-4 right-4 top-full mt-2 card shadow-2xl shadow-black/50 border border-white/10 animate-fade-in overflow-hidden z-50">
+                <div className="max-h-96 overflow-y-auto py-1 px-1 space-y-0.5">
+                  {searchResults.length === 0 ? (
+                    <p className="px-3 py-6 text-xs text-ndp-text-dim text-center">
+                      {t('admin.sidebar.search_no_results', 'Aucun résultat')}
+                    </p>
+                  ) : (
+                    searchResults.map(renderSearchResult)
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+        <div className="flex items-center gap-1 ml-auto flex-shrink-0 relative z-10">
           <SetupChecklistMenu />
           <NotificationBell />
           <UserCluster viewAsRole={viewAsRole} onViewAsRoleChange={setViewAsRole} variant="compact" />
