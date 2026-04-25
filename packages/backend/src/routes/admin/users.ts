@@ -203,6 +203,8 @@ export async function usersRoutes(app: FastifyInstance) {
       data: { role },
       select: { id: true, displayName: true, role: true },
     });
+    // Without invalidate, the 30s rbac cache kept the old role for up to 30s after a demote.
+    invalidateUserStateCache(userId);
 
     logEvent('info', 'User', `${user.displayName} role changed to ${role}`);
     return user;

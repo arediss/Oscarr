@@ -18,12 +18,3 @@ export async function sendUserNotification(userId: number, payload: Notification
     },
   });
 }
-
-export async function notifyRequestOwner(requestId: number, payload: Omit<NotificationPayload, 'type'> & { type: string }): Promise<void> {
-  const request = await prisma.mediaRequest.findUnique({
-    where: { id: requestId },
-    select: { userId: true },
-  });
-  if (!request) return;
-  await sendUserNotification(request.userId, payload);
-}

@@ -165,7 +165,11 @@ export async function checkPlexServerAccess(
       (resource: { clientIdentifier: string; provides: string }) =>
         resource.clientIdentifier === serverMachineId && resource.provides?.includes('server')
     );
-  } catch {
+  } catch (err) {
+    // Plex.tv outage / network blip would otherwise look indistinguishable from "user has
+    // no access" — log so admins can correlate login refusals with a real Plex incident.
+    const { logEvent } = await import('../../utils/logEvent.js');
+    logEvent('warn', 'PlexAuth', `userHasServerAccess check failed: ${String(err)}`).catch(() => { /* never mask the auth path */ });
     return false;
   }
 }
