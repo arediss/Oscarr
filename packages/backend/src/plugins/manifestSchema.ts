@@ -31,11 +31,40 @@ const jobDef = z.object({
   cron: z.string().min(1),
 }).strict();
 
+const sizeSchema = z.object({
+  w: z.number().int().positive(),
+  h: z.number().int().positive(),
+}).strict();
+
+const dashboardWidgetPropsSchema = z.object({
+  id: z.string().min(1).regex(/^[a-z0-9-]+$/, 'must be lowercase alphanumeric + dashes'),
+  title: z.string().min(1),
+  icon: z.string().optional(),                    // Lucide icon name
+  defaultSize: sizeSchema,
+  minSize: sizeSchema.optional(),
+  maxSize: sizeSchema.optional(),
+}).strict();
+
 const uiContribution = z.object({
   hookPoint: z.string().min(1),
   props: z.record(z.unknown()),
   order: z.number().optional(),
-}).strict();
+}).strict().superRefine((data, ctx) => {
+  // For the dashboard widget hook, validate props with the dedicated schema so a malformed
+  // contribution is rejected at plugin load instead of crashing the dashboard at render.
+  if (data.hookPoint === 'admin.dashboard.widget') {
+    const result = dashboardWidgetPropsSchema.safeParse(data.props);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['props', ...issue.path],
+          message: issue.message,
+        });
+      }
+    }
+  }
+});
 
 const routesDef = z.object({
   prefix: z.string().min(1).startsWith('/'),
