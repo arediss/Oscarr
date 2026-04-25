@@ -428,14 +428,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   );
 
   return (
-    <div className="min-h-dvh bg-ndp-bg flex flex-col">
+    <div className="h-dvh bg-ndp-bg flex flex-col overflow-hidden">
       {/* Topbar spans the full viewport (above the sidebar) so its `max-w-[1800px] mx-auto` is
           centered against the same width as Layout.tsx's home topbar. Otherwise the max-w
           centers within `viewport - sidebar`, shifting avatar/notif ~60px right between pages. */}
       <div className="hidden md:block border-b border-white/5">{desktopTopBar}</div>
 
       <div className="flex flex-1 min-h-0">
-      <aside className="hidden md:flex md:flex-col w-72 flex-shrink-0 border-r border-white/5 sticky top-0 h-[calc(100dvh-3.5rem)]">
+      <aside className="hidden md:flex md:flex-col w-72 flex-shrink-0 border-r border-white/5 overflow-y-auto">
         {sidebarBody(false)}
       </aside>
 
@@ -483,9 +483,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {sidebarBody(true)}
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
+      <div className="flex-1 min-w-0 flex flex-col min-h-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
         <div className="md:hidden">{mobileTopBar}</div>
-        <main id="main" tabIndex={-1} className="flex-1 min-w-0">{children}</main>
+        <main id="main" tabIndex={-1} className="flex-1 min-w-0 min-h-0 overflow-y-auto">{children}</main>
       </div>
       </div>
     </div>
