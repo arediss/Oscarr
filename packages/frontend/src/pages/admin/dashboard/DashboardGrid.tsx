@@ -17,7 +17,6 @@ const ROW_HEIGHT = 50;
 
 interface RenderableItem extends LayoutItem {
   title: string;
-  icon?: string;
   body: React.ReactNode;
   ghost: boolean;     // true = source disappeared (plugin disabled, etc.)
 }
@@ -37,7 +36,7 @@ export function DashboardGrid() {
       const builtIn = getBuiltInWidget(item.i);
       if (builtIn) {
         const Body = builtIn.Component;
-        return { ...item, title: builtIn.title, icon: builtIn.icon, body: <Body />, ghost: false };
+        return { ...item, title: builtIn.title, body: <Body />, ghost: false };
       }
       const parsed = parsePluginLayoutI(item.i);
       if (parsed) {
@@ -48,16 +47,14 @@ export function DashboardGrid() {
           return {
             ...item,
             title: 'Widget unavailable',
-            icon: 'AlertTriangle',
             body: <p className="text-xs text-ndp-text-dim">Plugin disabled or removed.</p>,
             ghost: true,
           };
         }
-        const props = contribution.props as { title: string; icon?: string };
+        const props = contribution.props as { title: string };
         return {
           ...item,
           title: props.title,
-          icon: props.icon,
           body: <PluginWidget pluginId={parsed.pluginId} widgetId={parsed.widgetId} contribution={contribution} />,
           ghost: false,
         };
@@ -111,26 +108,43 @@ export function DashboardGrid() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center justify-end gap-1.5">
         {!editMode ? (
           <>
-            <button onClick={enterEdit} className="btn-secondary inline-flex items-center gap-2 text-sm">
-              <Pencil className="h-4 w-4" /> Edit
+            <button
+              onClick={enterEdit}
+              className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text hover:bg-ndp-surface-hover"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Edit
             </button>
-            <button onClick={onReset} className="btn-secondary inline-flex items-center gap-2 text-sm" title="Reset to default" aria-label="Reset to default">
-              <RotateCcw className="h-4 w-4" />
+            <button
+              onClick={onReset}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/5 bg-ndp-surface-light text-ndp-text hover:bg-ndp-surface-hover"
+              title="Reset to default"
+              aria-label="Reset to default"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
             </button>
           </>
         ) : (
           <>
-            <button onClick={() => setPickerOpen(true)} className="btn-secondary inline-flex items-center gap-2 text-sm">
-              <Plus className="h-4 w-4" /> Add widget
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text hover:bg-ndp-surface-hover"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add widget
             </button>
-            <button onClick={cancel} className="btn-secondary inline-flex items-center gap-2 text-sm">
-              <X className="h-4 w-4" /> Cancel
+            <button
+              onClick={cancel}
+              className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text hover:bg-ndp-surface-hover"
+            >
+              <X className="h-3.5 w-3.5" /> Cancel
             </button>
-            <button onClick={onSave} className="btn-primary inline-flex items-center gap-2 text-sm">
-              <Save className="h-4 w-4" /> Save
+            <button
+              onClick={onSave}
+              className="inline-flex items-center gap-1.5 rounded-md bg-ndp-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-ndp-accent-hover"
+            >
+              <Save className="h-3.5 w-3.5" /> Save
             </button>
           </>
         )}
@@ -152,7 +166,6 @@ export function DashboardGrid() {
           <div key={r.i}>
             <WidgetChrome
               title={r.title}
-              icon={r.icon}
               editMode={editMode}
               onRemove={editMode ? () => removeItem(r.i) : undefined}
             >
