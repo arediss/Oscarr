@@ -14,18 +14,17 @@ export async function registerSecurity(app: FastifyInstance) {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        // The sha256 hash matches the static importmap in packages/frontend/index.html — needed
-        // for plugin runtime resolution (react, react-dom, @oscarr/sdk). Update if the importmap changes.
+        // Strict: only same-origin scripts + the static importmap hash (plugin runtime resolution
+        // for react / react-dom / @oscarr/sdk). Update if packages/frontend/index.html changes.
         scriptSrc: ["'self'", "'sha256-faXwVQbBGEbFozbVLtyhAzVuniTmTwA/WN/tTKNJ88g='"],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-        imgSrc: [
-          "'self'", 'data:', 'blob:',
-          'https://image.tmdb.org',
-          'https://plex.tv', 'https://*.plex.tv',
-          'https://cdn.discordapp.com',
-        ],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        // Permissive: any HTTPS image is allowed. <img> can't execute code, and the alternative
+        // (allowlisting plex.tv / discord / jellyfin / emby / radarr / sonarr / future providers
+        // / user-uploaded TMDB-mirror endpoints) creates ongoing CSP friction with no real
+        // security benefit on a self-hosted, reverse-proxied app.
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
         connectSrc: ["'self'", 'https://api.themoviedb.org', 'https://image.tmdb.org'],
-        fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
+        fontSrc: ["'self'", 'data:'],
         frameAncestors: ["'none'"],
         formAction: ["'self'"],
         baseUri: ["'self'"],
