@@ -64,10 +64,18 @@ export async function syncMissingKeywords(): Promise<{ synced: number; errors: n
         await upsertKeywordsAndRating(media.id, keywords, contentRating);
         synced++;
       } catch (err) {
-        await prisma.media.update({
-          where: { id: media.id },
-          data: { keywordIds: '[]' },
-        }).catch(() => {});
+        // Don't poison `keywordIds = '[]'` on transient errors (TMDB 5xx / 429 / network) —
+        // that sentinel marks a row as permanently synced-with-no-keywords, blocking retry.
+        // Persist the empty sentinel only when TMDB explicitly says "not found" (404 / 422).
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 404 || status === 422) {
+          await prisma.media.update({
+            where: { id: media.id },
+            data: { keywordIds: '[]' },
+          }).catch((dbErr) => {
+            logEvent('warn', 'KeywordSync', `Failed to persist empty-keyword sentinel for "${media.title}": ${String(dbErr)}`);
+          });
+        }
         errors++;
         logEvent('debug', 'KeywordSync', `Failed for "${media.title}" (tmdb:${media.tmdbId}): ${err}`);
       }
