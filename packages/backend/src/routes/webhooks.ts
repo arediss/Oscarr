@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { getArrClient, getServiceDefinition } from '../providers/index.js';
-import { promoteMediaToAvailable } from '../services/mediaService.js';
+import { promoteMediaToAvailable, findMediaByExternalId } from '../services/mediaService.js';
 import { sendAvailabilityNotifications } from '../services/sync/helpers.js';
 import { logEvent } from '../utils/logEvent.js';
 
@@ -84,10 +84,7 @@ export async function webhookRoutes(app: FastifyInstance) {
 
     if (event.type === 'added') {
       const mediaType = client.mediaType;
-      // Create media in DB if it doesn't exist yet
-      const existing = mediaType === 'movie'
-        ? await prisma.media.findUnique({ where: { tmdbId_mediaType: { tmdbId: event.externalId, mediaType: 'movie' } } })
-        : await prisma.media.findFirst({ where: { mediaType: 'tv', tvdbId: event.externalId } });
+      const existing = await findMediaByExternalId(mediaType, event.externalId);
 
       if (!existing) {
         const arrIdField = serviceType === 'radarr' ? 'radarrId' : serviceType === 'sonarr' ? 'sonarrId' : null;
@@ -115,9 +112,7 @@ export async function webhookRoutes(app: FastifyInstance) {
 
     if (event.type === 'deleted') {
       const mediaType = client.mediaType;
-      const media = mediaType === 'movie'
-        ? await prisma.media.findUnique({ where: { tmdbId_mediaType: { tmdbId: event.externalId, mediaType: 'movie' } } })
-        : await prisma.media.findFirst({ where: { mediaType: 'tv', tvdbId: event.externalId } });
+      const media = await findMediaByExternalId(mediaType, event.externalId);
 
       if (media && media.status === 'available') {
         await prisma.media.update({
@@ -132,18 +127,7 @@ export async function webhookRoutes(app: FastifyInstance) {
 
     if (event.type === 'download') {
       const mediaType = client.mediaType;
-
-      // Find media in DB
-      let media;
-      if (mediaType === 'movie') {
-        media = await prisma.media.findUnique({
-          where: { tmdbId_mediaType: { tmdbId: event.externalId, mediaType: 'movie' } },
-        });
-      } else {
-        media = await prisma.media.findFirst({
-          where: { mediaType: 'tv', tvdbId: event.externalId },
-        });
-      }
+      const media = await findMediaByExternalId(mediaType, event.externalId);
 
       if (!media) {
         logEvent('debug', 'Webhook', `${sanitize(serviceType)} download event for unknown media: ${sanitize(event.title)} (${event.externalId})`);

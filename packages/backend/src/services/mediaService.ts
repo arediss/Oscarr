@@ -2,6 +2,40 @@ import { prisma } from '../utils/prisma.js';
 import { getArrClient, getServiceTypeForMedia } from '../providers/index.js';
 import { normalizeLanguages } from '../utils/languages.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '@oscarr/shared';
+import { getTvDetails } from './tmdb.js';
+import type { Media } from '@prisma/client';
+
+// ---------------------------------------------------------------------------
+// Shared media lookup helpers — used by sync, webhooks, request flow.
+// ---------------------------------------------------------------------------
+
+/** Resolve an *arr external id (tmdbId for movies, tvdbId for TV) to the local Media row.
+ *  TV tolerates legacy `-tvdbId` placeholder rows so webhook + sync paths share the same
+ *  lookup semantics. Returns null when nothing matches. */
+export function findMediaByExternalId(
+  mediaType: 'movie' | 'tv',
+  externalId: number,
+): Promise<Media | null> {
+  if (mediaType === 'movie') {
+    return prisma.media.findUnique({
+      where: { tmdbId_mediaType: { tmdbId: externalId, mediaType: 'movie' } },
+    });
+  }
+  return prisma.media.findFirst({
+    where: { mediaType: 'tv', OR: [{ tvdbId: externalId }, { tmdbId: -externalId }] },
+  });
+}
+
+/** Resolve a tmdbId to its tvdbId via TMDB external_ids. Cached implicitly by the TMDB
+ *  cache layer; returns null when TMDB has no tvdb mapping. */
+export async function resolveTvdbId(tmdbId: number): Promise<number | null> {
+  try {
+    const data = await getTvDetails(tmdbId);
+    return data.external_ids?.tvdb_id ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
