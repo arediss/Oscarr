@@ -29,17 +29,22 @@ class WidgetErrorBoundary extends ReactComponent<{ children: ReactNode }, { hasE
 }
 
 export function WidgetChrome({ title, icon, editMode, onRemove, children }: WidgetChromeProps) {
+  if (!editMode) {
+    return (
+      <div className="h-full">
+        <WidgetErrorBoundary>{children}</WidgetErrorBoundary>
+      </div>
+    );
+  }
   return (
     <div className="card flex h-full flex-col overflow-hidden">
       <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
-        {editMode && (
-          <span className="widget-drag-handle cursor-move text-ndp-text-dim hover:text-ndp-text">
-            <GripVertical className="h-4 w-4" />
-          </span>
-        )}
+        <span className="widget-drag-handle cursor-move text-ndp-text-dim hover:text-ndp-text">
+          <GripVertical className="h-4 w-4" />
+        </span>
         {icon && <DynamicIcon name={icon} className="h-4 w-4 text-ndp-text-dim" />}
         <h3 className="flex-1 truncate text-sm font-medium text-ndp-text">{title}</h3>
-        {editMode && onRemove && (
+        {onRemove && (
           <button
             onClick={onRemove}
             className="rounded p-1 text-ndp-text-dim hover:bg-white/5 hover:text-ndp-danger"

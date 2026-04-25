@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Users, Film, Server, Plug } from 'lucide-react';
 import api from '@/lib/api';
 
@@ -10,6 +11,7 @@ interface Stats {
 }
 
 export function StatsCountersWidget() {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<Stats>({ users: null, pendingRequests: null, services: null, plugins: null });
 
   useEffect(() => {
@@ -39,21 +41,23 @@ export function StatsCountersWidget() {
     return () => { cancelled = true; };
   }, []);
 
-  const items: { icon: typeof Users; label: string; value: number | null }[] = [
-    { icon: Users, label: 'Users', value: stats.users },
-    { icon: Film, label: 'Pending requests', value: stats.pendingRequests },
-    { icon: Server, label: 'Services', value: stats.services },
-    { icon: Plug, label: 'Plugins', value: stats.plugins },
+  const cards: { key: keyof Stats; label: string; icon: typeof Users; accent: string }[] = [
+    { key: 'users', label: t('admin.dashboard.users'), icon: Users, accent: 'text-indigo-400' },
+    { key: 'pendingRequests', label: t('admin.dashboard.pending_requests'), icon: Film, accent: 'text-amber-400' },
+    { key: 'services', label: t('admin.dashboard.services'), icon: Server, accent: 'text-emerald-400' },
+    { key: 'plugins', label: t('admin.dashboard.plugins'), icon: Plug, accent: 'text-fuchsia-400' },
   ];
 
   return (
-    <div className="grid h-full grid-cols-4 gap-3">
-      {items.map(({ icon: Icon, label, value }) => (
-        <div key={label} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
-          <Icon className="h-5 w-5 text-ndp-accent" />
-          <div className="min-w-0">
-            <p className="truncate text-xs text-ndp-text-dim">{label}</p>
-            <p className="text-lg font-semibold text-ndp-text">{value ?? '—'}</p>
+    <div className="grid h-full grid-cols-2 md:grid-cols-4 gap-4">
+      {cards.map(({ key, label, icon: Icon, accent }) => (
+        <div key={key} className="card p-5 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-ndp-text-dim uppercase tracking-wider">{label}</span>
+            <Icon className={`w-4 h-4 ${accent}`} />
+          </div>
+          <div className="text-2xl font-semibold text-ndp-text tabular-nums">
+            {stats[key] ?? '—'}
           </div>
         </div>
       ))}

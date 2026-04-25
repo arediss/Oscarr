@@ -13,7 +13,7 @@ import { usePluginUI } from '@/plugins/usePlugins';
 const ResponsiveGridLayout = WidthProvider(Responsive);
 const COLS = { lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 };
 const BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 };
-const ROW_HEIGHT = 80;
+const ROW_HEIGHT = 50;
 
 interface RenderableItem extends LayoutItem {
   title: string;
