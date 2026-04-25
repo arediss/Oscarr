@@ -1,18 +1,26 @@
 import type { ComponentType } from 'react';
+import { StatsCountersWidget } from './widgets/StatsCountersWidget';
 
 export interface BuiltInWidget {
-  id: string;                  // matches the layout 'i' suffix after 'builtin:'
-  title: string;               // displayed in WidgetChrome title bar
-  icon: string;                // Lucide icon name
+  id: string;
+  title: string;
+  icon: string;
   defaultSize: { w: number; h: number };
   minSize?: { w: number; h: number };
-  Component: ComponentType;    // widget body
+  Component: ComponentType;
 }
 
-/** Registry of built-in widgets. Keyed by short id (no 'builtin:' prefix). */
-export const BUILT_IN_WIDGETS: Record<string, BuiltInWidget> = {};
+export const BUILT_IN_WIDGETS: Record<string, BuiltInWidget> = {
+  'stats-counters': {
+    id: 'stats-counters',
+    title: 'Stats',
+    icon: 'BarChart3',
+    defaultSize: { w: 12, h: 1 },
+    minSize: { w: 4, h: 1 },
+    Component: StatsCountersWidget,
+  },
+};
 
-/** Lookup by layout 'i' (e.g. 'builtin:stats-counters' → the entry). */
 export function getBuiltInWidget(layoutI: string): BuiltInWidget | null {
   if (!layoutI.startsWith('builtin:')) return null;
   return BUILT_IN_WIDGETS[layoutI.slice('builtin:'.length)] ?? null;
