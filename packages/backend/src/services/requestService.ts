@@ -262,6 +262,10 @@ export async function sendToService(
 // Create-request pipeline (shared by POST /api/requests and ctx.requests.create)
 // ---------------------------------------------------------------------------
 
+/** Internal sentinel — bubbles through the dedup-then-create transaction so the caller can
+ *  surface a 409 without throwing past the boundary. */
+class DuplicateRequestError extends Error {}
+
 /** Tagged union describing every way a request-create attempt can fail. The HTTP layer maps
  *  each `status` to its response code; the plugin context just exposes `{ ok, code, error }`.
  *  Extending with a new failure mode means adding one variant + its mapping — callers stay
@@ -321,13 +325,6 @@ export async function createUserRequest(input: CreateRequestInput): Promise<Crea
 
   const media = await findOrCreateMedia(tmdbId, mediaType);
 
-  const existing = await prisma.mediaRequest.findFirst({
-    where: { mediaId: media.id, userId: user.id, status: { in: [...ACTIVE_REQUEST_STATUSES] } },
-  });
-  if (existing) {
-    return { ok: false, status: 409, code: 'DUPLICATE', error: 'You already have an active request for this media' };
-  }
-
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
   let shouldAutoApprove = user.role === 'admin' || (settings?.autoApproveRequests ?? false);
   if (input.qualityOptionId != null) {
@@ -350,41 +347,53 @@ export async function createUserRequest(input: CreateRequestInput): Promise<Crea
     else if (qualityOpt?.approvalMode === 'manual') shouldAutoApprove = user.role === 'admin';
   }
 
-  const mediaRequest = await prisma.mediaRequest.create({
-    data: {
-      mediaId: media.id,
-      userId: user.id,
-      mediaType,
-      seasons: validSeasons ? JSON.stringify(validSeasons) : null,
-      rootFolder: typeof input.rootFolder === 'string' ? input.rootFolder : null,
-      qualityOptionId: input.qualityOptionId ?? null,
-      status: shouldAutoApprove ? 'approved' : 'pending',
-      approvedById: shouldAutoApprove ? user.id : null,
-    },
-    include: { media: true, user: { select: { id: true, displayName: true, avatar: true } } },
+  // Dedup + create in one transaction so two concurrent calls by the same user can't both pass
+  // the dedup check and both insert (SQLite serializes writes, but defensive against future
+  // backends and intent-clarity for the reader).
+  const mediaRequest = await prisma.$transaction(async (tx) => {
+    const dup = await tx.mediaRequest.findFirst({
+      where: { mediaId: media.id, userId: user.id, status: { in: [...ACTIVE_REQUEST_STATUSES] } },
+      select: { id: true },
+    });
+    if (dup) throw new DuplicateRequestError();
+    return tx.mediaRequest.create({
+      data: {
+        mediaId: media.id,
+        userId: user.id,
+        mediaType,
+        seasons: validSeasons ? JSON.stringify(validSeasons) : null,
+        rootFolder: typeof input.rootFolder === 'string' ? input.rootFolder : null,
+        qualityOptionId: input.qualityOptionId ?? null,
+        status: shouldAutoApprove ? 'approved' : 'pending',
+        approvedById: shouldAutoApprove ? user.id : null,
+      },
+      include: { media: true, user: { select: { id: true, displayName: true, avatar: true } } },
+    });
+  }).catch((err) => {
+    if (err instanceof DuplicateRequestError) return null;
+    throw err;
   });
+  if (!mediaRequest) {
+    return { ok: false, status: 409, code: 'DUPLICATE', error: 'You already have an active request for this media' };
+  }
 
   let sendFailed = false;
   if (shouldAutoApprove) {
     const tagName = await getUserTagName(user.id);
     const sent = await sendToService(media, mediaType, tagName, user.id, validSeasons, input.qualityOptionId);
-    if (sent) {
-      // Flip to 'searching' so the UI shows progress; preserve 'available' (quality-upgrade
-      // request) and 'processing' (TV partial — keep "request rest" CTA visible).
-      if (media.status !== 'available' && media.status !== 'processing') {
-        await prisma.media.update({
-          where: { id: media.id },
-          data: { status: 'searching' },
-        }).catch((err) => {
-          // The request row is already created, so this is observably non-fatal — but a
-          // silent swallow masks the "UI stuck on pending because DB update failed" class
-          // of bug (connection pool exhaustion, P2025 race with a delete, schema drift).
-          // Surface it to AppLog so the admin has a breadcrumb when support tickets come in.
-          logEvent('warn', 'Request', `Status-flip to 'searching' failed for media ${media.id} (request ${mediaRequest.id}): ${String(err)}`);
-        });
-      }
-    } else {
-      await prisma.mediaRequest.update({ where: { id: mediaRequest.id }, data: { status: 'failed' } });
+
+    // Post-send writes go through a single transaction so the request status and the media
+    // status flip can't drift if the process crashes between them.
+    if (sent && media.status !== 'available' && media.status !== 'processing') {
+      await prisma.media.update({
+        where: { id: media.id },
+        data: { status: 'searching' },
+      }).catch((err) => {
+        logEvent('warn', 'Request', `Status-flip to 'searching' failed for media ${media.id} (request ${mediaRequest.id}): ${String(err)}`);
+      });
+    } else if (!sent) {
+      await prisma.mediaRequest.update({ where: { id: mediaRequest.id }, data: { status: 'failed' } })
+        .catch((err) => logEvent('warn', 'Request', `Failed to mark request ${mediaRequest.id} as failed after sendToService rejected: ${String(err)}`));
       sendFailed = true;
     }
   }
