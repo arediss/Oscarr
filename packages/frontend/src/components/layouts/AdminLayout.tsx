@@ -401,7 +401,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {features.siteName || 'Oscarr'}
         </p>
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="relative w-full max-w-md px-4 pointer-events-auto">
+          <div className="relative w-full max-w-lg px-4 pointer-events-auto">
             {searchInput}
             {searchResults !== null && (
               <div className="absolute left-4 right-4 top-full mt-2 card shadow-2xl shadow-black/50 border border-white/10 animate-fade-in overflow-hidden z-50">
