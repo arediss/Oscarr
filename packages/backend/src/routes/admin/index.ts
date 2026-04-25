@@ -14,6 +14,7 @@ import { keywordsRoutes } from './keywords.js';
 import { blacklistRoutes } from './blacklist.js';
 import { backupRoutes } from './backup.js';
 import { homepageRoutes } from './homepage.js';
+import { dashboardRoutes } from './dashboard.js';
 import { plexAdminRoutes } from './plex.js';
 import { authProvidersRoutes } from './authProviders.js';
 import { setupChecklistRoutes } from './setupChecklist.js';
@@ -35,6 +36,7 @@ export async function adminRoutes(app: FastifyInstance) {
   await blacklistRoutes(app);
   await backupRoutes(app);
   await homepageRoutes(app);
+  await dashboardRoutes(app);
   await plexAdminRoutes(app);
   await authProvidersRoutes(app);
   await setupChecklistRoutes(app);
