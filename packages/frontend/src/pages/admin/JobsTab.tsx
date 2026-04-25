@@ -21,6 +21,7 @@ interface CronJobData {
   lastStatus: string | null;
   lastDuration: number | null;
   lastResult: string | null;
+  running?: boolean;
 }
 
 interface SyncToast {
@@ -45,11 +46,13 @@ export function JobsTab() {
   const { schemas: SERVICE_SCHEMAS } = useServiceSchemas();
   const [jobs, setJobs] = useState<CronJobData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState<string | null>(null);
   const [editingCron, setEditingCron] = useState<{ key: string; value: string } | null>(null);
   const [toast, setToast] = useState<SyncToast | null>(null);
   const [webhooks, setWebhooks] = useState<WebhookStatus[]>([]);
   const [webhookLoading, setWebhookLoading] = useState<number | null>(null);
+  // Snapshot of lastRunAt taken when *this* client triggered the job — lets us detect
+  // completion (lastRunAt advances + running goes false) and surface the result toast.
+  const [triggered, setTriggered] = useState<Map<string, string | null>>(new Map());
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -111,19 +114,58 @@ export function JobsTab() {
   };
 
   const runJob = async (key: string) => {
-    setRunning(key);
+    const snapshot = jobs.find((j) => j.key === key)?.lastRunAt ?? null;
     try {
-      const { data } = await api.post(`/admin/jobs/${key}/run`);
-      await fetchJobs();
-      if (data?.result && (data.result.radarr || data.result.sonarr)) {
-        showToast({ type: 'success', message: formatSyncResult(data.result) });
+      await api.post(`/admin/jobs/${key}/run`);
+      setTriggered((prev) => new Map(prev).set(key, snapshot));
+      showToast({ type: 'success', message: t('admin.jobs.job_started', { key }) });
+      fetchJobs();
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 409) {
+        showToast({ type: 'error', message: t('admin.jobs.job_already_running', { key }) });
       } else {
-        showToast({ type: 'success', message: t('admin.jobs.job_done', { key }) });
+        showToast({ type: 'error', message: extractApiError(err, t('admin.jobs.job_failed', { key })) });
       }
-    } catch (err) {
-      showToast({ type: 'error', message: extractApiError(err, t('admin.jobs.job_failed', { key })) });
-    } finally { setRunning(null); }
+    }
   };
+
+  // Poll while any job is mid-run (server-reported `running` flag, or one we just triggered
+  // and haven't seen finish yet). 3s strikes a balance between responsive UI and not hammering
+  // the admin endpoint.
+  useEffect(() => {
+    const anyActive = jobs.some((j) => j.running) || triggered.size > 0;
+    if (!anyActive) return;
+    const id = setInterval(fetchJobs, 3000);
+    return () => clearInterval(id);
+  }, [jobs, triggered, fetchJobs]);
+
+  // Surface the result toast when a tracked job finishes.
+  useEffect(() => {
+    if (triggered.size === 0) return;
+    const next = new Map(triggered);
+    let changed = false;
+    for (const [key, snapshot] of triggered) {
+      const job = jobs.find((j) => j.key === key);
+      if (!job || job.running) continue;
+      if (job.lastRunAt && job.lastRunAt !== snapshot) {
+        next.delete(key);
+        changed = true;
+        if (job.lastStatus === 'success') {
+          let parsed: Record<string, unknown> | null = null;
+          try { parsed = job.lastResult ? JSON.parse(job.lastResult) : null; } catch { /* ignore */ }
+          if (parsed && (parsed.radarr || parsed.sonarr)) {
+            showToast({ type: 'success', message: formatSyncResult(parsed as Record<string, any>) });
+          } else {
+            showToast({ type: 'success', message: t('admin.jobs.job_done', { key }) });
+          }
+        } else {
+          showToast({ type: 'error', message: t('admin.jobs.job_failed', { key }) });
+        }
+      }
+    }
+    if (changed) setTriggered(next);
+  }, [jobs, triggered, t]);
 
   const toggleJob = async (job: CronJobData) => {
     try {
@@ -230,8 +272,8 @@ export function JobsTab() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-0.5 flex-shrink-0">
-                  <button onClick={() => runJob(job.key)} disabled={running !== null} className="p-2 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors" title={t('admin.jobs.run')}>
-                    {running === job.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  <button onClick={() => runJob(job.key)} disabled={!!job.running} className="p-2 text-ndp-text-dim hover:text-ndp-accent hover:bg-white/5 rounded-lg transition-colors" title={t('admin.jobs.run')}>
+                    {job.running || triggered.has(job.key) ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                   </button>
                   <button onClick={() => toggleJob(job)} className="p-2 text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 rounded-lg transition-colors" title={job.enabled ? t('common.disable') : t('common.enable')}>
                     <Power className={clsx('w-4 h-4', job.enabled && 'text-ndp-success')} />

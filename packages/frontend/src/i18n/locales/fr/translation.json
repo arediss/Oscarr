@@ -588,6 +588,8 @@
   "admin.jobs.run": "Lancer",
   "admin.jobs.job_done": "Job \"{{key}}\" terminé",
   "admin.jobs.job_failed": "Job \"{{key}}\" échoué",
+  "admin.jobs.job_started": "Job \"{{key}}\" démarré",
+  "admin.jobs.job_already_running": "Job \"{{key}}\" déjà en cours",
   "admin.jobs.toast.radarr_sync": "Radarr : +{{added}} ajoutés, {{updated}} mis à jour ({{duration}}s)",
   "admin.jobs.toast.sonarr_sync": "Sonarr : +{{added}} ajoutés, {{updated}} mis à jour ({{duration}}s)",
   "admin.jobs.toast.radarr_requests": "Radarr : {{imported}} importées, {{skipped}} ignorées",
