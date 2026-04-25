@@ -6,7 +6,7 @@ import 'react-resizable/css/styles.css';
 import { useDashboardLayout, type DashboardLayout, type LayoutItem } from './useDashboardLayout';
 import { WidgetChrome } from './WidgetChrome';
 import { WidgetPickerModal } from './WidgetPickerModal';
-import { BUILT_IN_WIDGETS, getBuiltInWidget } from './builtInCatalog';
+import { getBuiltInWidget } from './builtInCatalog';
 import { PluginWidget, parsePluginLayoutI } from './PluginWidget';
 import { usePluginUI } from '@/plugins/usePlugins';
 
@@ -117,7 +117,7 @@ export function DashboardGrid() {
             <button onClick={enterEdit} className="btn-secondary inline-flex items-center gap-2 text-sm">
               <Pencil className="h-4 w-4" /> Edit
             </button>
-            <button onClick={onReset} className="btn-secondary inline-flex items-center gap-2 text-sm" title="Reset to default">
+            <button onClick={onReset} className="btn-secondary inline-flex items-center gap-2 text-sm" title="Reset to default" aria-label="Reset to default">
               <RotateCcw className="h-4 w-4" />
             </button>
           </>
