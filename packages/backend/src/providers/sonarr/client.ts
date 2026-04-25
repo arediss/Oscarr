@@ -192,6 +192,7 @@ export class SonarrClient implements ArrClient {
     return series.map(show => ({
       serviceMediaId: show.id,
       externalId: show.tvdbId,
+      tmdbId: show.tmdbId && show.tmdbId > 0 ? show.tmdbId : undefined,
       title: show.title,
       status: this.getSeriesStatus(show),
       posterPath: extractImageFromArr(show.images, 'poster'),

@@ -179,9 +179,12 @@ async function processSingleMedia(
         },
       });
     } else {
+      // Use Sonarr's tmdbId when present so batch-status (keyed by positive tmdbId) matches.
+      // Fall back to -(tvdbId) when Sonarr can't resolve it — collision-free since tvdbId is unique.
+      const realTmdbId = item.tmdbId && item.tmdbId > 0 ? item.tmdbId : null;
       const created = await prisma.media.create({
         data: {
-          tmdbId: -(item.externalId), // Negative placeholder until real tmdbId is resolved
+          tmdbId: realTmdbId ?? -(item.externalId),
           tvdbId: item.externalId,
           mediaType: 'tv',
           title: item.title,
@@ -231,10 +234,26 @@ async function processSingleMedia(
     ...(item.backdropPath && !existing.backdropPath ? { backdropPath: item.backdropPath } : {}),
     ...(becameAvailable && !existing.availableAt ? { availableAt: new Date() } : {}),
   };
-  // TV: always write tvdbId, fix negative tmdbId placeholder when possible
+  // TV: always write tvdbId, upgrade the negative placeholder to Sonarr's real tmdbId when
+  // available so home-page pills (`/media/batch-status`, keyed by positive tmdbId) match.
   if (client.mediaType === 'tv') {
     updateData.tvdbId = item.externalId;
-    if (existing.tmdbId < 0) updateData.tmdbId = -(item.externalId); // Keep consistent placeholder
+    if (existing.tmdbId < 0) {
+      const realTmdbId = item.tmdbId && item.tmdbId > 0 ? item.tmdbId : null;
+      if (realTmdbId) {
+        // Pre-existing corruption guard: another row may already hold this tmdbId (e.g. a
+        // request-flow row that created with the real tmdbId before this placeholder).
+        // Upgrading would violate the (tmdbId, mediaType) unique constraint — skip the upgrade
+        // and keep the placeholder until the duplicate is reconciled manually.
+        const conflict = await prisma.media.findFirst({
+          where: { tmdbId: realTmdbId, mediaType: 'tv', NOT: { id: existing.id } },
+          select: { id: true },
+        });
+        updateData.tmdbId = conflict ? -(item.externalId) : realTmdbId;
+      } else {
+        updateData.tmdbId = -(item.externalId);
+      }
+    }
   }
 
   // Seasons are NOT written here — the caller collects them for a batched deleteMany+createMany
