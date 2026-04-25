@@ -88,24 +88,48 @@ export async function webhookRoutes(app: FastifyInstance) {
 
       if (!existing) {
         const arrIdField = serviceType === 'radarr' ? 'radarrId' : serviceType === 'sonarr' ? 'sonarrId' : null;
-        await prisma.media.create({
+        // Enrich with poster/quality/seasons via getMediaById — without this the row stayed
+        // poster-less until next periodic sync (~15 min) and rendered an empty card on /home.
+        let enriched: Awaited<ReturnType<typeof client.getMediaById>> = null;
+        if (event.internalId && event.internalId > 0 && client.getMediaById) {
+          enriched = await client.getMediaById(event.internalId).catch((err) => {
+            logEvent('warn', 'Webhook', `getMediaById failed for ${sanitize(serviceType)}:${event.internalId}: ${String(err)}`);
+            return null;
+          });
+        }
+        const realTmdbId = mediaType === 'tv'
+          ? (enriched?.tmdbId && enriched.tmdbId > 0 ? enriched.tmdbId : -(event.externalId))
+          : event.externalId;
+        const created = await prisma.media.create({
           data: {
-            tmdbId: mediaType === 'movie' ? event.externalId : -(event.externalId),
+            tmdbId: realTmdbId,
             ...(mediaType === 'tv' ? { tvdbId: event.externalId } : {}),
             mediaType,
-            title: sanitize(event.title),
+            title: enriched?.title ?? sanitize(event.title),
             status: 'searching',
-            // Set the *arr internal id at creation time so the home's "Recently added"
-            // query (which gates on radarrId/sonarrId IS NOT NULL) picks the row up as
-            // soon as it later flips to `available`. See the matching backfill in the
-            // 'download' branch for the upgrade path on pre-existing rows.
+            posterPath: enriched?.posterPath ?? null,
+            backdropPath: enriched?.backdropPath ?? null,
+            qualityProfileId: enriched?.qualityProfileId ?? null,
             ...(arrIdField && event.internalId !== undefined && event.internalId > 0
               ? { [arrIdField]: event.internalId }
               : {}),
           },
         });
+        if (mediaType === 'tv' && enriched?.seasons?.length) {
+          await prisma.season.createMany({
+            data: enriched.seasons
+              .filter((s) => s.seasonNumber > 0)
+              .map((s) => ({
+                mediaId: created.id,
+                seasonNumber: s.seasonNumber,
+                episodeCount: s.totalEpisodeCount,
+                status: s.status,
+              })),
+          }).catch((err) => {
+            logEvent('warn', 'Webhook', `Season backfill failed for media ${created.id}: ${String(err)}`);
+          });
+        }
         logEvent('info', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" added — created in Oscarr`);
-        logEvent('debug', 'Webhook', `${sanitize(serviceType)}: "${sanitize(event.title)}" added, created in DB`);
       }
       return reply.send({ ok: true });
     }

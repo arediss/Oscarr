@@ -159,9 +159,8 @@ export class RadarrClient implements ArrClient {
     return 'searching';
   }
 
-  async getAllMedia(): Promise<ArrMediaItem[]> {
-    const movies = await this.getMovies();
-    return movies.map(movie => ({
+  private movieToArrItem(movie: RadarrMovie): ArrMediaItem {
+    return {
       serviceMediaId: movie.id,
       externalId: movie.tmdbId,
       title: movie.title,
@@ -172,7 +171,22 @@ export class RadarrClient implements ArrClient {
       addedDate: movie.added || null,
       tags: movie.tags || [],
       hasFile: movie.hasFile,
-    }));
+    };
+  }
+
+  async getAllMedia(): Promise<ArrMediaItem[]> {
+    const movies = await this.getMovies();
+    return movies.map((m) => this.movieToArrItem(m));
+  }
+
+  async getMediaById(serviceMediaId: number): Promise<ArrMediaItem | null> {
+    try {
+      const { data } = await this.api.get<RadarrMovie>(`/movie/${serviceMediaId}`);
+      return data ? this.movieToArrItem(data) : null;
+    } catch (err) {
+      if ((err as { response?: { status?: number } })?.response?.status === 404) return null;
+      throw err;
+    }
   }
 
   async checkAvailability(tmdbId: number): Promise<ArrAvailabilityResult> {
