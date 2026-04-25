@@ -1,11 +1,9 @@
 import type { ReactNode } from 'react';
 import { Component as ReactComponent } from 'react';
 import { GripVertical, X } from 'lucide-react';
-import { DynamicIcon } from '@/plugins/DynamicIcon';
 
 interface WidgetChromeProps {
   title: string;
-  icon?: string;
   editMode: boolean;
   onRemove?: () => void;
   children: ReactNode;
@@ -28,35 +26,32 @@ class WidgetErrorBoundary extends ReactComponent<{ children: ReactNode }, { hasE
   }
 }
 
-export function WidgetChrome({ title, icon, editMode, onRemove, children }: WidgetChromeProps) {
-  if (!editMode) {
-    return (
-      <div className="h-full">
-        <WidgetErrorBoundary>{children}</WidgetErrorBoundary>
-      </div>
-    );
-  }
+export function WidgetChrome({ title, editMode, onRemove, children }: WidgetChromeProps) {
   return (
-    <div className="card flex h-full flex-col overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
-        <span className="widget-drag-handle cursor-move text-ndp-text-dim hover:text-ndp-text">
-          <GripVertical className="h-4 w-4" />
-        </span>
-        {icon && <DynamicIcon name={icon} className="h-4 w-4 text-ndp-text-dim" />}
-        <h3 className="flex-1 truncate text-sm font-medium text-ndp-text">{title}</h3>
-        {onRemove && (
-          <button
-            onClick={onRemove}
-            className="rounded p-1 text-ndp-text-dim hover:bg-white/5 hover:text-ndp-danger"
-            aria-label={`Remove ${title}`}
+    <div className="relative h-full">
+      <WidgetErrorBoundary>{children}</WidgetErrorBoundary>
+      {editMode && (
+        <>
+          <div className="pointer-events-none absolute inset-0 rounded-xl outline outline-1 outline-dashed outline-white/20" />
+          <span
+            className="widget-drag-handle absolute top-1 left-1 z-10 inline-flex h-6 w-6 cursor-move items-center justify-center rounded-md bg-black/60 text-ndp-text-dim backdrop-blur-sm hover:text-ndp-text"
+            title={`Drag ${title}`}
+            aria-label={`Drag ${title}`}
           >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto p-3">
-        <WidgetErrorBoundary>{children}</WidgetErrorBoundary>
-      </div>
+            <GripVertical className="h-3.5 w-3.5" />
+          </span>
+          {onRemove && (
+            <button
+              onClick={onRemove}
+              className="absolute top-1 right-1 z-10 inline-flex h-6 w-6 items-center justify-center rounded-md bg-black/60 text-ndp-text-dim backdrop-blur-sm hover:bg-ndp-danger/80 hover:text-white"
+              title={`Remove ${title}`}
+              aria-label={`Remove ${title}`}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }
