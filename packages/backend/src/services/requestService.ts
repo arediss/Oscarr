@@ -45,12 +45,36 @@ export async function findOrCreateMedia(tmdbId: number, mediaType: 'movie' | 'tv
 
   const title = 'title' in tmdbData ? tmdbData.title : tmdbData.name;
   const releaseDate = 'release_date' in tmdbData ? tmdbData.release_date : tmdbData.first_air_date;
+  const tvdbId = mediaType === 'tv' ? (tmdbData.external_ids?.tvdb_id ?? null) : null;
+
+  // TV: upgrade a sync-created placeholder (tmdbId<0) before creating a duplicate.
+  if (mediaType === 'tv' && tvdbId) {
+    const placeholder = await prisma.media.findFirst({
+      where: { mediaType: 'tv', tvdbId, tmdbId: { lt: 0 } },
+    });
+    if (placeholder) {
+      await prisma.media.update({
+        where: { id: placeholder.id },
+        data: {
+          tmdbId,
+          title: placeholder.title || title,
+          overview: placeholder.overview ?? (tmdbData.overview || null),
+          posterPath: placeholder.posterPath ?? tmdbData.poster_path,
+          backdropPath: placeholder.backdropPath ?? tmdbData.backdrop_path,
+          releaseDate: placeholder.releaseDate ?? (releaseDate || null),
+          voteAverage: placeholder.voteAverage ?? tmdbData.vote_average,
+          genres: placeholder.genres ?? (tmdbData.genres ? JSON.stringify(tmdbData.genres.map(g => g.name)) : null),
+        },
+      });
+      return prisma.media.findUniqueOrThrow({ where: { id: placeholder.id } });
+    }
+  }
 
   const media = await prisma.$transaction(async (tx) => {
     const created = await tx.media.create({
       data: {
         tmdbId,
-        tvdbId: tmdbData.external_ids?.tvdb_id ?? null,
+        tvdbId,
         mediaType,
         title,
         overview: tmdbData.overview || null,
