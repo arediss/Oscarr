@@ -517,6 +517,7 @@ There are two types of hook points:
 | `home.rows` | Additional rows on home page | — | Component |
 | `header.actions` | Actions in the header bar (before notification bell) | `user` | Component |
 | `avatar.menu` | Items in the avatar dropdown (before logout) | `user`, `isAdmin` | Component |
+| `admin.dashboard.widget` | Draggable widget on admin Dashboard tab | `widgetId` | Component |
 
 ### Component hooks
 
@@ -586,6 +587,44 @@ Plugins with settings automatically get an admin tab. Plugins with a `frontend` 
   }
 }
 ```
+
+### `admin.dashboard.widget`
+
+Contributes a draggable widget to the admin Dashboard tab. The plugin's frontend bundle exposes a React component that renders inside the widget body; the core wraps it in a chrome (title bar + drag handle + remove button) and provides a per-widget error boundary.
+
+**Manifest:**
+
+```json
+{
+  "hooks": {
+    "ui": [{
+      "hookPoint": "admin.dashboard.widget",
+      "props": {
+        "id": "weekly-stats",
+        "title": "Tautulli — this week",
+        "icon": "BarChart",
+        "defaultSize": { "w": 4, "h": 3 },
+        "minSize": { "w": 2, "h": 2 }
+      }
+    }]
+  }
+}
+```
+
+**`props` schema (validated at plugin load):**
+
+| Field | Type | Required | Description |
+|---|---|:-:|---|
+| `id` | string (`a-z0-9-`) | yes | Unique within the plugin. Forms the layout id `plugin:<pluginId>:<id>` |
+| `title` | string | yes | Shown in the widget chrome title bar |
+| `icon` | string | no | Lucide icon name (defaults to no icon) |
+| `defaultSize` | `{ w, h }` | yes | Initial grid size. `w` is in 12 columns, `h` is in row units |
+| `minSize` | `{ w, h }` | no | Minimum size when the admin resizes |
+| `maxSize` | `{ w, h }` | no | Maximum size when the admin resizes |
+
+**Frontend code:** the plugin's `frontend/index.tsx` must expose a default-exported React component that matches this hook point. The component receives no special props beyond what `PluginHookComponent` already provides; data fetching is the widget's own responsibility.
+
+A malformed manifest (e.g. uppercase `id`, missing `defaultSize`) is rejected at plugin load time — the plugin is marked `error` and never reaches the dashboard.
 
 ## Frontend SDK (`@oscarr/sdk`)
 
