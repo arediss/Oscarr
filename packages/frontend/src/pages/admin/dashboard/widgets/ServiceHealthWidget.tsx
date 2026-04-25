@@ -19,16 +19,20 @@ export function ServiceHealthWidget() {
 
   useEffect(() => {
     if (!services) return;
+    let cancelled = false;
     setHealth(Object.fromEntries(services.map((s) => [s.id, { status: 'loading' as const }])));
     services.forEach((s) => {
       api.post<{ ok: boolean; version?: string }>(`/admin/services/${s.id}/test`)
         .then(({ data }) => {
+          if (cancelled) return;
           setHealth((h) => ({ ...h, [s.id]: { status: data.ok ? 'ok' : 'error', version: data.version, error: data.ok ? undefined : 'Unreachable' } }));
         })
         .catch((err) => {
+          if (cancelled) return;
           setHealth((h) => ({ ...h, [s.id]: { status: 'error', error: (err as Error).message } }));
         });
     });
+    return () => { cancelled = true; };
   }, [services]);
 
   const sorted = useMemo(() => services ? [...services].sort((a, b) => a.name.localeCompare(b.name)) : [], [services]);
