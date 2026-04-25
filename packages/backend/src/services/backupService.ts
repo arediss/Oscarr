@@ -162,7 +162,7 @@ export async function runAutoBackup(): Promise<{ filename: string; size: number 
  *    7. HMAC signature (or explicit BACKUP_ALLOW_UNSIGNED=true opt-in).
  *  By the time the buffer reaches this function it's been validated 7 ways and is NOT untrusted
  *  network data anymore — dbPath is also a constant derived from env/config, never from the body. */
-export function applyDbBuffer(dbBuffer: Buffer): { ok: boolean; safetyPath: string } {
+export function applyDbBuffer(dbBuffer: Buffer): { ok: boolean; safetyPath: string; rollbackFailed?: boolean; error?: string } {
   const dbPath = getDbPath();
   const safetyPath = `${dbPath}.pre-restore.bak`;
   copyFileSync(dbPath, safetyPath);
@@ -171,8 +171,18 @@ export function applyDbBuffer(dbBuffer: Buffer): { ok: boolean; safetyPath: stri
     if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true });
     writeFileSync(dbPath, dbBuffer);
     return { ok: true, safetyPath };
-  } catch {
-    try { copyFileSync(safetyPath, dbPath); } catch { /* critical */ }
-    return { ok: false, safetyPath };
+  } catch (writeErr) {
+    // Restore failed — try to put the safety copy back. If that ALSO fails, the live DB is
+    // broken and the only good copy is safetyPath. Use stderr (not logEvent) since logEvent
+    // depends on the DB we just broke.
+    const writeMsg = String((writeErr as Error)?.message ?? writeErr);
+    try {
+      copyFileSync(safetyPath, dbPath);
+      return { ok: false, safetyPath, error: writeMsg };
+    } catch (rollbackErr) {
+      const rollbackMsg = String((rollbackErr as Error)?.message ?? rollbackErr);
+      console.error(`[Backup] CRITICAL: restore failed (${writeMsg}) AND rollback failed (${rollbackMsg}). Database may be corrupted; safety copy at ${safetyPath}`);
+      return { ok: false, safetyPath, rollbackFailed: true, error: `restore: ${writeMsg}; rollback: ${rollbackMsg}` };
+    }
   }
 }

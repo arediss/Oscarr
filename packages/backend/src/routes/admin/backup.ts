@@ -172,7 +172,17 @@ export async function backupRoutes(app: FastifyInstance) {
 
     const result = applyDbBuffer(dbBuffer);
     if (!result.ok) {
-      return reply.status(500).send({ error: 'Failed to write database. Original restored.' });
+      if (result.rollbackFailed) {
+        logEvent('error', 'Backup', `CRITICAL: restore + rollback both failed. safetyPath=${result.safetyPath} details=${result.error}`);
+        return reply.status(500).send({
+          error: 'BACKUP_RESTORE_AND_ROLLBACK_FAILED',
+          message: 'Database restore failed and the safety rollback also failed. Recover manually from the safety copy.',
+          safetyPath: result.safetyPath,
+          details: result.error,
+        });
+      }
+      logEvent('warn', 'Backup', `Restore failed, rolled back to safety copy. details=${result.error}`);
+      return reply.status(500).send({ error: 'Failed to write database. Original restored.', details: result.error });
     }
 
     logEvent('info', 'Backup', `Database restored from v${version} backup by user ${actor.id}. Restart required.`);
