@@ -251,7 +251,6 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       req('notifications', 'sendUserNotification');
       await sendUserNotification(userId, payload);
     },
-    notificationRegistry,
     getArrClient: (serviceType: string) => {
       if (!checkServiceAccess(pluginId, allowedServices, serviceType, aclLogger)) {
         throw new Error(`Plugin "${pluginId}" is not allowed to access service "${serviceType}" — declare it in manifest.services`);
@@ -260,7 +259,8 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
     },
     async getServiceConfig(serviceType: string) {
       if (!checkServiceAccess(pluginId, allowedServices, serviceType, aclLogger)) return null;
-      const svc = await prisma.service.findFirst({ where: { type: serviceType } });
+      // Filter by enabled — plugins shouldn't keep using a service the admin just disabled.
+      const svc = await prisma.service.findFirst({ where: { type: serviceType, enabled: true } });
       if (!svc) return null;
       try {
         const config = JSON.parse(svc.config);
@@ -271,7 +271,7 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
     },
     async getServiceConfigRaw(serviceType: string) {
       if (!checkServiceAccess(pluginId, allowedServices, serviceType, aclLogger)) return null;
-      const svc = await prisma.service.findFirst({ where: { type: serviceType } });
+      const svc = await prisma.service.findFirst({ where: { type: serviceType, enabled: true } });
       if (!svc) return null;
       try {
         return JSON.parse(svc.config) as Record<string, unknown>;
@@ -308,7 +308,7 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
     events: {
       on: (event, handler) => {
         req('events', 'events.on');
-        pluginEventBus.on(event, handler);
+        pluginEventBus.on(event, handler, pluginId);
       },
       off: (event, handler) => {
         req('events', 'events.off');

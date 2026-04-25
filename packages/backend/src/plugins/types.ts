@@ -113,7 +113,6 @@ export interface PluginContext {
   setSetting(key: string, value: unknown): Promise<void>;
   sendNotification(type: string, data: NotificationPayload): Promise<void>;
   sendUserNotification(userId: number, payload: { type: string; title: string; message: string; metadata?: Record<string, unknown> }): Promise<void>;
-  notificationRegistry: NotificationRegistry;
   getArrClient(serviceType: string): Promise<ArrClient>;
   getServiceConfig(serviceType: string): Promise<{ url: string; apiKey: string } | null>;
   /** Returns the full raw JSON config of a configured service (whatever fields the provider chose to store). Use when you need more than the common url/apiKey subset. */

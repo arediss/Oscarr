@@ -5,19 +5,39 @@ import type { NotificationProvider, NotificationEventType, NotificationPayload }
 export class NotificationRegistry {
   private providers = new Map<string, NotificationProvider>();
   private eventTypes = new Map<string, NotificationEventType>();
+  // Tracks which plugin owns which provider id so disable/uninstall can clean up — without
+  // this, plugin providers stayed wired to the singleton across hot reloads / uninstalls.
+  private providerOwners = new Map<string, Set<string>>();
 
   // ─── Provider management ───────────────────────────────
 
-  registerProvider(provider: NotificationProvider): void {
+  registerProvider(provider: NotificationProvider, pluginId?: string): void {
     if (this.providers.has(provider.id)) {
-      console.warn(`[NotificationRegistry] Provider "${provider.id}" already registered, overwriting.`);
+      logEvent('warn', 'NotificationRegistry', `Provider "${provider.id}" already registered, overwriting`);
     }
     this.providers.set(provider.id, provider);
-    console.log(`[NotificationRegistry] Registered provider "${provider.id}"`);
+    if (pluginId) {
+      if (!this.providerOwners.has(pluginId)) this.providerOwners.set(pluginId, new Set());
+      this.providerOwners.get(pluginId)!.add(provider.id);
+    }
+    logEvent('debug', 'NotificationRegistry', `Registered provider "${provider.id}"${pluginId ? ` (plugin: ${pluginId})` : ''}`);
   }
 
   unregisterProvider(id: string): void {
     this.providers.delete(id);
+    for (const set of this.providerOwners.values()) set.delete(id);
+  }
+
+  /** Drop every provider registered by the given plugin. Called on disable + uninstall. */
+  removeAllForPlugin(pluginId: string): number {
+    const owned = this.providerOwners.get(pluginId);
+    if (!owned) return 0;
+    let removed = 0;
+    for (const providerId of owned) {
+      if (this.providers.delete(providerId)) removed++;
+    }
+    this.providerOwners.delete(pluginId);
+    return removed;
   }
 
   getProvider(id: string): NotificationProvider | undefined {
@@ -87,7 +107,6 @@ export class NotificationRegistry {
           provider.send(providerSettings, payload)
             .then(() => logEvent('info', 'Notification', `${providerId}: ${type}`))
             .catch(err => {
-              console.error(`[Notification] ${providerId} failed:`, err.message);
               logEvent('error', 'Notification', `${providerId} failed: ${err.message}`);
             })
         );
@@ -95,7 +114,7 @@ export class NotificationRegistry {
 
       await Promise.all(promises);
     } catch (err) {
-      console.error('[Notification] Dispatch failed:', err);
+      logEvent('error', 'Notification', `Dispatch failed: ${String(err)}`);
     }
   }
 
