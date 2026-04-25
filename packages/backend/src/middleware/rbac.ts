@@ -21,8 +21,14 @@ async function getFreshUserState(
     const state = { role: user?.role ?? jwtRole, disabled: user?.disabled ?? false };
     _userStateCache.set(userId, { ...state, at: Date.now() });
     return state;
-  } catch {
-    return { role: jwtRole, disabled: false };
+  } catch (err) {
+    // Fail-closed: a DB outage shouldn't grant a disabled user authorization. If a stale
+    // cache entry exists we keep using it (last-known-good); otherwise treat as disabled.
+    const { logEvent } = await import('../utils/logEvent.js');
+    logEvent('error', 'RBAC', `getFreshUserState DB lookup failed for user ${userId}: ${String(err)}`)
+      .catch(() => { /* never mask the auth path on logEvent failure */ });
+    if (cached) return { role: cached.role, disabled: cached.disabled };
+    return { role: jwtRole, disabled: true };
   }
 }
 

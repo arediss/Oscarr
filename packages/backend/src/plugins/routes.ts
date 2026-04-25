@@ -175,6 +175,13 @@ export async function pluginRoutes(app: FastifyInstance) {
         installedDir = installed.dir;
         // Freshly installed plugins default to disabled — admin reviews capabilities + toggles on.
         const loaded = await pluginEngine.loadSingle(installed.dir, { defaultEnabled: false });
+        // Register the plugin's job defs so manual triggers + cron ticks pick them up without
+        // a server restart. No-op when the plugin defines no jobs.
+        const jobDefs = loaded.manifest.hooks?.jobs ?? [];
+        if (jobDefs.length > 0) {
+          const { registerPluginJobs } = await import('../services/scheduler.js');
+          await registerPluginJobs(jobDefs);
+        }
         return {
           ok: true,
           plugin: {

@@ -63,7 +63,9 @@ async function seedJobs() {
 }
 
 async function runJob(key: string): Promise<RunJobOutcome> {
-  const handler = JOB_HANDLERS[key];
+  // Resolve plugin handlers lazily so a hot-installed plugin's job runs without restart —
+  // initScheduler's one-shot Object.assign would otherwise miss it until next boot.
+  const handler = JOB_HANDLERS[key] ?? _pluginEngine?.getJobHandlers()[key];
   if (!handler) return { skipped: true, reason: 'unknown_job' };
 
   // Guard: skip plugin jobs if their plugin is disabled
@@ -139,8 +141,12 @@ function scheduleJob(key: string, cronExpression: string) {
     return;
   }
 
+  // runJob already logs+writes lastStatus on its own catch, but a synchronous throw before
+  // that catch (or a logEvent failure inside it) would otherwise vanish into the cron callback.
   const task = cron.schedule(cronExpression, () => {
-    runJob(key).catch(() => {});
+    runJob(key).catch((err) => {
+      logEvent('error', 'Job', `Cron tick for "${sanitize(key)}" rejected outside runJob: ${String(err)}`);
+    });
   });
   activeTasks.set(key, task);
   logEvent('debug', 'Job', `Job "${sanitize(key)}" scheduled: ${sanitize(cronExpression)}`);
@@ -205,6 +211,21 @@ export async function updateJobSchedule(key: string, cronExpression: string, ena
 
 export async function triggerJob(key: string): Promise<RunJobOutcome> {
   return runJob(key);
+}
+
+/** Register a plugin's job definitions after a hot install (loadSingle). Upserts CronJob rows
+ *  and schedules cron tasks; without this, manual triggers and cron ticks would only see the
+ *  plugin's jobs after the next process restart. */
+export async function registerPluginJobs(jobs: { key: string; label: string; cron: string }[]): Promise<void> {
+  for (const job of jobs) {
+    pluginJobKeys.add(job.key);
+    const row = await prisma.cronJob.upsert({
+      where: { key: job.key },
+      update: {},
+      create: { key: job.key, label: job.label, cronExpression: job.cron, enabled: true },
+    });
+    if (row.enabled) scheduleJob(job.key, row.cronExpression);
+  }
 }
 
 /** True when `key` is currently mid-run (manual or cron-triggered). Read-only — for status APIs. */
