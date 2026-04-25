@@ -2,7 +2,6 @@ import { randomUUID } from 'crypto';
 import { createWriteStream, existsSync } from 'fs';
 import { mkdir, readFile, readdir, rename, rm } from 'fs/promises';
 import { lookup as dnsLookup } from 'dns/promises';
-import { tmpdir } from 'os';
 import { join } from 'path';
 import { Readable, Transform } from 'stream';
 import { pipeline } from 'stream/promises';
@@ -176,7 +175,10 @@ export async function installPluginFromUrl(url: string): Promise<InstalledPlugin
   if (!/^https?:\/\//i.test(url)) {
     throw new Error('Only http(s) URLs are supported');
   }
-  const workDir = join(tmpdir(), `oscarr-plugin-install-${randomUUID()}`);
+  // Stage inside the plugins dir (under a hidden name the loader ignores) so the final rename
+  // stays on the same filesystem — `os.tmpdir()` is often a separate tmpfs mount in containers,
+  // which makes fs.rename() throw EXDEV (cross-device link not permitted).
+  const workDir = join(getPluginsDir(), `.oscarr-plugin-install-${randomUUID()}`);
   const downloadPath = join(workDir, 'download.tar.gz');
   const extractDir = join(workDir, 'extracted');
 
