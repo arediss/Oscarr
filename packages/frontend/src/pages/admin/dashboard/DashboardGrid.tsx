@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Responsive, WidthProvider, type Layout } from 'react-grid-layout';
 import { Pencil, Plus, RotateCcw, Save, X } from 'lucide-react';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { useDashboardLayout, type DashboardLayout, type LayoutItem } from './useDashboardLayout';
+import { useDashboardLayout, type DashboardLayout, type DashboardTab, type LayoutItem } from './useDashboardLayout';
 import { WidgetChrome } from './WidgetChrome';
 import { WidgetPickerModal } from './WidgetPickerModal';
+import { ResetDashboardConfirmModal } from './ResetDashboardConfirmModal';
 import { getBuiltInWidget } from './builtInCatalog';
 import { PluginWidget, parsePluginLayoutI } from './PluginWidget';
 import { usePluginUI } from '@/plugins/usePlugins';
@@ -21,18 +22,49 @@ interface RenderableItem extends LayoutItem {
   ghost: boolean;     // true = source disappeared (plugin disabled, etc.)
 }
 
+function genTabId(existing: DashboardTab[]): string {
+  const used = new Set(existing.map((t) => t.id));
+  for (let i = 1; i < 1000; i++) {
+    const id = `tab-${i}`;
+    if (!used.has(id)) return id;
+  }
+  return `tab-${Date.now()}`;
+}
+
 export function DashboardGrid() {
   const { layout, loading, error, save, reset } = useDashboardLayout();
   const { contributions } = usePluginUI('admin.dashboard.widget');
   const [editMode, setEditMode] = useState(false);
   const [draft, setDraft] = useState<DashboardLayout | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
 
   const current = editMode ? (draft ?? layout) : layout;
 
+  // Pin the active tab to a real tab id whenever the layout shape changes (initial load,
+  // tab deletion, save). Falls back to the first tab if the previous active id disappeared.
+  useEffect(() => {
+    if (!current || current.tabs.length === 0) return;
+    if (!activeTabId || !current.tabs.some((t) => t.id === activeTabId)) {
+      setActiveTabId(current.tabs[0].id);
+    }
+  }, [current, activeTabId]);
+
+  useEffect(() => {
+    if (renamingTabId && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [renamingTabId]);
+
+  const activeTab = current?.tabs.find((t) => t.id === activeTabId) ?? current?.tabs[0] ?? null;
+
   const renderables = useMemo<RenderableItem[]>(() => {
-    if (!current) return [];
-    return current.items.map((item): RenderableItem => {
+    if (!activeTab) return [];
+    return activeTab.items.map((item): RenderableItem => {
       const builtIn = getBuiltInWidget(item.i);
       if (builtIn) {
         const Body = builtIn.Component;
@@ -61,20 +93,27 @@ export function DashboardGrid() {
       }
       return { ...item, title: item.i, body: <p className="text-xs text-ndp-text-dim">Unknown widget id</p>, ghost: true };
     });
-  }, [current, contributions]);
+  }, [activeTab, contributions]);
 
   const enterEdit = () => { setDraft(layout); setEditMode(true); };
-  const cancel = () => { setDraft(null); setEditMode(false); };
+  const cancel = () => { setDraft(null); setEditMode(false); setRenamingTabId(null); };
+
+  const updateActiveTab = (transform: (tab: DashboardTab) => DashboardTab) => {
+    if (!draft || !activeTab) return;
+    setDraft({
+      ...draft,
+      tabs: draft.tabs.map((t) => (t.id === activeTab.id ? transform(t) : t)),
+    });
+  };
 
   const onLayoutChange = (next: Layout[]) => {
-    if (!editMode || !draft) return;
+    if (!editMode || !draft || !activeTab) return;
     const items: LayoutItem[] = next.map((l) => ({ i: l.i, x: l.x, y: l.y, w: l.w, h: l.h }));
-    setDraft({ ...draft, items });
+    updateActiveTab((t) => ({ ...t, items }));
   };
 
   const removeItem = (i: string) => {
-    if (!draft) return;
-    setDraft({ ...draft, items: draft.items.filter((it) => it.i !== i) });
+    updateActiveTab((t) => ({ ...t, items: t.items.filter((it) => it.i !== i) }));
   };
 
   const onSave = async () => {
@@ -82,72 +121,161 @@ export function DashboardGrid() {
     await save(draft);
     setDraft(null);
     setEditMode(false);
+    setRenamingTabId(null);
   };
 
   const addPicked = (entry: { layoutI: string; defaultSize: { w: number; h: number }; minSize?: { w: number; h: number } }) => {
-    if (!draft) return;
-    const maxY = draft.items.reduce((m, it) => Math.max(m, it.y + it.h), 0);
-    setDraft({
-      ...draft,
-      items: [...draft.items, { i: entry.layoutI, x: 0, y: maxY, w: entry.defaultSize.w, h: entry.defaultSize.h }],
+    updateActiveTab((t) => {
+      const maxY = t.items.reduce((m, it) => Math.max(m, it.y + it.h), 0);
+      return {
+        ...t,
+        items: [...t.items, { i: entry.layoutI, x: 0, y: maxY, w: entry.defaultSize.w, h: entry.defaultSize.h }],
+      };
     });
   };
 
-  const onReset = async () => {
-    if (!confirm('Reset to default layout?')) return;
+  const onResetConfirmed = async () => {
     await reset();
     setDraft(null);
     setEditMode(false);
+    setActiveTabId(null);
+    setRenamingTabId(null);
+  };
+
+  const addTab = () => {
+    if (!draft) return;
+    const newId = genTabId(draft.tabs);
+    setDraft({
+      ...draft,
+      tabs: [...draft.tabs, { id: newId, name: 'Untitled', items: [] }],
+    });
+    setActiveTabId(newId);
+    setRenamingTabId(newId);
+  };
+
+  const renameTab = (id: string, name: string) => {
+    if (!draft) return;
+    const trimmed = name.trim() || 'Untitled';
+    setDraft({
+      ...draft,
+      tabs: draft.tabs.map((t) => (t.id === id ? { ...t, name: trimmed.slice(0, 50) } : t)),
+    });
+    setRenamingTabId(null);
+  };
+
+  const removeTab = (id: string) => {
+    if (!draft || draft.tabs.length <= 1) return;
+    const next = draft.tabs.filter((t) => t.id !== id);
+    setDraft({ ...draft, tabs: next });
+    if (activeTabId === id) setActiveTabId(next[0].id);
   };
 
   if (loading) return <p className="text-sm text-ndp-text-dim">Loading dashboard…</p>;
   if (error) return <p className="text-sm text-ndp-danger">Failed to load layout: {error}</p>;
-  if (!current) return null;
+  if (!current || !activeTab) return null;
 
-  const alreadyOnDashboard = new Set(current.items.map((it) => it.i));
+  // A widget is "already on the dashboard" if it lives on ANY tab — the picker disables those
+  // entries to keep widget ids unique across the whole layout.
+  const alreadyOnDashboard = new Set(current.tabs.flatMap((t) => t.items.map((it) => it.i)));
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end gap-1.5">
-        {!editMode ? (
-          <>
+      <div className="flex items-center gap-1.5 border-b border-white/5 pb-2">
+        <div className="flex flex-1 items-center gap-1 overflow-x-auto">
+          {current.tabs.map((t) => {
+            const active = t.id === activeTab.id;
+            const isRenaming = renamingTabId === t.id;
+            return (
+              <div key={t.id} className="flex items-center">
+                {isRenaming ? (
+                  <input
+                    ref={renameInputRef}
+                    defaultValue={t.name}
+                    onBlur={(e) => renameTab(t.id, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') renameTab(t.id, (e.target as HTMLInputElement).value);
+                      if (e.key === 'Escape') setRenamingTabId(null);
+                    }}
+                    className="rounded-md border border-ndp-accent/60 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text outline-none"
+                    maxLength={50}
+                  />
+                ) : (
+                  <button
+                    onClick={() => setActiveTabId(t.id)}
+                    onDoubleClick={() => editMode && setRenamingTabId(t.id)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                      active
+                        ? 'bg-ndp-accent/10 text-ndp-accent'
+                        : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
+                    }`}
+                    title={editMode ? 'Double-click to rename' : t.name}
+                  >
+                    {t.name}
+                  </button>
+                )}
+                {editMode && active && current.tabs.length > 1 && !isRenaming && (
+                  <button
+                    onClick={() => removeTab(t.id)}
+                    className="ml-0.5 rounded p-0.5 text-ndp-text-dim hover:text-ndp-danger"
+                    aria-label={`Remove ${t.name}`}
+                    title="Remove tab"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {editMode && (
+            <button
+              onClick={addTab}
+              className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-ndp-text-dim hover:bg-white/5 hover:text-ndp-text"
+              title="Add tab"
+              aria-label="Add tab"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {!editMode ? (
             <button
               onClick={enterEdit}
               className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text hover:bg-ndp-surface-hover"
             >
               <Pencil className="h-3.5 w-3.5" /> Edit
             </button>
-            <button
-              onClick={onReset}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/5 bg-ndp-surface-light text-ndp-text hover:bg-ndp-surface-hover"
-              title="Reset to default"
-              aria-label="Reset to default"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              onClick={() => setPickerOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text hover:bg-ndp-surface-hover"
-            >
-              <Plus className="h-3.5 w-3.5" /> Add widget
-            </button>
-            <button
-              onClick={cancel}
-              className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text hover:bg-ndp-surface-hover"
-            >
-              <X className="h-3.5 w-3.5" /> Cancel
-            </button>
-            <button
-              onClick={onSave}
-              className="inline-flex items-center gap-1.5 rounded-md bg-ndp-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-ndp-accent-hover"
-            >
-              <Save className="h-3.5 w-3.5" /> Save
-            </button>
-          </>
-        )}
+          ) : (
+            <>
+              <button
+                onClick={() => setPickerOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text hover:bg-ndp-surface-hover"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add widget
+              </button>
+              <button
+                onClick={() => setResetOpen(true)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/5 bg-ndp-surface-light text-ndp-text hover:bg-ndp-surface-hover"
+                title="Reset to default"
+                aria-label="Reset to default"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={cancel}
+                className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text hover:bg-ndp-surface-hover"
+              >
+                <X className="h-3.5 w-3.5" /> Cancel
+              </button>
+              <button
+                onClick={onSave}
+                className="inline-flex items-center gap-1.5 rounded-md bg-ndp-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-ndp-accent-hover"
+              >
+                <Save className="h-3.5 w-3.5" /> Save
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <ResponsiveGridLayout
@@ -181,6 +309,13 @@ export function DashboardGrid() {
         onPick={addPicked}
         alreadyOnDashboard={alreadyOnDashboard}
       />
+
+      {resetOpen && (
+        <ResetDashboardConfirmModal
+          onConfirm={onResetConfirmed}
+          onClose={() => setResetOpen(false)}
+        />
+      )}
     </div>
   );
 }
