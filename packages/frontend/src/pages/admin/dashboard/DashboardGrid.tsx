@@ -58,7 +58,7 @@ export function DashboardGrid() {
           ...item,
           title: props.title,
           icon: props.icon,
-          body: <PluginWidget layoutI={item.i} />,
+          body: <PluginWidget pluginId={parsed.pluginId} widgetId={parsed.widgetId} contribution={contribution} />,
           ghost: false,
         };
       }

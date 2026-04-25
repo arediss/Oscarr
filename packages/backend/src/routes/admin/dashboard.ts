@@ -14,19 +14,22 @@ const DEFAULT_LAYOUT = {
 const layoutBodySchema = {
   type: 'object',
   required: ['version', 'items'],
+  additionalProperties: false,
   properties: {
-    version: { type: 'integer', minimum: 1 },
+    version: { type: 'integer', minimum: 1, maximum: 1000 },
     items: {
       type: 'array',
+      maxItems: 100,
       items: {
         type: 'object',
         required: ['i', 'x', 'y', 'w', 'h'],
+        additionalProperties: false,
         properties: {
-          i: { type: 'string', minLength: 1 },
-          x: { type: 'integer', minimum: 0 },
-          y: { type: 'integer', minimum: 0 },
-          w: { type: 'integer', minimum: 1 },
-          h: { type: 'integer', minimum: 1 },
+          i: { type: 'string', minLength: 1, maxLength: 200 },
+          x: { type: 'integer', minimum: 0, maximum: 1000 },
+          y: { type: 'integer', minimum: 0, maximum: 1000 },
+          w: { type: 'integer', minimum: 1, maximum: 100 },
+          h: { type: 'integer', minimum: 1, maximum: 100 },
         },
       },
     },
