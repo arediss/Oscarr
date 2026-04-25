@@ -52,7 +52,11 @@ WORKDIR /app
 # ship vulns the scanner picks up.
 COPY --chown=oscarr:oscarr packages/backend/package.prod.json packages/backend/package.json
 RUN cd packages/backend && npm install --omit=dev --no-audit --no-fund \
- && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+ && rm -rf \
+      /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+      /usr/local/lib/node_modules/corepack /usr/local/bin/corepack \
+      /opt/yarn-v* /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+      /root/.npm
 
 # Bundled backend server + its sourcemap (keeps stack traces useful in prod logs).
 COPY --from=builder --chown=oscarr:oscarr /app/packages/backend/dist/server.js packages/backend/dist/server.js
