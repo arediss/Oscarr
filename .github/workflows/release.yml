@@ -118,7 +118,7 @@ jobs:
           set -e
           curl -fsS http://127.0.0.1:3456/api/setup/install-status > /dev/null
           curl -fsS http://127.0.0.1:3456/api/app/features | grep -q '"siteName"'
-          curl -fsS http://127.0.0.1:3456/ | grep -q '<!doctype html'
+          curl -fsS http://127.0.0.1:3456/ | grep -qi '<!doctype html'
           echo "Smoke OK"
 
       - name: Graceful shutdown check
