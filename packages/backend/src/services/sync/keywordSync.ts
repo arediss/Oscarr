@@ -105,14 +105,42 @@ export async function trackKeywordsFromDetails(
 
   const keywordIds = JSON.stringify(keywords.map((k) => k.id));
   const title = (details as TmdbMovie).title || (details as TmdbTv).name || '';
+  const tvdbId = mediaType === 'tv' ? (details.external_ids?.tvdb_id ?? null) : null;
+
+  // For TV: a sync-created placeholder row may exist with `tmdbId = -tvdbId`. Detect it via
+  // tvdbId and upgrade in place — doing a plain upsert keyed on positive tmdbId would create a
+  // duplicate row, leaving the placeholder orphaned (no sonarrId on the new row, no tmdbId
+  // match for batch-status on the old one).
+  if (mediaType === 'tv' && tvdbId) {
+    const placeholder = await prisma.media.findFirst({
+      where: { mediaType: 'tv', tvdbId, tmdbId: { lt: 0 } },
+      select: { id: true },
+    });
+    if (placeholder) {
+      // Pre-existing positive-tmdbId row would conflict on the unique (tmdbId, mediaType)
+      // index — leave both rows alone in that case (audit step will reconcile).
+      const conflict = await prisma.media.findFirst({
+        where: { mediaType: 'tv', tmdbId, NOT: { id: placeholder.id } },
+        select: { id: true },
+      });
+      if (!conflict) {
+        await prisma.media.update({
+          where: { id: placeholder.id },
+          data: { tmdbId, keywordIds, contentRating },
+        });
+        return;
+      }
+    }
+  }
 
   await prisma.media.upsert({
     where: { tmdbId_mediaType: { tmdbId, mediaType } },
-    update: { keywordIds, contentRating },
+    update: { keywordIds, contentRating, ...(tvdbId ? { tvdbId } : {}) },
     create: {
       tmdbId,
       mediaType,
       title,
+      tvdbId,
       posterPath: details.poster_path,
       backdropPath: details.backdrop_path,
       keywordIds,
