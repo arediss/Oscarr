@@ -1,6 +1,6 @@
 {
   "name": "@oscarr/backend-runtime",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "Minimal manifest for the bundled prod image. Only lists modules that stay external in the esbuild bundle (native + Prisma) — everything else is inlined in dist/server.js.",
@@ -12,5 +12,8 @@
     "bare-os": "^3.9.0",
     "bare-path": "^3.0.0",
     "bare-url": "^2.4.2"
+  },
+  "overrides": {
+    "picomatch": ">=4.0.4"
   }
 }
