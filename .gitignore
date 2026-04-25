@@ -11,7 +11,8 @@ docs/plans/
 issues/
 data/
 .claude/
-docs/superpowers/
+docs/superpowers/*
+!docs/superpowers/specs/
 *.tsbuildinfo
 
 # Plugin symlinks are per-machine dev artifacts — keep the folder tracked (via .gitkeep) but ignore entries inside.
