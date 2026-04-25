@@ -394,8 +394,12 @@ export function enforcePluginRoutePermission(
   }
 
   const viewAsRole = request.headers['x-view-as-role'] as string | undefined;
-  const effectiveRole = (viewAsRole && jwtUser.role === 'admin' && !rule.permission.startsWith('admin'))
-    ? viewAsRole
+  // Restrict to roles that actually exist — without this, header could be any string
+  // (downstream hasPermission returns false on unknowns, so privilege escalation is
+  // already blocked, but logging unknown attempts helps audit + tightens the surface).
+  const isKnownRole = !!viewAsRole && (roleCacheReady ? roleCache[viewAsRole] !== undefined : viewAsRole in FALLBACK_ROLES);
+  const effectiveRole = (isKnownRole && jwtUser.role === 'admin' && !rule.permission.startsWith('admin'))
+    ? (viewAsRole as string)
     : jwtUser.role;
 
   if (!hasPermission(effectiveRole, rule.permission)) {
@@ -461,10 +465,12 @@ export function rbacPlugin(app: FastifyInstance): void {
     // Any authenticated user is enough
     if (rule.permission === AUTH) return;
 
-    // "View as role" simulation — admin only, never applies to admin routes
+    // "View as role" simulation — admin only, never applies to admin routes. Restrict to
+    // known roles so an arbitrary header string can't reach hasPermission with junk input.
     const viewAsRole = request.headers['x-view-as-role'] as string | undefined;
-    const effectiveRole = (viewAsRole && freshRole === 'admin' && !rule.permission.startsWith('admin'))
-      ? viewAsRole
+    const isKnownRole = !!viewAsRole && (roleCacheReady ? roleCache[viewAsRole] !== undefined : viewAsRole in FALLBACK_ROLES);
+    const effectiveRole = (isKnownRole && freshRole === 'admin' && !rule.permission.startsWith('admin'))
+      ? (viewAsRole as string)
       : freshRole;
 
     if (!hasPermission(effectiveRole, rule.permission)) {

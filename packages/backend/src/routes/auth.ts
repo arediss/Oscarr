@@ -62,10 +62,20 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
           })
         : null;
 
-      let user = existingProvider?.user || await prisma.user.findUnique({
-        where: { email: opts.email },
-        include: { providers: true },
-      });
+      let user = existingProvider?.user;
+      if (!user) {
+        const byEmail = await prisma.user.findUnique({
+          where: { email: opts.email },
+          include: { providers: true },
+        });
+        if (byEmail) {
+          // Synthetic provider emails (`*@jellyfin.local`, `*@discord.local` …) can collide
+          // with a real user-supplied email. Log the merge so admins have a breadcrumb if the
+          // wrong account ends up linked to an external identity.
+          logEvent('warn', 'Auth', `findOrCreateUser: linking "${opts.provider}" identity ${opts.providerId ?? '?'} to existing user ${byEmail.id} via email match (${opts.email})`);
+          user = byEmail;
+        }
+      }
 
       const userCount = await prisma.user.count();
       const isFirstUser = userCount === 0;
