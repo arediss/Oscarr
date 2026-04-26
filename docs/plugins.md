@@ -149,12 +149,50 @@ Restart Oscarr once to discover it (hot-install from the UI only applies when pu
 
 ## Releasing a plugin
 
-When an admin clicks **Install** in the Discover tab, Oscarr resolves the tarball URL in this order:
+When an admin clicks **Install** in the Discover tab, Oscarr resolves the install URL in this order:
 
-1. **GitHub Release asset** — the latest release's first `.tar.gz` asset that isn't a `.sha256` companion. **Recommended** — repo stays source-only, the prebuilt `dist/` ships in the asset, install always works.
-2. **Source tarball** (`tarball/HEAD`) — fallback for plugins that commit `dist/` to their repo (legacy pattern; works but pollutes git history with build artifacts).
+1. **Arch-specific Release asset** — the latest release's `.tar.gz` whose name carries an arch token matching the running container (`arm64`/`aarch64` on ARM hosts, `amd64`/`x64`/`x86_64` on x86_64 hosts). Use this when your plugin ships native modules and you need separate bundles per architecture.
+2. **Universal Release asset** — the latest release's `.tar.gz` with **no** arch token in its name. **The recommended path for ~95% of plugins**: a single self-contained bundle that runs anywhere.
+3. **Source archive** (`tarball/HEAD`) — fallback for plugins that commit `dist/` to their repo. Works but pollutes git history with build artifacts; not recommended for new plugins.
 
-**Recommended workflow** — drop this `.github/workflows/release.yml` in your plugin repo. It runs on every `v*` tag push, builds your plugin, and publishes a tarball asset on the corresponding GitHub Release:
+`.sha256` companion files (`<name>.tar.gz.sha256`) are recognised and skipped by the resolver — keep them around, Oscarr may consume them for asset integrity in a later release.
+
+### Asset contents
+
+The tarball you upload to the Release **must** include, at the archive root (no enclosing folder):
+
+- `manifest.json`
+- `package.json`
+- `dist/` containing the built file referenced by `manifest.entry`
+- Any other runtime asset your plugin needs (e.g. `frontend/`, static files)
+
+> Oscarr's prod image strips `npm`, `yarn` and `corepack` for security and size — `npm install` does **not** run after extraction. Anything `dist/index.js` imports at runtime must already be inside the asset.
+
+### The bundling decision
+
+Most plugins should bundle every runtime dep into `dist/index.js` via esbuild's `bundle: true` with no `external` overrides (besides `@oscarr/shared`, which Oscarr's runtime injects). One bundle, one universal asset, install just works.
+
+**The exception**: deps that ship native `.node` binaries or use dynamic `require()` patterns esbuild can't statically analyse. Common offenders:
+
+- `discord.js` — opt-in `zlib-sync` (faster gzip) and `@discordjs/opus` (voice) are native. The pure-JS code paths work without them; if you don't use voice, simply don't install those optionals and bundle `discord.js` normally.
+- `bcrypt` / `bcryptjs` — `bcrypt` is native; `bcryptjs` is a drop-in pure-JS replacement.
+- `better-sqlite3`, `argon2`, `node-canvas`, `sharp` — all native. No pure-JS swap, you'll need per-arch assets.
+- `prisma` — already installed in Oscarr's runtime; mark external.
+
+**To find the native deps in your plugin** quickly:
+
+```bash
+npm ls --all 2>/dev/null | grep -iE 'native|prebuilt|\.node$'
+# or, more thorough:
+find node_modules -name '*.node' -not -path '*/.*' | head -20
+find node_modules -name 'binding.gyp' | head -20
+```
+
+If both commands return nothing, you're safe to ship a single universal asset.
+
+### Recommended workflow — universal bundle
+
+Drop this `.github/workflows/release.yml` in your plugin repo. It runs on every `v*` tag push, builds your plugin, packs a single universal tarball, and uploads it on the corresponding GitHub Release:
 
 ```yaml
 name: Release
@@ -187,15 +225,75 @@ jobs:
             *.sha256
 ```
 
-Adjust the `tar` line to match what your plugin actually ships (drop `frontend` if you don't have one, add `assets` if you have static files). The asset must include:
+### Per-arch matrix — when you need native deps
 
-- `manifest.json` at the root
-- `package.json` at the root
-- The `dist/` directory containing the built `entry` from your manifest
+If your plugin genuinely needs a native dep that has no pure-JS alternative, build a separate asset per arch. Oscarr's resolver picks the right one based on `process.arch` of the running container. Asset names must contain an arch token (`amd64`, `x64`, `x86_64`, `arm64`, or `aarch64`):
 
-The `.sha256` companion is optional today but Oscarr will likely consume it for asset integrity in a future release — keeping it now costs nothing.
+```yaml
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest          # x86_64 host
+            arch: amd64
+          - runner: ubuntu-24.04-arm       # GitHub-hosted ARM (or self-hosted)
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --omit=dev   # prebuilds native binaries for THIS arch
+      - run: npm ci              # full deps including dev for the build
+      - run: npm run build
+      - name: Pack artifact
+        run: |
+          ID=$(jq -r .id manifest.json)
+          VER="${GITHUB_REF_NAME#v}"
+          # Re-run --omit=dev into a fresh node_modules so the asset only ships runtime deps
+          rm -rf node_modules && npm ci --omit=dev
+          tar -czf "${ID}-${VER}-linux-${{ matrix.arch }}.tar.gz" \
+            manifest.json package.json dist frontend node_modules
+          sha256sum "${ID}-${VER}-linux-${{ matrix.arch }}.tar.gz" \
+            > "${ID}-${VER}-linux-${{ matrix.arch }}.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.arch }}
+          path: |
+            *.tar.gz
+            *.sha256
 
-To cut a release: `git tag v0.1.2 && git push origin v0.1.2`. The workflow runs, the release page gets the asset, and Oscarr admins immediately see "update available" in their Plugins tab.
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+```
+
+The asset name pattern is what the resolver matches against. As long as you keep `linux-amd64` / `linux-arm64` (or any `amd64`/`arm64` token separated by `-`/`_`/`.`), Oscarr picks the right one.
+
+### Cutting a release
+
+```bash
+git tag v0.1.2 && git push origin v0.1.2
+```
+
+The workflow runs, GitHub Release gets the asset(s), and Oscarr admins immediately see "update available" in their Plugins tab.
 
 ## Getting started
 
