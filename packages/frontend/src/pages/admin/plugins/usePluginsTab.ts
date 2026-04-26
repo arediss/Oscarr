@@ -12,27 +12,6 @@ export interface InstallMessage {
 }
 
 /**
- * Pick the install tarball URL for a plugin. Prefers a prebuilt release asset (the recommended
- * pattern — repo stays source-only, dist/ ships in the asset). Falls back to the auto-generated
- * source archive for plugins that commit dist/ to their repo.
- */
-async function resolveInstallUrl(repository: string): Promise<string> {
-  try {
-    const r = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, {
-      headers: { Accept: 'application/vnd.github+json' },
-    });
-    if (r.ok) {
-      const rel = await r.json() as { assets?: { name: string; browser_download_url: string }[] };
-      const asset = (rel.assets ?? []).find(
-        (a) => /\.tar\.gz$/i.test(a.name) && !/\.sha256$/i.test(a.name),
-      );
-      if (asset?.browser_download_url) return asset.browser_download_url;
-    }
-  } catch { /* network blip / rate limit — fall through to source tarball */ }
-  return `https://api.github.com/repos/${repository}/tarball/HEAD`;
-}
-
-/**
  * Owns all plugin-page data + mutations: installed list, remote registry, toggle/install/
  * uninstall flows, one-shot update-check probe on the Installed tab, and the Reload-Oscarr
  * restart poller. UI consumes the returned state + handlers and stays presentational.
@@ -93,9 +72,10 @@ export function usePluginsTab() {
 
   const install = useCallback(async (entry: RegistryPlugin): Promise<boolean> => {
     setInstalling(entry.id);
-    const url = await resolveInstallUrl(entry.repository);
     try {
-      const { data } = await api.post('/plugins/install', { url });
+      // Pass the repo slug — backend resolves to a Release asset URL via the GitHub API.
+      // Keeps api.github.com out of the frontend's connect-src CSP.
+      const { data } = await api.post('/plugins/install', { repository: entry.repository });
       setInstallMessage({ kind: 'success', text: `Installed ${data.plugin.name} v${data.plugin.version} — toggle it on in Installed whenever you're ready` });
       // Fire-and-forget so the caller can unmount the consent modal immediately; the refetch
       // populates the Installed tab in the background before the admin flips to it.
