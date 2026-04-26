@@ -108,11 +108,30 @@ async function runUpdateCheck(now: number): Promise<Record<string, UpdateInfo>> 
   return result;
 }
 
+// Match common arch suffixes plugin authors use in their asset filenames. Ordered with the
+// most specific tokens first so 'aarch64' wins over 'arm' on a substring match.
+const ARCH_TOKENS: Record<string, string[]> = {
+  arm64: ['arm64', 'aarch64'],
+  x64:   ['amd64', 'x64', 'x86_64'],
+};
+
+function archMatches(assetName: string, arch: string): boolean {
+  const tokens = ARCH_TOKENS[arch] ?? [];
+  return tokens.some((t) => new RegExp(`(?:^|[-_.])${t}(?:[-_.]|\\.tar\\.gz$)`, 'i').test(assetName));
+}
+
+function hasAnyArchToken(assetName: string): boolean {
+  return Object.values(ARCH_TOKENS).flat().some(
+    (t) => new RegExp(`(?:^|[-_.])${t}(?:[-_.]|\\.tar\\.gz$)`, 'i').test(assetName),
+  );
+}
+
 /**
- * Pick the install tarball URL for a registry plugin. Prefers a prebuilt release asset (the
- * recommended pattern — repo stays source-only, dist/ ships in the asset). Falls back to the
- * GitHub-generated source archive for plugins that commit dist/ to their repo. Lives backend-
- * side so the frontend doesn't need api.github.com in its CSP.
+ * Pick the install tarball URL for a registry plugin. Resolves in this order:
+ *   1. Release asset matching the running container's arch (e.g. plugin-x.y.z-linux-arm64.tar.gz)
+ *   2. Release asset with no arch suffix (universal pure-JS bundle — the recommended path)
+ *   3. Source archive (tarball/HEAD) — fallback for plugins that commit dist/ to their repo
+ * Lives backend-side so the frontend doesn't need api.github.com in its CSP.
  */
 async function resolveInstallUrlFromRepo(repository: string): Promise<string> {
   try {
@@ -122,10 +141,16 @@ async function resolveInstallUrlFromRepo(repository: string): Promise<string> {
     const r = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, { headers });
     if (r.ok) {
       const rel = await r.json() as { assets?: { name: string; browser_download_url: string }[] };
-      const asset = (rel.assets ?? []).find(
+      const tarballs = (rel.assets ?? []).filter(
         (a) => /\.tar\.gz$/i.test(a.name) && !/\.sha256$/i.test(a.name),
       );
-      if (asset?.browser_download_url) return asset.browser_download_url;
+      const arch = process.arch;
+      // 1. Arch-specific asset wins
+      const archAsset = tarballs.find((a) => archMatches(a.name, arch));
+      if (archAsset?.browser_download_url) return archAsset.browser_download_url;
+      // 2. Universal asset (no arch token in the name)
+      const universal = tarballs.find((a) => !hasAnyArchToken(a.name));
+      if (universal?.browser_download_url) return universal.browser_download_url;
     }
   } catch { /* network blip / rate limit — fall through to source tarball */ }
   return `https://api.github.com/repos/${repository}/tarball/HEAD`;
