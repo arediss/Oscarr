@@ -108,6 +108,29 @@ async function runUpdateCheck(now: number): Promise<Record<string, UpdateInfo>> 
   return result;
 }
 
+/**
+ * Pick the install tarball URL for a registry plugin. Prefers a prebuilt release asset (the
+ * recommended pattern — repo stays source-only, dist/ ships in the asset). Falls back to the
+ * GitHub-generated source archive for plugins that commit dist/ to their repo. Lives backend-
+ * side so the frontend doesn't need api.github.com in its CSP.
+ */
+async function resolveInstallUrlFromRepo(repository: string): Promise<string> {
+  try {
+    const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
+    const ghToken = process.env.GITHUB_TOKEN;
+    if (ghToken) headers.Authorization = `Bearer ${ghToken}`;
+    const r = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, { headers });
+    if (r.ok) {
+      const rel = await r.json() as { assets?: { name: string; browser_download_url: string }[] };
+      const asset = (rel.assets ?? []).find(
+        (a) => /\.tar\.gz$/i.test(a.name) && !/\.sha256$/i.test(a.name),
+      );
+      if (asset?.browser_download_url) return asset.browser_download_url;
+    }
+  } catch { /* network blip / rate limit — fall through to source tarball */ }
+  return `https://api.github.com/repos/${repository}/tarball/HEAD`;
+}
+
 // Allowed file extensions for plugin frontend serving
 const ALLOWED_EXTENSIONS = new Set(['.js', '.mjs', '.css', '.json', '.map', '.svg']);
 
@@ -155,21 +178,29 @@ export async function pluginRoutes(app: FastifyInstance) {
   // ── Install plugin from URL ─────────────────────────────────────
   // Download a tar.gz, validate its manifest, drop it into the plugins dir,
   // and hot-load it via engine.loadSingle() — no container restart needed.
-  app.post<{ Body: { url: string } }>(
+  app.post<{ Body: { url?: string; repository?: string } }>(
     '/install',
     {
       bodyLimit: 8 * 1024,
       schema: {
         body: {
           type: 'object',
-          required: ['url'],
-          properties: { url: { type: 'string', minLength: 1 } },
+          additionalProperties: false,
+          properties: {
+            // Either form is accepted: `repository` for registry installs (backend resolves to
+            // a Release asset URL via the GitHub API — avoids burning the frontend CSP on
+            // api.github.com), or `url` for manual installs / direct tarball pastes.
+            url: { type: 'string', minLength: 1, maxLength: 500 },
+            repository: { type: 'string', pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$', maxLength: 200 },
+          },
+          anyOf: [{ required: ['url'] }, { required: ['repository'] }],
         },
       },
     },
     async (request, reply) => {
-      const { url } = request.body;
+      const { url: explicitUrl, repository } = request.body;
       let installedDir: string | null = null;
+      const url = repository ? await resolveInstallUrlFromRepo(repository) : explicitUrl!;
       try {
         const installed = await installPluginFromUrl(url);
         installedDir = installed.dir;
