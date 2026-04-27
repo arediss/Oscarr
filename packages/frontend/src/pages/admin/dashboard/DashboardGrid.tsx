@@ -7,9 +7,12 @@ import { useDashboardLayout, type DashboardLayout, type DashboardTab, type Layou
 import { WidgetChrome } from './WidgetChrome';
 import { WidgetPickerModal } from './WidgetPickerModal';
 import { ResetDashboardConfirmModal } from './ResetDashboardConfirmModal';
+import { WidgetEditModal } from './WidgetEditModal';
+import { IconPicker } from './IconPicker';
 import { getBuiltInWidget } from './builtInCatalog';
 import { PluginWidget, parsePluginLayoutI } from './PluginWidget';
 import { usePluginUI } from '@/plugins/usePlugins';
+import { DynamicIcon } from '@/plugins/DynamicIcon';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 const COLS = { lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 };
@@ -18,8 +21,9 @@ const ROW_HEIGHT = 50;
 
 interface RenderableItem extends LayoutItem {
   title: string;
+  defaultIcon?: string;
   body: React.ReactNode;
-  ghost: boolean;     // true = source disappeared (plugin disabled, etc.)
+  ghost: boolean;
 }
 
 function genTabId(existing: DashboardTab[]): string {
@@ -40,6 +44,7 @@ export function DashboardGrid() {
   const [resetOpen, setResetOpen] = useState(false);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+  const [editingItemI, setEditingItemI] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
 
   const current = editMode ? (draft ?? layout) : layout;
@@ -68,7 +73,7 @@ export function DashboardGrid() {
       const builtIn = getBuiltInWidget(item.i);
       if (builtIn) {
         const Body = builtIn.Component;
-        return { ...item, title: builtIn.title, body: <Body />, ghost: false };
+        return { ...item, title: builtIn.title, defaultIcon: builtIn.icon, body: <Body />, ghost: false };
       }
       const parsed = parsePluginLayoutI(item.i);
       if (parsed) {
@@ -83,10 +88,11 @@ export function DashboardGrid() {
             ghost: true,
           };
         }
-        const props = contribution.props as { title: string };
+        const props = contribution.props as { title: string; icon?: string };
         return {
           ...item,
           title: props.title,
+          defaultIcon: props.icon,
           body: <PluginWidget pluginId={parsed.pluginId} widgetId={parsed.widgetId} contribution={contribution} />,
           ghost: false,
         };
@@ -108,12 +114,34 @@ export function DashboardGrid() {
 
   const onLayoutChange = (next: Layout[]) => {
     if (!editMode || !draft || !activeTab) return;
-    const items: LayoutItem[] = next.map((l) => ({ i: l.i, x: l.x, y: l.y, w: l.w, h: l.h }));
+    const byI = new Map(activeTab.items.map((it) => [it.i, it]));
+    const items: LayoutItem[] = next.map((l) => {
+      const existing = byI.get(l.i);
+      return {
+        ...existing,
+        i: l.i, x: l.x, y: l.y, w: l.w, h: l.h,
+      } as LayoutItem;
+    });
     updateActiveTab((t) => ({ ...t, items }));
   };
 
   const removeItem = (i: string) => {
     updateActiveTab((t) => ({ ...t, items: t.items.filter((it) => it.i !== i) }));
+  };
+
+  const updateItem = (i: string, patch: Partial<LayoutItem>) => {
+    updateActiveTab((t) => ({
+      ...t,
+      items: t.items.map((it) => (it.i === i ? { ...it, ...patch } : it)),
+    }));
+  };
+
+  const setTabIcon = (id: string, icon: string | undefined) => {
+    if (!draft) return;
+    setDraft({
+      ...draft,
+      tabs: draft.tabs.map((t) => (t.id === id ? { ...t, icon } : t)),
+    });
   };
 
   const onSave = async () => {
@@ -196,22 +224,38 @@ export function DashboardGrid() {
                       if (e.key === 'Enter') renameTab(t.id, (e.target as HTMLInputElement).value);
                       if (e.key === 'Escape') setRenamingTabId(null);
                     }}
-                    className="rounded-md border border-ndp-accent/60 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text outline-none"
+                    className="rounded-lg border border-ndp-accent/60 bg-ndp-surface-light px-4 py-1.5 text-sm font-medium text-ndp-text outline-none"
                     maxLength={50}
                   />
                 ) : (
                   <button
                     onClick={() => setActiveTabId(t.id)}
                     onDoubleClick={() => editMode && setRenamingTabId(t.id)}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    className={`inline-flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
                       active
                         ? 'bg-ndp-accent/10 text-ndp-accent'
                         : 'text-ndp-text-muted hover:text-ndp-text hover:bg-white/5'
                     }`}
                     title={editMode ? 'Double-click to rename' : t.name}
                   >
+                    {t.icon && <DynamicIcon name={t.icon} className="h-4 w-4" />}
                     {t.name}
                   </button>
+                )}
+                {editMode && active && !isRenaming && (
+                  <IconPicker
+                    value={t.icon}
+                    onChange={(next) => setTabIcon(t.id, next)}
+                    trigger={
+                      <button
+                        className="ml-0.5 rounded p-1 text-ndp-text-dim hover:bg-white/5 hover:text-ndp-text"
+                        title="Set icon"
+                        aria-label={`Set icon for ${t.name}`}
+                      >
+                        {t.icon ? <DynamicIcon name={t.icon} className="h-3.5 w-3.5" /> : <Pencil className="h-3 w-3" />}
+                      </button>
+                    }
+                  />
                 )}
                 {editMode && active && current.tabs.length > 1 && !isRenaming && (
                   <button
@@ -229,11 +273,11 @@ export function DashboardGrid() {
           {editMode && (
             <button
               onClick={addTab}
-              className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-ndp-text-dim hover:bg-white/5 hover:text-ndp-text"
+              className="ml-1 inline-flex h-8 w-8 items-center justify-center rounded-lg text-ndp-text-dim hover:bg-white/5 hover:text-ndp-text"
               title="Add tab"
               aria-label="Add tab"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-4 w-4" />
             </button>
           )}
         </div>
@@ -284,23 +328,33 @@ export function DashboardGrid() {
         breakpoints={BREAKPOINTS}
         cols={COLS}
         rowHeight={ROW_HEIGHT}
+        margin={[12, 12]}
+        containerPadding={[0, 8]}
         isDraggable={editMode}
         isResizable={editMode}
         draggableHandle=".widget-drag-handle"
         onLayoutChange={onLayoutChange}
         compactType="vertical"
       >
-        {renderables.map((r) => (
-          <div key={r.i}>
-            <WidgetChrome
-              title={r.title}
-              editMode={editMode}
-              onRemove={editMode ? () => removeItem(r.i) : undefined}
-            >
-              {r.body}
-            </WidgetChrome>
-          </div>
-        ))}
+        {renderables.map((r) => {
+          const wantsHeader = !!r.customTitle || !!r.customIcon || r.showTitle === true;
+          const headerTitle = wantsHeader ? (r.customTitle || r.title) : undefined;
+          const headerIcon = wantsHeader ? (r.customIcon || r.defaultIcon) : undefined;
+          return (
+            <div key={r.i}>
+              <WidgetChrome
+                title={r.title}
+                editMode={editMode}
+                headerTitle={headerTitle}
+                headerIcon={headerIcon}
+                onRemove={editMode ? () => removeItem(r.i) : undefined}
+                onEdit={editMode ? () => setEditingItemI(r.i) : undefined}
+              >
+                {r.body}
+              </WidgetChrome>
+            </div>
+          );
+        })}
       </ResponsiveGridLayout>
 
       <WidgetPickerModal
@@ -316,6 +370,19 @@ export function DashboardGrid() {
           onClose={() => setResetOpen(false)}
         />
       )}
+
+      {editingItemI && (() => {
+        const r = renderables.find((x) => x.i === editingItemI);
+        if (!r) return null;
+        return (
+          <WidgetEditModal
+            item={r}
+            defaultTitle={r.title}
+            onSave={(patch) => updateItem(r.i, patch)}
+            onClose={() => setEditingItemI(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

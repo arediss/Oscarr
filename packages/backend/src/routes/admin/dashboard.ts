@@ -25,6 +25,9 @@ const itemSchema = {
     y: { type: 'integer', minimum: 0, maximum: 1000 },
     w: { type: 'integer', minimum: 1, maximum: 100 },
     h: { type: 'integer', minimum: 1, maximum: 100 },
+    customTitle: { type: 'string', maxLength: 80 },
+    customIcon: { type: 'string', maxLength: 30 },
+    showTitle: { type: 'boolean' },
   },
 } as const;
 
@@ -45,6 +48,7 @@ const layoutBodySchema = {
         properties: {
           id: { type: 'string', pattern: '^[a-z0-9-]+$', minLength: 1, maxLength: 50 },
           name: { type: 'string', minLength: 1, maxLength: 50 },
+          icon: { type: 'string', maxLength: 30 },
           items: { type: 'array', maxItems: 100, items: itemSchema },
         },
       },
