@@ -7,11 +7,15 @@ export interface LayoutItem {
   y: number;
   w: number;
   h: number;
+  customTitle?: string;
+  customIcon?: string;
+  showTitle?: boolean;
 }
 
 export interface DashboardTab {
   id: string;
   name: string;
+  icon?: string;
   items: LayoutItem[];
 }
 
