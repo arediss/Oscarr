@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next';
 import { clsx } from 'clsx';
 import { Trash2, RefreshCw, ScrollText, ChevronDown, ChevronRight, ChevronLeft, Copy, Check } from 'lucide-react';
 import { localizedDateTime } from '@/i18n/formatters';
+import { copyToClipboard } from '@/utils/clipboard';
 import api from '@/lib/api';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
@@ -226,9 +227,11 @@ function LogRow({ log, t }: { log: LogEntry; t: TFunction }) {
       head,
       hasStack ? `\n${stack}` : '',
     ].filter(Boolean).join('\n');
-    await navigator.clipboard.writeText(block);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    const ok = await copyToClipboard(block);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
   };
 
   return (
