@@ -13,6 +13,7 @@ export interface RegistryPlugin {
   tags?: string[];
   url: string;
   stars: number;
+  downloads?: number;
   updatedAt: string | null;
   services?: string[];
   capabilities?: string[];

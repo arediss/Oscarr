@@ -76,19 +76,18 @@ async function runUpdateCheck(now: number): Promise<Record<string, UpdateInfo>> 
       const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
       const ghToken = process.env.GITHUB_TOKEN;
       if (ghToken) headers.Authorization = `Bearer ${ghToken}`;
-      const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, { headers });
-      if (!r.ok) {
+      const rel = await fetchLatestRelease(repo, headers);
+      if (!rel) {
         result[p.id] = { installed: p.version, latest: null, available: false, repository: repo };
         continue;
       }
-      const rel = await r.json() as { tag_name?: string; tarball_url?: string };
       const latest = rel.tag_name?.replace(/^v/, '') ?? null;
+      const available = !!latest && compareSemver(latest, p.version) > 0;
       result[p.id] = {
         installed: p.version,
         latest,
-        available: !!latest && latest !== p.version,
+        available,
         repository: repo,
-        sourceUrl: rel.tarball_url,
       };
       // Persist so the badge survives a restart (the admin doesn't have to wait for
       // the next TTL miss to see "update available" again).
@@ -108,8 +107,6 @@ async function runUpdateCheck(now: number): Promise<Record<string, UpdateInfo>> 
   return result;
 }
 
-// Match common arch suffixes plugin authors use in their asset filenames. Ordered with the
-// most specific tokens first so 'aarch64' wins over 'arm' on a substring match.
 const ARCH_TOKENS: Record<string, string[]> = {
   arm64: ['arm64', 'aarch64'],
   x64:   ['amd64', 'x64', 'x86_64'],
@@ -126,33 +123,64 @@ function hasAnyArchToken(assetName: string): boolean {
   );
 }
 
-/**
- * Pick the install tarball URL for a registry plugin. Resolves in this order:
- *   1. Release asset matching the running container's arch (e.g. plugin-x.y.z-linux-arm64.tar.gz)
- *   2. Release asset with no arch suffix (universal pure-JS bundle — the recommended path)
- *   3. Source archive (tarball/HEAD) — fallback for plugins that commit dist/ to their repo
- * Lives backend-side so the frontend doesn't need api.github.com in its CSP.
- */
+interface GitHubRelease {
+  tag_name?: string;
+  draft?: boolean;
+  prerelease?: boolean;
+  assets?: { name: string; browser_download_url: string; download_count?: number }[];
+}
+
+function compareSemver(a: string, b: string): number {
+  const parse = (t: string) => {
+    const [core, ...pre] = t.replace(/^v/i, '').split('-');
+    const parts = core.split('.').map((n) => parseInt(n, 10) || 0);
+    while (parts.length < 3) parts.push(0);
+    return { parts, pre: pre.join('-') };
+  };
+  const A = parse(a);
+  const B = parse(b);
+  for (let i = 0; i < 3; i++) {
+    if (A.parts[i] !== B.parts[i]) return A.parts[i] - B.parts[i];
+  }
+  if (!A.pre && B.pre) return 1;
+  if (A.pre && !B.pre) return -1;
+  return A.pre.localeCompare(B.pre);
+}
+
+/** GitHub returns 404 on /releases/latest when no release is flagged as latest. Falls back
+ *  to /releases sorted by semver. */
+async function fetchLatestRelease(repository: string, headers: Record<string, string>): Promise<GitHubRelease | null> {
+  const latest = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, { headers });
+  if (latest.ok) return latest.json() as Promise<GitHubRelease>;
+  if (latest.status === 404) {
+    const list = await fetch(`https://api.github.com/repos/${repository}/releases?per_page=30`, { headers });
+    if (list.ok) {
+      const releases = await list.json() as GitHubRelease[];
+      const stable = releases.filter((r) => !r.draft && !r.prerelease && r.tag_name);
+      if (stable.length === 0) return null;
+      stable.sort((a, b) => compareSemver(b.tag_name!, a.tag_name!));
+      return stable[0];
+    }
+  }
+  return null;
+}
+
 async function resolveInstallUrlFromRepo(repository: string): Promise<string> {
   try {
     const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
     const ghToken = process.env.GITHUB_TOKEN;
     if (ghToken) headers.Authorization = `Bearer ${ghToken}`;
-    const r = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, { headers });
-    if (r.ok) {
-      const rel = await r.json() as { assets?: { name: string; browser_download_url: string }[] };
+    const rel = await fetchLatestRelease(repository, headers);
+    if (rel) {
       const tarballs = (rel.assets ?? []).filter(
         (a) => /\.tar\.gz$/i.test(a.name) && !/\.sha256$/i.test(a.name),
       );
-      const arch = process.arch;
-      // 1. Arch-specific asset wins
-      const archAsset = tarballs.find((a) => archMatches(a.name, arch));
+      const archAsset = tarballs.find((a) => archMatches(a.name, process.arch));
       if (archAsset?.browser_download_url) return archAsset.browser_download_url;
-      // 2. Universal asset (no arch token in the name)
       const universal = tarballs.find((a) => !hasAnyArchToken(a.name));
       if (universal?.browser_download_url) return universal.browser_download_url;
     }
-  } catch { /* network blip / rate limit — fall through to source tarball */ }
+  } catch { /* fall through to source tarball */ }
   return `https://api.github.com/repos/${repository}/tarball/HEAD`;
 }
 
@@ -187,7 +215,7 @@ export async function pluginRoutes(app: FastifyInstance) {
         ...p,
         latestVersion: s?.latestVersion ?? null,
         lastUpdateCheck: s?.lastUpdateCheck?.toISOString() ?? null,
-        updateAvailable: !!s?.latestVersion && s.latestVersion !== p.version,
+        updateAvailable: !!s?.latestVersion && compareSemver(s.latestVersion, p.version) > 0,
       };
     });
   });
@@ -212,9 +240,6 @@ export async function pluginRoutes(app: FastifyInstance) {
           type: 'object',
           additionalProperties: false,
           properties: {
-            // Either form is accepted: `repository` for registry installs (backend resolves to
-            // a Release asset URL via the GitHub API — avoids burning the frontend CSP on
-            // api.github.com), or `url` for manual installs / direct tarball pastes.
             url: { type: 'string', minLength: 1, maxLength: 500 },
             repository: { type: 'string', pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$', maxLength: 200 },
           },
@@ -229,8 +254,8 @@ export async function pluginRoutes(app: FastifyInstance) {
       try {
         const installed = await installPluginFromUrl(url);
         installedDir = installed.dir;
-        // Freshly installed plugins default to disabled — admin reviews capabilities + toggles on.
         const loaded = await pluginEngine.loadSingle(installed.dir, { defaultEnabled: false });
+        updateCache = null;
         // Register the plugin's job defs so manual triggers + cron ticks pick them up without
         // a server restart. No-op when the plugin defines no jobs.
         const jobDefs = loaded.manifest.hooks?.jobs ?? [];
@@ -279,6 +304,7 @@ export async function pluginRoutes(app: FastifyInstance) {
       try {
         const removed = await pluginEngine.uninstall(id);
         if (!removed) return reply.status(404).send({ error: `Plugin "${id}" not found` });
+        updateCache = null;
         return { ok: true };
       } catch (err) {
         request.log.error({ err, id }, '[plugins] Uninstall failed');
@@ -468,6 +494,16 @@ export async function pluginRoutes(app: FastifyInstance) {
             if (repoRes.ok) repoMeta = await repoRes.json() as Record<string, unknown>;
           } catch { /* ignore */ }
 
+          let downloads = 0;
+          try {
+            const rel = await fetchLatestRelease(entry.repository, headers);
+            for (const a of rel?.assets ?? []) {
+              if (/\.tar\.gz$/i.test(a.name) && !/\.sha256$/i.test(a.name)) {
+                downloads += a.download_count ?? 0;
+              }
+            }
+          } catch { /* ignore */ }
+
           return {
             id: manifest.id,
             name: manifest.name,
@@ -480,6 +516,7 @@ export async function pluginRoutes(app: FastifyInstance) {
             tags: Array.isArray(entry.tags) ? entry.tags.filter((t): t is string => typeof t === 'string') : [],
             url: `https://github.com/${entry.repository}`,
             stars: repoMeta.stargazers_count ?? 0,
+            downloads,
             updatedAt: repoMeta.pushed_at || null,
             // Permission surface the plugin will request — surfaced pre-install so the admin can
             // review what they're about to grant before Oscarr downloads any code.

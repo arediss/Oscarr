@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Download, ExternalLink, Plug, Trash2 } from 'lucide-react';
+import { Download, ExternalLink, Loader2, Plug, Trash2 } from 'lucide-react';
 import type { PluginInfo } from '@/plugins/types';
 import { PluginInitial } from './PluginCardChrome';
 import { usePluginsDir } from '@/hooks/usePluginsDir';
@@ -113,13 +113,21 @@ export function InstalledList({
               <button
                 onClick={() => onToggle(plugin)}
                 disabled={toggling === plugin.id}
-                className="flex items-center gap-2.5 text-xs font-medium text-ndp-text-dim hover:text-ndp-text transition-colors"
+                className="flex items-center gap-2.5 text-xs font-medium text-ndp-text-dim hover:text-ndp-text transition-colors disabled:opacity-70"
                 title={plugin.enabled ? 'Disable' : 'Enable'}
               >
-                <span className={clsx('relative w-9 h-5 rounded-full transition-colors', plugin.enabled ? 'bg-ndp-accent' : 'bg-white/10')}>
-                  <span className={clsx('absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform', plugin.enabled && 'translate-x-4')} />
-                </span>
-                {plugin.enabled ? 'Enabled' : 'Disabled'}
+                {toggling === plugin.id ? (
+                  <span className="inline-flex h-5 w-9 items-center justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin text-ndp-accent" />
+                  </span>
+                ) : (
+                  <span className={clsx('relative w-9 h-5 rounded-full transition-colors', plugin.enabled ? 'bg-ndp-accent' : 'bg-white/10')}>
+                    <span className={clsx('absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform', plugin.enabled && 'translate-x-4')} />
+                  </span>
+                )}
+                {toggling === plugin.id
+                  ? (plugin.enabled ? 'Disabling…' : 'Enabling…')
+                  : (plugin.enabled ? 'Enabled' : 'Disabled')}
               </button>
               {isConfirming ? (
                 <div className="flex items-center gap-1.5">

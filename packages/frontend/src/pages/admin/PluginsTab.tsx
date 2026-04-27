@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { BookOpen, Download, Loader2, Package, RefreshCw } from 'lucide-react';
 import { Spinner } from './Spinner';
@@ -27,7 +28,16 @@ export function PluginsTab() {
     setInstallMessage,
   } = usePluginsTab();
 
-  const [subTab, setSubTab] = useState<SubTab>('installed');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialSub = searchParams.get('sub') === 'discover' ? 'discover' : 'installed';
+  const [subTab, setSubTabState] = useState<SubTab>(initialSub);
+  const setSubTab = (next: SubTab) => {
+    setSubTabState(next);
+    const params = new URLSearchParams(searchParams);
+    if (next === 'installed') params.delete('sub');
+    else params.set('sub', next);
+    setSearchParams(params, { replace: true });
+  };
   const [showHowTo, setShowHowTo] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const [expandedInstall, setExpandedInstall] = useState<string | null>(null);
