@@ -143,6 +143,38 @@ export async function settingsRoutes(app: FastifyInstance) {
     return settings;
   });
 
+  // === VERBOSE REQUEST LOG (debug toggle) ===
+  // Persists every API request to AppLog while ON. Off by default to avoid filling the DB.
+
+  app.get('/verbose-request-log', async () => {
+    const s = await prisma.appSettings.findUnique({
+      where: { id: 1 },
+      select: { verboseRequestLog: true },
+    });
+    return { enabled: s?.verboseRequestLog === true };
+  });
+
+  app.put('/verbose-request-log', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['enabled'],
+        properties: { enabled: { type: 'boolean' } },
+      },
+    },
+  }, async (request) => {
+    const { enabled } = request.body as { enabled: boolean };
+    await prisma.appSettings.upsert({
+      where: { id: 1 },
+      update: { verboseRequestLog: enabled },
+      create: { id: 1, verboseRequestLog: enabled, updatedAt: new Date() },
+    });
+    const { setVerboseRequestLogFlag } = await import('../../utils/verboseRequestLog.js');
+    setVerboseRequestLogFlag(enabled);
+    logEvent('warn', 'Settings', `Verbose request log ${enabled ? 'enabled' : 'disabled'}`);
+    return { ok: true };
+  });
+
   // === BANNER ===
 
   app.put('/banner', {
