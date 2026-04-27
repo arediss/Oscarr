@@ -13,6 +13,7 @@ import { registerRoutes } from './bootstrap/routes.js';
 import { registerPlugins } from './bootstrap/plugins.js';
 import { registerStatic } from './bootstrap/static.js';
 import { initNotifications, startScheduler } from './bootstrap/jobs.js';
+import { refreshVerboseRequestLogFlag, registerVerboseRequestLog } from './utils/verboseRequestLog.js';
 
 // Process-level guards: log the error to AppLog (so an admin can share it from the Logs tab)
 // then exit hard — a process that's already thrown an unhandled exception is in undefined state
@@ -72,7 +73,9 @@ async function ensureMigrated() {
 async function start() {
   loadInstallState();
   await ensureMigrated();
+  await refreshVerboseRequestLogFlag();
   await registerSecurity(app);
+  registerVerboseRequestLog(app);
   await registerDocs(app);
   await registerRoutes(app);
   initNotifications();

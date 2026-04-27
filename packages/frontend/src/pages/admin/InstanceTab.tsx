@@ -48,6 +48,8 @@ export function InstanceTab() {
   const [apiKeyCopied, setApiKeyCopied] = useState(false);
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [apiKeyLoading, setApiKeyLoading] = useState(false);
+  const [verboseLog, setVerboseLog] = useState(false);
+  const [verboseLogToggling, setVerboseLogToggling] = useState(false);
 
   const initialValues = useRef<Record<string, unknown>>({});
 
@@ -77,6 +79,9 @@ export function InstanceTab() {
       // Non-critical probes — let these fail silently, they just degrade the UI.
       api.get('/admin/api-key')
         .then(({ data }) => { setApiKeyHasKey(data.hasKey); setApiKeyMasked(data.maskedKey); })
+        .catch(() => {});
+      api.get('/admin/verbose-request-log')
+        .then(({ data }) => setVerboseLog(!!data.enabled))
         .catch(() => {});
     } catch (err) {
       console.error('InstanceTab load failed', err);
@@ -210,6 +215,49 @@ export function InstanceTab() {
             <span className="text-xs text-ndp-text-dim ml-2">{t('admin.instance.maintenance_desc')}</span>
           </div>
           <input value={bannerText} onChange={(e) => setBannerText(e.target.value)} placeholder={t('admin.instance.maintenance_placeholder')} className="input w-full text-sm" />
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-lg font-semibold text-ndp-text mb-2">Debug</h2>
+        <p className="text-xs text-ndp-text-dim mb-4">
+          Tools to dig into request flows when something misbehaves. Leave OFF in production.
+        </p>
+        <div className={clsx('card p-4', verboseLog && 'border border-amber-400/40 bg-amber-400/5')}>
+          <div className="flex items-start gap-3">
+            <button
+              onClick={async () => {
+                const next = !verboseLog;
+                setVerboseLogToggling(true);
+                try {
+                  await api.put('/admin/verbose-request-log', { enabled: next });
+                  setVerboseLog(next);
+                } catch {
+                  showToast('Toggle failed', 'error');
+                } finally {
+                  setVerboseLogToggling(false);
+                }
+              }}
+              disabled={verboseLogToggling}
+              className="flex items-center gap-2.5 text-xs font-medium text-ndp-text-dim hover:text-ndp-text transition-colors disabled:opacity-70"
+              aria-pressed={verboseLog}
+            >
+              <span className={clsx('relative w-9 h-5 rounded-full transition-colors', verboseLog ? 'bg-amber-400' : 'bg-white/10')}>
+                <span className={clsx('absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform', verboseLog && 'translate-x-4')} />
+              </span>
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-ndp-text">Verbose request log</p>
+              <p className="text-xs text-ndp-text-dim mt-0.5">
+                Persists every <code className="text-ndp-text bg-black/30 px-1 rounded">/api/*</code> request to <strong>Logs</strong> with status, redirect target, IP and user-agent. Useful for tracing OAuth round-trips. Tokens and auth headers are scrubbed.
+              </p>
+              {verboseLog && (
+                <p className="text-xs text-amber-300 mt-2">
+                  ⚠ Enabled — disable as soon as you're done debugging to avoid filling the database.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
