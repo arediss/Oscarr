@@ -29,6 +29,7 @@ export async function registerStatic(app: FastifyInstance) {
     if (request.url.startsWith('/api/')) {
       return reply.status(404).send({ error: 'Not found' });
     }
+    reply.header('Cache-Control', 'no-store');
     return reply.sendFile('index.html');
   });
 }
