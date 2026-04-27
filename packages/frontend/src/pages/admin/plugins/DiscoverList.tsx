@@ -123,10 +123,14 @@ export function DiscoverList({
                   </div>
 
                   <div className="flex items-center gap-3 text-xs text-ndp-text-dim">
-                    {plugin.stars > 0 && (
-                      <span className="flex items-center gap-1">
-                        <Star className="w-3 h-3" />
-                        {plugin.stars}
+                    <span className="flex items-center gap-1">
+                      <Star className="w-3 h-3" />
+                      {plugin.stars}
+                    </span>
+                    {plugin.downloads !== undefined && (
+                      <span className="flex items-center gap-1" title="Total installs (GitHub release downloads)">
+                        <Download className="w-3 h-3" />
+                        {plugin.downloads}
                       </span>
                     )}
                     {plugin.updatedAt && (

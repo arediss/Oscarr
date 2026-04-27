@@ -5,6 +5,18 @@ import type { PluginUIContribution } from './types';
 const cache = new Map<string, { data: PluginUIContribution[]; fetchedAt: number }>();
 const CACHE_TTL = 60_000;
 
+// Per-hookPoint subscriber set. Cleared together with the cache so mounted hooks refetch
+// after a toggle/install/uninstall instead of waiting for a full page reload.
+const listeners = new Map<string, Set<() => void>>();
+
+function notify(hookPoint?: string): void {
+  if (hookPoint) {
+    listeners.get(hookPoint)?.forEach((cb) => cb());
+    return;
+  }
+  listeners.forEach((set) => set.forEach((cb) => cb()));
+}
+
 export function usePluginUI(hookPoint: string) {
   const cached = cache.get(hookPoint);
   const hasFreshOnMount = !!cached && Date.now() - cached.fetchedAt < CACHE_TTL;
@@ -12,6 +24,22 @@ export function usePluginUI(hookPoint: string) {
   const [contributions, setContributions] = useState<PluginUIContribution[]>(hasFreshOnMount ? cached.data : []);
   const [loading, setLoading] = useState(!hasFreshOnMount);
   const [error, setError] = useState<string | null>(null);
+  // Bumped on cache invalidation to force the fetch effect to re-run for every mounted hook.
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    const cb = () => setRevision((r) => r + 1);
+    let set = listeners.get(hookPoint);
+    if (!set) {
+      set = new Set();
+      listeners.set(hookPoint, set);
+    }
+    set.add(cb);
+    return () => {
+      set!.delete(cb);
+      if (set!.size === 0) listeners.delete(hookPoint);
+    };
+  }, [hookPoint]);
 
   useEffect(() => {
     // Re-check freshness inside the effect to avoid stale closure
@@ -40,16 +68,18 @@ export function usePluginUI(hookPoint: string) {
       .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
-  }, [hookPoint]);
+  }, [hookPoint, revision]);
 
   return { contributions, loading, error };
 }
 
-/** Invalidate the UI contribution cache (e.g. after toggling a plugin). */
+/** Invalidate the UI contribution cache (e.g. after toggling a plugin). Notifies all
+ *  mounted `usePluginUI` consumers so they refetch in place — no page reload needed. */
 export function invalidatePluginUICache(hookPoint?: string): void {
   if (hookPoint) {
     cache.delete(hookPoint);
   } else {
     cache.clear();
   }
+  notify(hookPoint);
 }
