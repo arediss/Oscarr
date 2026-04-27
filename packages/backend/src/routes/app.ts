@@ -14,8 +14,17 @@ const APP_VERSION = JSON.parse(
 ).version as string;
 
 export async function appRoutes(app: FastifyInstance) {
-  // Get app version + check for updates
-  app.get('/version', async () => {
+  app.get('/version', async (request, reply) => {
+    const clientV = request.cookies?.oscarr_v;
+    if (clientV && clientV !== APP_VERSION) {
+      reply.header('Clear-Site-Data', '"cache"');
+    }
+    reply.setCookie('oscarr_v', APP_VERSION, {
+      path: '/',
+      httpOnly: false,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 365,
+    });
     const result: { current: string; latest?: string; updateAvailable?: boolean; releaseUrl?: string } = {
       current: APP_VERSION,
     };
