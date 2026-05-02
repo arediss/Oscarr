@@ -203,6 +203,8 @@ export interface AuthHelpers {
     providerEmail?: string;
     email: string;
     displayName: string;
+    /** Avatar URL fetched from this provider. Stored on `UserProvider.providerAvatar` and
+     *  potentially picked up by `User.avatar` depending on the user's `avatarSource` setting. */
     avatar?: string | null;
   }) => Promise<{
     id: number;

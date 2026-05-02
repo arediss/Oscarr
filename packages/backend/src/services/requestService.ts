@@ -401,8 +401,27 @@ export async function createUserRequest(input: CreateRequestInput): Promise<Crea
   const username = user.displayName || 'User';
   const mediaUrl = await buildSiteLink(`/${mediaType}/${media.tmdbId}`);
   safeNotify('request_new', { title: media.title, mediaType, username, posterPath: media.posterPath, tmdbId: media.tmdbId, url: mediaUrl });
-  if (shouldAutoApprove && !sendFailed) {
-    safeUserNotify(user.id, { type: 'request_approved', title: media.title, message: 'notifications.msg.request_auto_approved', metadata: { mediaId: media.id, tmdbId: media.tmdbId, mediaType, posterPath: media.posterPath, msgParams: { title: media.title } } });
+
+  // Auto-approve path: don't ping the requester — they already know the instance auto-approves
+  // (their request goes through silently). The bell entry would just be noise. Manual approvals
+  // emit the notif from lifecycle.ts where a human decision actually happened.
+  //
+  // Pending path: admins need an in-app heads-up so they don't have to check the admin tab
+  // manually. We notify every (non-disabled) admin user. Custom mod roles aren't covered yet —
+  // follow-up if instances need it.
+  if (!shouldAutoApprove) {
+    const admins = await prisma.user.findMany({
+      where: { role: 'admin', disabled: false, id: { not: user.id } },
+      select: { id: true },
+    });
+    for (const admin of admins) {
+      safeUserNotify(admin.id, {
+        type: 'request_pending_review',
+        title: 'notifications.msg.request_pending_review_title',
+        message: 'notifications.msg.request_pending_review',
+        metadata: { mediaId: media.id, tmdbId: media.tmdbId, mediaType, requestId: mediaRequest.id, msgParams: { username, title: media.title } },
+      });
+    }
   }
   logEvent('info', 'Request', `${username} requested "${media.title}"`);
 

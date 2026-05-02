@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useVirtualList } from '@/hooks/useVirtualList';
 import type { TFunction } from 'i18next';
 import { clsx } from 'clsx';
 import { Trash2, RefreshCw, ScrollText, ChevronDown, ChevronRight, ChevronLeft, Copy, Check } from 'lucide-react';
@@ -166,44 +165,13 @@ export function LogsTab() {
   );
 }
 
-/** Virtualized log list — renders only the rows in viewport. Uses window-mode virtualization
- *  (the browser's own scroll drives the list) so the list flows naturally with the page
- *  instead of being cut at a fixed height. Row heights are variable (the stack-trace expand
- *  ~doubles a row), so we use `measureElement`. */
+/** Plain list — 50 rows per page, no virtualisation needed. The previous window-mode
+ *  virtualizer was misaligned with the admin layout (admin scrolls inside <main>, not the
+ *  window), which reserved ~3200px of placeholder height and produced a runaway scrollbar. */
 function LogList({ logs, t }: { logs: LogEntry[]; t: TFunction }) {
-  const { parentRef, rowVirtualizer, items } = useVirtualList({
-    count: logs.length,
-    estimateSize: 64,
-    mode: 'window',
-  });
-  // In window mode translateY is relative to the document, so we subtract the parent's
-  // offset from each virtual item's start. Computed once per render via `scrollMargin`.
-  const scrollMargin = parentRef.current?.offsetTop ?? 0;
-
   return (
-    <div ref={parentRef}>
-      <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
-        {items.map((v) => {
-          const log = logs[v.index];
-          return (
-            <div
-              key={log.id}
-              ref={rowVirtualizer.measureElement}
-              data-index={v.index}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                transform: `translateY(${v.start - scrollMargin}px)`,
-                paddingBottom: '0.5rem',
-              }}
-            >
-              <LogRow log={log} t={t} />
-            </div>
-          );
-        })}
-      </div>
+    <div className="space-y-2">
+      {logs.map((log) => <LogRow key={log.id} log={log} t={t} />)}
     </div>
   );
 }

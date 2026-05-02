@@ -5,6 +5,7 @@ import { logEvent } from '../../utils/logEvent.js';
 import { parseServiceConfig } from '../../utils/services.js';
 import type { Provider, AuthProvider, AuthHelpers } from '../types.js';
 import { isProviderEnabled } from '../authSettings.js';
+import { refreshUserAvatar } from '../../utils/avatarSource.js';
 
 const PLEX_CLIENT_ID = 'oscarr-client';
 
@@ -117,7 +118,10 @@ const plexAuth: AuthProvider = {
     });
 
     app.post('/plex/callback', {
-      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+      // Frontend pinFlow polls 1/s for up to 2 min (PIN TTL) — bump the limit so 2FA delays
+      // don't trip the rate limiter and abort the login mid-flow. The endpoint is naturally
+      // bounded by the PIN lifetime; the limit is a flood guard, not a per-request budget.
+      config: { rateLimit: { max: 150, timeWindow: '1 minute' } },
       schema: {
         body: {
           type: 'object' as const,
@@ -179,11 +183,11 @@ const plexAuth: AuthProvider = {
 
     await prisma.userProvider.upsert({
       where: { userId_provider: { userId, provider: 'plex' } },
-      update: { providerId: String(plexAccount.id), providerToken: authToken, providerUsername: plexAccount.username, providerEmail: plexAccount.email.toLowerCase() },
-      create: { userId, provider: 'plex', providerId: String(plexAccount.id), providerToken: authToken, providerUsername: plexAccount.username, providerEmail: plexAccount.email.toLowerCase() },
+      update: { providerId: String(plexAccount.id), providerToken: authToken, providerUsername: plexAccount.username, providerEmail: plexAccount.email.toLowerCase(), providerAvatar: plexAccount.thumb ?? null },
+      create: { userId, provider: 'plex', providerId: String(plexAccount.id), providerToken: authToken, providerUsername: plexAccount.username, providerEmail: plexAccount.email.toLowerCase(), providerAvatar: plexAccount.thumb ?? null },
     });
 
-    await prisma.user.update({ where: { id: userId }, data: { avatar: plexAccount.thumb } });
+    await refreshUserAvatar(userId);
     logEvent('info', 'Auth', `Plex account linked: ${plexAccount.username}`);
     return { providerUsername: plexAccount.username };
   },

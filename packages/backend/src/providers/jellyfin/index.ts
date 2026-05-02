@@ -4,6 +4,7 @@ import { logEvent } from '../../utils/logEvent.js';
 import { parseServiceConfig } from '../../utils/services.js';
 import type { Provider, AuthProvider } from '../types.js';
 import { isProviderEnabled } from '../authSettings.js';
+import { refreshUserAvatar } from '../../utils/avatarSource.js';
 
 // ─── Jellyfin API helpers ──────────────────────────────────────────
 
@@ -137,10 +138,10 @@ const jellyfinAuth: AuthProvider = {
     const avatar = getAvatarUrl(serverUrl, auth.user.id, auth.user.primaryImageTag);
     await prisma.userProvider.upsert({
       where: { userId_provider: { userId, provider: 'jellyfin' } },
-      update: { providerId: auth.userId, providerToken: auth.token, providerUsername: auth.user.name },
-      create: { userId, provider: 'jellyfin', providerId: auth.userId, providerToken: auth.token, providerUsername: auth.user.name },
+      update: { providerId: auth.userId, providerToken: auth.token, providerUsername: auth.user.name, providerAvatar: avatar ?? null },
+      create: { userId, provider: 'jellyfin', providerId: auth.userId, providerToken: auth.token, providerUsername: auth.user.name, providerAvatar: avatar ?? null },
     });
-    if (avatar) await prisma.user.update({ where: { id: userId }, data: { avatar } });
+    await refreshUserAvatar(userId);
 
     logEvent('info', 'Auth', `Jellyfin account linked: ${auth.user.name}`);
     return { providerUsername: auth.user.name };

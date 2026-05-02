@@ -1,7 +1,9 @@
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import type { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { FRONTEND_DIST } from '../utils/paths.js';
+import { FRONTEND_DIST, PROJECT_PACKAGE_JSON } from '../utils/paths.js';
+
+const APP_VERSION = JSON.parse(readFileSync(PROJECT_PACKAGE_JSON, 'utf-8')).version as string;
 
 /**
  * Production-only: serve the built frontend and fall back to `index.html` for unknown non-API
@@ -30,6 +32,16 @@ export async function registerStatic(app: FastifyInstance) {
       return reply.status(404).send({ error: 'Not found' });
     }
     reply.header('Cache-Control', 'no-store');
+    const clientV = request.cookies?.oscarr_v;
+    if (clientV && clientV !== APP_VERSION) {
+      reply.header('Clear-Site-Data', '"cache"');
+    }
+    reply.setCookie('oscarr_v', APP_VERSION, {
+      path: '/',
+      httpOnly: false,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 365,
+    });
     return reply.sendFile('index.html');
   });
 }

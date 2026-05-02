@@ -56,6 +56,7 @@ const ROUTE_PERMISSIONS: Record<string, RouteRule> = {
   'POST:/api/auth/login':                { permission: PUBLIC },
   'POST:/api/auth/link-provider':        { permission: AUTH },
   'GET:/api/auth/me':                    { permission: AUTH },
+  'PUT:/api/auth/me/avatar-source':      { permission: AUTH },
   'POST:/api/auth/logout':               { permission: AUTH },
 
   // ── TMDB (any user) ──

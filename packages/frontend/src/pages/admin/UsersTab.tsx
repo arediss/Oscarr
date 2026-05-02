@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Loader2, CheckCircle, RefreshCw, Trash2, Link, ChevronDown, UserX, UserCheck, RefreshCcw, Download } from 'lucide-react';
+import { Loader2, CheckCircle, RefreshCw, Trash2, Link, ChevronDown, UserX, UserCheck, RefreshCcw, Download, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import api from '@/lib/api';
 import { showToast, extractApiError } from '@/utils/toast';
@@ -89,9 +89,27 @@ export function UsersTab() {
       await api.put(`/admin/users/${userId}/role`, { role: newRole });
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
     } catch (err) {
-      console.error('Failed to change role:', err);
+      const code = extractApiError(err, '');
+      const msg =
+        code === 'CANNOT_DEMOTE_SELF' ? t('admin.users.cannot_demote_self', "You can't demote your own admin role.")
+        : code === 'LAST_ADMIN_LOCK' ? t('admin.users.last_admin_lock', 'At least one active admin must remain.')
+        : extractApiError(err, t('admin.users.role_change_failed', 'Failed to change role'));
+      showToast(msg, 'error');
     } finally {
       setUpdatingRoleFor(null);
+    }
+  };
+
+  const handleUnlinkProvider = async (userId: number, provider: string) => {
+    try {
+      await api.delete(`/admin/users/${userId}/providers/${provider}`);
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, providers: (u.providers || []).filter(p => p.provider !== provider) } : u));
+    } catch (err) {
+      const code = extractApiError(err, '');
+      const msg =
+        code === 'LAST_AUTH_METHOD' ? t('admin.users.last_auth_method', 'Cannot unlink the last authentication method — set a password first.')
+        : extractApiError(err, t('admin.users.unlink_failed', 'Failed to unlink provider'));
+      showToast(msg, 'error');
     }
   };
 
@@ -101,7 +119,11 @@ export function UsersTab() {
       await api.put(`/admin/users/${userId}/disabled`, { disabled });
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, disabled } : u));
     } catch (err) {
-      console.error('Failed to toggle disabled:', err);
+      const code = extractApiError(err, '');
+      const msg =
+        code === 'LAST_ADMIN_LOCK' ? t('admin.users.last_admin_lock', 'At least one active admin must remain.')
+        : extractApiError(err, t('admin.users.disable_failed', 'Failed to toggle account'));
+      showToast(msg, 'error');
     } finally {
       setTogglingDisabledFor(null);
     }
@@ -372,9 +394,19 @@ export function UsersTab() {
                   {/* Group 1 — provider badges + request count */}
                   <span className="text-xs text-ndp-text-dim tabular-nums">{u.requestCount} {t('requests.title').toLowerCase()}</span>
                   {(u.providers || []).map((p) => (
-                    <span key={p.provider} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${getProviderBadgeClass(p.provider)}`} title={p.email && p.email !== u.email ? p.email : p.username || undefined}>
-                      {p.provider.charAt(0).toUpperCase() + p.provider.slice(1)}
-                      {p.email && p.email !== u.email && <span className="ml-1 opacity-60">({p.email})</span>}
+                    <span key={p.provider} className="group relative inline-flex">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${getProviderBadgeClass(p.provider)}`} title={p.email && p.email !== u.email ? p.email : p.username || undefined}>
+                        {p.provider.charAt(0).toUpperCase() + p.provider.slice(1)}
+                        {p.email && p.email !== u.email && <span className="ml-1 opacity-60">({p.email})</span>}
+                      </span>
+                      <button
+                        onClick={() => handleUnlinkProvider(u.id, p.provider)}
+                        className="ml-0.5 hidden group-hover:inline-flex items-center justify-center w-4 h-4 rounded-full text-ndp-text-dim hover:bg-ndp-danger/20 hover:text-ndp-danger"
+                        title={t('admin.users.unlink', { provider: p.provider, defaultValue: 'Unlink {{provider}}' })}
+                        aria-label={`Unlink ${p.provider}`}
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
                     </span>
                   ))}
                   <LinkProviderDropdown

@@ -4,6 +4,7 @@ import { getAuthProvider } from '../../providers/index.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { parseId } from '../../utils/params.js';
 import { invalidateUserStateCache } from '../../middleware/rbac.js';
+import { refreshUserAvatar } from '../../utils/avatarSource.js';
 
 export async function usersRoutes(app: FastifyInstance) {
   // === USER MANAGEMENT ===
@@ -196,12 +197,27 @@ export async function usersRoutes(app: FastifyInstance) {
     const roleExists = await prisma.role.findUnique({ where: { name: role } });
     if (!roleExists) return reply.status(400).send({ error: 'Invalid role' });
 
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, displayName: true },
+    });
+    if (!target) return reply.status(404).send({ error: 'User not found' });
+
+    if (target.role === 'admin' && role !== 'admin') {
+      if (target.id === request.user.id) {
+        return reply.status(400).send({ error: 'CANNOT_DEMOTE_SELF' });
+      }
+      const adminCount = await prisma.user.count({ where: { role: 'admin', disabled: false } });
+      if (adminCount <= 1) {
+        return reply.status(400).send({ error: 'LAST_ADMIN_LOCK' });
+      }
+    }
+
     const user = await prisma.user.update({
       where: { id: userId },
       data: { role },
       select: { id: true, displayName: true, role: true },
     });
-    // Without invalidate, the 30s rbac cache kept the old role for up to 30s after a demote.
     invalidateUserStateCache(userId);
 
     logEvent('info', 'User', `${user.displayName} role changed to ${role}`);
@@ -232,6 +248,19 @@ export async function usersRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'You cannot disable your own account' });
     }
 
+    if (disabled) {
+      const target = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true, disabled: true },
+      });
+      if (target?.role === 'admin' && !target.disabled) {
+        const adminCount = await prisma.user.count({ where: { role: 'admin', disabled: false } });
+        if (adminCount <= 1) {
+          return reply.status(400).send({ error: 'LAST_ADMIN_LOCK' });
+        }
+      }
+    }
+
     const user = await prisma.user.update({
       where: { id: userId },
       data: { disabled },
@@ -241,5 +270,59 @@ export async function usersRoutes(app: FastifyInstance) {
 
     logEvent('info', 'User', `${user.displayName || user.email} ${disabled ? 'disabled' : 'enabled'}`);
     return user;
+  });
+
+  app.delete('/users/:id/providers/:provider', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id', 'provider'],
+        properties: {
+          id: { type: 'string' },
+          provider: { type: 'string', minLength: 1, maxLength: 50 },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { id, provider } = request.params as { id: string; provider: string };
+    const userId = parseId(id);
+    if (!userId) return reply.status(400).send({ error: 'Invalid ID' });
+
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, displayName: true, email: true, passwordHash: true },
+    });
+    if (!target) return reply.status(404).send({ error: 'User not found' });
+
+    const links = await prisma.userProvider.findMany({
+      where: { userId },
+      select: { id: true, provider: true },
+    });
+    const link = links.find((l) => l.provider === provider);
+    if (!link) return reply.status(404).send({ error: 'Provider link not found' });
+
+    const remainingLinks = links.filter((l) => l.provider !== provider).length;
+    const hasPassword = !!target.passwordHash;
+    if (remainingLinks === 0 && !hasPassword) {
+      return reply.status(400).send({ error: 'LAST_AUTH_METHOD' });
+    }
+
+    await prisma.userProvider.delete({ where: { id: link.id } });
+
+    // If this was the user's chosen avatar source (#169), fall back to "none" so we don't leave
+    // them pointing at a provider that no longer has a row. refreshUserAvatar then recomputes
+    // User.avatar (initials fallback in the UI).
+    const avatarState = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarSource: true },
+    });
+    if (avatarState?.avatarSource === provider) {
+      await prisma.user.update({ where: { id: userId }, data: { avatarSource: 'none' } });
+    }
+    await refreshUserAvatar(userId);
+
+    invalidateUserStateCache(userId);
+    logEvent('info', 'User', `Admin unlinked ${provider} from ${target.displayName || target.email}`);
+    return { ok: true };
   });
 }

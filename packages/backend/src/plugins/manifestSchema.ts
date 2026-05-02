@@ -45,26 +45,38 @@ const dashboardWidgetPropsSchema = z.object({
   maxSize: sizeSchema.optional(),
 }).strict();
 
+const accountSectionPropsSchema = z.object({
+  id: z.string().min(1).regex(/^[a-z0-9-]+$/, 'must be lowercase alphanumeric + dashes'),
+  label: z.string().min(1),                       // i18n key or literal label
+  icon: z.string().min(1),                        // Lucide icon name
+  permission: z.string().optional(),              // RBAC gate (e.g. "subscription.view")
+}).strict();
+
 const uiContribution = z.object({
   hookPoint: z.string().min(1),
   props: z.record(z.unknown()),
   order: z.number().optional(),
 }).strict().superRefine((data, ctx) => {
-  // For the dashboard widget hook, validate props with the dedicated schema so a malformed
-  // contribution is rejected at plugin load instead of crashing the dashboard at render.
-  if (data.hookPoint === 'admin.dashboard.widget') {
-    const result = dashboardWidgetPropsSchema.safeParse(data.props);
-    if (!result.success) {
-      for (const issue of result.error.issues) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['props', ...issue.path],
-          message: issue.message,
-        });
-      }
+  // Per-hook props validation so a malformed contribution is rejected at plugin load
+  // instead of crashing the host at render time.
+  const propsValidator = HOOK_POINT_PROPS_SCHEMAS[data.hookPoint];
+  if (!propsValidator) return;
+  const result = propsValidator.safeParse(data.props);
+  if (!result.success) {
+    for (const issue of result.error.issues) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['props', ...issue.path],
+        message: issue.message,
+      });
     }
   }
 });
+
+const HOOK_POINT_PROPS_SCHEMAS: Record<string, z.ZodTypeAny> = {
+  'admin.dashboard.widget': dashboardWidgetPropsSchema,
+  'account.section': accountSectionPropsSchema,
+};
 
 const routesDef = z.object({
   prefix: z.string().min(1).startsWith('/'),

@@ -2,6 +2,8 @@ export interface UserProviderInfo {
   provider: string;
   username?: string | null;
   email?: string | null;
+  /** Avatar URL fetched from this provider — used by the avatar source picker. */
+  avatar?: string | null;
 }
 
 export interface User {
@@ -9,6 +11,11 @@ export interface User {
   email: string;
   displayName: string | null;
   avatar: string | null;
+  /** Which linked provider supplies the avatar. `null` = legacy/auto, `"none"` = initials fallback,
+   *  `"dicebear"` = self-generated SVG, otherwise a provider id (matches an entry in `providers[].provider`). */
+  avatarSource?: string | null;
+  /** JSON-encoded `{ style, seed }` for the dicebear editor — null when avatarSource isn't dicebear. */
+  avatarConfig?: string | null;
   /** Role name — 'admin'/'user' are the built-in system roles; admins can create custom roles at runtime. */
   role: string;
   disabled?: boolean;

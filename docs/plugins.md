@@ -664,7 +664,7 @@ There are two types of hook points:
 | `media.card.overlay` | Overlay on media card hover | `media`, `type`, `availability` | Component |
 | `home.rows` | Additional rows on home page | — | Component |
 | `header.actions` | Actions in the header bar (before notification bell) | `user` | Component |
-| `avatar.menu` | Items in the avatar dropdown (before logout) | `user`, `isAdmin` | Component |
+| `account.section` | A user-account modal section (sidebar entry + content pane) | `user`, `hasPermission`, `close` | Component |
 | `admin.dashboard.widget` | Draggable widget on admin Dashboard tab | `widgetId` | Component |
 
 ### Component hooks
@@ -720,7 +720,27 @@ Plugin frontend components are wrapped in an error boundary. If a plugin compone
 }
 ```
 
-Icons use [Lucide React](https://lucide.dev/icons/) icon names.
+Icon names refer to [Lucide React](https://lucide.dev/icons/), but **only icons explicitly added
+to Oscarr's curated allowlist** render — anything else falls back to a `Puzzle` placeholder (and
+emits a console warning in dev). The allowlist is curated for bundle-size reasons (tree-shaking).
+
+### Available icons
+
+The current allowlist (defined in [`packages/frontend/src/plugins/DynamicIcon.tsx`](../packages/frontend/src/plugins/DynamicIcon.tsx)):
+
+`Activity` · `AlertCircle` · `AlertTriangle` · `Award` · `BarChart3` · `Bell` · `Bookmark` ·
+`BookOpen` · `Bot` · `Calendar` · `Check` · `CheckCircle` · `ChevronDown` · `ChevronUp` ·
+`Clock` · `Cloud` · `Code` · `Coins` · `Copy` · `Cpu` · `CreditCard` · `Crown` · `Database` ·
+`Download` · `ExternalLink` · `Eye` · `EyeOff` · `File` · `FileText` · `Film` · `Filter` ·
+`Flag` · `Folder` · `Gauge` · `Gift` · `Globe` · `Grid3x3` · `HardDrive` · `Heart` · `Home` ·
+`Image` · `Info` · `Key` · `Layers` · `LayoutDashboard` · `List` · `Loader2` · `Lock` · `Mail` ·
+`MessageSquare` · `Music` · `Package` · `Palette` · `PieChart` · `Play` · `Plug` · `Power` ·
+`Puzzle` · `RefreshCw` · `Rocket` · `ScrollText` · `Search` · `Send` · `Server` · `Settings` ·
+`Shield` · `Sparkles` · `Star` · `Tag` · `Terminal` · `Timer` · `Trash2` · `TrendingUp` ·
+`Trophy` · `Tv` · `Upload` · `User` · `UserCheck` · `Users` · `Video` · `Wrench` · `Zap`
+
+Need an icon that isn't listed? Open a PR adding the import + map entry in `DynamicIcon.tsx` and
+appending it to this list. Keep additions minimal — every icon ships in the core bundle.
 
 ### Admin tab
 

@@ -9,7 +9,6 @@ import { usePluginsTab } from './plugins/usePluginsTab';
 import { usePluginsDir } from '@/hooks/usePluginsDir';
 import { InstalledList } from './plugins/InstalledList';
 import { DiscoverList } from './plugins/DiscoverList';
-import { ManualInstallModal } from './plugins/ManualInstallModal';
 import { PluginDocsModal } from './plugins/PluginDocsModal';
 import type { RegistryPlugin, SubTab } from './plugins/constants';
 
@@ -40,7 +39,6 @@ export function PluginsTab() {
   };
   const [showHowTo, setShowHowTo] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
-  const [expandedInstall, setExpandedInstall] = useState<string | null>(null);
   const pluginsDir = usePluginsDir();
 
   /** Consent-first install: click Install → modal shows services + capabilities →
@@ -79,8 +77,6 @@ export function PluginsTab() {
 
   const updatesAvailable = plugins.filter((p) => p.updateAvailable).length;
   const installedIds = new Set(plugins.map((p) => p.id));
-
-  const expandedPlugin = expandedInstall ? registry.find((p) => p.id === expandedInstall) ?? null : null;
 
   return (
     <AdminTabLayout>
@@ -189,7 +185,6 @@ export function PluginsTab() {
           installMessage={installMessage}
           onRetry={fetchRegistry}
           onInstall={handleInstall}
-          onExpandManual={setExpandedInstall}
           onManage={() => setSubTab('installed')}
         />
       )}
@@ -202,10 +197,6 @@ export function PluginsTab() {
         onCancel={() => setInstallConsent(null)}
         onConfirm={() => installConsent && doInstall(installConsent)}
       />
-
-      {expandedPlugin && (
-        <ManualInstallModal plugin={expandedPlugin} onClose={() => setExpandedInstall(null)} />
-      )}
 
       {showHowTo && <PluginDocsModal onClose={() => setShowHowTo(false)} />}
     </AdminTabLayout>

@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dicebear/avataaars": "^9.4.2",
+    "@dicebear/core": "^9.4.2",
     "@fontsource/inter": "^5.2.8",
     "@oscarr/shared": "*",
     "@tanstack/react-virtual": "^3.13.24",

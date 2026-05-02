@@ -281,41 +281,47 @@ export function DashboardGrid() {
             </button>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-0.5">
           {!editMode ? (
             <button
               onClick={enterEdit}
-              className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text hover:bg-ndp-surface-hover"
+              className="p-2 rounded-lg text-ndp-text-muted hover:text-ndp-text hover:bg-white/5 transition-colors"
+              title="Edit"
+              aria-label="Edit"
             >
-              <Pencil className="h-3.5 w-3.5" /> Edit
+              <Pencil className="w-4 h-4" />
             </button>
           ) : (
             <>
               <button
                 onClick={() => setPickerOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text hover:bg-ndp-surface-hover"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-ndp-surface-light hover:bg-ndp-surface-hover px-3 py-1.5 text-xs font-medium text-ndp-text transition-colors"
               >
-                <Plus className="h-3.5 w-3.5" /> Add widget
+                <Plus className="w-3.5 h-3.5" /> Add widget
               </button>
               <button
                 onClick={() => setResetOpen(true)}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/5 bg-ndp-surface-light text-ndp-text hover:bg-ndp-surface-hover"
+                className="p-2 rounded-lg text-ndp-text-muted hover:text-ndp-danger hover:bg-ndp-danger/10 transition-colors"
                 title="Reset to default"
                 aria-label="Reset to default"
               >
-                <RotateCcw className="h-3.5 w-3.5" />
+                <RotateCcw className="w-4 h-4" />
               </button>
               <button
                 onClick={cancel}
-                className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-ndp-surface-light px-2.5 py-1 text-xs font-medium text-ndp-text hover:bg-ndp-surface-hover"
+                className="p-2 rounded-lg text-ndp-text-muted hover:text-ndp-text hover:bg-white/5 transition-colors"
+                title="Cancel"
+                aria-label="Cancel"
               >
-                <X className="h-3.5 w-3.5" /> Cancel
+                <X className="w-4 h-4" />
               </button>
               <button
                 onClick={onSave}
-                className="inline-flex items-center gap-1.5 rounded-md bg-ndp-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-ndp-accent-hover"
+                className="p-2 rounded-lg text-ndp-accent hover:bg-ndp-accent/10 transition-colors"
+                title="Save"
+                aria-label="Save"
               >
-                <Save className="h-3.5 w-3.5" /> Save
+                <Save className="w-4 h-4" />
               </button>
             </>
           )}

@@ -1,19 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bell, Check, CheckCheck, Trash2, X } from 'lucide-react';
+import { Bell, CheckCheck, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useNotifications } from '@/hooks/useNotifications';
-
-function timeAgo(dateStr: string, t: (key: string) => string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return t('notifications.just_now');
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
-}
+import NotificationList from '@/components/NotificationList';
 
 interface NotificationBellProps {
   dropdownDirection?: 'below' | 'above';
@@ -21,7 +11,7 @@ interface NotificationBellProps {
 
 export default function NotificationBell({ dropdownDirection = 'below' }: NotificationBellProps = {}) {
   const { t } = useTranslation();
-  const { notifications, unreadCount, markAsRead, markAllRead, dismiss } = useNotifications();
+  const { unreadCount, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -35,26 +25,11 @@ export default function NotificationBell({ dropdownDirection = 'below' }: Notifi
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const typeIcon = (type: string) => {
-    if (type === 'request_approved') return '✓';
-    if (type === 'request_declined') return '✗';
-    if (type === 'media_available') return '▶';
-    if (type === 'support_reply') return '💬';
-    return '•';
-  };
-
-  const typeColor = (type: string) => {
-    if (type === 'request_approved') return 'text-green-400';
-    if (type === 'request_declined') return 'text-red-400';
-    if (type === 'media_available') return 'text-ndp-accent';
-    if (type === 'support_reply') return 'text-blue-400';
-    return 'text-ndp-text-muted';
-  };
-
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative group" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
+        aria-label={t('notifications.title')}
         className="relative p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg hover:bg-white/5 transition-colors"
       >
         <Bell className="w-5 h-5" />
@@ -64,6 +39,14 @@ export default function NotificationBell({ dropdownDirection = 'below' }: Notifi
           </span>
         )}
       </button>
+      {!open && (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 rounded-md bg-ndp-surface border border-white/10 text-xs text-ndp-text whitespace-nowrap shadow-lg shadow-black/40 z-50 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-[opacity,transform] duration-100"
+        >
+          {t('notifications.title')}
+        </span>
+      )}
 
       {open && (
         <div className={clsx(
@@ -95,63 +78,8 @@ export default function NotificationBell({ dropdownDirection = 'below' }: Notifi
           </div>
 
           {/* List */}
-          <div className="max-h-80 overflow-y-auto">
-            {notifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-ndp-text-dim">
-                {t('notifications.no_notifications')}
-              </div>
-            ) : (
-              notifications.map((notif) => (
-                <div
-                  key={notif.id}
-                  className={clsx(
-                    'group flex items-start gap-3 px-4 py-3 hover:bg-white/5 transition-colors cursor-pointer border-b border-white/5 last:border-0',
-                    !notif.read && 'bg-ndp-accent/5'
-                  )}
-                  onClick={() => { if (!notif.read) markAsRead(notif.id); }}
-                >
-                  {/* Type indicator */}
-                  <span className={clsx('text-lg mt-0.5 flex-shrink-0', typeColor(notif.type))}>
-                    {typeIcon(notif.type)}
-                  </span>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <p className={clsx('text-sm truncate', notif.read ? 'text-ndp-text-muted' : 'text-ndp-text font-medium')}>
-                      {notif.title?.startsWith('notifications.msg.')
-                        ? t(notif.title, (notif.metadata?.msgParams as Record<string, unknown>) || {})
-                        : notif.title}
-                    </p>
-                    <p className="text-xs text-ndp-text-dim mt-0.5 line-clamp-2">
-                      {notif.message?.startsWith('notifications.msg.')
-                        ? t(notif.message, (notif.metadata?.msgParams as Record<string, unknown>) || {})
-                        : notif.message}
-                    </p>
-                    <p className="text-[10px] text-ndp-text-dim mt-1">{timeAgo(notif.createdAt, t)}</p>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    {!notif.read && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); markAsRead(notif.id); }}
-                        className="p-1 text-ndp-text-dim hover:text-ndp-accent rounded hover:bg-white/5"
-                        title={t('notifications.mark_read')}
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); dismiss(notif.id); }}
-                      className="p-1 text-ndp-text-dim hover:text-ndp-danger rounded hover:bg-white/5"
-                      title={t('notifications.dismiss')}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
+          <div className="max-h-96 overflow-y-auto">
+            <NotificationList onAction={() => setOpen(false)} />
           </div>
         </div>
       )}

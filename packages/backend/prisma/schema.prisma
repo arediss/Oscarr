@@ -12,7 +12,9 @@ model User {
   email                 String    @unique
   displayName           String?
   passwordHash          String?
-  avatar                String?
+  avatar                String?   // resolved/cached URL — derived from avatarSource + matching UserProvider.providerAvatar (or the dicebear data URI)
+  avatarSource          String?   // null = legacy/auto, "none" = initials fallback, "dicebear" = generated, otherwise a linked provider id ("plex", "discord", ...)
+  avatarConfig          String?   // JSON for the dicebear generator: { style, seed } — lets the editor restore the user's choice next time
   role                  String    @default("user") // "admin" | "user"
   disabled              Boolean   @default(false) // true = login blocked or friendly-gated depending on AppSettings.disabledLoginMode
   createdAt             DateTime  @default(now())
@@ -47,6 +49,7 @@ model UserProvider {
   providerToken     String?   // OAuth token for API calls
   providerUsername  String?   // Username from the provider
   providerEmail     String?   // Email from the provider (may differ from user email)
+  providerAvatar    String?   // Avatar URL fetched from this provider (used by avatar source picker)
   createdAt         DateTime  @default(now())
 
   user              User @relation(fields: [userId], references: [id], onDelete: Cascade)

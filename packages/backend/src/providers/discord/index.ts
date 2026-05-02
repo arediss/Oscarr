@@ -211,7 +211,14 @@ const discordAuth: AuthProvider = {
           username: string;
           email?: string;
           global_name?: string;
+          avatar?: string | null;
         };
+        // Discord serves custom avatars from the CDN; the `avatar` field is just the hash. The
+        // `a_` prefix marks animated avatars (we keep PNG anyway for size). Skip default avatars
+        // entirely — they're bland fallbacks the user likely doesn't want.
+        const discordAvatarUrl = profile.avatar
+          ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png?size=256`
+          : null;
 
         // Guild gate — applies to both login and link flows. Keeps Oscarr access scoped to a
         // known community so random Discord users can't create accounts by hitting the button.
@@ -229,6 +236,7 @@ const discordAuth: AuthProvider = {
               userId: record.userId,
               providerUsername: profile.username,
               providerEmail: profile.email ?? null,
+              providerAvatar: discordAvatarUrl,
             },
             create: {
               userId: record.userId,
@@ -236,8 +244,11 @@ const discordAuth: AuthProvider = {
               providerId: profile.id,
               providerUsername: profile.username,
               providerEmail: profile.email ?? null,
+              providerAvatar: discordAvatarUrl,
             },
           });
+          const { refreshUserAvatar } = await import('../../utils/avatarSource.js');
+          await refreshUserAvatar(record.userId);
           return reply.redirect('/profile?linked=discord');
         }
 
@@ -253,6 +264,7 @@ const discordAuth: AuthProvider = {
             providerEmail: profile.email,
             email: profile.email ?? `${profile.id}@discord.local`,
             displayName,
+            avatar: discordAvatarUrl,
           });
         } catch (err) {
           if ((err as Error).message === 'SIGNUP_NOT_ALLOWED') {

@@ -64,7 +64,7 @@ export function InstalledList({
               <PluginInitial name={plugin.name} />
               <div className="min-w-0 flex-1">
                 <h3 className="text-sm font-semibold text-ndp-text truncate">{plugin.name}</h3>
-                <p className="text-xs text-ndp-text-dim mt-0.5">
+                <p className="text-xs text-ndp-text-dim mt-0.5 truncate">
                   v{plugin.version}
                   {plugin.author && <> · {plugin.author}</>}
                 </p>
@@ -74,22 +74,26 @@ export function InstalledList({
             {(hasUpdate || plugin.compat?.status === 'untested' || plugin.compat?.status === 'incompatible' || hasError) && (
               <div className="flex items-center gap-1.5 flex-wrap">
                 {hasUpdate && plugin.latestVersion && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-ndp-accent/15 text-ndp-accent font-medium">
+                  <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-ndp-accent/10 text-ndp-accent font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-ndp-accent" />
                     v{plugin.latestVersion} available
                   </span>
                 )}
                 {plugin.compat?.status === 'untested' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-medium" title={plugin.compat.reason}>
+                  <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-white/[0.04] text-ndp-text-muted ring-1 ring-white/5" title={plugin.compat.reason}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                     Untested
                   </span>
                 )}
                 {plugin.compat?.status === 'incompatible' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-ndp-danger/15 text-ndp-danger font-medium" title={plugin.compat.reason}>
+                  <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-ndp-danger/10 text-ndp-danger font-medium" title={plugin.compat.reason}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-ndp-danger" />
                     Incompatible
                   </span>
                 )}
                 {hasError && (
-                  <span className="text-xs bg-ndp-danger/10 text-ndp-danger px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-ndp-danger/10 text-ndp-danger font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-ndp-danger" />
                     {t('common.error')}
                   </span>
                 )}

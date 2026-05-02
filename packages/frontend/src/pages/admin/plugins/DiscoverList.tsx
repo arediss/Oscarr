@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { AlertTriangle, Check, Download, ExternalLink, Loader2, Package, Star, Terminal } from 'lucide-react';
+import { AlertTriangle, Check, Download, ExternalLink, Loader2, Package, Star } from 'lucide-react';
 import { PluginInitial } from './PluginCardChrome';
 import { CATEGORY_CONFIG, TAG_CONFIG, type RegistryPlugin } from './constants';
 import type { InstallMessage } from './usePluginsTab';
@@ -13,16 +13,14 @@ interface DiscoverListProps {
   installMessage: InstallMessage | null;
   onRetry: () => void;
   onInstall: (entry: RegistryPlugin) => void;
-  onExpandManual: (id: string) => void;
   onManage: () => void;
 }
 
 /** Discover grid — browse the GitHub plugin registry, install with a click (consent happens in
- *  the parent through PluginConsentModal), or expand the Terminal icon for manual git-clone
- *  instructions (admin escape hatch when the automatic install can't reach the registry). */
+ *  the parent through PluginConsentModal). */
 export function DiscoverList({
   registry, registryLoading, registryError, installedIds,
-  installing, installMessage, onRetry, onInstall, onExpandManual, onManage,
+  installing, installMessage, onRetry, onInstall, onManage,
 }: DiscoverListProps) {
   return (
     <div className="space-y-5">
@@ -80,10 +78,16 @@ export function DiscoverList({
                   <div className="flex items-start gap-3">
                     <PluginInitial name={plugin.name} />
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-sm font-semibold text-ndp-text truncate">{plugin.name}</h3>
-                      <p className="text-xs text-ndp-text-dim mt-0.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3 className="text-sm font-semibold text-ndp-text truncate">{plugin.name}</h3>
+                        {isInstalled && (
+                          <Check className="w-3.5 h-3.5 text-ndp-success flex-shrink-0" aria-label="Installed" />
+                        )}
+                      </div>
+                      <p className="text-xs text-ndp-text-dim mt-0.5 truncate">
                         v{plugin.version}
                         {plugin.author && <> · {plugin.author}</>}
+                        {' · '}{cat.label}
                       </p>
                     </div>
                     <a
@@ -97,24 +101,24 @@ export function DiscoverList({
                     </a>
                   </div>
 
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', cat.color)}>
-                      {cat.label}
-                    </span>
-                    {plugin.tags?.map((tag) => {
-                      const tagCfg = TAG_CONFIG[tag] || { label: tag, color: 'bg-white/5 text-ndp-text-dim' };
-                      return (
-                        <span key={tag} className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', tagCfg.color)}>
-                          {tagCfg.label}
-                        </span>
-                      );
-                    })}
-                    {isInstalled && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-ndp-success/15 text-ndp-success font-medium">
-                        Installed
-                      </span>
-                    )}
-                  </div>
+                  {plugin.tags && plugin.tags.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {plugin.tags.map((tag) => {
+                        const tagCfg = TAG_CONFIG[tag] || { label: tag };
+                        return (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-white/[0.04] text-ndp-text-muted ring-1 ring-white/5"
+                          >
+                            {tagCfg.dot && (
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tagCfg.dot }} />
+                            )}
+                            {tagCfg.label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   <div className="flex-1 min-h-[2.5rem]">
                     {plugin.description && (
@@ -138,42 +142,33 @@ export function DiscoverList({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 pt-3 border-t border-white/5">
+                  <div className="pt-3 border-t border-white/5">
                     {isInstalled ? (
                       <button
                         onClick={onManage}
-                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-ndp-text-muted transition-colors"
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-ndp-text-muted bg-white/[0.04] hover:bg-white/[0.07] ring-1 ring-white/5 transition-colors"
                       >
                         <Package className="w-4 h-4" />
                         Manage
                       </button>
                     ) : (
-                      <>
-                        <button
-                          onClick={() => onInstall(plugin)}
-                          disabled={installing === plugin.id}
-                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-ndp-accent hover:bg-ndp-accent/90 disabled:opacity-50 rounded-lg text-sm text-white font-medium transition-colors"
-                        >
-                          {installing === plugin.id ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Installing…
-                            </>
-                          ) : (
-                            <>
-                              <Download className="w-4 h-4" />
-                              Install
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={() => onExpandManual(plugin.id)}
-                          className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-ndp-text-dim hover:text-ndp-text transition-colors"
-                          title="Manual install (advanced)"
-                        >
-                          <Terminal className="w-4 h-4" />
-                        </button>
-                      </>
+                      <button
+                        onClick={() => onInstall(plugin)}
+                        disabled={installing === plugin.id}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ring-1 ring-ndp-accent/30 text-ndp-accent bg-ndp-accent/[0.06] hover:bg-ndp-accent hover:text-white hover:ring-ndp-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {installing === plugin.id ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Installing…
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4" />
+                            Install
+                          </>
+                        )}
+                      </button>
                     )}
                   </div>
                 </div>

@@ -240,29 +240,30 @@ function HeroCarousel({ trending, loading }: { trending: TmdbMedia[]; loading: b
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 mt-6 w-48">
-              {trending.slice(0, 5).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => changeHero(i)}
-                  aria-label={t('home.goto_slide', { n: i + 1 })}
-                  style={{ transform: i === heroIndex ? 'scale(1.15)' : 'scale(1)' }}
-                  className="relative flex-1 h-1.5 rounded-full bg-white/20 hover:bg-white/30 overflow-hidden transition-[transform,background-color] duration-300 ease-out"
-                >
-                  {i === heroIndex ? (
-                    <div
-                      key={progressKey}
-                      className="absolute inset-0 bg-ndp-accent origin-left"
-                      style={{ transform: 'scaleX(0)', animation: 'heroProgress 8s linear forwards' }}
-                    />
-                  ) : (
-                    <div
-                      className="absolute inset-0 bg-ndp-accent origin-left"
-                      style={{ transform: i < heroIndex ? 'scaleX(1)' : 'scaleX(0)' }}
-                    />
-                  )}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 mt-6">
+              {trending.slice(0, 5).map((_, i) => {
+                const active = i === heroIndex;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => changeHero(i)}
+                    aria-label={t('home.goto_slide', { n: i + 1 })}
+                    className={`relative h-1.5 rounded-full overflow-hidden transition-[width,background-color] duration-300 ease-out ${
+                      active
+                        ? 'w-12 bg-white/20'
+                        : 'w-1.5 bg-white/30 hover:bg-white/50'
+                    }`}
+                  >
+                    {active && (
+                      <div
+                        key={progressKey}
+                        className="absolute inset-0 bg-ndp-accent origin-left"
+                        style={{ transform: 'scaleX(0)', animation: 'heroProgress 8s linear forwards' }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

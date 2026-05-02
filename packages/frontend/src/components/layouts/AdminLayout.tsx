@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Menu, X, Search, ArrowUpCircle, ExternalLink, AlertCircle } from 'lucide-react';
+import { Menu, X, Search, ArrowUpCircle, ExternalLink, AlertCircle, Bell, CheckCheck, ChevronLeft, Home } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // Diacritic-insensitive lowercase so "systeme" matches "Système" and "acces" matches "Accès".
@@ -22,6 +22,9 @@ import { usePluginUI } from '@/plugins/usePlugins';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
 import { UserCluster } from '@/components/nav/UserCluster';
 import NotificationBell from '@/components/NotificationBell';
+import NotificationList from '@/components/NotificationList';
+import { useNotifications } from '@/hooks/useNotifications';
+import { AdminJumpButton } from '@/components/nav/AdminJumpButton';
 import SetupChecklistMenu from '@/components/nav/SetupChecklistMenu';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -33,9 +36,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { contributions: pluginTabs } = usePluginUI('admin.tabs');
   const versionInfo = useVersionInfo();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<'main' | 'notifications'>('main');
   const [warnings, setWarnings] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [viewAsRole, setViewAsRoleState] = useState<string | null>(sessionStorage.getItem('view-as-role'));
+  const { unreadCount, markAllRead } = useNotifications();
+
+  useEffect(() => {
+    if (!drawerOpen) setMobileView('main');
+  }, [drawerOpen]);
 
   // `sidebarContent` is rendered twice (desktop aside + mobile drawer), so a plain ref would
   // get overwritten by whichever input mounts last — which on desktop is the hidden drawer copy.
@@ -373,16 +382,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const headerLabel = activeGroup ? t(activeGroup.label) : activePluginTabItem?.label ?? '';
 
   const mobileTopBar = (
-    <header className="h-14 flex-shrink-0">
-      <div className="max-w-[1800px] mx-auto h-full flex items-center justify-between px-4 sm:px-6">
+    <header className="h-16 flex-shrink-0">
+      <div className="max-w-[1800px] mx-auto h-full flex items-center px-4 sm:px-6">
         <div className="flex items-center gap-3 min-w-0">
           {headerIcon}
           <h1 className="text-base font-semibold text-ndp-text truncate">{headerLabel}</h1>
-        </div>
-        <div className="flex items-center gap-1">
-          <SetupChecklistMenu />
-          <NotificationBell />
-          <UserCluster viewAsRole={viewAsRole} onViewAsRoleChange={setViewAsRole} variant="compact" />
         </div>
       </div>
     </header>
@@ -392,10 +396,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
    *  Search is absolutely positioned so the wordmark length doesn't shift it (matches the
    *  /home topbar layout). */
   const desktopTopBar = (
-    <header className="h-14 flex-shrink-0">
+    <header className="h-16 flex-shrink-0">
       <div
         className="h-full relative flex items-center gap-4 pl-3 sm:pl-4"
-        style={{ paddingRight: 'max(1rem, calc((100vw - 1800px) / 2 + 1.5rem))' }}
+        style={{ paddingRight: 'max(1.5rem, calc((100vw - 1800px) / 2 + 1.5rem))' }}
       >
         <p className="text-lg font-bold text-ndp-text tracking-tight flex-shrink-0 relative z-10" role="presentation">
           {features.siteName || 'Oscarr'}
@@ -418,8 +422,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 ml-auto flex-shrink-0 relative z-10">
+        <div className="flex items-center gap-2 ml-auto flex-shrink-0 relative z-10">
           <SetupChecklistMenu />
+          <AdminJumpButton />
           <NotificationBell />
           <UserCluster viewAsRole={viewAsRole} onViewAsRoleChange={setViewAsRole} variant="compact" />
         </div>
@@ -439,18 +444,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {sidebarBody(false)}
       </aside>
 
-      {/* Mobile bottom nav — menu button + active tab label. Avatar + bell on mobile live in
-          the top bar (same as desktop) so we don't overcrowd the bottom strip. */}
+      {/* Mobile bottom nav — menu button + active tab label. Avatar/notif/admin-jump live in
+          the drawer rows (matching the home layout) so the bottom strip stays minimal. */}
       <div
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-ndp-surface/95 backdrop-blur-xl border-t border-white/5 flex items-center h-14 px-3 gap-2"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <button
           onClick={() => setDrawerOpen(true)}
-          className="p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg hover:bg-white/5 transition-colors"
+          className="relative p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg hover:bg-white/5 transition-colors"
           aria-label={t('admin.open_menu', 'Open admin menu')}
         >
           <Menu className="w-5 h-5" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 w-2 h-2 bg-ndp-accent rounded-full animate-pulse" />
+          )}
         </button>
         <h1 className="text-sm font-semibold text-ndp-text truncate flex-1 min-w-0">
           {t(activeTabLabel)}
@@ -473,14 +481,116 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         aria-hidden={!drawerOpen}
       >
-        <button
-          onClick={() => setDrawerOpen(false)}
-          className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-white/5 transition-colors z-10"
-          aria-label={t('common.close', 'Close')}
-        >
-          <X className="w-4 h-4 text-ndp-text-muted" />
-        </button>
-        {sidebarBody(true)}
+        <div className="flex items-center justify-between px-4 h-14 border-b border-white/5 flex-shrink-0">
+          {mobileView === 'notifications' ? (
+            <button
+              onClick={() => setMobileView('main')}
+              className="flex items-center gap-1.5 -ml-1.5 px-1.5 py-1 rounded-lg hover:bg-white/5 transition-colors"
+              aria-label={t('common.back', 'Back')}
+            >
+              <ChevronLeft className="w-4 h-4 text-ndp-text-muted" />
+              <span className="text-base font-bold text-ndp-text">{t('notifications.title')}</span>
+            </button>
+          ) : (
+            <span className="text-base font-bold text-ndp-text tracking-tight">
+              {features.siteName || 'Oscarr'}
+            </span>
+          )}
+          <div className="flex items-center gap-1">
+            {mobileView === 'notifications' && unreadCount > 0 && (
+              <button
+                onClick={() => markAllRead()}
+                className="flex items-center gap-1 text-xs text-ndp-text-dim hover:text-ndp-accent transition-colors px-2 py-1 rounded hover:bg-white/5"
+                title={t('notifications.mark_all_read')}
+              >
+                <CheckCheck className="w-3.5 h-3.5" />
+                <span>{t('notifications.mark_all_read')}</span>
+              </button>
+            )}
+            <button
+              onClick={() => setDrawerOpen(false)}
+              className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+              aria-label={t('common.close', 'Close')}
+            >
+              <X className="w-4 h-4 text-ndp-text-muted" />
+            </button>
+          </div>
+        </div>
+
+        {mobileView === 'main' ? (
+          <div className="flex-1 overflow-y-auto flex flex-col">
+            <div className="px-3 pt-3 pb-2">
+              <UserCluster
+                viewAsRole={viewAsRole}
+                onViewAsRoleChange={setViewAsRole}
+                variant="expanded"
+              />
+            </div>
+            <div className="h-px bg-white/5 mx-3" />
+
+            <div className="px-3 pt-3 pb-2">
+              {searchInput}
+            </div>
+
+            <nav className="px-3 pb-3 space-y-0.5">
+              {searchResults !== null ? (
+                searchResults.length === 0 ? (
+                  <p className="px-3 py-6 text-xs text-ndp-text-dim text-center">
+                    {t('admin.sidebar.search_no_results', 'Aucun résultat')}
+                  </p>
+                ) : (
+                  searchResults.map(renderSearchResult)
+                )
+              ) : tabList}
+            </nav>
+
+            <div className="h-px bg-white/5 mx-3" />
+
+            <div className="px-3 py-3 space-y-0.5">
+              <button
+                onClick={() => setMobileView('notifications')}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-ndp-text-muted hover:text-ndp-text hover:bg-white/5 transition-colors"
+              >
+                <Bell className="w-5 h-5 flex-shrink-0" />
+                <span className="flex-1 text-left truncate">{t('notifications.title')}</span>
+                {unreadCount > 0 && (
+                  <span className="min-w-[20px] h-5 flex items-center justify-center rounded-full bg-ndp-accent text-[10px] font-bold text-white px-1.5">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <Link
+                to="/"
+                onClick={() => setDrawerOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-ndp-text-muted hover:text-ndp-accent hover:bg-white/5 transition-colors"
+              >
+                <Home className="w-5 h-5 flex-shrink-0" />
+                <span className="truncate">{t('admin.back_to_app', 'Retour Oscarr')}</span>
+              </Link>
+            </div>
+
+            {versionInfo?.updateAvailable && versionInfo.latest && (
+              <a
+                href={versionInfo.releaseUrl || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mx-3 mb-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-ndp-accent/10 border border-ndp-accent/20 text-ndp-accent text-xs font-medium hover:bg-ndp-accent/15 transition-colors"
+              >
+                <ArrowUpCircle className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1 min-w-0">
+                  <span className="block truncate">{t('admin.sidebar.update_available', 'Update available')}</span>
+                  <span className="block text-[10px] text-ndp-accent/70 font-normal">v{versionInfo.latest}</span>
+                </span>
+                <ExternalLink className="w-3 h-3 flex-shrink-0" />
+              </a>
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto">
+            <NotificationList actionsAlwaysVisible onAction={() => setDrawerOpen(false)} />
+          </div>
+        )}
       </aside>
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">

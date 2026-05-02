@@ -7,6 +7,10 @@ interface AuthContextType {
   loading: boolean;
   login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
+  /** Re-fetch /auth/me and update the user/permissions in context. Call after a mutation that
+   *  changed user state on the server (e.g. picking an avatar source) so every consumer reads
+   *  the same fresh value. */
+  refreshUser: () => Promise<void>;
   isAdmin: boolean;
   hasAccess: boolean;
   permissions: string[];
@@ -87,8 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasAccess = isAdmin || (user?.providers ?? []).length > 0;
 
   const value = useMemo(
-    () => ({ user, loading, login, logout, isAdmin, hasAccess, permissions, hasPermission }),
-    [user, loading, login, logout, isAdmin, hasAccess, permissions, hasPermission],
+    () => ({ user, loading, login, logout, refreshUser: fetchUser, isAdmin, hasAccess, permissions, hasPermission }),
+    [user, loading, login, logout, fetchUser, isAdmin, hasAccess, permissions, hasPermission],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

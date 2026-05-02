@@ -6,6 +6,7 @@ import { getAuthProviders, getAuthProvider, getAuthProviderConfigs } from '../pr
 import { getProviderConfig, isProviderEnabled } from '../providers/authSettings.js';
 import type { AuthHelpers } from '../providers/types.js';
 import { getPermissionsForRole } from '../middleware/rbac.js';
+import { refreshUserAvatar } from '../utils/avatarSource.js';
 
 function buildHelpers(app: FastifyInstance): AuthHelpers {
   return {
@@ -101,6 +102,7 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
                 providerToken: opts.providerToken,
                 providerUsername: opts.providerUsername,
                 providerEmail: opts.providerEmail,
+                providerAvatar: opts.avatar ?? null,
               },
             },
           },
@@ -116,6 +118,7 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
           providerToken: opts.providerToken,
           providerUsername: opts.providerUsername,
           providerEmail: opts.providerEmail,
+          providerAvatar: opts.avatar ?? null,
         },
         create: {
           userId: user.id,
@@ -124,15 +127,20 @@ function buildHelpers(app: FastifyInstance): AuthHelpers {
           providerToken: opts.providerToken,
           providerUsername: opts.providerUsername,
           providerEmail: opts.providerEmail,
+          providerAvatar: opts.avatar ?? null,
         },
       });
 
-      user = await prisma.user.update({
+      // Display name still merges from the provider on first contact, but we let
+      // refreshUserAvatar own the avatar field — it picks the right URL based on the user's
+      // chosen avatarSource (or the first available one for legacy accounts).
+      await prisma.user.update({
         where: { id: user.id },
-        data: {
-          displayName: user.displayName || opts.displayName,
-          avatar: opts.avatar || user.avatar,
-        },
+        data: { displayName: user.displayName || opts.displayName },
+      });
+      await refreshUserAvatar(user.id);
+      user = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
         include: { providers: true },
       });
 
@@ -190,7 +198,7 @@ export async function authRoutes(app: FastifyInstance) {
           displayName: result.displayName,
           passwordHash: result.providerData.passwordHash as string,
           role: isFirstUser ? 'admin' : 'user',
-          providers: { create: { provider: 'email', providerId: result.email } },
+          providers: { create: { provider: 'email', providerId: result.email, providerUsername: result.displayName, providerEmail: result.email } },
         },
       });
 
@@ -298,13 +306,84 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({
       where: { id },
       select: {
-        id: true, email: true, displayName: true, avatar: true, role: true, createdAt: true,
-        providers: { select: { provider: true, providerUsername: true, providerEmail: true } },
+        id: true, email: true, displayName: true, avatar: true, avatarSource: true, avatarConfig: true, role: true, createdAt: true,
+        providers: { select: { provider: true, providerUsername: true, providerEmail: true, providerAvatar: true } },
       },
     });
     if (!user) return reply.status(404).send({ error: 'USER_NOT_FOUND' });
     const permissions = getPermissionsForRole(user.role);
-    return reply.send({ ...user, permissions });
+    // Normalize provider keys to the shorter form already used by signAndSend (and by the
+    // frontend `UserProviderInfo` type) — also exposes `avatar` per provider so the picker
+    // can preview each option.
+    const providers = user.providers.map((p) => ({
+      provider: p.provider,
+      username: p.providerUsername,
+      email: p.providerEmail,
+      avatar: p.providerAvatar,
+    }));
+    return reply.send({ ...user, providers, permissions });
+  });
+
+  // PUT /me/avatar-source — Issue #169. Lets the user pick which linked provider supplies their
+  // avatar, "none" for initials, or "dicebear" for a self-generated SVG. Provider sources are
+  // validated against actual linkage. Dicebear stores the editor config + the rendered data URI
+  // (computed client-side so the backend stays free of the dicebear deps).
+  app.put('/me/avatar-source', {
+    schema: {
+      body: {
+        type: 'object' as const,
+        required: ['source'],
+        properties: {
+          source: { type: 'string' as const },
+          config: { type: 'object' as const, additionalProperties: true },
+          avatar: { type: 'string' as const },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { id } = request.user as { id: number };
+    const { source, config, avatar } = request.body as {
+      source: string;
+      config?: { style?: string; seed?: string; options?: Record<string, unknown> };
+      avatar?: string;
+    };
+
+    if (source === 'dicebear') {
+      if (!avatar || !avatar.startsWith('data:image/svg+xml')) {
+        return reply.status(400).send({ error: 'INVALID_AVATAR' });
+      }
+      // Cap to ~100KB to keep the User row lean. SVGs from dicebear are typically 2-6KB so this
+      // is generous; mostly a safety net against pasted attacks.
+      if (avatar.length > 100_000) return reply.status(413).send({ error: 'AVATAR_TOO_LARGE' });
+      if (!config || typeof config.style !== 'string' || typeof config.seed !== 'string') {
+        return reply.status(400).send({ error: 'INVALID_CONFIG' });
+      }
+      const serializedConfig = JSON.stringify(config);
+      if (serializedConfig.length > 5_000) return reply.status(413).send({ error: 'CONFIG_TOO_LARGE' });
+      await prisma.user.update({
+        where: { id },
+        data: {
+          avatarSource: 'dicebear',
+          avatarConfig: serializedConfig,
+          avatar,
+        },
+      });
+      return reply.send({ avatarSource: 'dicebear', avatar });
+    }
+
+    if (source !== 'none') {
+      const linked = await prisma.userProvider.findUnique({
+        where: { userId_provider: { userId: id, provider: source } },
+        select: { id: true },
+      });
+      if (!linked) return reply.status(400).send({ error: 'PROVIDER_NOT_LINKED' });
+    }
+
+    // Keep avatarConfig untouched when switching to a non-dicebear source — the user can come
+    // back to their custom avatar later (clicking the "Oscarr" tile restores it without re-editing).
+    await prisma.user.update({ where: { id }, data: { avatarSource: source } });
+    const resolved = await refreshUserAvatar(id);
+    return reply.send({ avatarSource: source, avatar: resolved });
   });
 
   app.post('/logout', async (_request, reply) => {

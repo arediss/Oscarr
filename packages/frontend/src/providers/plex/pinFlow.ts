@@ -93,9 +93,11 @@ export function startPlexPinFlow(opts: PlexPinFlowOptions): PlexPinFlowHandle {
             onToken(token);
           }
         } catch (err) {
-          // 400 = PIN not validated yet → keep polling. Anything else is terminal.
+          // 400 = PIN not validated yet → keep polling. 429 = upstream rate limit hiccup, also
+          // transient (the next tick will succeed once the window slides). Anything else is
+          // terminal — close the popup and surface the error.
           const status = (err as { response?: { status?: number } })?.response?.status;
-          if (status !== undefined && status !== 400) {
+          if (status !== undefined && status !== 400 && status !== 429) {
             cancel();
             onError();
           }
