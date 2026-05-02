@@ -29,6 +29,8 @@ import { PluginSlot } from '@/plugins/PluginSlot';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
 import { useFeatures } from '@/context/FeaturesContext';
 import { UserCluster } from '@/components/nav/UserCluster';
+import { LinkIcon } from '@/icons/LinkIcon';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 const ALL_NAV = [
   { path: '/', labelKey: 'nav.home', icon: Home, feature: null },
@@ -71,6 +73,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, []);
 
   const navItems = ALL_NAV.filter(({ feature }) => !feature || features[feature]);
+
+  // Custom admin-defined links (#167) split by position relative to the topbar search bar.
+  const customLinks = (features.customLinks ?? []).slice().sort((a, b) => a.order - b.order);
+  const leftLinks = customLinks.filter((l) => l.position === 'left');
+  const rightLinks = customLinks.filter((l) => l.position === 'right');
 
   useEffect(() => {
     if (location.pathname === '/search') {
@@ -211,6 +218,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                 )}
               />
+              {leftLinks.map((link) => (
+                <a
+                  key={link.id}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-ndp-text-muted hover:text-ndp-text hover:bg-white/5 transition-all duration-200"
+                >
+                  <LinkIcon value={link.icon} className="w-4 h-4" />
+                  <span className="hidden lg:inline">{link.label}</span>
+                </a>
+              ))}
             </div>
 
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -229,6 +248,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0 relative z-10">
+              {rightLinks.map((link) => (
+                <Tooltip key={link.id} label={link.label}>
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={link.label}
+                    className="p-2 text-ndp-text-muted hover:text-ndp-text rounded-lg hover:bg-white/5 transition-colors flex items-center justify-center"
+                  >
+                    <LinkIcon value={link.icon} className="w-5 h-5" />
+                  </a>
+                </Tooltip>
+              ))}
+
               <PluginSlot hookPoint="header.actions" context={{ user, isAdmin: hasPermission('admin.*'), hasPermission }} />
 
               {hasPermission('admin.*') && changelog.hasNew && (
@@ -350,6 +383,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </Link>
               )}
             />
+            {leftLinks.map((link) => (
+              <a
+                key={link.id}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setDrawerOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-ndp-text-muted hover:text-ndp-text hover:bg-white/5 transition-colors"
+              >
+                <LinkIcon value={link.icon} className="w-5 h-5 flex-shrink-0" />
+                <span className="truncate">{link.label}</span>
+              </a>
+            ))}
 
             <div className="h-px bg-white/5 my-2" />
 
@@ -365,6 +411,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </span>
               )}
             </button>
+
+            {rightLinks.map((link) => (
+              <a
+                key={link.id}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setDrawerOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-ndp-text-muted hover:text-ndp-text hover:bg-white/5 transition-colors"
+              >
+                <LinkIcon value={link.icon} className="w-5 h-5 flex-shrink-0" />
+                <span className="truncate">{link.label}</span>
+              </a>
+            ))}
 
             {hasPermission('admin.*') && changelog.hasNew && (
               <button

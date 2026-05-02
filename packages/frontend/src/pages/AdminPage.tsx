@@ -25,6 +25,7 @@ import { LogsTab } from './admin/LogsTab';
 import { PluginsTab } from './admin/PluginsTab';
 import { RolesTab } from './admin/RolesTab';
 import { HomepageTab } from './admin/HomepageTab';
+import { LinksTab } from './admin/LinksTab';
 import { AuthProvidersTab } from './admin/AuthProvidersTab';
 
 export default function AdminPage() {
@@ -86,6 +87,7 @@ export default function AdminPage() {
       {activeTab === 'instance' && <InstanceTab />}
       {activeTab === 'features' && <FeaturesTab />}
       {activeTab === 'homepage' && <HomepageTab />}
+      {activeTab === 'links' && <LinksTab />}
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'roles' && <RolesTab />}
       {activeTab === 'auth' && <AuthProvidersTab />}

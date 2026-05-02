@@ -192,6 +192,7 @@ model AppSettings {
   homepageLayout        String?   // JSON array of HomepageSection configs
   adminDashboardLayout  String?   // JSON: { version, items[{ i, x, y, w, h }] } — null = use defaults
   verboseRequestLog     Boolean   @default(false) // When true, every HTTP request is persisted to AppLog (debug only)
+  customLinks           String    @default("[]") // JSON array of { id, label, url, icon, order } — admin-defined external links rendered in the user account modal
   setupChecklistDismissed Boolean @default(false)
   updatedAt             DateTime  @updatedAt
 }

@@ -417,6 +417,7 @@
   "admin.features.disabled_login_silent": "Silent block",
   "admin.features.disabled_login_silent_desc": "Login rejected with a generic \"Invalid credentials\" error. The user has no indication their account was disabled.",
   "admin.tab.homepage": "Homepage",
+  "admin.tab.links": "Quick links",
   "admin.homepage.reset": "Reset to default",
   "admin.homepage.add_section": "Add custom section",
   "admin.homepage.help": "Drag sections to reorder. Toggle visibility or add custom sections.",

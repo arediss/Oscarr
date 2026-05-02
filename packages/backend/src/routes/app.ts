@@ -138,6 +138,14 @@ export async function appRoutes(app: FastifyInstance) {
     const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
     const pluginFeatures = pluginEngine.getAllFeatureFlags();
     const languages: string[] = settings?.instanceLanguages ? JSON.parse(settings.instanceLanguages) : ['en'];
+    // Custom links (#167) shipped with the features payload so the Layout topbar has them at
+    // mount without a second round-trip. Bad JSON falls back to an empty list — admins fix it
+    // via the editor without breaking the page.
+    let customLinks: Array<{ id: string; label: string; url: string; icon: string; position: 'left' | 'right'; order: number }> = [];
+    try {
+      const parsed = settings?.customLinks ? JSON.parse(settings.customLinks) : [];
+      if (Array.isArray(parsed)) customLinks = parsed;
+    } catch { /* malformed JSON in DB → empty list */ }
     return {
       requestsEnabled: settings?.requestsEnabled ?? true,
       supportEnabled: settings?.supportEnabled ?? true,
@@ -145,6 +153,7 @@ export async function appRoutes(app: FastifyInstance) {
       siteName: settings?.siteName ?? 'Oscarr',
       nsfwBlurEnabled: settings?.nsfwBlurEnabled ?? true,
       instanceLanguage: languages[0] ?? 'en',
+      customLinks,
       ...pluginFeatures,
     };
   });

@@ -417,6 +417,7 @@
   "admin.features.disabled_login_silent": "Blocage silencieux",
   "admin.features.disabled_login_silent_desc": "Connexion refusée avec une erreur générique « Identifiants invalides ». L'utilisateur n'a aucune indication que son compte a été désactivé.",
   "admin.tab.homepage": "Accueil",
+  "admin.tab.links": "Liens rapides",
   "admin.homepage.reset": "Réinitialiser",
   "admin.homepage.add_section": "Ajouter une section",
   "admin.homepage.help": "Glissez les sections pour les réordonner. Activez/désactivez ou ajoutez des sections personnalisées.",

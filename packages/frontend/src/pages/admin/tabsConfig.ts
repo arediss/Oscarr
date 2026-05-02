@@ -20,6 +20,7 @@ import {
   Archive,
   ToggleRight,
   AlertTriangle,
+  Link as LinkIcon,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -62,6 +63,7 @@ export type AdminTabId =
   | 'backups'
   | 'danger'
   | 'plugins'
+  | 'links'
   | (string & {});
 
 export const ADMIN_GROUPS: AdminGroupDef[] = [
@@ -105,6 +107,7 @@ export const ADMIN_GROUPS: AdminGroupDef[] = [
       { id: 'services', label: 'admin.tab.services', icon: Server },
       { id: 'notifications', label: 'admin.tab.notifications', icon: Bell },
       { id: 'homepage', label: 'admin.tab.homepage', icon: Home },
+      { id: 'links', label: 'admin.tab.links', icon: LinkIcon },
     ],
   },
   {

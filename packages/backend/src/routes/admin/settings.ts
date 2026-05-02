@@ -1,9 +1,41 @@
 import type { FastifyInstance } from 'fastify';
 import crypto from 'crypto';
+import { randomUUID } from 'crypto';
 import { prisma } from '../../utils/prisma.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { safeNotify, invalidateSiteUrl } from '../../utils/safeNotify.js';
 import { invalidateLanguageCache } from '../../services/tmdb.js';
+
+// Issue #167 — admin-defined external links rendered in the home topbar.
+// Strict-https for safety (no http://), short labels (50 chars), icon is either a Lucide name,
+// a brand id from the curated list, or an https image URL. Position drives left/right placement
+// relative to the topbar search bar.
+interface RawCustomLink { id?: unknown; label?: unknown; url?: unknown; icon?: unknown; position?: unknown; order?: unknown }
+interface ValidCustomLink { id: string; label: string; url: string; icon: string; position: 'left' | 'right'; order: number }
+// Icon shapes accepted: Lucide name (`Settings`), curated brand id (`brand:discord`), or an
+// HTTPS image URL. The colon is what `brand:` needs — without it the previous regex rejected
+// every brand pick.
+const LUCIDE_RE = /^[a-zA-Z0-9_-]{1,40}$/;
+const BRAND_RE = /^brand:[a-z0-9-]{1,40}$/;
+const HTTPS_IMG_RE = /^https:\/\/\S+$/;
+function validateLink(raw: RawCustomLink, idx: number): ValidCustomLink {
+  if (typeof raw.label !== 'string' || raw.label.trim().length === 0) throw new Error(`Link ${idx}: label is required`);
+  if (raw.label.trim().length > 50) throw new Error(`Link ${idx}: label too long (max 50)`);
+  if (typeof raw.url !== 'string' || !/^https:\/\//.test(raw.url)) throw new Error(`Link ${idx}: url must start with https://`);
+  if (raw.url.length > 2000) throw new Error(`Link ${idx}: url too long`);
+  if (typeof raw.icon !== 'string' || (!LUCIDE_RE.test(raw.icon) && !BRAND_RE.test(raw.icon) && !HTTPS_IMG_RE.test(raw.icon))) {
+    throw new Error(`Link ${idx}: invalid icon`);
+  }
+  if (raw.position !== 'left' && raw.position !== 'right') throw new Error(`Link ${idx}: position must be left|right`);
+  return {
+    id: typeof raw.id === 'string' && raw.id.length > 0 ? raw.id : randomUUID(),
+    label: raw.label.trim(),
+    url: raw.url,
+    icon: raw.icon,
+    position: raw.position,
+    order: typeof raw.order === 'number' && Number.isFinite(raw.order) ? raw.order : idx,
+  };
+}
 
 export async function settingsRoutes(app: FastifyInstance) {
   // === SETUP STATUS ===
@@ -141,6 +173,65 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (body.siteUrl !== undefined) invalidateSiteUrl();
     logEvent('info', 'Settings', 'Settings updated');
     return settings;
+  });
+
+  // === CUSTOM LINKS (#167) ===
+  // Admin CRUD for the external links rendered in the home topbar. Public read-side ships via
+  // /api/app/features so Layout has them at mount.
+
+  app.get('/custom-links', async () => {
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    try {
+      const parsed = settings?.customLinks ? JSON.parse(settings.customLinks) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  app.put('/custom-links', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['links'],
+        properties: {
+          links: {
+            type: 'array',
+            maxItems: 20,
+            items: {
+              type: 'object',
+              required: ['label', 'url', 'icon', 'position'],
+              additionalProperties: true,
+              properties: {
+                id: { type: 'string' },
+                label: { type: 'string' },
+                url: { type: 'string' },
+                icon: { type: 'string' },
+                position: { type: 'string', enum: ['left', 'right'] },
+                order: { type: 'number' },
+              },
+            },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { links: rawLinks } = request.body as { links: RawCustomLink[] };
+    let validated: ValidCustomLink[];
+    try {
+      validated = rawLinks.map((raw, idx) => validateLink(raw, idx));
+    } catch (err) {
+      return reply.status(400).send({ error: (err as Error).message });
+    }
+    // Re-number `order` based on submission order so the UI doesn't have to manage it strictly.
+    validated.forEach((l, i) => { l.order = i; });
+    await prisma.appSettings.upsert({
+      where: { id: 1 },
+      update: { customLinks: JSON.stringify(validated) },
+      create: { id: 1, customLinks: JSON.stringify(validated), updatedAt: new Date() },
+    });
+    logEvent('info', 'Settings', `Custom links updated (${validated.length} link${validated.length === 1 ? '' : 's'})`);
+    return { links: validated };
   });
 
   // === VERBOSE REQUEST LOG (debug toggle) ===

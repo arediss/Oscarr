@@ -2,13 +2,23 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import i18n from 'i18next';
 import api from '@/lib/api';
 
+export interface CustomLink {
+  id: string;
+  label: string;
+  url: string;
+  icon: string;
+  position: 'left' | 'right';
+  order: number;
+}
+
 interface Features {
   requestsEnabled: boolean;
   supportEnabled: boolean;
   calendarEnabled: boolean;
   siteName: string;
   instanceLanguage?: string;
-  [key: string]: boolean | string | undefined;
+  customLinks?: CustomLink[];
+  [key: string]: boolean | string | CustomLink[] | undefined;
 }
 
 interface FeaturesContextType {
