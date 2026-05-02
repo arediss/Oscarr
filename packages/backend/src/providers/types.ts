@@ -156,7 +156,7 @@ export interface ServiceDefinition {
   id: string;
   label: string;
   icon: string; // URL to provider icon
-  category: 'arr' | 'media-server' | 'download-client' | 'monitoring';
+  category: 'arr' | 'media-server' | 'download-client' | 'indexer' | 'monitoring';
   fields: ServiceField[];
   /** Media types this service handles (e.g. radarr=['movie'], sonarr=['tv'], a future
    *  lidarr=['music']). Used by `getServiceTypeForMedia(mediaType)` without a hardcoded

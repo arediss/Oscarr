@@ -13,7 +13,7 @@ export interface ServiceSchema {
   id: string;
   label: string;
   icon: string;
-  category: 'arr' | 'media-server' | 'download-client' | 'monitoring';
+  category: 'arr' | 'media-server' | 'download-client' | 'indexer' | 'monitoring';
   fields: ServiceField[];
 }
 

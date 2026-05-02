@@ -13,8 +13,41 @@ export const qbittorrentProvider: Provider = {
       { key: 'password', labelKey: 'common.password', type: 'password' },
     ],
     async test(config) {
-      await axios.get(`${config.url}/api/v2/app/version`, { timeout: 5000 });
-      return { ok: true };
+      const baseUrl = config.url?.replace(/\/+$/, '') ?? '';
+      const username = config.username ?? '';
+      const password = config.password ?? '';
+
+      const loginRes = await axios.post(
+        `${baseUrl}/api/v2/auth/login`,
+        new URLSearchParams({ username, password }).toString(),
+        {
+          timeout: 5000,
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Referer: baseUrl,
+          },
+          validateStatus: () => true,
+        },
+      );
+
+      // qBit returns 403 on temp-IP-ban (too many failed attempts) — a distinct state from bad creds.
+      if (loginRes.status === 403) throw new Error('AUTH_BANNED');
+      if (loginRes.status !== 200 || loginRes.data !== 'Ok.') throw new Error('AUTH_FAILED');
+
+      const setCookie = loginRes.headers['set-cookie'];
+      const cookieHeader = Array.isArray(setCookie)
+        ? setCookie.map((c) => c.split(';')[0]).join('; ')
+        : '';
+      if (!cookieHeader.includes('SID=')) throw new Error('AUTH_NO_SESSION');
+
+      const versionRes = await axios.get<string>(`${baseUrl}/api/v2/app/version`, {
+        timeout: 5000,
+        headers: { Cookie: cookieHeader, Referer: baseUrl },
+        responseType: 'text',
+        transformResponse: [(data) => data],
+      });
+
+      return { ok: true, version: String(versionRes.data).trim().replace(/^v/i, '') };
     },
   },
 };

@@ -18,6 +18,9 @@ export type TestErrorCode =
   | 'HTTP_FORBIDDEN'
   | 'HTTP_NOT_FOUND'
   | 'HTTP_SERVER_ERROR'
+  | 'AUTH_FAILED'
+  | 'AUTH_BANNED'
+  | 'AUTH_NO_SESSION'
   | 'UNKNOWN';
 
 export function classifyTestError(err: unknown): TestErrorInfo {
@@ -27,6 +30,17 @@ export function classifyTestError(err: unknown): TestErrorInfo {
   const code = (ax?.code ?? (err as { code?: string })?.code ?? '').toString();
   const status = ax?.response?.status;
   const host = ax?.config?.url ? safeHost(ax.config.url) : undefined;
+  const message = (err as Error)?.message ?? '';
+
+  if (message === 'AUTH_FAILED') {
+    return { code: 'AUTH_FAILED', message: 'Authentication failed — bad username or password' };
+  }
+  if (message === 'AUTH_BANNED') {
+    return { code: 'AUTH_BANNED', message: 'IP temporarily banned after too many failed attempts — wait or restart the service' };
+  }
+  if (message === 'AUTH_NO_SESSION') {
+    return { code: 'AUTH_NO_SESSION', message: 'Login succeeded but the service did not return a session cookie' };
+  }
 
   if (status) {
     if (status === 401) return { code: 'HTTP_UNAUTHORIZED', message: 'Authentication failed — check the API key' };
@@ -58,7 +72,7 @@ export function classifyTestError(err: unknown): TestErrorInfo {
     return { code: 'TLS_ERROR', message: (err as Error)?.message ?? 'TLS certificate error' };
   }
 
-  return { code: 'UNKNOWN', message: (err as Error)?.message ?? 'Unknown error' };
+  return { code: 'UNKNOWN', message: message || 'Unknown error' };
 }
 
 function safeHost(rawUrl: string): string | undefined {
