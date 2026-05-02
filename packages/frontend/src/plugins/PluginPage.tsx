@@ -4,12 +4,16 @@ import { useTranslation } from 'react-i18next';
 import type { ComponentType } from 'react';
 import { loadPluginModule, hasLoaded, getCached, pluginFrontendUrl, PLUGIN_SCOPE_ATTR } from './pluginModuleCache';
 import { PluginErrorBoundary } from './PluginErrorBoundary';
+import { usePluginUI } from './usePlugins';
 
 export function PluginPage() {
   const { pluginId } = useParams<{ pluginId: string }>();
   const { t } = useTranslation();
 
-  const url = pluginId ? pluginFrontendUrl(pluginId) : '';
+  const { contributions: navContribs, loading: navLoading } = usePluginUI('nav');
+  const isUserFacing = navContribs.some((c) => c.pluginId === pluginId);
+
+  const url = pluginId && isUserFacing ? pluginFrontendUrl(pluginId) : '';
   const [Component, setComponent] = useState<ComponentType<any> | null>(() => (url ? getCached(url) : null));
   const [loading, setLoading] = useState(url ? !hasLoaded(url) : false);
   const [error, setError] = useState(false);
@@ -35,6 +39,9 @@ export function PluginPage() {
   }, [url]);
 
   if (!pluginId) {
+    return <div className="flex items-center justify-center h-64 text-ndp-text-muted">{t('plugin.not_found')}</div>;
+  }
+  if (!navLoading && !isUserFacing) {
     return <div className="flex items-center justify-center h-64 text-ndp-text-muted">{t('plugin.not_found')}</div>;
   }
   if (loading) {
