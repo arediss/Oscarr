@@ -9,8 +9,8 @@ self.addEventListener('push', (event) => {
     event.waitUntil(
       self.registration.showNotification(data.title || 'Oscarr', {
         body: data.body || '',
-        icon: data.icon || '/favicon.svg',
-        badge: '/favicon.svg',
+        icon: data.icon || '/logo.png',
+        badge: '/logo.png',
         data: { url: data.url || '/' },
         tag: data.url || 'oscarr-notification', // prevents duplicate notifications
         renotify: true,

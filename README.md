@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="packages/frontend/public/favicon.svg" width="80" alt="Oscarr" />
+  <img src="docs/logo.png" width="120" alt="Oscarr" />
 </p>
 
 <h1 align="center">Oscarr</h1>

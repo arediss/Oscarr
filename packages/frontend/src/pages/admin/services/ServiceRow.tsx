@@ -27,7 +27,7 @@ export function ServiceRow({
       <div className="flex items-center gap-4 p-4">
         <span className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0', service.enabled ? 'bg-ndp-success' : 'bg-ndp-text-dim')} />
 
-        <img src={schema?.icon || '/favicon.svg'} alt={schema?.label || service.type} className="w-8 h-8 rounded-lg object-contain flex-shrink-0" />
+        <img src={schema?.icon || '/logo.png'} alt={schema?.label || service.type} className="w-8 h-8 rounded-lg object-contain flex-shrink-0" />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">

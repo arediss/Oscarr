@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['logo.png'],
       manifest: {
         name: 'Oscarr',
         short_name: 'Oscarr',
@@ -22,19 +22,19 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: '/favicon.svg',
+            src: '/logo.png',
             sizes: 'any',
-            type: 'image/svg+xml',
+            type: 'image/png',
           },
           {
-            src: '/favicon.svg',
+            src: '/logo.png',
             sizes: '192x192',
-            type: 'image/svg+xml',
+            type: 'image/png',
           },
           {
-            src: '/favicon.svg',
+            src: '/logo.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
           },
         ],
       },
