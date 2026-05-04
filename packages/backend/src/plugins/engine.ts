@@ -39,8 +39,9 @@ export class PluginEngine {
   private log(level: 'info' | 'warn' | 'error' | 'debug', msg: string): void {
     // Strip CR/LF from log lines so a plugin id like "foo\n[INFO] forged-line" can't splice
     // a fake entry into the log. Plugin ids reach this helper from request.params, so
-    // sanitize once here rather than at every call site.
-    const sanitized = String(msg).replace(/[\r\n]+/g, ' ');
+    // sanitize once here rather than at every call site. Direct `msg.replace(...)` (no
+    // String() wrapper) is the form CodeQL's log-injection rule recognizes as a cleanse.
+    const sanitized = msg.replace(/[\r\n]+/g, ' ');
     if (this.logger) {
       this.logger[level](sanitized);
     } else {

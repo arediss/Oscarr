@@ -169,9 +169,6 @@ export function applyDbBuffer(dbBuffer: Buffer): { ok: boolean; safetyPath: stri
   try {
     const dbDir = dirname(dbPath);
     if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true });
-    // codeql[js/http-to-file-access] dbBuffer is admin-uploaded but already passed the 7-step
-    // trust chain documented above (RBAC, CSRF, rate-limit, password re-auth, version check,
-    // SQLite magic-header, HMAC signature). dbPath is a config constant — no path traversal.
     writeFileSync(dbPath, dbBuffer);
     return { ok: true, safetyPath };
   } catch (writeErr) {
