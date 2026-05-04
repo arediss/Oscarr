@@ -41,6 +41,11 @@ export default defineConfig({
       workbox: {
         importScripts: ['/sw-push.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // skipWaiting + clientsClaim makes a new SW take over immediately on next page load
+        // (no need to close all tabs). Combined with the controllerchange listener in main.tsx,
+        // open tabs auto-reload to the new build instead of needing a hard refresh.
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/image\.tmdb\.org\/.*/i,

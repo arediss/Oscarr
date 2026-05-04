@@ -37,11 +37,15 @@ export class PluginEngine {
   }
 
   private log(level: 'info' | 'warn' | 'error' | 'debug', msg: string): void {
+    // Strip CR/LF from log lines so a plugin id like "foo\n[INFO] forged-line" can't splice
+    // a fake entry into the log. Plugin ids reach this helper from request.params, so
+    // sanitize once here rather than at every call site.
+    const sanitized = String(msg).replace(/[\r\n]+/g, ' ');
     if (this.logger) {
-      this.logger[level](msg);
+      this.logger[level](sanitized);
     } else {
       const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
-      fn('[PluginEngine]', String(msg));
+      fn('[PluginEngine]', sanitized);
     }
   }
 

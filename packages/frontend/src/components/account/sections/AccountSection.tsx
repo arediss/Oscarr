@@ -219,7 +219,6 @@ function AvatarSourcePicker({ providers, currentSource, dicebearAvatar, savingSo
       <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
         {tiles.map((tile) => {
           const selected = effectiveSource === tile.id;
-          const saving = savingSource === tile.id;
           // Dicebear tile is special: clicking it when already selected opens the editor (the
           // pencil icon hints at this). Every other tile no-ops on re-click since picking the
           // already-active source is meaningless.

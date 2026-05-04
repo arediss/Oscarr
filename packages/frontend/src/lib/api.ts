@@ -6,6 +6,12 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// In-memory setup secret. Held only in the JS heap for the lifetime of the install wizard;
+// never written to sessionStorage / localStorage so a tab snoop or stale tab can't read it.
+// A page refresh during install loses it (acceptable — re-enter on the gate screen).
+let setupSecret: string | null = null;
+export function setSetupSecret(value: string | null): void { setupSecret = value; }
+
 // Add language header (auth is via httpOnly cookie, no Bearer token needed)
 api.interceptors.request.use((config) => {
   config.headers['Accept-Language'] = i18n.language;
@@ -16,9 +22,8 @@ api.interceptors.request.use((config) => {
   if (viewAsRole) {
     config.headers['X-View-As-Role'] = viewAsRole;
   }
-  // Attach setup secret for install routes
+  // Attach setup secret for install routes — read from the module-local var, not storage.
   if (config.url?.startsWith('/setup/') || config.url === '/setup') {
-    const setupSecret = sessionStorage.getItem('setup-secret');
     if (setupSecret) {
       config.headers['X-Setup-Secret'] = setupSecret;
     }

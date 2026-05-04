@@ -75,12 +75,6 @@ export function LogsTab() {
     catch (err) { console.error(err); }
   };
 
-  const levelColors: Record<string, string> = {
-    info: 'bg-ndp-accent/10 text-ndp-accent',
-    warn: 'bg-ndp-warning/10 text-ndp-warning',
-    error: 'bg-ndp-danger/10 text-ndp-danger',
-  };
-
   const uniqueLabels = [...new Set(logs.map((l) => l.label))].sort((a, b) => a.localeCompare(b));
 
   // 4 icon-only action buttons share the same visual shape: rounded-lg, 2.5×2.5rem hit area,

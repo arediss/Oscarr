@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/context/AuthContext';
 import { Film, Loader2, CheckCircle, RefreshCw, PartyPopper, Plus, Trash2, XCircle, Eye, EyeOff, Mail, Pencil } from 'lucide-react';
-import api from '@/lib/api';
+import api, { setSetupSecret as setApiSetupSecret } from '@/lib/api';
 import { useServiceSchemas } from '@/hooks/useServiceSchemas';
 import { extractApiError } from '@/utils/toast';
 
@@ -273,6 +273,7 @@ export default function InstallPage() {
       // Hard reload instead of SPA navigation: BackendGate cached installed:false at mount.
       // A full reload re-probes /setup/install-status (now reporting installed:true) and
       // remounts the app on the normal routes instead of looping back to /install.
+      setApiSetupSecret(null);
       window.location.href = '/';
       return;
     }
@@ -329,7 +330,7 @@ export default function InstallPage() {
             <form className="space-y-4" onSubmit={async (e) => {
               e.preventDefault();
               if (!setupSecret) return;
-              sessionStorage.setItem('setup-secret', setupSecret);
+              setApiSetupSecret(setupSecret);
               setError('');
               try {
                 const { data } = await api.post('/setup/verify-secret');
@@ -337,7 +338,7 @@ export default function InstallPage() {
                 setSecretValid(true);
               } catch {
                 setError(t('install.setup_secret_invalid', 'Invalid setup secret.'));
-                sessionStorage.removeItem('setup-secret');
+                setApiSetupSecret(null);
                 setSecretShake(true);
               }
             }}>
@@ -599,7 +600,7 @@ export default function InstallPage() {
               <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
                 <div className="h-full bg-ndp-success rounded-full transition-all duration-1000 ease-linear" style={{ width: `${((5 - countdown) / 5) * 100}%` }} />
               </div>
-              <button onClick={() => navigate('/', { replace: true })} className="btn-primary text-sm">
+              <button onClick={() => { setApiSetupSecret(null); navigate('/', { replace: true }); }} className="btn-primary text-sm">
                 {t('install.go_now')}
               </button>
             </div>
