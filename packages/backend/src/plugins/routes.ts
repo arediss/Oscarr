@@ -235,6 +235,10 @@ export async function pluginRoutes(app: FastifyInstance) {
     '/install',
     {
       bodyLimit: 8 * 1024,
+      // Each install triggers an outbound HTTP fetch + tarball extraction, which is the
+      // most expensive operation in this router. 5/min is plenty for a real admin and tight
+      // enough to defang accidental script-loops or abuse if an admin token leaks.
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
       schema: {
         body: {
           type: 'object',

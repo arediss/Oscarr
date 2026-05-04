@@ -7,14 +7,6 @@ import { normalizeLanguages } from '../utils/languages.js';
 import { performLiveCheckWithTimeout, cacheLanguageData, promoteMediaToAvailable, canSkipLiveCheck } from '../services/mediaService.js';
 import { COMPLETABLE_REQUEST_STATUSES } from '@oscarr/shared';
 
-/** Normalize episode info to { season, episode, title } regardless of source format */
-function normalizeEpisodeInfo(info: Record<string, unknown>): { season: number; episode: number; title: string } | null {
-  const season = info.season ?? info.seasonNumber;
-  const episode = info.episode ?? info.episodeNumber;
-  if (season == null || episode == null) return null;
-  return { season: Number(season), episode: Number(episode), title: String(info.title || '') };
-}
-
 /** Normalize lastEpisodeInfo — handles both old (raw Sonarr) and new (normalized) formats */
 function parseEpisodeInfo(raw: string): { season: number; episode: number; title: string } | null {
   try {

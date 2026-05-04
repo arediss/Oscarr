@@ -20,7 +20,6 @@ import {
   Clapperboard,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import api from '@/lib/api';
 import { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useNsfwFilter } from '@/hooks/useNsfwFilter';

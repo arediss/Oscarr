@@ -73,7 +73,6 @@ export default function RequestsPage() {
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const [qualityOptions, setQualityOptions] = useState<{ id: number; label: string }[]>([]);
   const [showCleanup, setShowCleanup] = useState(false);
   const cleanupModal = useModal({
@@ -114,7 +113,6 @@ export default function RequestsPage() {
         setRequests(data.results);
       }
       setTotalPages(data.totalPages);
-      setTotal(data.total);
       setPage(pageNum);
     } catch (err) {
       console.error('Failed to fetch requests:', err);
