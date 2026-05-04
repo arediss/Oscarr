@@ -891,9 +891,26 @@ npm run build     # emits dist/frontend/{index.js,index.css}
 
 The plugin loader injects `<link rel="stylesheet" href="/api/plugins/<id>/frontend/index.css">` the first time any component from the plugin mounts, and removes it when the plugin is disabled or uninstalled. No explicit import needed on your side.
 
+### How the plugin's CSS bundle is scoped
+
+When the plugin loader injects your `dist/frontend/index.css`, it **rewrites every selector** to be scoped to a `data-oscarr-plugin="<your-id>"` attribute. So `.bg-black` in your bundle becomes `[data-oscarr-plugin="<id>"] .bg-black` at the document level. The loader auto-applies that attribute on the wrapper around any of your plugin's components, so as long as your component tree is rendered inside Oscarr's normal DOM flow, you don't have to think about it — Tailwind utilities just work.
+
+**Heads-up — `createPortal` to `document.body`:** if your plugin renders a modal, overlay, drawer, popover or anything else through `react-dom`'s `createPortal(..., document.body)`, the portaled subtree **escapes the auto-applied scope wrapper** and your Tailwind utilities silently stop matching. Re-apply the attribute on your portaled root:
+
+```tsx
+import { createPortal } from 'react-dom';
+
+createPortal(
+  <div data-oscarr-plugin="my-plugin-id" className="fixed inset-0 bg-black/80 …">
+    …
+  </div>,
+  document.body,
+);
+```
+
 ### Scoping runtime-injected custom CSS
 
-If your plugin injects raw CSS at runtime (e.g. `.plugin-communication`'s markdown typography), prefix selectors with `.oscarr-<plugin-id>-*` to avoid colliding with core or other plugins. Tailwind utilities don't need scoping — same class name = same rule everywhere.
+If your plugin injects raw CSS at runtime (e.g. `.plugin-communication`'s markdown typography), prefix selectors with `.oscarr-<plugin-id>-*` to avoid colliding with core or other plugins. The bundle-CSS scope rewriter only operates on `dist/frontend/index.css` — anything you `document.head.appendChild(<style>)` at runtime is up to you.
 
 ### Tailwind version alignment
 
