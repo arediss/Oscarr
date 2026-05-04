@@ -3,9 +3,17 @@ import { attachAxiosRetry } from '../utils/fetchWithRetry.js';
 import { getCached, setCache } from '../utils/cache.js';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
-// NOSONAR: This is a public read-only TMDB API token (scopes: api_read), not a secret
-const TMDB_DEFAULT_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJkODg0ZWJlNzE0NTU4NWI0ZDZkYTAzNDVlM2NjMDcyMiIsIm5iZiI6MTU0NzI5NzAxOS41MjgsInN1YiI6IjVjMzllMGZiYzNhMzY4MDg0ZjQ2YTE1YyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.0HM5S5_3ufPtWrzU_zt7ZNEFKinftqAq1n9Nk3y0eOw'; // NOSONAR
+// Public read-only TMDB v4 token (scopes: api_read) — not a secret. Shipped as a fallback so
+// `docker run` works zero-config, but every install sharing this same token risks IP-level
+// throttling or revocation by TMDB. Admins should set TMDB_API_TOKEN to use their own.
+// NOSONAR + codeql/jwt-token alerts on the built artefact are dismissed in the UI.
+const TMDB_DEFAULT_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJkODg0ZWJlNzE0NTU4NWI0ZDZkYTAzNDVlM2NjMDcyMiIsIm5iZiI6MTU0NzI5NzAxOS41MjgsInN1YiI6IjVjMzllMGZiYzNhMzY4MDg0ZjQ2YTE1YyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.0HM5S5_3ufPtWrzU_zt7ZNEFKinftqAq1n9Nk3y0eOw';
 const TMDB_TOKEN = process.env.TMDB_API_TOKEN || TMDB_DEFAULT_TOKEN;
+if (!process.env.TMDB_API_TOKEN) {
+  // eslint-disable-next-line no-console
+  console.warn('[TMDB] No TMDB_API_TOKEN set — falling back to the bundled public token. ' +
+    'Get your own at https://www.themoviedb.org/settings/api to avoid shared rate limits.');
+}
 
 import { prisma } from '../utils/prisma.js';
 

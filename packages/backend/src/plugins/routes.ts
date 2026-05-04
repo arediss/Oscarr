@@ -165,7 +165,15 @@ async function fetchLatestRelease(repository: string, headers: Record<string, st
   return null;
 }
 
+// Mirror of the pattern enforced by the /install route schema. Re-validating in-function
+// guarantees no future caller (or a refactor that bypasses the schema) can splice arbitrary
+// segments — `://`, `..`, `?`, `#` — into the github.com URL we build below.
+const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
 async function resolveInstallUrlFromRepo(repository: string): Promise<string> {
+  if (!REPO_PATTERN.test(repository)) {
+    throw new Error(`Invalid repository identifier: ${repository}`);
+  }
   try {
     const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
     const ghToken = process.env.GITHUB_TOKEN;
