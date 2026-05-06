@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { pluginEventBus } from '../eventBus.js';
 import { prisma } from '../../utils/prisma.js';
 import { getPluginDataDir } from '../../utils/dataPath.js';
+import { getKV, openPluginDb, migrate as migrateDb, type PluginDatabase, type Migration } from '../storage/index.js';
 import { scrubSecrets } from '../../utils/logScrubber.js';
 import { notificationRegistry } from '../../notifications/index.js';
 import type { NotificationPayload } from '../../notifications/types.js';
@@ -317,6 +318,39 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       emit: (event, data) => {
         req('events', 'events.emit');
         return pluginEventBus.emit(event, data);
+      },
+    },
+
+    kv: {
+      async get<T>(key: string) {
+        req('storage:plugin', 'kv.get');
+        const kv = await getKV(pluginId);
+        return kv.get<T>(key);
+      },
+      async set<T>(key: string, value: T) {
+        req('storage:plugin', 'kv.set');
+        const kv = await getKV(pluginId);
+        return kv.set(key, value);
+      },
+      async delete(key: string) {
+        req('storage:plugin', 'kv.delete');
+        const kv = await getKV(pluginId);
+        return kv.delete(key);
+      },
+      async keys() {
+        req('storage:plugin', 'kv.keys');
+        const kv = await getKV(pluginId);
+        return kv.keys();
+      },
+    },
+    db: {
+      open(name: string, migrations?: Migration[]) {
+        req('storage:plugin', 'db.open');
+        return openPluginDb(pluginId, name, migrations);
+      },
+      migrate(db: PluginDatabase, migrations: Migration[]) {
+        req('storage:plugin', 'db.migrate');
+        return migrateDb(db, migrations);
       },
     },
 

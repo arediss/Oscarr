@@ -101,6 +101,10 @@ export async function buildManifest(includeCache: boolean) {
     includeCache,
     stats: { users: userCount, media: mediaCount, requests: requestCount, cache: includeCache ? cacheCount : 0 },
     migrations: migrations.map((m) => m.migration_name),
+    // True when the backup zip contains plugin-owned KV/SQLite files under `plugins/`.
+    // Restore path doesn't yet re-extract these (see TODO in applyDbBuffer); this flag is
+    // forward-compat metadata so a future restore can detect what's available in the zip.
+    pluginsDataIncluded: existsSync(join(dirname(getDbPath()), 'plugins')),
   };
 }
 
@@ -125,6 +129,15 @@ export async function createBackupZip(
     archive.pipe(output);
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
     archive.file(dbCopy, { name: 'oscarr.db' });
+
+    // Include plugin-owned data (KV files, SQLite DBs + WAL/SHM) so a backup captures
+    // everything the user installed plugins persisted. The `*.tmp` exclusion drops
+    // half-written KV files an atomic rename hadn't finished yet.
+    const pluginsDataDir = join(dirname(getDbPath()), 'plugins');
+    if (existsSync(pluginsDataDir)) {
+      archive.glob('plugins/**', { cwd: dirname(getDbPath()), ignore: ['plugins/**/*.tmp'] });
+    }
+
     archive.finalize();
   });
 
@@ -161,7 +174,11 @@ export async function runAutoBackup(): Promise<{ filename: string; size: number 
  *    4. admin password re-auth   5. version-compat check                6. SQLite magic-header match
  *    7. HMAC signature (or explicit BACKUP_ALLOW_UNSIGNED=true opt-in).
  *  By the time the buffer reaches this function it's been validated 7 ways and is NOT untrusted
- *  network data anymore — dbPath is also a constant derived from env/config, never from the body. */
+ *  network data anymore — dbPath is also a constant derived from env/config, never from the body.
+ *
+ *  TODO: backups now include `plugins/**` (manifest.pluginsDataIncluded), but restore only
+ *  re-applies oscarr.db. A follow-up should extract `plugins/**` from the zip into
+ *  `data/plugins/` so plugin KV/SQLite data is restored alongside the core DB. */
 export function applyDbBuffer(dbBuffer: Buffer): { ok: boolean; safetyPath: string; rollbackFailed?: boolean; error?: string } {
   const dbPath = getDbPath();
   const safetyPath = `${dbPath}.pre-restore.bak`;

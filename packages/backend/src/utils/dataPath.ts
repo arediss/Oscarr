@@ -15,8 +15,15 @@ export function getDataRoot(): string {
   return dirname(getDbPath());
 }
 
+/** Path to a plugin's data dir without creating it. Caller decides whether to mkdir
+ *  (writing) or just resolve (deleting / probing). Prevents two callers from drifting
+ *  on the path layout. */
+export function pluginDataDirPath(pluginId: string): string {
+  return resolve(getDataRoot(), 'plugins', pluginId);
+}
+
 export async function getPluginDataDir(pluginId: string): Promise<string> {
-  const dir = resolve(getDataRoot(), 'plugins', pluginId);
+  const dir = pluginDataDirPath(pluginId);
   await mkdir(dir, { recursive: true });
   return dir;
 }

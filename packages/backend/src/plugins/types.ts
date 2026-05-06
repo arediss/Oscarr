@@ -4,6 +4,9 @@ import type { NotificationPayload } from '../notifications/types.js';
 import type { ArrClient } from '../providers/types.js';
 import type { PluginRouter } from './router.js';
 import type { PluginMedia, PluginMediaRequest, PluginMediaBatchKey, PluginMediaBatchStatus, PluginTmdbSearchPage, PluginFolderRule, TmdbMovie, TmdbTv, PluginSettingDef } from '@oscarr/shared';
+import type { Migration, PluginDatabase } from './storage/index.js';
+
+export type { Migration, PluginDatabase };
 
 // ─── Plugin Manifest (manifest.json) ────────────────────────────────
 
@@ -19,7 +22,10 @@ export type PluginCapability =
   // Each new bucket is opt-in via manifest.capabilities, checked at call-time in context/v1.ts.
   | 'tmdb:read'
   | 'requests:read'
-  | 'requests:write';
+  | 'requests:write'
+  // Persistent plugin-owned storage (JSON KV + SQLite) under data/plugins/<id>/. Files are
+  // wiped on uninstall; never touches oscarr.db.
+  | 'storage:plugin';
 
 export const ALL_CAPABILITIES: readonly PluginCapability[] = [
   'users:read',
@@ -32,6 +38,7 @@ export const ALL_CAPABILITIES: readonly PluginCapability[] = [
   'tmdb:read',
   'requests:read',
   'requests:write',
+  'storage:plugin',
 ] as const;
 
 export interface PluginManifest {
@@ -122,6 +129,25 @@ export interface PluginContext {
     on(event: string, handler: (data: unknown) => void | Promise<void>): void;
     off(event: string, handler: (data: unknown) => void | Promise<void>): void;
     emit(event: string, data: unknown): Promise<void>;
+  };
+
+  /** Plugin-owned persistent storage. Files live under `data/plugins/<pluginId>/` and are
+   *  wiped on uninstall — they never touch oscarr.db. Gated by `storage:plugin`. */
+  kv: {
+    get<T>(key: string): Promise<T | null>;
+    set<T>(key: string, value: T): Promise<void>;
+    delete(key: string): Promise<void>;
+    keys(): Promise<string[]>;
+  };
+  db: {
+    /** Open or reuse a cached SQLite handle. `name` becomes `<name>.db` in the plugin's
+     *  data dir, restricted to `[a-zA-Z0-9_-]+` to block path traversal. Pass `migrations`
+     *  to apply them in the same call — equivalent to calling `migrate()` afterwards. */
+    open(name: string, migrations?: Migration[]): Promise<PluginDatabase>;
+    /** Apply migrations whose version is > the current `_schema_version`, in ascending
+     *  order, each in its own transaction. Idempotent on re-run. Not safe to call
+     *  concurrently on the same handle. */
+    migrate(db: PluginDatabase, migrations: Migration[]): Promise<void>;
   };
 
   // ─── v1.1 additions (additive — existing plugins keep working unchanged) ───

@@ -12,6 +12,7 @@ import { createContext, clearLogRateCounter, type ContextFactoryDeps } from './c
 import { PluginRouter } from './router.js';
 import { enforcePluginRoutePermission, unregisterPluginRbac } from '../middleware/rbac.js';
 import { pluginEventBus } from './eventBus.js';
+import { closePluginStorage, rmPluginDataDir } from './storage/index.js';
 import type {
   LoadedPlugin,
   LoadedUIContribution,
@@ -413,8 +414,16 @@ export class PluginEngine {
     await prisma.pluginState.update({ where: { pluginId: id }, data: { enabled: false } })
       .catch((err) => this.log('warn', `Failed to mark plugin "${id}" disabled during uninstall: ${err}`));
 
+    // Close any plugin-owned SQLite handles + drop KV cache BEFORE deleting the data dir,
+    // otherwise the rm can fail on file-locked databases (Windows) or leave stale handles
+    // pointing at unlinked inodes (Linux/Mac — works but messy).
+    closePluginStorage(id);
+
     await rm(plugin.dir, { recursive: true, force: true }).catch((err) => {
       this.log('error', `Failed to delete plugin dir "${plugin.dir}": ${err}`);
+    });
+    await rmPluginDataDir(id).catch((err) => {
+      this.log('warn', `Failed to delete data dir for "${id}": ${err}`);
     });
 
     this.plugins.delete(id);
@@ -464,9 +473,12 @@ export class PluginEngine {
 
     // On disable: drop event-bus listeners + notif providers the plugin registered. Re-running
     // the lifecycle on re-enable will rebuild them — without this they leaked across toggles.
+    // Also close any open SQLite handles + KV cache so a re-enable starts with fresh state
+    // and the on-disk file isn't held open while disabled.
     if (!enabled) {
       pluginEventBus.removeAllForPlugin(id);
       notificationRegistry.removeAllForPlugin(id);
+      closePluginStorage(id);
     }
 
     // Stop or restart plugin cron jobs
