@@ -230,7 +230,7 @@ export async function mediaRoutes(app: FastifyInstance) {
 
   }, async (request) => {
     const { limit } = request.query as { limit?: string };
-    const take = Math.min(parseInt(limit || '20', 10) || 20, 50);
+    const take = Math.min(Number.parseInt(limit || '20', 10) || 20, 50);
 
     const media = await prisma.media.findMany({
       where: {
@@ -340,8 +340,8 @@ export async function mediaRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { tmdbId, seasonNumber } = request.query as { tmdbId: string; seasonNumber: string };
     const tmdbIdNum = parseId(tmdbId);
-    const seasonNum = parseInt(seasonNumber, 10);
-    if (!tmdbIdNum || isNaN(seasonNum)) return reply.status(400).send({ error: 'Invalid parameters' });
+    const seasonNum = Number.parseInt(seasonNumber, 10);
+    if (!tmdbIdNum || Number.isNaN(seasonNum)) return reply.status(400).send({ error: 'Invalid parameters' });
 
     // Find the media in our DB to get sonarrId
     const media = await prisma.media.findUnique({

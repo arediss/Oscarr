@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { getArrClient, getServiceDefinition } from '../providers/index.js';
@@ -7,7 +7,7 @@ import { sendAvailabilityNotifications } from '../services/sync/helpers.js';
 import { logEvent } from '../utils/logEvent.js';
 
 function sanitize(input: string): string {
-  return input.replace(/[\r\n\t]/g, '');
+  return input.replaceAll(/[\r\n\t]/g, '');
 }
 
 export async function webhookRoutes(app: FastifyInstance) {
@@ -138,7 +138,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       const mediaType = client.mediaType;
       const media = await findMediaByExternalId(mediaType, event.externalId);
 
-      if (media && media.status === 'available') {
+      if (media?.status === 'available') {
         await prisma.media.update({
           where: { id: media.id },
           data: { status: 'deleted' },

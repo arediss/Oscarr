@@ -11,7 +11,7 @@ export class RadarrClient implements ArrClient {
   readonly dbIdField = 'radarrId' as const;
   readonly defaultRootFolder = '/movies';
 
-  private api: AxiosInstance;
+  private readonly api: AxiosInstance;
 
   constructor(url: string, apiKey: string) {
     this.api = attachAxiosRetry(axios.create({
@@ -74,7 +74,7 @@ export class RadarrClient implements ArrClient {
   }
 
   async getOrCreateTag(username: string): Promise<number> {
-    const label = `ndp-${username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const label = `ndp-${username}`.toLowerCase().replaceAll(/[^a-z0-9-]/g, '');
     const tags = await this.getTags();
     const existing = tags.find((t) => t.label === label);
     if (existing) return existing.id;

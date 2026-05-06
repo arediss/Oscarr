@@ -1,5 +1,5 @@
 import axios, { type AxiosInstance } from 'axios';
-import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrSeasonItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrEpisode, ArrWebhookEvent } from '../types.js';
+import type { ArrClient, ArrTag, ArrQualityProfile, ArrRootFolder, ArrMediaItem, ArrAvailabilityResult, ArrHistoryEntry, ArrAddMediaOptions, ArrEpisode, ArrWebhookEvent } from '../types.js';
 import { extractImageFromArr } from '../types.js';
 import type { SonarrSeries, SonarrSeason, SonarrQueueItem, SonarrEpisode, SonarrEpisodeFile, SonarrHistoryRecord } from './types.js';
 import { logEvent } from '../../utils/logEvent.js';
@@ -11,7 +11,7 @@ export class SonarrClient implements ArrClient {
   readonly dbIdField = 'sonarrId' as const;
   readonly defaultRootFolder = '/tv';
 
-  private api: AxiosInstance;
+  private readonly api: AxiosInstance;
 
   constructor(url: string, apiKey: string) {
     this.api = attachAxiosRetry(axios.create({
@@ -114,7 +114,7 @@ export class SonarrClient implements ArrClient {
   }
 
   async getOrCreateTag(username: string): Promise<number> {
-    const label = `ndp-${username}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const label = `ndp-${username}`.toLowerCase().replaceAll(/[^a-z0-9-]/g, '');
     const tags = await this.getTags();
     const existing = tags.find((t) => t.label === label);
     if (existing) return existing.id;

@@ -10,7 +10,7 @@ import type {
 } from './types.js';
 
 export class TautulliClient {
-  private api: AxiosInstance;
+  private readonly api: AxiosInstance;
 
   constructor(url: string, apiKey: string) {
     const cleanUrl = url.replace(/\/+$/, '');

@@ -1,8 +1,8 @@
 import './env.js';
 import Fastify from 'fastify';
-import { execFileSync } from 'child_process';
-import { createRequire } from 'module';
-import { dirname, join } from 'path';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { prisma } from './utils/prisma.js';
 import { BACKEND_ROOT } from './utils/paths.js';
 import { loadInstallState } from './utils/install.js';
@@ -82,7 +82,7 @@ async function start() {
   await registerPlugins(app);
   await registerStatic(app);
 
-  const port = parseInt(process.env.PORT || '3001', 10);
+  const port = Number.parseInt(process.env.PORT || '3001', 10);
   if (Number.isNaN(port)) throw new Error('PORT environment variable must be a valid number');
   await app.listen({ port, host: '0.0.0.0' });
   app.log.info({ port }, 'Oscarr API listening');

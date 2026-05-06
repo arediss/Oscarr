@@ -29,7 +29,7 @@ class WidgetErrorBoundary extends ReactComponent<{ children: ReactNode }, { hasE
   }
 }
 
-export function WidgetChrome({ title, editMode, headerTitle, headerIcon, onRemove, onEdit, children }: WidgetChromeProps) {
+export function WidgetChrome({ title, editMode, headerTitle, headerIcon, onRemove, onEdit, children }: Readonly<WidgetChromeProps>) {
   const hasHeader = !!headerTitle || !!headerIcon;
   return (
     <div className={`relative h-full flex flex-col ${hasHeader ? 'card overflow-hidden' : ''}`}>

@@ -21,7 +21,7 @@ function pluginIdFromUrl(url: string): string | null {
 
 /** Prefix every rule selector with the scope attribute. Skips keyframe step selectors. */
 function scopePluginCss(css: string, scope: string): string {
-  return css.replace(/([^{}@]+)\{/g, (match, selectorList: string) => {
+  return css.replaceAll(/([^{}@]+)\{/g, (match, selectorList: string) => {
     const trimmed = selectorList.trim();
     if (!trimmed) return match;
     if (/^(\d+(\.\d+)?%|from|to)(\s*,\s*(\d+(\.\d+)?%|from|to))*$/.test(trimmed)) return match;

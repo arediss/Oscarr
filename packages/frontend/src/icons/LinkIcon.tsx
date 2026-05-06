@@ -10,7 +10,7 @@ interface LinkIconProps {
   className?: string;
 }
 
-export function LinkIcon({ value, className }: LinkIconProps) {
+export function LinkIcon({ value, className }: Readonly<LinkIconProps>) {
   if (value.startsWith('https://')) {
     return <img src={value} alt="" className={className} loading="lazy" decoding="async" />;
   }

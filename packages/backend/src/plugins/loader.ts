@@ -1,5 +1,5 @@
-import { readdir, readFile, stat, lstat, access } from 'fs/promises';
-import { join, resolve } from 'path';
+import { readdir, readFile, stat, lstat, access } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import type { PluginManifest } from './types.js';
 import { parseManifest } from './manifestSchema.js';
 import { PLUGINS_DIR } from '../utils/paths.js';

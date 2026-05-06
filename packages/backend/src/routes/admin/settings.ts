@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import crypto from 'crypto';
-import { randomUUID } from 'crypto';
+import crypto, { randomUUID } from 'node:crypto';
 import { prisma } from '../../utils/prisma.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { safeNotify, invalidateSiteUrl } from '../../utils/safeNotify.js';

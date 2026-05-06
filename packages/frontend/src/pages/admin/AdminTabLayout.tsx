@@ -9,7 +9,7 @@ interface AdminTabLayoutProps {
   children: ReactNode;
 }
 
-export function AdminTabLayout({ title, count, actions, children }: AdminTabLayoutProps) {
+export function AdminTabLayout({ title, count, actions, children }: Readonly<AdminTabLayoutProps>) {
   const showHeader = !!title || !!actions;
   return (
     <div className="space-y-6">

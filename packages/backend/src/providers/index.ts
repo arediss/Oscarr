@@ -104,7 +104,7 @@ export async function getArrClient(type: string): Promise<ArrClient> {
   if (!config?.url || !config?.apiKey) throw new Error(`No ${type} service configured`);
   const configKey = `${config.url}|${config.apiKey}`;
   const cached = _defaultCache.get(type);
-  if (cached && cached.configKey === configKey) return cached.instance;
+  if (cached?.configKey === configKey) return cached.instance;
   const def = getServiceDefinition(type);
   if (!def?.createClient) throw new Error(`Provider "${type}" does not support client creation`);
   const instance = def.createClient(config);
@@ -115,7 +115,7 @@ export async function getArrClient(type: string): Promise<ArrClient> {
 export function getArrClientForService(serviceId: number, serviceType: string, config: Record<string, string>): ArrClient {
   const configKey = `${config.url}|${config.apiKey}`;
   const cached = _serviceCache.get(serviceId);
-  if (cached && cached.configKey === configKey) return cached.instance;
+  if (cached?.configKey === configKey) return cached.instance;
   const def = getServiceDefinition(serviceType);
   if (!def?.createClient) throw new Error(`Provider "${serviceType}" does not support client creation`);
   const instance = def.createClient(config);

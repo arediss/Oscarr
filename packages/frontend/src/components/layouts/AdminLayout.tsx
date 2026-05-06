@@ -7,7 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 
 // Diacritic-insensitive lowercase so "systeme" matches "Système" and "acces" matches "Accès".
 const normalize = (s: string) =>
-  s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();
+  s.toLowerCase().normalize('NFD').replaceAll(/\p{Diacritic}/gu, '').trim();
 
 // Show ⌘K on Apple platforms (macOS, iPadOS — navigator.platform starts with "Mac" or "iPad")
 // and Ctrl+K everywhere else. The keybinding itself accepts both modifiers either way.

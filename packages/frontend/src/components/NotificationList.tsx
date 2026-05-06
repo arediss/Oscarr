@@ -72,7 +72,7 @@ interface NotificationListProps {
   onAction?: () => void;
 }
 
-export default function NotificationList({ actionsAlwaysVisible = false, onAction }: NotificationListProps) {
+export default function NotificationList({ actionsAlwaysVisible = false, onAction }: Readonly<NotificationListProps>) {
   const { t } = useTranslation();
   const { notifications, markAsRead, dismiss } = useNotifications();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
@@ -142,7 +142,7 @@ interface GroupProps {
   actionsAlwaysVisible: boolean;
 }
 
-function Group({ label, notifs, ...rest }: GroupProps) {
+function Group({ label, notifs, ...rest }: Readonly<GroupProps>) {
   if (notifs.length === 0) return null;
   return (
     <div>
@@ -163,7 +163,7 @@ interface NotifCardProps {
   actionsAlwaysVisible: boolean;
 }
 
-function NotifCard({ notif, t, markAsRead, dismiss, onAction, actionsAlwaysVisible }: NotifCardProps) {
+function NotifCard({ notif, t, markAsRead, dismiss, onAction, actionsAlwaysVisible }: Readonly<NotifCardProps>) {
   const navigate = useNavigate();
   const visual = TYPE_VISUALS[notif.type] ?? { icon: '•', color: 'text-ndp-text-muted', bg: 'bg-white/5' };
   const action = getNotifAction(notif);

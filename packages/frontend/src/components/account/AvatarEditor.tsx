@@ -32,10 +32,10 @@ const BACKGROUND_PALETTE = [
 
 function prettify(id: string): string {
   return id
-    .replace(/([A-Z])/g, ' $1')
+    .replaceAll(/([A-Z])/g, ' $1')
     .replace(/^./, (c) => c.toUpperCase())
-    .replace(/(\d+)/g, ' $1')
-    .replace(/\s+/g, ' ')
+    .replaceAll(/(\d+)/g, ' $1')
+    .replaceAll(/\s+/g, ' ')
     .trim();
 }
 
@@ -155,7 +155,7 @@ interface AvatarEditorProps {
   saving: boolean;
 }
 
-export default function AvatarEditor({ initialSeed, initialOptions, onCancel, onSave, saving }: AvatarEditorProps) {
+export default function AvatarEditor({ initialSeed, initialOptions, onCancel, onSave, saving }: Readonly<AvatarEditorProps>) {
   const { t } = useTranslation();
   const [seed, setSeedRaw] = useState(initialSeed ?? randomSeed());
   const [opts, setOpts] = useState<AvatarOptions>(() =>
@@ -377,7 +377,7 @@ interface KindToggleProps {
   saving: boolean;
 }
 
-function KindToggle({ current, options, onPick, saving }: KindToggleProps) {
+function KindToggle({ current, options, onPick, saving }: Readonly<KindToggleProps>) {
   return (
     <div className="inline-flex items-center gap-1 p-0.5 rounded-lg bg-white/5">
       {options.map((opt) => (
@@ -408,7 +408,7 @@ interface SelectProps {
   className?: string;
 }
 
-function Select({ options, value, onChange, saving, labelMap, className }: SelectProps) {
+function Select({ options, value, onChange, saving, labelMap, className }: Readonly<SelectProps>) {
   return (
     <div className={clsx('relative', className ?? 'flex-1')}>
       <select
@@ -434,7 +434,7 @@ interface ColorPickerProps {
   saving: boolean;
 }
 
-function ColorPicker({ palette, value, onChange, saving }: ColorPickerProps) {
+function ColorPicker({ palette, value, onChange, saving }: Readonly<ColorPickerProps>) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const display = value ?? palette[0] ?? '888888';

@@ -8,7 +8,7 @@ interface MediaGridProps {
   skeletonCount?: number;
 }
 
-export default function MediaGrid({ media, loading, skeletonCount = 14 }: MediaGridProps) {
+export default function MediaGrid({ media, loading, skeletonCount = 14 }: Readonly<MediaGridProps>) {
   const statuses = useMediaStatus(media);
 
   return (

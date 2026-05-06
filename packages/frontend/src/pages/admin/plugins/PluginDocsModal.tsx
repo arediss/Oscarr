@@ -9,7 +9,7 @@ interface PluginDocsModalProps {
 
 /** Quick-reference modal for building a plugin — minimal structure + manifest example + links
  *  out to the full docs and the registry. Triggered from the "Docs" button in the tab header. */
-export function PluginDocsModal({ onClose }: PluginDocsModalProps) {
+export function PluginDocsModal({ onClose }: Readonly<PluginDocsModalProps>) {
   const { t } = useTranslation();
   const { dialogRef, titleId } = useModal({ open: true, onClose });
   const pluginsDir = usePluginsDir();

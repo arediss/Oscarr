@@ -100,11 +100,11 @@ export async function getSharedServerUsers(adminToken: string, machineId: string
       return m ? m[1] : '';
     };
 
-    const userId = parseInt(attr('userID'), 10);
+    const userId = Number.parseInt(attr('userID'), 10);
     if (!userId || seen.has(userId)) continue;
     seen.add(userId);
 
-    const shareIdRaw = parseInt(attr('id'), 10);
+    const shareIdRaw = Number.parseInt(attr('id'), 10);
     users.push({
       id: userId,
       uuid: '',

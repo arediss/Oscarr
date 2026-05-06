@@ -1,6 +1,6 @@
 import semver from 'semver';
 import type { PluginManifest } from './types.js';
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 import { BACKEND_PACKAGE_JSON } from '../utils/paths.js';
 
 /**

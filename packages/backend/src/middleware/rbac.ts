@@ -256,7 +256,7 @@ const pluginPermissions: { key: string; description?: string; pluginId: string }
  */
 export function registerRoutePermission(pluginId: string, key: string, rule: RouteRule): void {
   const allowedPrefix = `/api/plugins/${pluginId}/`;
-  const parsed = key.match(/^([A-Z]+):(\/.+)$/);
+  const parsed = /^([A-Z]+):(\/.+)$/.exec(key);
   if (!parsed || !parsed[2].startsWith(allowedPrefix)) {
     throw new Error(`Route permission "${key}" is outside plugin "${pluginId}" namespace (${allowedPrefix})`);
   }

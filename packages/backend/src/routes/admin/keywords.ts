@@ -47,8 +47,8 @@ export async function keywordsRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { tmdbId } = request.params as { tmdbId: string };
     const { tag } = request.body as { tag: string | null };
-    const id = parseInt(tmdbId, 10);
-    if (isNaN(id)) return reply.status(400).send({ error: 'Invalid tmdbId' });
+    const id = Number.parseInt(tmdbId, 10);
+    if (Number.isNaN(id)) return reply.status(400).send({ error: 'Invalid tmdbId' });
 
     const keyword = await prisma.keyword.findUnique({ where: { tmdbId: id } });
     if (!keyword) return reply.status(404).send({ error: 'Keyword not found' });

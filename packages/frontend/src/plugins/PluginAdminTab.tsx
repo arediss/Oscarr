@@ -12,7 +12,7 @@ interface PluginAdminTabProps {
   pluginId: string;
 }
 
-export function PluginAdminTab({ pluginId }: PluginAdminTabProps) {
+export function PluginAdminTab({ pluginId }: Readonly<PluginAdminTabProps>) {
   const { t } = useTranslation();
   const url = pluginFrontendUrl(pluginId);
 

@@ -16,12 +16,9 @@ import {
   X,
   Save,
   Eraser,
-  SlidersHorizontal,
-  type LucideIcon,
-} from 'lucide-react';
+  SlidersHorizontal, } from 'lucide-react';
 import { clsx } from 'clsx';
-import api from '@/lib/api';
-import { posterUrl, backdropUrl } from '@/lib/api';
+import api, { posterUrl, backdropUrl } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useDownloadForMedia } from '@/hooks/useDownloads';
 import { localizedDate } from '@/i18n/formatters';
@@ -683,7 +680,7 @@ function RequestCardInner({
                   <select
                     value={selectedQuality ?? ''}
                     onChange={(e) => {
-                      const val = e.target.value ? parseInt(e.target.value) : undefined;
+                      const val = e.target.value ? Number.parseInt(e.target.value) : undefined;
                       setSelectedQuality(val);
                       setResolvingCtx(true);
                       const qParam = val ? `?qualityOptionId=${val}` : '';
@@ -714,7 +711,7 @@ function RequestCardInner({
                       <label className="text-xs text-ndp-text-muted block mb-1.5 font-medium">{t('requests.target_service')}</label>
                       <select
                         value={overrideServiceId ?? ''}
-                        onChange={(e) => setOverrideServiceId(e.target.value ? parseInt(e.target.value) : null)}
+                        onChange={(e) => setOverrideServiceId(e.target.value ? Number.parseInt(e.target.value) : null)}
                         className="input w-full text-sm"
                       >
                         {resolvedCtx.availableServices.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}

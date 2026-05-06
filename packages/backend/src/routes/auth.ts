@@ -349,7 +349,7 @@ export async function authRoutes(app: FastifyInstance) {
     };
 
     if (source === 'dicebear') {
-      if (!avatar || !avatar.startsWith('data:image/svg+xml')) {
+      if (!avatar?.startsWith('data:image/svg+xml')) {
         return reply.status(400).send({ error: 'INVALID_AVATAR' });
       }
       // Cap to ~100KB to keep the User row lean. SVGs from dicebear are typically 2-6KB so this

@@ -54,10 +54,10 @@ export function useMediaDetailData(id: string | undefined, type: 'movie' | 'tv')
     if (data.activeQualityOptionIds) setActiveQualityOptionIds(data.activeQualityOptionIds as number[]);
     if (data.audioLanguages) setAudioLanguages(data.audioLanguages as string[]);
     if (data.subtitleLanguages) setSubtitleLanguages(data.subtitleLanguages as string[]);
-    if (data.nsfw && id) addNsfwIds([parseInt(id, 10)]);
+    if (data.nsfw && id) addNsfwIds([Number.parseInt(id, 10)]);
     // Update global status cache so list pages reflect the latest state on back navigation
     if (data.status && id) {
-      const tmdbId = parseInt(id, 10);
+      const tmdbId = Number.parseInt(id, 10);
       if (tmdbId) updateMediaStatusCache(tmdbId, type, data.status as string);
     }
   }, [id, type, addNsfwIds]);

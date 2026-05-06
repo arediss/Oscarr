@@ -11,7 +11,7 @@ interface PreferencesSectionProps {
   onViewAsRoleChange: (role: string | null) => void;
 }
 
-export function PreferencesSection({ viewAsRole, onViewAsRoleChange }: PreferencesSectionProps) {
+export function PreferencesSection({ viewAsRole, onViewAsRoleChange }: Readonly<PreferencesSectionProps>) {
   const { t } = useTranslation();
   const { hasPermission } = useAuth();
   const push = usePushNotifications();

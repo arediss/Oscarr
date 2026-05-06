@@ -47,7 +47,7 @@ export function PathsTab() {
     setSaving(true); setSaved(false);
     try {
       await api.put('/admin/settings', {
-        defaultQualityProfile: qualityProfile ? parseInt(qualityProfile) : null,
+        defaultQualityProfile: qualityProfile ? Number.parseInt(qualityProfile) : null,
         defaultMovieFolder: movieFolder || null,
         defaultTvFolder: tvFolder || null,
         defaultAnimeFolder: animeFolder || null,

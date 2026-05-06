@@ -48,7 +48,7 @@ export async function getAllServices(type: string): Promise<ServiceWithConfig[]>
 /** Get a specific service by ID with parsed config */
 export async function getServiceById(id: number): Promise<ServiceWithConfig | null> {
   const service = await prisma.service.findUnique({ where: { id } });
-  if (!service || !service.enabled) return null;
+  if (!service?.enabled) return null;
   return {
     id: service.id,
     name: service.name,

@@ -1,5 +1,5 @@
-import { dirname, resolve } from 'path';
-import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /** Bundled build (esbuild): __BUNDLED__ is replaced with the literal `true`. In tsx/tsc mode
  *  it stays undeclared — `typeof` is safe on undeclared identifiers (returns 'undefined'), so

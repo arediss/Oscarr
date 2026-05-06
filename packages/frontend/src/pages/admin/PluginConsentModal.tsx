@@ -46,7 +46,7 @@ const RISK_LABEL: Record<'low' | 'medium' | 'high', string> = {
   high:   'High risk — grants sensitive access',
 };
 
-export function PluginConsentModal({ plugin, open, busy, mode, onCancel, onConfirm }: Props) {
+export function PluginConsentModal({ plugin, open, busy, mode, onCancel, onConfirm }: Readonly<Props>) {
   const { t } = useTranslation();
   const { dialogRef, titleId } = useModal({ open: open && plugin !== null, onClose: onCancel });
   if (!open || !plugin) return null;

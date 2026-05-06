@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 import axios from 'axios';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { prisma } from '../utils/prisma.js';
 import { pluginEngine } from '../plugins/engine.js';
 import { getArrClient } from '../providers/index.js';

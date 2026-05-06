@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { join, extname, resolve, sep, relative } from 'path';
-import { existsSync, createReadStream } from 'fs';
-import { rm } from 'fs/promises';
+import { join, extname, resolve, sep, relative } from 'node:path';
+import { existsSync, createReadStream } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { pluginEngine } from './engine.js';
 import { getPluginsDir } from './loader.js';
 import { installPluginFromUrl } from './installer.js';
@@ -508,7 +508,7 @@ export async function pluginRoutes(app: FastifyInstance) {
       const logs = await prisma.pluginLog.findMany({
         where: { pluginId: id },
         orderBy: { createdAt: 'desc' },
-        take: Math.min(parseInt(limit, 10) || 100, 500),
+        take: Math.min(Number.parseInt(limit, 10) || 100, 500),
       });
       return logs;
     }

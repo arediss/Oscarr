@@ -1,23 +1,10 @@
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, X as XIcon, Eye, EyeOff } from 'lucide-react';
+import { AlertTriangle, X as XIcon, Eye, EyeOff, Home, Search, Film, MessageSquare, Calendar, Menu, X, Shield, Sparkles, Bell, ChevronLeft, CheckCheck } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import {
-  Home,
-  Search,
-  Film,
-  MessageSquare,
-  Calendar,
-  Menu,
-  X,
-  Shield,
-  Sparkles,
-  Bell,
-  ChevronLeft,
-  CheckCheck,
-} from 'lucide-react';
+
 import { clsx } from 'clsx';
 import NotificationBell from '@/components/NotificationBell';
 import NotificationList from '@/components/NotificationList';

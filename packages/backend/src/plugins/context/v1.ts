@@ -292,7 +292,7 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
       // A plugin can only rewrite RBAC rules for routes under its own namespace — without this
       // guard a plugin with the `permissions` capability could downgrade core admin routes
       // (e.g. `POST:/api/plugins/install`) to $public and escalate arbitrarily.
-      const parsed = routeKey.match(/^([A-Z]+):(\/.+)$/);
+      const parsed = /^([A-Z]+):(\/.+)$/.exec(routeKey);
       const allowedPrefix = `/api/plugins/${pluginId}/`;
       if (!parsed || !parsed[2].startsWith(allowedPrefix)) {
         throw new Error(

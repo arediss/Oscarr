@@ -20,7 +20,7 @@ export async function notificationRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const user = request.user as { id: number };
     const { page, unreadOnly } = request.query as { page?: string; unreadOnly?: string };
-    const pageNum = Math.max(1, parseInt(page || '1', 10) || 1);
+    const pageNum = Math.max(1, Number.parseInt(page || '1', 10) || 1);
 
     const where = {
       userId: user.id,

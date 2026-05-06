@@ -68,7 +68,7 @@ const LANGUAGE_OPTIONS = [
   { value: 'pt', label: 'Portuguese' },
 ];
 
-export function QueryBuilder({ query, onChange, previewResults, previewLoading }: QueryBuilderProps) {
+export function QueryBuilder({ query, onChange, previewResults, previewLoading }: Readonly<QueryBuilderProps>) {
   const { t } = useTranslation();
   const fieldId = useId();
   const [genres, setGenres] = useState<Genre[]>([]);

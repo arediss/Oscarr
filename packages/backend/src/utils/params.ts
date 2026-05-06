@@ -1,10 +1,10 @@
 export function parseId(value: string): number | null {
-  const id = parseInt(value, 10);
+  const id = Number.parseInt(value, 10);
   return Number.isNaN(id) || id < 1 ? null : id;
 }
 
 export function parsePage(value?: string): number {
-  const page = parseInt(value || '1', 10);
+  const page = Number.parseInt(value || '1', 10);
   return page > 0 ? page : 1;
 }
 

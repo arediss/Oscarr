@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { AuthHelpers, AuthProvider, Provider } from '../types.js';
 import { getProviderConfig, isProviderEnabled } from '../authSettings.js';

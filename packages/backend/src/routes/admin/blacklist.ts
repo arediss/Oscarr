@@ -75,7 +75,7 @@ export async function blacklistRoutes(app: FastifyInstance) {
     const { tmdbId, mediaType } = request.query as { tmdbId?: string; mediaType?: string };
     if (!tmdbId || !mediaType) return { blacklisted: false };
     const entry = await prisma.blacklistedMedia.findUnique({
-      where: { tmdbId_mediaType: { tmdbId: parseInt(tmdbId, 10), mediaType } },
+      where: { tmdbId_mediaType: { tmdbId: Number.parseInt(tmdbId, 10), mediaType } },
     });
     return { blacklisted: !!entry, reason: entry?.reason || null };
   });

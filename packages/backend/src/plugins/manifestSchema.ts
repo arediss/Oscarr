@@ -6,7 +6,7 @@ import { ALL_CAPABILITIES } from './types.js';
 // `manifest.json` lives at `<pluginDir>/manifest.json`; these fields must resolve inside `<pluginDir>`.
 const relativePath = z.string().refine(
   (v) => {
-    const normalized = v.replace(/\\/g, '/');
+    const normalized = v.replaceAll(/\\/g, '/');
     return !normalized.startsWith('..') && !normalized.includes('/../') && !normalized.startsWith('/');
   },
   { message: 'path traversal or absolute path not allowed' }

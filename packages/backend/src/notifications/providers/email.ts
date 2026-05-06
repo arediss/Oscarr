@@ -2,7 +2,7 @@ import { Resend } from 'resend';
 import type { NotificationProvider, NotificationPayload } from '../types.js';
 
 function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return text.replaceAll(/&/g, '&amp;').replaceAll(/</g, '&lt;').replaceAll(/>/g, '&gt;').replaceAll(/"/g, '&quot;');
 }
 
 function buildHtml(payload: NotificationPayload): string {

@@ -13,7 +13,7 @@ interface FloatingSaveBarProps {
   error?: string | null;
 }
 
-export function FloatingSaveBar({ show, saving, saved, onSave, onReset, error }: FloatingSaveBarProps) {
+export function FloatingSaveBar({ show, saving, saved, onSave, onReset, error }: Readonly<FloatingSaveBarProps>) {
   const { t } = useTranslation();
   const hasError = !!error;
   const visible = show || saved || hasError;

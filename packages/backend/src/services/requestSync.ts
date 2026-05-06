@@ -1,6 +1,5 @@
 import { prisma } from '../utils/prisma.js';
 import { getArrClient } from '../providers/index.js';
-import type { ArrMediaItem } from '../providers/types.js';
 import { getServiceConfig } from '../utils/services.js';
 import { chunk } from '../utils/batch.js';
 import { logEvent } from '../utils/logEvent.js';
@@ -17,7 +16,7 @@ interface SyncResult {
 }
 
 function extractUsernameFromTag(label: string): string | null {
-  const match = label.match(/^(?:\d+|ndp)\s*-\s*(.+)$/);
+  const match = /^(?:\d+|ndp)\s*-\s*(.+)$/.exec(label);
   return match ? match[1].trim().toLowerCase() : null;
 }
 

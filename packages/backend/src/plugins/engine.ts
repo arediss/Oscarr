@@ -1,6 +1,6 @@
-import { join } from 'path';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { readFile, rm, lstat } from 'fs/promises';
+import { readFile, rm, lstat } from 'node:fs/promises';
 import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { notificationRegistry } from '../notifications/index.js';
@@ -22,12 +22,12 @@ import type {
 } from './types.js';
 
 export class PluginEngine {
-  private plugins = new Map<string, LoadedPlugin>();
-  private settingsCache = new Map<string, Record<string, unknown>>();
-  private compatCache = new Map<string, CompatResult>();
+  private readonly plugins = new Map<string, LoadedPlugin>();
+  private readonly settingsCache = new Map<string, Record<string, unknown>>();
+  private readonly compatCache = new Map<string, CompatResult>();
   /** Per-plugin dispatch router. Key = pluginId. Presence = "this plugin's routes are live".
    *  Toggle off, uninstall, and hot-update just mutate this map — no Fastify restart needed. */
-  private routers = new Map<string, PluginRouter>();
+  private readonly routers = new Map<string, PluginRouter>();
   private dispatcherMounted = false;
   private logger: FastifyBaseLogger | null = null;
   private app: FastifyInstance | null = null;
@@ -40,7 +40,8 @@ export class PluginEngine {
   private log(level: 'info' | 'warn' | 'error' | 'debug', msg: string): void {
     // Strip CR/LF from log lines so a plugin id like "foo\n[INFO] forged-line" can't splice
     // a fake entry into the log. Plugin ids reach this helper from request.params, so
-    // sanitize once here rather than at every call site.
+    // sanitize once here rather than at every call site. KEEP `.replace()` (not `replaceAll`) —
+    // CodeQL's `js/log-injection` sanitizer recognition is method-name specific.
     const sanitized = msg.replace(/\n/g, ' ').replace(/\r/g, ' ');
     if (this.logger) {
       this.logger[level](sanitized);
@@ -537,7 +538,7 @@ export class PluginEngine {
 
       switch (field.type) {
         case 'number':
-          if (typeof val !== 'number' || isNaN(val)) return `Setting "${field.label}" must be a number`;
+          if (typeof val !== 'number' || Number.isNaN(val)) return `Setting "${field.label}" must be a number`;
           break;
         case 'boolean':
           if (typeof val !== 'boolean') return `Setting "${field.label}" must be a boolean`;

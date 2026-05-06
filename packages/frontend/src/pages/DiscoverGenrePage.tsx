@@ -31,7 +31,7 @@ export default function DiscoverGenrePage() {
   const [filters, setFilters] = useState<FilterValues>({ ...DEFAULT_FILTERS });
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const gid = parseInt(genreId || '0');
+  const gid = Number.parseInt(genreId || '0');
   const genre = ALL_GENRES.find((g) => g.id === gid && g.mediaType === mediaType);
   const genreName = genre ? t(genre.nameKey) : t('genre.unknown');
 

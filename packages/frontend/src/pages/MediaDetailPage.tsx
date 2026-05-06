@@ -29,7 +29,7 @@ import { PluginSlot } from '@/plugins/PluginSlot';
 import { useMediaDetailData } from '@/hooks/useMediaDetailData';
 import { useMediaRequestActions } from '@/hooks/useMediaRequestActions';
 import { useEpisodeModal } from '@/hooks/useEpisodeModal';
-import type { TmdbMedia, Media, TmdbCast, TmdbCrew } from '@/types';
+import type { TmdbCast, TmdbCrew } from '@/types';
 import { ACTIVE_REQUEST_STATUSES } from '@oscarr/shared';
 import { resolveButtonState } from '@/utils/resolveButtonState';
 import ActionButton from '@/components/ActionButton';
@@ -38,7 +38,7 @@ interface Props {
   type: 'movie' | 'tv';
 }
 
-export default function MediaDetailPage({ type }: Props) {
+export default function MediaDetailPage({ type }: Readonly<Props>) {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -537,7 +537,7 @@ export default function MediaDetailPage({ type }: Props) {
                           <div className="flex justify-center py-6">
                             <Loader2 className="w-5 h-5 text-ndp-accent animate-spin" />
                           </div>
-                        ) : episodes && episodes.length === 0 ? (
+                        ) : episodes?.length === 0 ? (
                           <p className="text-sm text-ndp-text-dim text-center py-4">{t('media.no_episodes')}</p>
                         ) : episodes ? (
                           <div className="py-1">

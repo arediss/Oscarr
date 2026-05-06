@@ -38,7 +38,7 @@ const DEFAULT_QUERY: DiscoverQuery = {
   sortBy: 'popularity.desc',
 };
 
-export function SectionEditor({ section, onSave, onClose }: SectionEditorProps) {
+export function SectionEditor({ section, onSave, onClose }: Readonly<SectionEditorProps>) {
   const { t } = useTranslation();
   const isNew = section === null;
   const isBuiltin = section?.type === 'builtin';

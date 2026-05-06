@@ -3,15 +3,7 @@ import type { NotificationRegistry } from '../notifications/registry.js';
 import type { NotificationPayload } from '../notifications/types.js';
 import type { ArrClient } from '../providers/types.js';
 import type { PluginRouter } from './router.js';
-import type {
-  PluginMedia,
-  PluginMediaRequest,
-  PluginMediaBatchKey,
-  PluginMediaBatchStatus,
-  PluginTmdbSearchPage,
-  PluginFolderRule,
-} from '@oscarr/shared';
-import type { TmdbMovie, TmdbTv } from '@oscarr/shared';
+import type { PluginMedia, PluginMediaRequest, PluginMediaBatchKey, PluginMediaBatchStatus, PluginTmdbSearchPage, PluginFolderRule, TmdbMovie, TmdbTv, PluginSettingDef } from '@oscarr/shared';
 
 // ─── Plugin Manifest (manifest.json) ────────────────────────────────
 
@@ -76,7 +68,6 @@ export interface PluginManifest {
 
 // PluginSettingDef moved to @oscarr/shared (shared wire contract with the frontend).
 export type { PluginSettingDef } from '@oscarr/shared';
-import type { PluginSettingDef } from '@oscarr/shared';
 
 export interface PluginJobDef {
   key: string;

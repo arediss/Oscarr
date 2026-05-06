@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from 'fs';
-import { dirname } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 const INSTALL_FILE_PATH = process.env.INSTALL_FILE_PATH || './data/install.json';
 

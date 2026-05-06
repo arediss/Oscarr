@@ -136,7 +136,7 @@ export function RoutingRulesTab() {
     const payload = {
       name: newName, mediaType: newMediaType, folderPath: newFolder,
       seriesType: newSeriesType || null,
-      serviceId: newServiceId ? parseInt(newServiceId) : null,
+      serviceId: newServiceId ? Number.parseInt(newServiceId) : null,
       conditions: newConditions,
     };
     try {

@@ -5,7 +5,7 @@ export type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 /** Strip newlines/tabs from single-line fields to prevent log injection. Stack traces keep
  *  their newlines — they're appended to `message` inside a clearly-bounded block. */
 function sanitizeLine(input: string): string {
-  return input.replace(/[\r\n\t]/g, ' ');
+  return input.replaceAll(/[\r\n\t]/g, ' ');
 }
 
 /** Redact the stack so "at …/<hostdir>/app/…" becomes "at <app>/…" — avoids shipping the op's

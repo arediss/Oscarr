@@ -11,7 +11,7 @@ interface InfoFieldProps {
   value: React.ReactNode;
 }
 
-function InfoField({ label, value }: InfoFieldProps) {
+function InfoField({ label, value }: Readonly<InfoFieldProps>) {
   return (
     <div className="space-y-1">
       <p className="text-[10px] uppercase tracking-wider font-semibold text-ndp-text-dim">{label}</p>
@@ -188,7 +188,7 @@ interface Tile {
   fallbackIcon?: 'user' | 'sparkles';
 }
 
-function AvatarSourcePicker({ providers, currentSource, dicebearAvatar, savingSource, onPick }: AvatarSourcePickerProps) {
+function AvatarSourcePicker({ providers, currentSource, dicebearAvatar, savingSource, onPick }: Readonly<AvatarSourcePickerProps>) {
   const { t } = useTranslation();
   // Only show tiles for providers that actually carry an avatar URL — email and any future
   // credential-only provider (LDAP, basic OIDC without picture claim, …) are filtered out

@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import api from '@/lib/api';
-import { registerNsfwHandler } from '@/lib/api';
+import api, { registerNsfwHandler } from '@/lib/api';
 import { useFeatures } from '@/context/FeaturesContext';
 
 const STORAGE_KEY = 'nsfw-show-all';

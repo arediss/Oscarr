@@ -53,7 +53,7 @@ export async function usersRoutes(app: FastifyInstance) {
       const msg = (err as Error).message;
       if (msg === 'NO_TOKEN') return reply.status(400).send({ error: `No ${providerId} token found. Configure the service in settings.` });
       if (msg === 'NO_MACHINE_ID') return reply.status(400).send({ error: `No ${providerId} server configured.` });
-      const safeProviderId = providerId.replace(/[\r\n\t]/g, '');
+      const safeProviderId = providerId.replaceAll(/[\r\n\t]/g, '');
       logEvent('error', 'User', `${safeProviderId} import failed: ${String(err)}`);
       return reply.status(502).send({ error: `Unable to retrieve ${providerId} users` });
     }
@@ -85,7 +85,7 @@ export async function usersRoutes(app: FastifyInstance) {
       // configure machineId"). `detail` carries the human fallback for log tools.
       if (msg === 'NO_TOKEN') return reply.status(400).send({ error: 'NO_AUTH_TOKEN', detail: `No ${providerId} token — configure the service first.` });
       if (msg === 'NO_MACHINE_ID') return reply.status(400).send({ error: 'NO_AUTH_SERVER', detail: `No ${providerId} server configured.` });
-      const safeProviderId = providerId.replace(/[\r\n\t]/g, '');
+      const safeProviderId = providerId.replaceAll(/[\r\n\t]/g, '');
       logEvent('error', 'User', `${safeProviderId} sync failed: ${String(err)}`);
       return reply.status(502).send({ error: 'AUTH_SYNC_FAILED', detail: `Unable to sync ${providerId} users` });
     }

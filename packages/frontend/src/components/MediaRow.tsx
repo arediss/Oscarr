@@ -19,7 +19,7 @@ const SIZE_CLASSES = {
   large: 'w-[180px] sm:w-[210px] lg:w-[240px]',
 };
 
-function MediaRow({ title, media, loading, href, size = 'default' }: MediaRowProps) {
+function MediaRow({ title, media, loading, href, size = 'default' }: Readonly<MediaRowProps>) {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const statuses = useMediaStatus(media);

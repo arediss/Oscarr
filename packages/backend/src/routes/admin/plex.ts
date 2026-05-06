@@ -42,7 +42,7 @@ export async function plexAdminRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'Target user has no Plex account linked' });
     }
 
-    const targetPlexId = parseInt(plexProvider.providerId, 10);
+    const targetPlexId = Number.parseInt(plexProvider.providerId, 10);
     if (!Number.isFinite(targetPlexId)) {
       return reply.status(500).send({ error: 'Target Plex user ID is malformed' });
     }

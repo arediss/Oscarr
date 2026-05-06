@@ -1,4 +1,4 @@
-import { lookup as dnsLookup } from 'dns/promises';
+import { lookup as dnsLookup } from 'node:dns/promises';
 
 /** SSRF guard for admin-typed URLs. Permissive by default (self-hosted LAN). Opt into strict
  *  mode via OSCARR_BLOCK_PRIVATE_SERVICES=true for cloud/shared hosting. */
@@ -32,12 +32,12 @@ export function normalizeHost(hostname: string): { host: string; mappedIPv4?: st
   const bare = hostname.startsWith('[') && hostname.endsWith(']')
     ? hostname.slice(1, -1)
     : hostname;
-  const dotted = bare.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
+  const dotted = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(bare);
   if (dotted) return { host: bare, mappedIPv4: dotted[1] };
-  const hex = bare.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(bare);
   if (hex) {
-    const hi = parseInt(hex[1], 16);
-    const lo = parseInt(hex[2], 16);
+    const hi = Number.parseInt(hex[1], 16);
+    const lo = Number.parseInt(hex[2], 16);
     return { host: bare, mappedIPv4: `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}` };
   }
   return { host: bare };

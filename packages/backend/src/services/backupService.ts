@@ -1,8 +1,8 @@
-import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, readdirSync, unlinkSync, statSync, createWriteStream } from 'fs';
-import { resolve, dirname, join } from 'path';
-import { tmpdir } from 'os';
-import { randomUUID, createHmac, timingSafeEqual } from 'crypto';
-import { execFileSync } from 'child_process';
+import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, readdirSync, unlinkSync, statSync, createWriteStream } from 'node:fs';
+import { resolve, dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import archiver from 'archiver';
 import { prisma } from '../utils/prisma.js';
 import { logEvent } from '../utils/logEvent.js';
@@ -136,13 +136,13 @@ export async function createBackupZip(
 /** Scheduled auto-backup — rotates down to BACKUP_RETENTION (default 7). */
 export async function runAutoBackup(): Promise<{ filename: string; size: number }> {
   const dir = getBackupDir();
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
+  const timestamp = new Date().toISOString().replaceAll(/[:.]/g, '-').slice(0, 16);
   const filename = `oscarr-backup-auto-${APP_VERSION}-${timestamp}.zip`;
   const outputPath = join(dir, filename);
 
   const { size } = await createBackupZip(false, outputPath);
 
-  const maxBackups = parseInt(process.env.BACKUP_RETENTION || '7', 10);
+  const maxBackups = Number.parseInt(process.env.BACKUP_RETENTION || '7', 10);
   const autoBackups = readdirSync(dir)
     .filter((f) => f.startsWith('oscarr-backup-auto-') && f.endsWith('.zip'))
     .sort((a, b) => statSync(join(dir, b)).mtimeMs - statSync(join(dir, a)).mtimeMs);

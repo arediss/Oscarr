@@ -1,10 +1,10 @@
-import { randomUUID } from 'crypto';
-import { createWriteStream, existsSync } from 'fs';
-import { mkdir, readFile, readdir, rename, rm } from 'fs/promises';
-import { lookup as dnsLookup } from 'dns/promises';
-import { join } from 'path';
-import { Readable, Transform } from 'stream';
-import { pipeline } from 'stream/promises';
+import { randomUUID } from 'node:crypto';
+import { createWriteStream, existsSync } from 'node:fs';
+import { mkdir, readFile, readdir, rename, rm } from 'node:fs/promises';
+import { lookup as dnsLookup } from 'node:dns/promises';
+import { join } from 'node:path';
+import { Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { extract as tarExtract } from 'tar';
 import { Agent, fetch as undiciFetch } from 'undici';
 import { parseManifest } from './manifestSchema.js';
@@ -131,7 +131,7 @@ async function downloadToFile(url: string, destPath: string): Promise<void> {
     },
   });
 
-  const nodeStream = Readable.fromWeb(res.body as import('stream/web').ReadableStream);
+  const nodeStream = Readable.fromWeb(res.body as import('node:stream/web').ReadableStream);
   const fileStream = createWriteStream(destPath);
   await pipeline(nodeStream, sizeGate, fileStream);
 }

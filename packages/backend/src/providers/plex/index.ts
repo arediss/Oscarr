@@ -3,7 +3,7 @@ import { prisma } from '../../utils/prisma.js';
 import { getPlexUser, createPlexPin, checkPlexPin, getSharedServerUsers } from './client.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { parseServiceConfig } from '../../utils/services.js';
-import type { Provider, AuthProvider, AuthHelpers } from '../types.js';
+import type { Provider, AuthProvider } from '../types.js';
 import { isProviderEnabled } from '../authSettings.js';
 import { refreshUserAvatar } from '../../utils/avatarSource.js';
 

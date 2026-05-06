@@ -63,16 +63,16 @@ export async function discoverRoutes(app: FastifyInstance) {
     if (mediaType !== 'movie' && mediaType !== 'tv' && mediaType !== 'all') {
       return reply.status(400).send({ error: 'Invalid mediaType' });
     }
-    const gid = parseInt(genreId, 10);
-    if (isNaN(gid) || gid < 0) return reply.status(400).send({ error: 'Invalid genreId' });
+    const gid = Number.parseInt(genreId, 10);
+    if (Number.isNaN(gid) || gid < 0) return reply.status(400).send({ error: 'Invalid genreId' });
 
     const filters = {
       sortBy,
-      voteAverageGte: voteAverageGte ? parseFloat(voteAverageGte) : undefined,
+      voteAverageGte: voteAverageGte ? Number.parseFloat(voteAverageGte) : undefined,
       releaseDateGte,
       releaseDateLte,
       originCountry,
-      keyword: keyword ? parseInt(keyword) : undefined,
+      keyword: keyword ? Number.parseInt(keyword) : undefined,
     };
     return fetchList(
       request,

@@ -47,7 +47,7 @@ export const DEFAULT_FILTERS: FilterValues = {
   hideRequested: false,
 };
 
-export default function FilterBar({ filters, onChange, sortOptions, title, subtitle, backButton }: FilterBarProps) {
+export default function FilterBar({ filters, onChange, sortOptions, title, subtitle, backButton }: Readonly<FilterBarProps>) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -195,8 +195,8 @@ export default function FilterBar({ filters, onChange, sortOptions, title, subti
                   placeholder={t('filter.all_years')}
                   value={filters.releaseYear ?? ''}
                   onChange={e => {
-                    const v = e.target.value.replace(/\D/g, '').slice(0, 4);
-                    const year = v.length === 4 ? parseInt(v) : null;
+                    const v = e.target.value.replaceAll(/\D/g, '').slice(0, 4);
+                    const year = v.length === 4 ? Number.parseInt(v) : null;
                     onChange({ ...filters, releaseYear: year && year >= 1900 && year <= CURRENT_YEAR + 2 ? year : null });
                   }}
                   className="w-full bg-white/5 border border-white/10 rounded-lg text-xs text-ndp-text px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-ndp-accent/40 placeholder:text-ndp-text-dim"

@@ -22,11 +22,11 @@ const TAB_LABELS: Record<TabId, string> = {
   url: 'URL',
 };
 
-export function IconPicker({ value, onChange, trigger, tabs = ['lucide'] }: Props) {
+export function IconPicker({ value, onChange, trigger, tabs = ['lucide'] }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>(tabs[0]);
-  const [urlDraft, setUrlDraft] = useState(value && value.startsWith('https://') ? value : '');
+  const [urlDraft, setUrlDraft] = useState(value?.startsWith('https://') ? value : '');
   const triggerRef = useRef<HTMLSpanElement | null>(null);
   const popRef = useRef<HTMLDivElement | null>(null);
 

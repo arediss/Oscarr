@@ -22,7 +22,7 @@ interface Props {
 
 type Filter = 'all' | 'built-in' | 'plugin';
 
-export function WidgetPickerModal({ open, onClose, onPick, alreadyOnDashboard }: Props) {
+export function WidgetPickerModal({ open, onClose, onPick, alreadyOnDashboard }: Readonly<Props>) {
   const { contributions } = usePluginUI('admin.dashboard.widget');
   const [filter, setFilter] = useState<Filter>('all');
 

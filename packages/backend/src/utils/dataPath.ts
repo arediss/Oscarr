@@ -1,5 +1,5 @@
-import { resolve, dirname } from 'path';
-import { mkdir } from 'fs/promises';
+import { resolve, dirname } from 'node:path';
+import { mkdir } from 'node:fs/promises';
 import { BACKEND_PRISMA_DIR } from './paths.js';
 
 function getDbPath(): string {

@@ -135,7 +135,7 @@ export interface ArrClient {
 export function extractImageFromArr(images: { coverType: string; remoteUrl: string }[] | undefined, type: 'poster' | 'fanart'): string | null {
   const url = images?.find(i => i.coverType === type)?.remoteUrl;
   if (!url) return null;
-  const match = url.match(/\/t\/p\/\w+(\/.+?)(?:\?|$)/);
+  const match = /\/t\/p\/\w+(\/.+?)(?:\?|$)/.exec(url);
   if (match) return match[1];
   // For non-TMDB URLs (TVDB etc.), store the full URL
   if (url.startsWith('http')) return url;

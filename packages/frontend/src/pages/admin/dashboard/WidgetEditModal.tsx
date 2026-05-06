@@ -12,7 +12,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function WidgetEditModal({ item, defaultTitle, onSave, onClose }: Props) {
+export function WidgetEditModal({ item, defaultTitle, onSave, onClose }: Readonly<Props>) {
   const { dialogRef, titleId } = useModal({ open: true, onClose });
   const [title, setTitle] = useState(item.customTitle ?? '');
   const [icon, setIcon] = useState<string | undefined>(item.customIcon);

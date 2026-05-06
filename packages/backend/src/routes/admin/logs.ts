@@ -18,7 +18,7 @@ export async function logsRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
 
     const { page, level, label } = request.query as { page?: string; level?: string; label?: string };
-    const pageNum = parseInt(page || '1', 10) || 1;
+    const pageNum = Number.parseInt(page || '1', 10) || 1;
     const take = 50;
     const skip = (pageNum - 1) * take;
     const where: Record<string, unknown> = {};

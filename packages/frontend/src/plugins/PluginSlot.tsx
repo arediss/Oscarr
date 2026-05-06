@@ -11,7 +11,7 @@ interface PluginSlotProps {
   renderItem?: (contribution: PluginUIContribution, index: number) => ReactNode;
 }
 
-export function PluginSlot({ hookPoint, context, renderItem }: PluginSlotProps) {
+export function PluginSlot({ hookPoint, context, renderItem }: Readonly<PluginSlotProps>) {
   const { contributions } = usePluginUI(hookPoint);
   if (!contributions.length) return null;
 

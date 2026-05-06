@@ -17,7 +17,7 @@ function parsePluginLayoutI(i: string): ParsedId | null {
   return { pluginId: rest.slice(0, sep), widgetId: rest.slice(sep + 1) };
 }
 
-export function PluginWidget({ pluginId, widgetId, contribution }: PluginWidgetProps) {
+export function PluginWidget({ pluginId, widgetId, contribution }: Readonly<PluginWidgetProps>) {
   return (
     <PluginHookComponent
       pluginId={pluginId}

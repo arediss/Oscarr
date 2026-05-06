@@ -173,7 +173,7 @@ export async function radarrSonarrRoutes(app: FastifyInstance) {
 
   }, async (request) => {
     const { days } = request.query as { days?: string };
-    const numDays = Math.min(parseInt(days || '30', 10) || 30, 90);
+    const numDays = Math.min(Number.parseInt(days || '30', 10) || 30, 90);
     const start = new Date().toISOString().slice(0, 10);
     const end = new Date(Date.now() + numDays * 86400000).toISOString().slice(0, 10);
 

@@ -196,7 +196,7 @@ interface ColumnProps {
   onAdd: () => void;
 }
 
-function Column({ label, links, onUpdate, onRemove, onMove, onAdd }: ColumnProps) {
+function Column({ label, links, onUpdate, onRemove, onMove, onAdd }: Readonly<ColumnProps>) {
   const { t } = useTranslation();
   return (
     <div className="card p-4 space-y-3">
@@ -250,7 +250,7 @@ interface LinkRowProps {
   onMove: (id: string, direction: -1 | 1) => void;
 }
 
-function LinkRow({ link, isFirst, isLast, onUpdate, onRemove, onMove }: LinkRowProps) {
+function LinkRow({ link, isFirst, isLast, onUpdate, onRemove, onMove }: Readonly<LinkRowProps>) {
   const { t } = useTranslation();
   const labelOk = link.label.trim().length > 0 && link.label.trim().length <= 50;
   const urlOk = HTTPS_RE.test(link.url);

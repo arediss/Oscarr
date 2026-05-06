@@ -104,7 +104,7 @@ const jellyfinAuth: AuthProvider = {
           providerId: auth.userId,
           providerToken: auth.token,
           providerUsername: auth.user.name,
-          email: `${auth.user.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@jellyfin.local`,
+          email: `${auth.user.name.toLowerCase().replaceAll(/[^a-z0-9]/g, '')}@jellyfin.local`,
           displayName: auth.user.name,
           avatar,
         });
@@ -149,7 +149,7 @@ const jellyfinAuth: AuthProvider = {
 
   async importUsers(_adminUserId, filter) {
     const cfg = await getConfig();
-    if (!cfg || !cfg.apiKey) throw new Error('NO_TOKEN');
+    if (!cfg?.apiKey) throw new Error('NO_TOKEN');
     const { url: serverUrl, apiKey } = cfg;
 
     const allUsers = await getUsers(serverUrl, apiKey);
@@ -164,7 +164,7 @@ const jellyfinAuth: AuthProvider = {
       });
       if (existingProvider) { skipped++; continue; }
 
-      const email = `${user.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@jellyfin.local`;
+      const email = `${user.name.toLowerCase().replaceAll(/[^a-z0-9]/g, '')}@jellyfin.local`;
       const existingUser = await prisma.user.findUnique({ where: { email } });
       if (existingUser) { skipped++; continue; }
 
@@ -195,7 +195,7 @@ const jellyfinAuth: AuthProvider = {
   // admin can cherry-pick imports through the same review modal as Plex.
   async syncUsers(_adminUserId) {
     const cfg = await getConfig();
-    if (!cfg || !cfg.apiKey) throw new Error('NO_TOKEN');
+    if (!cfg?.apiKey) throw new Error('NO_TOKEN');
     const { url: serverUrl, apiKey } = cfg;
 
     const users = await getUsers(serverUrl, apiKey);

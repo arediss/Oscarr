@@ -35,7 +35,7 @@ interface DynamicIconProps {
 
 const warned = new Set<string>();
 
-export function DynamicIcon({ name, className }: DynamicIconProps) {
+export function DynamicIcon({ name, className }: Readonly<DynamicIconProps>) {
   const Icon = ICON_MAP[name];
   if (!Icon) {
     if (import.meta.env.DEV && !warned.has(name)) {

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { FRONTEND_DIST, PROJECT_PACKAGE_JSON } from '../utils/paths.js';

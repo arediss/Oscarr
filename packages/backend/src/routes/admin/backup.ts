@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { readFileSync, existsSync, readdirSync, unlinkSync, statSync } from 'fs';
-import { resolve, join } from 'path';
-import { tmpdir } from 'os';
-import { randomUUID } from 'crypto';
+import { readFileSync, existsSync, readdirSync, unlinkSync, statSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { prisma } from '../../utils/prisma.js';
 import { logEvent } from '../../utils/logEvent.js';
 import { verifyPassword } from '../../utils/password.js';
@@ -125,7 +125,7 @@ export async function backupRoutes(app: FastifyInstance) {
 
   // Restore gates: HMAC + admin password re-auth + SQLite magic check.
   // Pre-HMAC backups require BACKUP_ALLOW_UNSIGNED=true.
-  const maxRestoreSize = parseInt(process.env.BACKUP_MAX_SIZE_MB || '500', 10) * 1024 * 1024;
+  const maxRestoreSize = Number.parseInt(process.env.BACKUP_MAX_SIZE_MB || '500', 10) * 1024 * 1024;
   app.post('/backup/restore', { bodyLimit: maxRestoreSize, config: { rateLimit: { max: 3, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = request.body as {
       db?: string;

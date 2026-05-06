@@ -3,11 +3,11 @@ import { logEvent } from '../utils/logEvent.js';
 import type { NotificationProvider, NotificationEventType, NotificationPayload } from './types.js';
 
 export class NotificationRegistry {
-  private providers = new Map<string, NotificationProvider>();
-  private eventTypes = new Map<string, NotificationEventType>();
+  private readonly providers = new Map<string, NotificationProvider>();
+  private readonly eventTypes = new Map<string, NotificationEventType>();
   // Tracks which plugin owns which provider id so disable/uninstall can clean up — without
   // this, plugin providers stayed wired to the singleton across hot reloads / uninstalls.
-  private providerOwners = new Map<string, Set<string>>();
+  private readonly providerOwners = new Map<string, Set<string>>();
 
   // ─── Provider management ───────────────────────────────
 

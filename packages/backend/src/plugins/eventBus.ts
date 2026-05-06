@@ -1,11 +1,11 @@
 type EventHandler = (data: unknown) => void | Promise<void>;
 
 export class PluginEventBus {
-  private listeners = new Map<string, Set<EventHandler>>();
+  private readonly listeners = new Map<string, Set<EventHandler>>();
   // Tracks which plugin owns which (event, handler) pair so disable/uninstall can clean up
   // — without this, every togglePlugin(false)/uninstall left zombie handlers wired to the
   // singleton, leaking memory and firing stale closures on later events.
-  private ownership = new Map<string, Array<{ event: string; handler: EventHandler }>>();
+  private readonly ownership = new Map<string, Array<{ event: string; handler: EventHandler }>>();
 
   on(event: string, handler: EventHandler, pluginId?: string): void {
     if (!this.listeners.has(event)) {

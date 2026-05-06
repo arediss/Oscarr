@@ -5,14 +5,13 @@ import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
 import { posterUrl } from '@/lib/api';
 import { localizedDate, localizedTime } from '@/i18n/formatters';
-import { useCalendar } from '@/hooks/useCalendar';
-import type { CalendarItem } from '@/hooks/useCalendar';
+import { useCalendar, type CalendarItem } from '@/hooks/useCalendar';
 
 type ViewMode = 'grid' | 'list';
 
 function extractPosterPath(url: string | null): string | null {
   if (!url) return null;
-  const match = url.match(/\/t\/p\/\w+(\/.+?)(?:\?|$)/);
+  const match = /\/t\/p\/\w+(\/.+?)(?:\?|$)/.exec(url);
   return match ? match[1] : url.startsWith('http') ? url : null;
 }
 
@@ -53,7 +52,7 @@ export default function CalendarPage() {
   const grouped: Record<string, CalendarItem[]> = {};
   for (const item of items) {
     const d = new Date(item.date);
-    if (isNaN(d.getTime())) continue; // skip invalid dates
+    if (Number.isNaN(d.getTime())) continue; // skip invalid dates
     const key = toDateKey(d);
     if (!grouped[key]) grouped[key] = [];
     if (item.type === 'episode' && item.tmdbId != null) {

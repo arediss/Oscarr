@@ -168,7 +168,7 @@ export function FeaturesTab() {
               min={1}
               max={1440}
               value={missingSearchCooldownMin}
-              onChange={(e) => setMissingSearchCooldownMin(Math.max(1, parseInt(e.target.value) || 60))}
+              onChange={(e) => setMissingSearchCooldownMin(Math.max(1, Number.parseInt(e.target.value) || 60))}
               className="input w-24 text-sm text-center"
             />
             <span className="text-sm text-ndp-text-dim">min</span>

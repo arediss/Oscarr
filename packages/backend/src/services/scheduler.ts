@@ -12,7 +12,7 @@ import { logEvent } from '../utils/logEvent.js';
 
 /** Strip control characters (newlines, tabs, etc.) to prevent log injection */
 function sanitize(input: string): string {
-  return input.replace(/[\r\n\t]/g, '');
+  return input.replaceAll(/[\r\n\t]/g, '');
 }
 
 // Map of job keys to their handler functions

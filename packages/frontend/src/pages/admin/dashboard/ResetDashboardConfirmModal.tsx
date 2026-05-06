@@ -6,7 +6,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function ResetDashboardConfirmModal({ onConfirm, onClose }: Props) {
+export function ResetDashboardConfirmModal({ onConfirm, onClose }: Readonly<Props>) {
   const { dialogRef, titleId } = useModal({ open: true, onClose });
 
   return (
