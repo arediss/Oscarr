@@ -68,7 +68,7 @@ export default function CalendarPage() {
   // For list view: all days from today onward that have items
   const listDays = Object.keys(grouped)
     .filter(key => key >= todayKey)
-    .sort();
+    .sort((a, b) => a.localeCompare(b));
 
   return (
     <div className="max-w-[1800px] mx-auto px-4 sm:px-8 py-8">

@@ -198,6 +198,9 @@ export function QualityTab() {
                 isSelected ? 'ring-1 ring-ndp-accent/30' : 'hover:bg-white/[0.02]',
               )}
               onClick={() => setEditingOption(isSelected ? null : opt.id)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingOption(isSelected ? null : opt.id); } }}
+              role="button"
+              tabIndex={0}
             >
               {/* Label */}
               <div className="flex items-center justify-between">

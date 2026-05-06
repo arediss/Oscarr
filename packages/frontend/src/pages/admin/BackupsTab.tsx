@@ -225,6 +225,9 @@ export function BackupsTab() {
               {!restoreResult && !restoreFile && !restoreError && (
                 <div
                   onClick={() => fileRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click(); } }}
+                  role="button"
+                  tabIndex={0}
                   className="border-2 border-dashed border-white/10 rounded-xl p-8 text-center hover:border-ndp-accent/30 transition-colors cursor-pointer"
                 >
                   <Upload className="w-8 h-8 text-ndp-text-dim mx-auto mb-2" />

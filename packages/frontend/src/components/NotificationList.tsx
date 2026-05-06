@@ -191,6 +191,9 @@ function NotifCard({ notif, t, markAsRead, dismiss, onAction, actionsAlwaysVisib
   return (
     <div
       onClick={handleClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } }}
+      role="button"
+      tabIndex={0}
       className={clsx(
         'group relative flex gap-3 px-4 py-3 hover:bg-white/[0.04] transition-colors cursor-pointer border-b border-white/5 last:border-0',
         isUnread && 'bg-ndp-accent/[0.04]',

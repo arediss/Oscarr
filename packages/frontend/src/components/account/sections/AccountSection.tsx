@@ -25,15 +25,16 @@ export function AccountSection() {
   const { user, refreshUser } = useAuth();
   const [savingSource, setSavingSource] = useState<string | null>(null);
   const [editingDicebear, setEditingDicebear] = useState(false);
-  if (!user) return null;
 
+  // Hooks must run on every render — read user.avatarConfig defensively so the early return
+  // below doesn't make React see a different hook order between renders.
   const dicebearConfig = useMemo(() => {
-    if (!user.avatarConfig) return null;
+    if (!user?.avatarConfig) return null;
     try {
       const parsed = JSON.parse(user.avatarConfig) as { seed?: string; options?: AvatarOptions };
       return parsed.seed ? { seed: parsed.seed, options: parsed.options ?? {} } : null;
     } catch { return null; }
-  }, [user.avatarConfig]);
+  }, [user?.avatarConfig]);
 
   // Re-render the saved dicebear avatar so the picker tile keeps showing it even when the active
   // source is something else (Plex/Discord). Without this the user would only see the sparkles
@@ -42,6 +43,8 @@ export function AccountSection() {
     () => (dicebearConfig ? renderDicebearAvatar(dicebearConfig.seed, dicebearConfig.options) : null),
     [dicebearConfig],
   );
+
+  if (!user) return null;
 
   const memberSince = user.createdAt ? new Date(user.createdAt) : null;
   const memberSinceLabel = memberSince && !Number.isNaN(memberSince.getTime())

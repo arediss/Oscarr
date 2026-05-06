@@ -312,6 +312,9 @@ function ConfigField({
   onChange: (v: string | boolean) => void;
 }) {
   const { t } = useTranslation();
+  // Hoisted to the top of the component so React Hooks order stays stable across the
+  // boolean/string render branches below.
+  const [revealMasked, setRevealMasked] = useState(false);
   // Localize known field keys when a translation exists; otherwise fall through to the English
   // string declared by the provider. Keeps the backend free of i18n plumbing while letting us
   // localize the commonly-shared fields (allowSignup, guildId, …).
@@ -359,7 +362,6 @@ function ConfigField({
 
   const strValue = typeof value === 'string' ? value : '';
   const isMasked = strValue === MASK;
-  const [revealMasked, setRevealMasked] = useState(false);
   const displayValue = isMasked && !revealMasked ? '••••••••' : strValue;
   const hasValue = !!strValue && !isMasked;
 

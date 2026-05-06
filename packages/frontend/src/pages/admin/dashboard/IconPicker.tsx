@@ -27,7 +27,7 @@ export function IconPicker({ value, onChange, trigger, tabs = ['lucide'] }: Read
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>(tabs[0]);
   const [urlDraft, setUrlDraft] = useState(value?.startsWith('https://') ? value : '');
-  const triggerRef = useRef<HTMLSpanElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
@@ -76,7 +76,7 @@ export function IconPicker({ value, onChange, trigger, tabs = ['lucide'] }: Read
 
   return (
     <>
-      <span ref={triggerRef} onClick={() => setOpen((o) => !o)} className="inline-flex">{trigger}</span>
+      <button type="button" ref={triggerRef} onClick={() => setOpen((o) => !o)} className="inline-flex bg-transparent border-0 p-0 cursor-pointer">{trigger}</button>
       {open && pos && createPortal(
         <div
           ref={popRef}
