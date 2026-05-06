@@ -7,189 +7,140 @@ import { getPluginsDir } from './loader.js';
 import { installPluginFromUrl } from './installer.js';
 import { prisma } from '../utils/prisma.js';
 import { scrubSecrets } from '../utils/logScrubber.js';
+import { buildRuntimeStatus } from './statusDetection.js';
+import { checkCompat } from './compat.js';
+import { parseManifest } from './manifestSchema.js';
+import type { PluginManifest, LoadedPlugin } from './types.js';
+import type { FastifyRequest } from 'fastify';
+import {
+  fetchRegistry,
+  fetchLatestRelease,
+  fetchRepoMetadata,
+  fetchRemoteManifest,
+  resolveInstallUrl,
+  checkUpdatesForRegistryPlugins,
+  type RegistryEntry,
+  type UpdateCheckResult,
+} from './registry.js';
 
-// ── Registry cache (module scope) ───────────────────────────────────
-const REGISTRY_URL = 'https://raw.githubusercontent.com/arediss/Oscarr-Plugin-Registry/main/plugins.json';
-const REGISTRY_TTL = 30 * 60 * 1000; // 30 minutes
-let registryCache: { data: unknown; timestamp: number } | null = null;
+// ── Discover catalog cache ──────────────────────────────────────────
+// The catalog is the UI-shaped projection (manifest + repo metadata + downloads) returned
+// by GET /registry. The raw registry doc + per-repo release calls are cached inside
+// registry.ts; this cache only memoizes the final UI shape so we don't re-stitch it on
+// every Discover open.
+const CATALOG_TTL_MS = 30 * 60 * 1000;
+let catalogCache: { data: unknown; timestamp: number } | null = null;
 
 // ── Update check cache ──────────────────────────────────────────────
-const UPDATE_TTL = 60 * 60 * 1000; // 1h — keeps us well under GitHub's 60 req/h unauthenticated limit
-let updateCache: { data: Record<string, UpdateInfo>; timestamp: number } | null = null;
-// Shared in-flight promise while a check is running. Without this, two admins (or a tab reopen
-// + a background refresh) can both pass the cache-miss guard and each fire N releases API calls,
-// eating the 60 req/h unauthenticated limit in one user action.
-let inflightUpdateCheck: Promise<Record<string, UpdateInfo>> | null = null;
+// Module-scope so the badge survives a tab refresh without re-hammering GitHub. 15 min is
+// tight enough for the admin "updates available" dot to feel live but loose enough to keep
+// us under GitHub's 60 req/h unauthenticated limit. The Reload button bypasses both this
+// cache and the per-repo release cache via `force: true`.
+const UPDATE_TTL_MS = 15 * 60 * 1000;
+let updateCache: { data: Record<string, UpdateCheckResult>; timestamp: number } | null = null;
 
-interface UpdateInfo {
-  installed: string;
-  latest: string | null;
-  available: boolean;
-  repository?: string;
-  /** Populated when the registry has a matching entry; otherwise the plugin can't be auto-updated. */
-  sourceUrl?: string;
-}
-
-async function checkUpdatesForInstalledPlugins(): Promise<Record<string, UpdateInfo>> {
+async function getOrComputeUpdates(force = false): Promise<Record<string, UpdateCheckResult>> {
   const now = Date.now();
-  if (updateCache && now - updateCache.timestamp < UPDATE_TTL) return updateCache.data;
-  if (inflightUpdateCheck) return inflightUpdateCheck;
+  if (!force && updateCache && now - updateCache.timestamp < UPDATE_TTL_MS) return updateCache.data;
 
-  inflightUpdateCheck = runUpdateCheck(now).finally(() => {
-    inflightUpdateCheck = null;
+  // Only registry-installed plugins are tracked. Local plugins (symlinks, URL installs,
+  // manual drop-ins) are excluded — admin manages those themselves.
+  const states = await prisma.pluginState.findMany({
+    where: { installSource: 'registry', repository: { not: null } },
+    select: { pluginId: true, repository: true },
   });
-  return inflightUpdateCheck;
-}
-
-async function runUpdateCheck(now: number): Promise<Record<string, UpdateInfo>> {
-  // Load registry (re-use the registry cache, don't hit GitHub twice). Don't cache the final
-  // result if the registry itself failed to load — avoids hiding updates for 1h over a transient blip.
-  let registry: { plugins?: Array<{ repository?: string }> } = {};
-  let registryOk = false;
-  try {
-    const res = await fetch(REGISTRY_URL);
-    if (res.ok) {
-      registry = await res.json() as typeof registry;
-      registryOk = true;
-    }
-  } catch { /* ignore — no registry = no update checks */ }
-
-  const reposByPluginId = new Map<string, string>();
-  for (const entry of registry.plugins ?? []) {
-    if (!entry.repository) continue;
-    const id = entry.repository.split('/').pop()?.toLowerCase().replace(/^oscarr-plugin-/, '') ?? '';
-    if (id) reposByPluginId.set(id, entry.repository);
-  }
-
   const installed = pluginEngine.getPluginList();
-  const result: Record<string, UpdateInfo> = {};
-  const persistOps: Promise<unknown>[] = [];
+  const inputs = states
+    .map((s) => {
+      const p = installed.find((i) => i.id === s.pluginId);
+      if (!p || !s.repository) return null;
+      return { id: p.id, repository: s.repository, version: p.version };
+    })
+    .filter((x): x is { id: string; repository: string; version: string } => x !== null);
+
+  const batch = await checkUpdatesForRegistryPlugins(inputs, { force });
+
+  // Skip null latest — a per-plugin failure mustn't overwrite a previously good value.
   const checkedAt = new Date();
-
-  for (const p of installed) {
-    const repo = reposByPluginId.get(p.id);
-    if (!repo) {
-      result[p.id] = { installed: p.version, latest: null, available: false };
-      continue;
-    }
-    try {
-      const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
-      const ghToken = process.env.GITHUB_TOKEN;
-      if (ghToken) headers.Authorization = `Bearer ${ghToken}`;
-      const rel = await fetchLatestRelease(repo, headers);
-      if (!rel) {
-        result[p.id] = { installed: p.version, latest: null, available: false, repository: repo };
-        continue;
-      }
-      const latest = rel.tag_name?.replace(/^v/, '') ?? null;
-      const available = !!latest && compareSemver(latest, p.version) > 0;
-      result[p.id] = {
-        installed: p.version,
-        latest,
-        available,
-        repository: repo,
-      };
-      // Persist so the badge survives a restart (the admin doesn't have to wait for
-      // the next TTL miss to see "update available" again).
-      persistOps.push(
+  await Promise.all(
+    Array.from(batch.results).flatMap(([pluginId, r]) =>
+      r.latest === null ? [] : [
         prisma.pluginState.update({
-          where: { pluginId: p.id },
-          data: { latestVersion: latest, lastUpdateCheck: checkedAt },
-        }).catch(() => {})
-      );
-    } catch {
-      result[p.id] = { installed: p.version, latest: null, available: false, repository: repo };
-    }
-  }
+          where: { pluginId },
+          data: { latestVersion: r.latest, lastUpdateCheck: checkedAt },
+        }).catch(() => { /* row may have been removed mid-check; ignore */ }),
+      ],
+    ),
+  );
 
-  await Promise.all(persistOps);
-  if (registryOk) updateCache = { data: result, timestamp: now };
+  const result: Record<string, UpdateCheckResult> = {};
+  for (const [id, r] of batch.results) result[id] = r;
+  if (batch.ok) updateCache = { data: result, timestamp: now };
   return result;
 }
 
-const ARCH_TOKENS: Record<string, string[]> = {
-  arm64: ['arm64', 'aarch64'],
-  x64:   ['amd64', 'x64', 'x86_64'],
-};
-
-function archMatches(assetName: string, arch: string): boolean {
-  const tokens = ARCH_TOKENS[arch] ?? [];
-  return tokens.some((t) => new RegExp(`(?:^|[-_.])${t}(?:[-_.]|\\.tar\\.gz$)`, 'i').test(assetName));
-}
-
-function hasAnyArchToken(assetName: string): boolean {
-  return Object.values(ARCH_TOKENS).flat().some(
-    (t) => new RegExp(`(?:^|[-_.])${t}(?:[-_.]|\\.tar\\.gz$)`, 'i').test(assetName),
-  );
-}
-
-interface GitHubRelease {
-  tag_name?: string;
-  draft?: boolean;
-  prerelease?: boolean;
-  assets?: { name: string; browser_download_url: string; download_count?: number }[];
-}
-
-function compareSemver(a: string, b: string): number {
-  const parse = (t: string) => {
-    const [core, ...pre] = t.replace(/^v/i, '').split('-');
-    const parts = core.split('.').map((n) => parseInt(n, 10) || 0);
-    while (parts.length < 3) parts.push(0);
-    return { parts, pre: pre.join('-') };
-  };
-  const A = parse(a);
-  const B = parse(b);
-  for (let i = 0; i < 3; i++) {
-    if (A.parts[i] !== B.parts[i]) return A.parts[i] - B.parts[i];
-  }
-  if (!A.pre && B.pre) return 1;
-  if (A.pre && !B.pre) return -1;
-  return A.pre.localeCompare(B.pre);
-}
-
-/** GitHub returns 404 on /releases/latest when no release is flagged as latest. Falls back
- *  to /releases sorted by semver. */
-async function fetchLatestRelease(repository: string, headers: Record<string, string>): Promise<GitHubRelease | null> {
-  const latest = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, { headers });
-  if (latest.ok) return latest.json() as Promise<GitHubRelease>;
-  if (latest.status === 404) {
-    const list = await fetch(`https://api.github.com/repos/${repository}/releases?per_page=30`, { headers });
-    if (list.ok) {
-      const releases = await list.json() as GitHubRelease[];
-      const stable = releases.filter((r) => !r.draft && !r.prerelease && r.tag_name);
-      if (stable.length === 0) return null;
-      stable.sort((a, b) => compareSemver(b.tag_name!, a.tag_name!));
-      return stable[0];
-    }
-  }
-  return null;
-}
-
-// Mirror of the pattern enforced by the /install route schema. Re-validating in-function
-// guarantees no future caller (or a refactor that bypasses the schema) can splice arbitrary
-// segments — `://`, `..`, `?`, `#` — into the github.com URL we build below.
-const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-
-async function resolveInstallUrlFromRepo(repository: string): Promise<string> {
-  if (!REPO_PATTERN.test(repository)) {
-    throw new Error(`Invalid repository identifier: ${repository}`);
-  }
+/** Shared install pipeline: download → extract → loadSingle → persist installSource. Throws on
+ *  any failure with the install dir already cleaned up. Used by both POST /install and
+ *  POST /:id/update so the two paths can't drift. */
+async function performInstall(
+  url: string,
+  repository: string | null,
+  request: FastifyRequest,
+): Promise<LoadedPlugin> {
+  let installedDir: string | null = null;
   try {
-    const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
-    const ghToken = process.env.GITHUB_TOKEN;
-    if (ghToken) headers.Authorization = `Bearer ${ghToken}`;
-    const rel = await fetchLatestRelease(repository, headers);
-    if (rel) {
-      const tarballs = (rel.assets ?? []).filter(
-        (a) => /\.tar\.gz$/i.test(a.name) && !/\.sha256$/i.test(a.name),
-      );
-      const archAsset = tarballs.find((a) => archMatches(a.name, process.arch));
-      if (archAsset?.browser_download_url) return archAsset.browser_download_url;
-      const universal = tarballs.find((a) => !hasAnyArchToken(a.name));
-      if (universal?.browser_download_url) return universal.browser_download_url;
+    const installed = await installPluginFromUrl(url);
+    installedDir = installed.dir;
+    const loaded = await pluginEngine.loadSingle(installed.dir, { defaultEnabled: false });
+
+    await prisma.pluginState.update({
+      where: { pluginId: loaded.manifest.id },
+      data: repository
+        ? { installSource: 'registry', repository }
+        : { installSource: 'local', repository: null },
+    }).catch((err) => {
+      request.log.warn({ err, pluginId: loaded.manifest.id }, '[plugins] Failed to persist installSource');
+    });
+
+    updateCache = null;
+
+    const jobDefs = loaded.manifest.hooks?.jobs ?? [];
+    if (jobDefs.length > 0) {
+      const { registerPluginJobs } = await import('../services/scheduler.js');
+      await registerPluginJobs(jobDefs);
     }
-  } catch { /* fall through to source tarball */ }
-  return `https://api.github.com/repos/${repository}/tarball/HEAD`;
+    return loaded;
+  } catch (err) {
+    if (installedDir) {
+      await rm(installedDir, { recursive: true, force: true }).catch((rmErr) => {
+        request.log.error({ err: rmErr, dir: installedDir }, '[plugins] Rollback failed to remove install dir');
+      });
+    }
+    throw err;
+  }
+}
+
+/** Compares the permission surface of two manifests. Drives the update consent modal:
+ *  added items trigger re-consent, removed/changed are shown for transparency. */
+function diffPermissions(prev: PluginManifest, next: PluginManifest) {
+  const diffArray = (a: string[] = [], b: string[] = []) => ({
+    added: b.filter((x) => !a.includes(x)),
+    removed: a.filter((x) => !b.includes(x)),
+  });
+  const prevReasons = (prev.capabilityReasons ?? {}) as Record<string, string>;
+  const nextReasons = (next.capabilityReasons ?? {}) as Record<string, string>;
+  const reasonAdded: Record<string, string> = {};
+  const reasonChanged: { capability: string; from: string; to: string }[] = [];
+  for (const [cap, reason] of Object.entries(nextReasons)) {
+    if (!(cap in prevReasons)) reasonAdded[cap] = reason;
+    else if (prevReasons[cap] !== reason) reasonChanged.push({ capability: cap, from: prevReasons[cap], to: reason });
+  }
+  const reasonRemoved = Object.keys(prevReasons).filter((cap) => !(cap in nextReasons));
+  return {
+    services: diffArray(prev.services, next.services),
+    capabilities: diffArray(prev.capabilities, next.capabilities),
+    capabilityReasons: { added: reasonAdded, removed: reasonRemoved, changed: reasonChanged },
+  };
 }
 
 // Allowed file extensions for plugin frontend serving
@@ -206,39 +157,109 @@ export async function pluginRoutes(app: FastifyInstance) {
   });
 
   // ── List installed plugins ──────────────────────────────────────
-  // Joins the engine's in-memory plugin list with PluginState so the caller gets
-  // `latestVersion` / `lastUpdateCheck` / `updateAvailable` out of the box —
-  // avoids the frontend re-implementing a semver comparison against the registry.
+  // Joins the engine's in-memory plugin list with PluginState to compute the runtime status
+  // (source, latestVersion, updateAvailable, autoUpdateEnabled). No registry fetch on this
+  // path — `latestVersion` is whatever was persisted by the last /updates call. The Discover
+  // endpoint (GET /registry) and /updates are the only paths that hit GitHub.
   app.get('/', async () => {
     const list = pluginEngine.getPluginList();
     if (list.length === 0) return list;
+
     const states = await prisma.pluginState.findMany({
       where: { pluginId: { in: list.map((p) => p.id) } },
-      select: { pluginId: true, latestVersion: true, lastUpdateCheck: true },
+      select: {
+        pluginId: true,
+        latestVersion: true,
+        lastUpdateCheck: true,
+        installSource: true,
+        autoUpdateEnabled: true,
+      },
     });
     const byId = new Map(states.map((s) => [s.pluginId, s]));
+
     return list.map((p) => {
       const s = byId.get(p.id);
+      const loaded = pluginEngine.getPlugin(p.id);
+      const runtime = loaded
+        ? buildRuntimeStatus(loaded, {
+            latestVersion: s?.latestVersion ?? null,
+            pluginState: s ? { installSource: s.installSource, autoUpdateEnabled: s.autoUpdateEnabled } : null,
+          })
+        : null;
       return {
         ...p,
-        latestVersion: s?.latestVersion ?? null,
+        latestVersion: runtime?.latestVersion ?? null,
         lastUpdateCheck: s?.lastUpdateCheck?.toISOString() ?? null,
-        updateAvailable: !!s?.latestVersion && compareSemver(s.latestVersion, p.version) > 0,
+        updateAvailable: runtime?.updateAvailable ?? false,
+        source: runtime?.source ?? 'local',
+        isSymlink: runtime?.isSymlink ?? p.isSymlink === true,
+        autoUpdateEnabled: runtime?.autoUpdateEnabled ?? false,
       };
     });
   });
 
   // ── Check for updates ────────────────────────────────────────────
-  // Looks up each installed plugin in the registry, fetches the latest
-  // GitHub release tag via the GitHub API, and compares with the installed
-  // version. Cached 1h in-memory to avoid hitting GitHub rate-limits.
-  app.get('/updates', async () => {
-    return checkUpdatesForInstalledPlugins();
+  // `?force=true` bypasses the 15 min TTL cache + the per-repo release cache.
+  app.get<{ Querystring: { force?: string } }>('/updates', async (request) => {
+    return getOrComputeUpdates(request.query.force === 'true');
   });
 
-  // ── Install plugin from URL ─────────────────────────────────────
-  // Download a tar.gz, validate its manifest, drop it into the plugins dir,
-  // and hot-load it via engine.loadSingle() — no container restart needed.
+  // ── Update preflight ────────────────────────────────────────────
+  // Powers the update modal: returns compat + permission diff between the loaded manifest
+  // and the latest release's manifest. We fetch the manifest at the release tag (not main)
+  // so the diff matches what /install will actually apply. Refuses with 502 when the tagged
+  // manifest can't be fetched — better than silently letting permissions change.
+  app.get<{ Params: { id: string } }>(
+    '/:id/update/preflight',
+    {
+      schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const plugin = pluginEngine.getPlugin(id);
+      if (!plugin) return reply.status(404).send({ error: 'Plugin not found' });
+
+      const state = await prisma.pluginState.findUnique({
+        where: { pluginId: id },
+        select: { installSource: true, repository: true },
+      });
+      if (state?.installSource !== 'registry' || !state.repository) {
+        return reply.status(400).send({ error: 'Plugin is not a registry install' });
+      }
+
+      const rel = await fetchLatestRelease(state.repository).catch(() => null);
+      const tag = rel?.tag_name;
+      const latestVersion = tag ? tag.replace(/^v/i, '') : null;
+      if (!latestVersion || latestVersion === plugin.manifest.version) {
+        return reply.status(400).send({ error: 'No update available' });
+      }
+
+      const remote = await fetchRemoteManifest(state.repository, tag!);
+      if (!remote) {
+        return reply.status(502).send({ error: "Couldn't verify the new manifest's permissions" });
+      }
+      let nextManifest: PluginManifest;
+      try {
+        nextManifest = parseManifest(remote, `${state.repository}@${tag}`) as PluginManifest;
+      } catch (err) {
+        return reply.status(502).send({ error: `Invalid manifest in ${tag}: ${(err as Error).message}` });
+      }
+
+      return {
+        currentVersion: plugin.manifest.version,
+        latestVersion,
+        compat: checkCompat(nextManifest),
+        permissionDiff: diffPermissions(plugin.manifest, nextManifest),
+      };
+    }
+  );
+
+  // ── Install plugin from URL or registry repository ──────────────
+  // Two install modes:
+  //   - `repository`: registry install — resolves the latest release tarball, persists
+  //                   `installSource='registry'` + the repository so /updates can track it.
+  //   - `url`:        raw URL install (legacy / dev) — persists `installSource='local'`,
+  //                   the admin manages updates themselves.
   app.post<{ Body: { url?: string; repository?: string } }>(
     '/install',
     {
@@ -261,20 +282,9 @@ export async function pluginRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const { url: explicitUrl, repository } = request.body;
-      let installedDir: string | null = null;
-      const url = repository ? await resolveInstallUrlFromRepo(repository) : explicitUrl!;
       try {
-        const installed = await installPluginFromUrl(url);
-        installedDir = installed.dir;
-        const loaded = await pluginEngine.loadSingle(installed.dir, { defaultEnabled: false });
-        updateCache = null;
-        // Register the plugin's job defs so manual triggers + cron ticks pick them up without
-        // a server restart. No-op when the plugin defines no jobs.
-        const jobDefs = loaded.manifest.hooks?.jobs ?? [];
-        if (jobDefs.length > 0) {
-          const { registerPluginJobs } = await import('../services/scheduler.js');
-          await registerPluginJobs(jobDefs);
-        }
+        const url = repository ? await resolveInstallUrl(repository) : explicitUrl!;
+        const loaded = await performInstall(url, repository ?? null, request);
         return {
           ok: true,
           plugin: {
@@ -286,15 +296,58 @@ export async function pluginRoutes(app: FastifyInstance) {
           },
         };
       } catch (err) {
-        request.log.error({ err, url: scrubSecrets(url) }, '[plugins] Install failed');
-        // Rollback: if the tarball landed on disk but loadSingle threw (bad manifest,
-        // incompatible version, bad entry…), the dir would otherwise be picked up
-        // at the next boot. Remove it now so a failed install leaves no trace.
-        if (installedDir) {
-          await rm(installedDir, { recursive: true, force: true }).catch((rmErr) => {
-            request.log.error({ err: rmErr, dir: installedDir }, '[plugins] Rollback failed to remove install dir');
-          });
-        }
+        const source = repository ? { repository } : { url: scrubSecrets(explicitUrl ?? '') };
+        request.log.error({ err, ...source }, '[plugins] Install failed');
+        return reply.status(400).send({ error: String((err as Error).message ?? err) });
+      }
+    }
+  );
+
+  // ── Update plugin ───────────────────────────────────────────────
+  // Uninstall the running version, then install the latest release of the same registry
+  // repository. Settings + installSource + repository + autoUpdateEnabled survive (uninstall
+  // only flips `enabled=false`, doesn't delete the row). If the plugin was enabled, we flip
+  // it back on after the new version loads. If install fails mid-flight, the plugin is gone
+  // and the admin must reinstall from Discover — by design, no stale-version rollback.
+  app.post<{ Params: { id: string } }>(
+    '/:id/update',
+    {
+      schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const plugin = pluginEngine.getPlugin(id);
+      if (!plugin) return reply.status(404).send({ error: 'Plugin not found' });
+
+      const state = await prisma.pluginState.findUnique({
+        where: { pluginId: id },
+        select: { installSource: true, repository: true },
+      });
+      if (state?.installSource !== 'registry' || !state.repository) {
+        return reply.status(400).send({ error: 'Plugin is not a registry install' });
+      }
+
+      const wasEnabled = plugin.enabled;
+      const repository = state.repository;
+      try {
+        // Resolve the URL BEFORE uninstalling so a network blip on resolve leaves the running
+        // plugin intact. Past the uninstall point, a failure leaves the plugin gone.
+        const url = await resolveInstallUrl(repository);
+        await pluginEngine.uninstall(id);
+        const loaded = await performInstall(url, repository, request);
+        if (wasEnabled) await pluginEngine.togglePlugin(loaded.manifest.id, true);
+        return {
+          ok: true,
+          plugin: {
+            id: loaded.manifest.id,
+            name: loaded.manifest.name,
+            version: loaded.manifest.version,
+            enabled: wasEnabled,
+          },
+        };
+      } catch (err) {
+        request.log.error({ err, id, repository }, '[plugins] Update failed');
         return reply.status(400).send({ error: String((err as Error).message ?? err) });
       }
     }
@@ -462,30 +515,19 @@ export async function pluginRoutes(app: FastifyInstance) {
   );
 
   // ── Plugin registry (Discover) ──────────────────────────────────
+  // Stitches the registry doc (curated list) with each entry's manifest + GitHub repo
+  // metadata + release download counts to produce the catalog the admin sees on the
+  // Discover tab. Cached 30 min — same TTL as the registry doc itself.
   app.get('/registry', async (request, reply) => {
     try {
       const now = Date.now();
-      if (registryCache && now - registryCache.timestamp < REGISTRY_TTL) {
-        return registryCache.data;
+      if (catalogCache && now - catalogCache.timestamp < CATALOG_TTL_MS) {
+        return catalogCache.data;
       }
 
-      const headers: Record<string, string> = { 'Accept': 'application/json' };
-      const ghToken = process.env.GITHUB_TOKEN;
-      if (ghToken) headers['Authorization'] = `Bearer ${ghToken}`;
-
-      const fetchWithTimeout = (url: string, opts: RequestInit = {}, timeoutMs = 5000) => {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
-        return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(timer));
-      };
-
-      const res = await fetchWithTimeout(REGISTRY_URL, { headers });
-      if (!res.ok) throw new Error(`Registry fetch failed: ${res.status}`);
-      const registry = await res.json() as { plugins: { repository: string; category?: string; tags?: string[] }[] };
-
-      // Validate repository format before fetching
+      const registry = await fetchRegistry();
       const validRepo = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
-      const validEntries = registry.plugins.filter(entry => {
+      const validEntries = (registry.plugins ?? []).filter((entry: RegistryEntry) => {
         if (!validRepo.test(entry.repository)) {
           request.log.warn({ repository: entry.repository }, '[Registry] Skipping invalid repository');
           return false;
@@ -493,28 +535,21 @@ export async function pluginRoutes(app: FastifyInstance) {
         return true;
       });
 
-      const plugins = await Promise.allSettled(
+      const catalog = await Promise.allSettled(
         validEntries.map(async (entry) => {
-          const manifestUrl = `https://raw.githubusercontent.com/${entry.repository}/main/manifest.json`;
-          const mRes = await fetchWithTimeout(manifestUrl, { headers });
-          if (!mRes.ok) return null;
-          const manifest = await mRes.json() as Record<string, unknown>;
-
-          let repoMeta: Record<string, unknown> = {};
-          try {
-            const repoRes = await fetchWithTimeout(`https://api.github.com/repos/${entry.repository}`, { headers });
-            if (repoRes.ok) repoMeta = await repoRes.json() as Record<string, unknown>;
-          } catch { /* ignore */ }
+          const manifest = await fetchRemoteManifest(entry.repository);
+          if (!manifest) return null;
+          const repoMeta = await fetchRepoMetadata(entry.repository);
 
           let downloads = 0;
           try {
-            const rel = await fetchLatestRelease(entry.repository, headers);
+            const rel = await fetchLatestRelease(entry.repository);
             for (const a of rel?.assets ?? []) {
               if (/\.tar\.gz$/i.test(a.name) && !/\.sha256$/i.test(a.name)) {
                 downloads += a.download_count ?? 0;
               }
             }
-          } catch { /* ignore */ }
+          } catch { /* ignore — downloads stay at 0 */ }
 
           return {
             id: manifest.id,
@@ -541,13 +576,13 @@ export async function pluginRoutes(app: FastifyInstance) {
         })
       );
 
-      const result = plugins
-        .filter(p => p.status === 'fulfilled' && p.value !== null)
-        .map(p => (p as PromiseFulfilledResult<any>).value);
+      const result = catalog
+        .flatMap((p) => (p.status === 'fulfilled' && p.value !== null ? [p.value] : []));
 
-      registryCache = { data: result, timestamp: now };
+      catalogCache = { data: result, timestamp: now };
       return result;
     } catch (err) {
+      request.log.warn({ err }, '[Registry] Catalog fetch failed');
       return reply.status(502).send({ error: 'Failed to fetch plugin registry' });
     }
   });

@@ -17,6 +17,7 @@ import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useFeatures } from '@/context/FeaturesContext';
 import { useVersionInfo } from '@/hooks/useVersionInfo';
+import { usePluginUpdatesCount } from '@/hooks/usePluginUpdatesCount';
 import { ADMIN_GROUPS, ADMIN_TABS, findGroupForTab } from '@/pages/admin/tabsConfig';
 import { usePluginUI } from '@/plugins/usePlugins';
 import { DynamicIcon } from '@/plugins/DynamicIcon';
@@ -35,6 +36,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [searchParams, setSearchParams] = useSearchParams();
   const { contributions: pluginTabs } = usePluginUI('admin.tabs');
   const versionInfo = useVersionInfo();
+  const pluginUpdatesCount = usePluginUpdatesCount();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'main' | 'notifications'>('main');
   const [warnings, setWarnings] = useState<Record<string, boolean>>({});
@@ -226,6 +228,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </p>
           )}
         </div>
+        {group.id === 'plugins' && pluginUpdatesCount > 0 && (
+          <span className="self-center min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-ndp-accent/90 text-white text-[10px] font-semibold leading-none flex-shrink-0">
+            {pluginUpdatesCount}
+          </span>
+        )}
       </button>
     );
   };

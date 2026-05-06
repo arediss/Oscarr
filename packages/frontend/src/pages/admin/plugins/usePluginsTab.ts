@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
 import { toastApiError, extractApiError } from '@/utils/toast';
 import { invalidatePluginUICache } from '@/plugins/usePlugins';
+import { refreshPluginUpdatesCount } from '@/hooks/usePluginUpdatesCount';
 import type { PluginInfo } from '@/plugins/types';
 import type { RegistryPlugin, SubTab } from './constants';
 
@@ -26,6 +27,8 @@ export function usePluginsTab() {
   const [toggling, setToggling] = useState<string | null>(null);
   const [installing, setInstalling] = useState<string | null>(null);
   const [uninstalling, setUninstalling] = useState<string | null>(null);
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [installMessage, setInstallMessage] = useState<InstallMessage | null>(null);
 
@@ -48,13 +51,45 @@ export function usePluginsTab() {
   useEffect(() => { fetchPlugins(); }, [fetchPlugins]);
 
   /** Kick an update-check once when the Installed tab first becomes visible so the
-   *  `latestVersion` badges can populate without user action. Backend has a 1h cache, so this
-   *  is a cheap no-op on subsequent mounts. */
+   *  `latestVersion` badges can populate without user action. Backend has a 15 min cache, so
+   *  this is a cheap no-op on subsequent mounts. */
   const updateCheckedRef = useRef(false);
   const checkForUpdates = useCallback((subTab: SubTab) => {
     if (subTab !== 'installed' || updateCheckedRef.current) return;
     updateCheckedRef.current = true;
     api.get('/plugins/updates').then(() => fetchPlugins()).catch(() => { /* best-effort */ });
+  }, [fetchPlugins]);
+
+  /** Force-refresh: bypass the 15 min TTL + per-repo release cache. Wired to the Reload button. */
+  const refreshUpdates = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await api.get('/plugins/updates', { params: { force: 'true' } });
+      await fetchPlugins();
+      refreshPluginUpdatesCount();
+    } catch (err) {
+      toastApiError(err, t('admin.plugins.refresh_failed'));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchPlugins, t]);
+
+  const applyUpdate = useCallback(async (id: string): Promise<boolean> => {
+    setUpdating(id);
+    try {
+      const { data } = await api.post(`/plugins/${id}/update`);
+      setInstallMessage({ kind: 'success', text: `Updated to v${data.plugin.version}` });
+      await fetchPlugins();
+      invalidatePluginUICache();
+      refreshPluginUpdatesCount();
+      return true;
+    } catch (err) {
+      setInstallMessage({ kind: 'error', text: extractApiError(err, String((err as Error).message)) });
+      return false;
+    } finally {
+      setUpdating(null);
+      setTimeout(() => setInstallMessage(null), 6000);
+    }
   }, [fetchPlugins]);
 
   const toggle = useCallback(async (plugin: PluginInfo) => {
@@ -80,6 +115,7 @@ export function usePluginsTab() {
       // Fire-and-forget so the caller can unmount the consent modal immediately; the refetch
       // populates the Installed tab in the background before the admin flips to it.
       fetchPlugins();
+      refreshPluginUpdatesCount();
       return true;
     } catch (err) {
       setInstallMessage({ kind: 'error', text: extractApiError(err, String((err as Error).message)) });
@@ -96,6 +132,7 @@ export function usePluginsTab() {
       await api.post(`/plugins/${id}/uninstall`);
       await fetchPlugins();
       invalidatePluginUICache();
+      refreshPluginUpdatesCount();
     } catch (err) {
       setInstallMessage({ kind: 'error', text: `Uninstall failed: ${extractApiError(err, String((err as Error).message))}` });
       setTimeout(() => setInstallMessage(null), 6000);
@@ -124,9 +161,9 @@ export function usePluginsTab() {
 
   return {
     plugins, registry, loading, registryLoading, registryError,
-    toggling, installing, uninstalling, restarting, installMessage,
-    fetchPlugins, fetchRegistry, checkForUpdates,
-    toggle, install, uninstall, restart,
+    toggling, installing, uninstalling, updating, refreshing, restarting, installMessage,
+    fetchPlugins, fetchRegistry, checkForUpdates, refreshUpdates,
+    toggle, install, uninstall, applyUpdate, restart,
     setInstallMessage,
   };
 }

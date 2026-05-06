@@ -256,6 +256,30 @@ export interface LoadedPlugin {
   dir: string;
   enabled: boolean;
   error?: string;
+  /** True when `plugins/<dir>/` is a symlink (dev workflow). Resolved at boot via lstat. */
+  isSymlink?: boolean;
+}
+
+// ─── Plugin source / runtime status ─────────────────────────────────
+
+/** How a plugin was installed.
+ *  - 'registry': installed via /install with a `repository` body — eligible for in-app
+ *                updates and (eventually) auto-update.
+ *  - 'local':    everything else (symlink dev install, install from a raw URL, manual
+ *                drop-in, or any plugin whose state predates this flow). The admin manages
+ *                updates themselves. */
+export type PluginSource = 'registry' | 'local';
+
+/** Runtime status returned by GET /api/plugins. Drives the admin UI badges. */
+export interface PluginRuntimeStatus {
+  source: PluginSource;
+  isSymlink: boolean;
+  installedVersion: string;
+  /** Latest registry-published version. Null for 'local' plugins (we don't track them). */
+  latestVersion: string | null;
+  /** True iff source === 'registry' AND latestVersion > installedVersion. */
+  updateAvailable: boolean;
+  autoUpdateEnabled: boolean;
 }
 
 // PluginInfo (the public shape returned by getPluginList()) moved to @oscarr/shared.

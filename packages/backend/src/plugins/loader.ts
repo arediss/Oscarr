@@ -1,4 +1,4 @@
-import { readdir, readFile, stat, access } from 'fs/promises';
+import { readdir, readFile, stat, lstat, access } from 'fs/promises';
 import { join, resolve } from 'path';
 import type { PluginManifest } from './types.js';
 import { parseManifest } from './manifestSchema.js';
@@ -13,6 +13,8 @@ export function getPluginsDir(): string {
 export interface DiscoveredPlugin {
   dir: string;
   manifest: PluginManifest;
+  /** True when `dir` is a symlink — drives the "Local (dev)" status in the admin UI. */
+  isSymlink: boolean;
 }
 
 export async function discoverPlugins(): Promise<DiscoveredPlugin[]> {
@@ -30,10 +32,21 @@ export async function discoverPlugins(): Promise<DiscoveredPlugin[]> {
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue; // Skip hidden files/dirs
 
-    // Follow symlinks: stat() follows symlinks, isDirectory() doesn't for symlink entries
+    // Follow symlinks for content (stat) but track whether the entry IS a symlink (lstat)
+    // so the admin UI can badge dev-symlinked plugins as "Local". stat() throws on broken
+    // symlinks — wrap so we skip those rather than abort the whole boot.
     const entryPath = join(pluginsDir, entry.name);
-    const entryStat = await stat(entryPath);
-    if (!entryStat.isDirectory()) continue;
+    let entryIsDirectory = false;
+    let isSymlink = false;
+    try {
+      const entryStat = await stat(entryPath);
+      entryIsDirectory = entryStat.isDirectory();
+      const lstatResult = await lstat(entryPath);
+      isSymlink = lstatResult.isSymbolicLink();
+    } catch {
+      continue;
+    }
+    if (!entryIsDirectory) continue;
 
     const manifestPath = join(entryPath, 'manifest.json');
 
@@ -42,7 +55,7 @@ export async function discoverPlugins(): Promise<DiscoveredPlugin[]> {
       const raw = await readFile(manifestPath, 'utf-8');
       const data = JSON.parse(raw);
       const manifest = parseManifest(data, entryPath) as PluginManifest;
-      plugins.push({ dir: entryPath, manifest });
+      plugins.push({ dir: entryPath, manifest, isSymlink });
     } catch (err) {
       const { logEvent } = await import('../utils/logEvent.js');
       logEvent('error', 'PluginLoader', `Failed to load manifest from ${entryPath}: ${String(err)}`)

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Download, ExternalLink, Loader2, Plug, Trash2 } from 'lucide-react';
+import { ArrowUpCircle, Download, ExternalLink, Loader2, Plug, Trash2 } from 'lucide-react';
 import type { PluginInfo } from '@/plugins/types';
 import { PluginInitial } from './PluginCardChrome';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { usePluginsDir } from '@/hooks/usePluginsDir';
 import type { RegistryPlugin } from './constants';
 
@@ -12,8 +13,10 @@ interface InstalledListProps {
   registry: RegistryPlugin[];
   toggling: string | null;
   uninstalling: string | null;
+  updating: string | null;
   onToggle: (plugin: PluginInfo) => void;
   onUninstall: (id: string) => void;
+  onUpdate: (plugin: PluginInfo) => void;
   onBrowse: () => void;
 }
 
@@ -21,7 +24,7 @@ interface InstalledListProps {
  *  uninstall-with-inline-confirm. Renders the empty state with a "Browse plugins" CTA when the
  *  list is empty. */
 export function InstalledList({
-  plugins, registry, toggling, uninstalling, onToggle, onUninstall, onBrowse,
+  plugins, registry, toggling, uninstalling, updating, onToggle, onUninstall, onUpdate, onBrowse,
 }: InstalledListProps) {
   const { t } = useTranslation();
   const [uninstallConfirm, setUninstallConfirm] = useState<string | null>(null);
@@ -69,27 +72,64 @@ export function InstalledList({
                   {plugin.author && <> · {plugin.author}</>}
                 </p>
               </div>
+              {hasUpdate && !hasError && (
+                <button
+                  onClick={() => onUpdate(plugin)}
+                  disabled={updating === plugin.id}
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-ndp-accent text-white font-medium hover:bg-ndp-accent/90 transition-colors disabled:opacity-50"
+                >
+                  {updating === plugin.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowUpCircle className="w-3 h-3" />}
+                  {updating === plugin.id ? t('admin.plugins.update.applying') : t('admin.plugins.update.cta')}
+                </button>
+              )}
             </div>
 
-            {(hasUpdate || plugin.compat?.status === 'untested' || plugin.compat?.status === 'incompatible' || hasError) && (
+            {(hasUpdate || plugin.source || plugin.compat?.status === 'untested' || plugin.compat?.status === 'incompatible' || hasError) && (
               <div className="flex items-center gap-1.5 flex-wrap">
                 {hasUpdate && plugin.latestVersion && (
                   <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-ndp-accent/10 text-ndp-accent font-medium">
                     <span className="w-1.5 h-1.5 rounded-full bg-ndp-accent" />
-                    v{plugin.latestVersion} available
+                    {t('admin.plugins.badge.update_available', { version: plugin.latestVersion })}
                   </span>
+                )}
+                {plugin.source === 'local' && (
+                  <Tooltip
+                    label={
+                      plugin.isSymlink
+                        ? t('admin.plugins.tooltip.local_symlink')
+                        : t('admin.plugins.tooltip.local_generic')
+                    }
+                    multiline
+                  >
+                    <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-white/[0.04] text-ndp-text-muted ring-1 ring-white/5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                      {t('admin.plugins.badge.local')}
+                    </span>
+                  </Tooltip>
+                )}
+                {plugin.source === 'registry' && !hasUpdate && (
+                  <Tooltip label={t('admin.plugins.tooltip.up_to_date')} multiline>
+                    <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      {t('admin.plugins.badge.up_to_date')}
+                    </span>
+                  </Tooltip>
                 )}
                 {plugin.compat?.status === 'untested' && (
-                  <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-white/[0.04] text-ndp-text-muted ring-1 ring-white/5" title={plugin.compat.reason}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    Untested
-                  </span>
+                  <Tooltip label={plugin.compat.reason ?? ''} multiline>
+                    <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-white/[0.04] text-ndp-text-muted ring-1 ring-white/5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      {t('admin.plugins.badge.untested')}
+                    </span>
+                  </Tooltip>
                 )}
                 {plugin.compat?.status === 'incompatible' && (
-                  <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-ndp-danger/10 text-ndp-danger font-medium" title={plugin.compat.reason}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-ndp-danger" />
-                    Incompatible
-                  </span>
+                  <Tooltip label={plugin.compat.reason ?? ''} multiline>
+                    <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-ndp-danger/10 text-ndp-danger font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-ndp-danger" />
+                      {t('admin.plugins.badge.incompatible')}
+                    </span>
+                  </Tooltip>
                 )}
                 {hasError && (
                   <span className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full bg-ndp-danger/10 text-ndp-danger font-medium">
@@ -108,7 +148,7 @@ export function InstalledList({
               ) : null}
               {hasUpdate && rv?.url && !hasError && (
                 <a href={rv.url} target="_blank" rel="noopener noreferrer" className="text-xs text-ndp-accent hover:underline inline-flex items-center gap-1 mt-1.5">
-                  View update <ExternalLink className="w-3 h-3" />
+                  {t('admin.plugins.view_update')} <ExternalLink className="w-3 h-3" />
                 </a>
               )}
             </div>

@@ -91,8 +91,23 @@ const hooks = z.object({
 
 const capabilityEnum = z.enum(ALL_CAPABILITIES as unknown as [string, ...string[]]);
 
+/** Strict format introduced in v0.8.0: `<owner>__<repo>`, lowercase, GitHub-aligned.
+ *  - owner: matches GitHub username rules (alphanumeric + dashes, no underscores) so
+ *    splitting at the first `__` is unambiguous.
+ *  - repo: matches GitHub repo rules (alphanumeric + dot/underscore/dash).
+ *  Required for plugins installed via the registry. Enforced at install/update endpoints,
+ *  not at manifest parse time (legacy plugins must keep loading until the admin regularizes them). */
+export const NEW_PLUGIN_ID_REGEX = /^[a-z0-9-]+__[a-z0-9._-]+$/;
+
+/** Legacy format pre-v0.8.0: short kebab-case. Tolerated here so existing on-disk plugins
+ *  keep loading after the v0.8.0 upgrade. The admin regularizes them via "Install from registry". */
+const LEGACY_PLUGIN_ID_REGEX = /^[a-z0-9-]+$/;
+
 const pluginManifestSchema = z.object({
-  id: z.string().min(1).regex(/^[a-z0-9-]+$/, 'must be lowercase alphanumeric + dashes'),
+  id: z.string().min(1).refine(
+    (v) => NEW_PLUGIN_ID_REGEX.test(v) || LEGACY_PLUGIN_ID_REGEX.test(v),
+    { message: 'must be `<owner>__<repo>` (new format) or lowercase alphanumeric+dashes (legacy)' },
+  ),
   name: z.string().min(1),
   version: z.string().min(1),
   apiVersion,

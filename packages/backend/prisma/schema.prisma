@@ -320,6 +320,18 @@ model PluginState {
   // isn't in the registry or no check has run yet. Updated by GET /plugins/updates.
   latestVersion   String?
   lastUpdateCheck DateTime?
+  // 'registry' | 'local'. Set at install: 'registry' when /install received a repository,
+  // 'local' otherwise (URL install, manual drop-in, or any pre-existing PluginState row).
+  installSource   String    @default("local")
+  // GitHub repository ("<owner>/<repo>") for registry installs. Used by the update checker
+  // and the future auto-update job to look up releases without re-deriving from the plugin id
+  // (which can be the legacy short form for ids that predate the new format).
+  repository      String?
+  autoUpdateEnabled    Boolean   @default(false)
+  lastUpdateAttemptAt  DateTime?
+  // 'success' | 'failed' | 'rolled-back'
+  lastUpdateStatus     String?
+  lastUpdateError      String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }

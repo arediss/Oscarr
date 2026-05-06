@@ -39,6 +39,41 @@ export interface PluginInfo {
   services?: string[];
   capabilities?: string[];
   capabilityReasons?: Partial<Record<string, string>>;
+
+  // ── v0.8.0 — install source & update status ──
+  /** How the plugin reached this Oscarr instance:
+   *  - 'registry': installed via /install with a `repository` body — eligible for in-app
+   *                updates and (eventually) auto-update.
+   *  - 'local':    everything else (symlink dev install, raw URL install, manual drop-in).
+   *                The admin manages updates themselves. */
+  source?: 'registry' | 'local';
+  /** True when `plugins/<id>/` is a symlink. Surfaced to the UI so dev installs are obvious. */
+  isSymlink?: boolean;
+  /** Per-plugin auto-update toggle. Off by default. Only effective when source === 'registry'. */
+  autoUpdateEnabled?: boolean;
+}
+
+/** Pre-update preview returned by `GET /api/plugins/:id/update/preflight`. The admin sees
+ *  this in the update modal: incompat blocks the apply button, added permissions trigger
+ *  re-consent, removed/changed are shown for transparency. */
+export interface PluginUpdatePreflight {
+  currentVersion: string;
+  latestVersion: string;
+  compat: {
+    status: 'verified' | 'untested' | 'incompatible' | 'unknown';
+    range?: string;
+    oscarrVersion: string;
+    reason?: string;
+  };
+  permissionDiff: {
+    services: { added: string[]; removed: string[] };
+    capabilities: { added: string[]; removed: string[] };
+    capabilityReasons: {
+      added: Record<string, string>;
+      removed: string[];
+      changed: { capability: string; from: string; to: string }[];
+    };
+  };
 }
 
 /** A single plugin settings field as published in the manifest. Shown in the admin plugin

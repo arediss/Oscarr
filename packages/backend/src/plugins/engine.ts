@@ -1,5 +1,6 @@
 import { join } from 'path';
-import { readFile, rm } from 'fs/promises';
+import { pathToFileURL } from 'node:url';
+import { readFile, rm, lstat } from 'fs/promises';
 import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
 import { prisma } from '../utils/prisma.js';
 import { notificationRegistry } from '../notifications/index.js';
@@ -62,7 +63,7 @@ export class PluginEngine {
   private async _loadFromDisk(
     dir: string,
     manifest: PluginManifest,
-    opts: { defaultEnabled: boolean }
+    opts: { defaultEnabled: boolean; isSymlink?: boolean; hotReload?: boolean }
   ): Promise<LoadedPlugin> {
     const compat = checkCompat(manifest);
     this.compatCache.set(manifest.id, compat);
@@ -70,17 +71,24 @@ export class PluginEngine {
       throw new Error(`Plugin "${manifest.id}" is incompatible: ${compat.reason}`);
     }
 
+    const entryPath = join(dir, manifest.entry);
+    // On hot-reload only, cache-bust the ESM URL so the swapped-in code is re-imported
+    // instead of Node returning the cached old module (it keys by URL string). Boot-time
+    // loads use the canonical URL so multiple restarts don't fragment the module cache.
+    const baseUrl = pathToFileURL(entryPath).href;
+    const moduleUrl = opts.hotReload ? `${baseUrl}?v=${Date.now()}` : baseUrl;
+    const mod = await import(moduleUrl);
+    if (typeof mod.register !== 'function') {
+      throw new Error(`Plugin "${manifest.id}" does not export a register() function`);
+    }
+
+    // Persist state only after the module imports cleanly. If the import throws, we don't
+    // leave an orphan PluginState row pointing at a plugin id that never actually loaded.
     const state = await prisma.pluginState.upsert({
       where: { pluginId: manifest.id },
       update: {},
       create: { pluginId: manifest.id, enabled: opts.defaultEnabled, settings: '{}' },
     });
-
-    const entryPath = join(dir, manifest.entry);
-    const mod = await import(entryPath);
-    if (typeof mod.register !== 'function') {
-      throw new Error(`Plugin "${manifest.id}" does not export a register() function`);
-    }
 
     const ctx = createContext(manifest, this.getContextDeps());
     const registration: PluginRegistration = await mod.register(ctx);
@@ -108,7 +116,13 @@ export class PluginEngine {
       registration.registerNotificationProviders(scoped);
     }
 
-    const loaded: LoadedPlugin = { manifest, registration, dir, enabled: state.enabled };
+    const loaded: LoadedPlugin = {
+      manifest,
+      registration,
+      dir,
+      enabled: state.enabled,
+      isSymlink: opts.isSymlink ?? false,
+    };
     this.plugins.set(manifest.id, loaded);
     return loaded;
   }
@@ -195,7 +209,14 @@ export class PluginEngine {
       throw new Error(`Plugin "${manifest.id}" is already loaded`);
     }
 
-    const loaded = await this._loadFromDisk(dir, manifest, { defaultEnabled: opts.defaultEnabled ?? true });
+    const isSymlink = await lstat(dir).then((s) => s.isSymbolicLink()).catch(() => false);
+    const loaded = await this._loadFromDisk(dir, manifest, {
+      defaultEnabled: opts.defaultEnabled ?? true,
+      isSymlink,
+      // loadSingle is the install/hot-update path — bust the ESM cache so a same-path
+      // re-install (uninstall → install on the same plugin id) actually re-imports.
+      hotReload: true,
+    });
     if (loaded.enabled) await this._registerRoutes(loaded);
     this.log('info', `Loaded "${manifest.id}" v${manifest.version} via loadSingle`);
     return loaded;
@@ -205,9 +226,9 @@ export class PluginEngine {
     const discovered = await discoverPlugins();
     this.log('info', `Discovered ${discovered.length} plugin(s)`);
 
-    for (const { dir, manifest } of discovered) {
+    for (const { dir, manifest, isSymlink } of discovered) {
       try {
-        await this._loadFromDisk(dir, manifest, { defaultEnabled: true });
+        await this._loadFromDisk(dir, manifest, { defaultEnabled: true, isSymlink });
         this.log('info', `Loaded "${manifest.id}" v${manifest.version}`);
       } catch (err) {
         this.log('error', `Failed to load plugin "${manifest.id}": ${err}`);
@@ -217,6 +238,7 @@ export class PluginEngine {
           dir,
           enabled: false,
           error: String(err),
+          isSymlink,
         });
       }
     }
@@ -333,6 +355,7 @@ export class PluginEngine {
       services: p.manifest.services,
       capabilities: p.manifest.capabilities,
       capabilityReasons: p.manifest.capabilityReasons,
+      isSymlink: p.isSymlink === true,
     }));
   }
 
@@ -348,6 +371,27 @@ export class PluginEngine {
   async uninstall(id: string): Promise<boolean> {
     const plugin = this.plugins.get(id);
     if (!plugin) return false;
+
+    // Run onDisable so plugins can release resources (close DB pools, kill websockets,
+    // drain queues) before we tear down their environment. Capped at 5s — a runaway
+    // shutdown shouldn't block uninstall. Errors are logged, not thrown — the user
+    // explicitly asked to uninstall and we honour that even if cleanup is partial.
+    if (plugin.enabled && plugin.registration.onDisable) {
+      try {
+        const ctx = createContext(plugin.manifest, this.getContextDeps());
+        let timer: NodeJS.Timeout | undefined;
+        const timeout = new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('onDisable timed out after 5s')), 5000);
+        });
+        try {
+          await Promise.race([plugin.registration.onDisable(ctx), timeout]);
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      } catch (err) {
+        this.log('warn', `onDisable failed during uninstall of "${id}": ${err}`);
+      }
+    }
 
     // Pause jobs before the dir disappears so a cron tick doesn't try to import a removed file.
     for (const job of plugin.manifest.hooks?.jobs ?? []) {

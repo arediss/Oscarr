@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { BookOpen, Download, Loader2, Package, RefreshCw } from 'lucide-react';
+import { BookOpen, Download, Loader2, Package, Power, RefreshCw } from 'lucide-react';
 import { Spinner } from './Spinner';
 import { AdminTabLayout } from './AdminTabLayout';
 import { PluginConsentModal } from './PluginConsentModal';
+import { PluginUpdateModal } from './plugins/PluginUpdateModal';
 import { usePluginsTab } from './plugins/usePluginsTab';
 import { usePluginsDir } from '@/hooks/usePluginsDir';
 import { InstalledList } from './plugins/InstalledList';
 import { DiscoverList } from './plugins/DiscoverList';
 import { PluginDocsModal } from './plugins/PluginDocsModal';
+import type { PluginInfo } from '@/plugins/types';
 import type { RegistryPlugin, SubTab } from './plugins/constants';
 
 /**
@@ -20,10 +23,12 @@ import type { RegistryPlugin, SubTab } from './plugins/constants';
  * Data + mutations all live in `usePluginsTab`; lists and modals are their own components.
  */
 export function PluginsTab() {
+  const { t } = useTranslation();
   const {
     plugins, registry, loading, registryLoading, registryError,
-    toggling, installing, uninstalling, restarting, installMessage,
-    fetchRegistry, checkForUpdates, toggle, install, uninstall, restart,
+    toggling, installing, uninstalling, updating, refreshing, restarting, installMessage,
+    fetchRegistry, checkForUpdates, refreshUpdates,
+    toggle, install, uninstall, applyUpdate, restart,
     setInstallMessage,
   } = usePluginsTab();
 
@@ -44,6 +49,8 @@ export function PluginsTab() {
   /** Consent-first install: click Install → modal shows services + capabilities →
    *  admin confirms → Oscarr actually downloads the tarball (disabled by default). */
   const [installConsent, setInstallConsent] = useState<RegistryPlugin | null>(null);
+  /** Update flow target. The modal fetches its own preflight (compat + permission diff). */
+  const [updateTarget, setUpdateTarget] = useState<PluginInfo | null>(null);
 
   useEffect(() => {
     if (subTab === 'discover' && registry.length === 0 && !registryLoading) {
@@ -71,6 +78,12 @@ export function PluginsTab() {
   const handleRestart = async () => {
     setShowRestartConfirm(false);
     await restart();
+  };
+
+  const handleUpdateConfirm = async () => {
+    if (!updateTarget) return;
+    const ok = await applyUpdate(updateTarget.id);
+    if (ok) setUpdateTarget(null);
   };
 
   if (loading) return <Spinner />;
@@ -117,18 +130,27 @@ export function PluginsTab() {
           <button
             onClick={() => setShowHowTo(true)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors"
-            title="Plugin development guide"
+            title={t('admin.plugins.docs_title')}
           >
             <BookOpen className="w-4 h-4" />
-            <span className="hidden sm:inline">Docs</span>
+            <span className="hidden sm:inline">{t('admin.plugins.docs')}</span>
+          </button>
+          <button
+            onClick={refreshUpdates}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors disabled:opacity-50"
+            title={t('admin.plugins.reload_title')}
+          >
+            {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            <span className="hidden sm:inline">{t('admin.plugins.reload')}</span>
           </button>
           <button
             onClick={() => setShowRestartConfirm(true)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-ndp-text-dim hover:text-ndp-text hover:bg-white/5 transition-colors"
-            title={`Restart the server to pick up plugins dropped into ${pluginsDir} by hand. Installs from Discover don't need this.`}
+            title={t('admin.plugins.reboot_title', { dir: pluginsDir })}
           >
-            <RefreshCw className="w-4 h-4" />
-            <span className="hidden sm:inline">Reload</span>
+            <Power className="w-4 h-4" />
+            <span className="hidden sm:inline">{t('admin.plugins.reboot')}</span>
           </button>
         </div>
       </div>
@@ -136,17 +158,16 @@ export function PluginsTab() {
       {showRestartConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowRestartConfirm(false)}>
           <div className="card p-6 max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-ndp-text font-semibold mb-2">Reload plugins</h3>
+            <h3 className="text-ndp-text font-semibold mb-2">{t('admin.plugins.reboot_modal_title')}</h3>
             <p className="text-sm text-ndp-text-muted mb-4">
-              Restarts Oscarr to discover plugins you added to <code className="text-ndp-text bg-black/30 px-1 py-0.5 rounded text-xs">{pluginsDir}</code> by hand.
-              Plugins installed from Discover are already live — you don't need this for those.
+              {t('admin.plugins.reboot_modal_body_prefix')} <code className="text-ndp-text bg-black/30 px-1 py-0.5 rounded text-xs">{pluginsDir}</code>{t('admin.plugins.reboot_modal_body_suffix')}
             </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowRestartConfirm(false)} className="px-4 py-2 text-sm text-ndp-text-dim hover:text-ndp-text transition-colors">
-                Cancel
+                {t('common.cancel')}
               </button>
               <button onClick={handleRestart} className="px-4 py-2 bg-ndp-accent text-white rounded-lg text-sm font-medium hover:bg-ndp-accent/90 transition-colors">
-                Restart now
+                {t('admin.plugins.reboot_modal_confirm')}
               </button>
             </div>
           </div>
@@ -157,8 +178,8 @@ export function PluginsTab() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="w-8 h-8 animate-spin text-ndp-accent" />
-            <p className="text-ndp-text font-medium">Restarting Oscarr...</p>
-            <p className="text-sm text-ndp-text-dim">This usually takes a few seconds</p>
+            <p className="text-ndp-text font-medium">{t('admin.plugins.rebooting')}</p>
+            <p className="text-sm text-ndp-text-dim">{t('admin.plugins.rebooting_hint')}</p>
           </div>
         </div>
       )}
@@ -169,8 +190,10 @@ export function PluginsTab() {
           registry={registry}
           toggling={toggling}
           uninstalling={uninstalling}
+          updating={updating}
           onToggle={toggle}
           onUninstall={uninstall}
+          onUpdate={setUpdateTarget}
           onBrowse={() => setSubTab('discover')}
         />
       )}
@@ -196,6 +219,14 @@ export function PluginsTab() {
         mode="install"
         onCancel={() => setInstallConsent(null)}
         onConfirm={() => installConsent && doInstall(installConsent)}
+      />
+
+      <PluginUpdateModal
+        plugin={updateTarget}
+        open={!!updateTarget}
+        busy={updateTarget ? updating === updateTarget.id : false}
+        onCancel={() => setUpdateTarget(null)}
+        onConfirm={handleUpdateConfirm}
       />
 
       {showHowTo && <PluginDocsModal onClose={() => setShowHowTo(false)} />}
