@@ -126,7 +126,7 @@ export function SectionEditor({ section, onSave, onClose }: Readonly<SectionEdit
   const handleSave = () => {
     let saved: HomepageSection;
     if (isBuiltin) {
-      saved = { ...section!, title, size, enabled };
+      saved = { ...section, title, size, enabled };
     } else if (customMode === 'endpoint') {
       saved = {
         id: section?.id || crypto.randomUUID(),

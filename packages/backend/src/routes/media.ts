@@ -151,7 +151,7 @@ export async function mediaRoutes(app: FastifyInstance) {
     const liveCheck = skipLive
       ? { liveAvailable: true, sonarrSeasonStats: null, audioLanguages: null, subtitleLanguages: null, timedOut: false }
       : await performLiveCheckWithTimeout(
-          mediaType, tmdbIdNum!, media?.tvdbId ?? null, !!cachedAudio,
+          mediaType, tmdbIdNum, media?.tvdbId ?? null, !!cachedAudio,
         );
     const { liveAvailable, sonarrSeasonStats, audioLanguages, subtitleLanguages } = liveCheck;
 

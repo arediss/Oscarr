@@ -36,8 +36,8 @@ export function usePluginUI(hookPoint: string) {
     }
     set.add(cb);
     return () => {
-      set!.delete(cb);
-      if (set!.size === 0) listeners.delete(hookPoint);
+      set.delete(cb);
+      if (set.size === 0) listeners.delete(hookPoint);
     };
   }, [hookPoint]);
 

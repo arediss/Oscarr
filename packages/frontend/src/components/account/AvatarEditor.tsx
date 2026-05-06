@@ -157,7 +157,7 @@ interface AvatarEditorProps {
 
 export default function AvatarEditor({ initialSeed, initialOptions, onCancel, onSave, saving }: Readonly<AvatarEditorProps>) {
   const { t } = useTranslation();
-  const [seed, setSeedRaw] = useState(initialSeed ?? randomSeed());
+  const [seed, setSeedRaw] = useState(() => initialSeed ?? randomSeed());
   const [opts, setOpts] = useState<AvatarOptions>(() =>
     initialOptions && Object.keys(initialOptions).length > 0
       ? initialOptions

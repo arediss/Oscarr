@@ -41,7 +41,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
   const [mobileView, setMobileView] = useState<'main' | 'notifications'>('main');
   const [warnings, setWarnings] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewAsRole, setViewAsRoleState] = useState<string | null>(sessionStorage.getItem('view-as-role'));
+  const [viewAsRole, setViewAsRoleState] = useState<string | null>(() => sessionStorage.getItem('view-as-role'));
   const { unreadCount, markAllRead } = useNotifications();
 
   useEffect(() => {

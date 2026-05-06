@@ -463,7 +463,7 @@ export function createContextV1(manifest: PluginManifest, deps: V1FactoryDeps): 
         // Runtime validation at the boundary — TypeScript only guards compile-time callers,
         // but plugins load plain JS from disk and can pass anything. Catch obvious garbage
         // here rather than forwarding NaN into Prisma where the error becomes opaque.
-        if (!Number.isInteger(input?.userId) || (input.userId as number) < 1) {
+        if (!Number.isInteger(input?.userId) || input.userId < 1) {
           return { ok: false, code: 'INVALID_INPUT', error: 'userId must be a positive integer' };
         }
         // Delegates to the same createUserRequest pipeline the HTTP route uses — pluginGuard

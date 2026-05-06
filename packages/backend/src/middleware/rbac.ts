@@ -402,7 +402,7 @@ export function enforcePluginRoutePermission(
   // already blocked, but logging unknown attempts helps audit + tightens the surface).
   const isKnownRole = !!viewAsRole && (roleCacheReady ? roleCache[viewAsRole] !== undefined : viewAsRole in FALLBACK_ROLES);
   const effectiveRole = (isKnownRole && jwtUser.role === 'admin' && !rule.permission.startsWith('admin'))
-    ? (viewAsRole as string)
+    ? viewAsRole
     : jwtUser.role;
 
   if (!hasPermission(effectiveRole, rule.permission)) {
@@ -473,7 +473,7 @@ export function rbacPlugin(app: FastifyInstance): void {
     const viewAsRole = request.headers['x-view-as-role'] as string | undefined;
     const isKnownRole = !!viewAsRole && (roleCacheReady ? roleCache[viewAsRole] !== undefined : viewAsRole in FALLBACK_ROLES);
     const effectiveRole = (isKnownRole && freshRole === 'admin' && !rule.permission.startsWith('admin'))
-      ? (viewAsRole as string)
+      ? viewAsRole
       : freshRole;
 
     if (!hasPermission(effectiveRole, rule.permission)) {

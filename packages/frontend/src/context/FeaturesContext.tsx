@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import i18n from 'i18next';
 import api from '@/lib/api';
 
@@ -71,8 +71,10 @@ export function FeaturesProvider({ children }: Readonly<{ children: ReactNode }>
     }
   }, [features.instanceLanguage]);
 
+  const ctxValue = useMemo(() => ({ features, loading, refreshFeatures }), [features, loading, refreshFeatures]);
+
   return (
-    <FeaturesContext.Provider value={{ features, loading, refreshFeatures }}>
+    <FeaturesContext.Provider value={ctxValue}>
       {children}
     </FeaturesContext.Provider>
   );

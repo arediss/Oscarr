@@ -38,7 +38,7 @@ export default function Layout({ children }: Readonly<{ children: React.ReactNod
   const changelog = useChangelogNotification();
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [viewAsRole, setViewAsRoleState] = useState<string | null>(sessionStorage.getItem('view-as-role'));
+  const [viewAsRole, setViewAsRoleState] = useState<string | null>(() => sessionStorage.getItem('view-as-role'));
   const { features } = useFeatures();
   const [scrolled, setScrolled] = useState(false);
   const { unreadCount, markAllRead } = useNotifications();

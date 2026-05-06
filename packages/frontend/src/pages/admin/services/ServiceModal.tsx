@@ -121,7 +121,7 @@ export function ServiceModal({ service, onClose, onSaved }: ServiceModalProps) {
     setSaving(true);
     try {
       if (isEdit) {
-        await api.put(`/admin/services/${service!.id}`, { name, config, isDefault });
+        await api.put(`/admin/services/${service.id}`, { name, config, isDefault });
       } else {
         await api.post('/admin/services', { name, type, config, isDefault });
       }

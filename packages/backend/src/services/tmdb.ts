@@ -35,7 +35,7 @@ export async function getInstanceLanguages(): Promise<string[]> {
   const parsed: string[] = settings?.instanceLanguages ? JSON.parse(settings.instanceLanguages) : ['en'];
   _cachedLangs = parsed.includes('en') ? parsed : [...parsed, 'en'];
   _cachedAt = Date.now();
-  return _cachedLangs!;
+  return _cachedLangs;
 }
 
 function normalizeLang(lang?: string): string {
@@ -377,7 +377,7 @@ export async function discoverMixed(page = 1, lang?: string, filters?: DiscoverF
         va = (ra.popularity as number) ?? 0;
         vb = (rb.popularity as number) ?? 0;
       }
-      return desc ? (vb as number) - (va as number) : (va as number) - (vb as number);
+      return desc ? vb - va : va - vb;
     });
     merged.splice(20);
 

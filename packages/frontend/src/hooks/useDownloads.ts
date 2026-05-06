@@ -90,8 +90,8 @@ export function useOnDownloadComplete(tmdbId: number | undefined, callback: () =
     }
     cbs.add(stableCb);
     return () => {
-      cbs!.delete(stableCb);
-      if (cbs!.size === 0) completionCallbacks.delete(tmdbId);
+      cbs.delete(stableCb);
+      if (cbs.size === 0) completionCallbacks.delete(tmdbId);
     };
   }, [tmdbId]);
 }
