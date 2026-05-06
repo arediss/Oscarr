@@ -401,7 +401,7 @@ function ConfigField({
 }
 
 /** Read-only display of the OAuth callback URL the admin must register in the provider's portal. */
-function CallbackUrlBlock({ url }: { url: string }) {
+function CallbackUrlBlock({ url }: Readonly<{ url: string }>) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const copy = () => {

@@ -82,12 +82,12 @@ export async function requestMaintenanceRoutes(app: FastifyInstance) {
     },
   }, async (request, reply) => {
     const { actions } = request.body as { actions: Record<string, 'keep' | 'remove' | 'remove_with_service'> };
-    const validStatuses = ['pending', 'available', 'approved', 'declined', 'failed'];
+    const validStatuses = new Set(['pending', 'available', 'approved', 'declined', 'failed']);
     let deletedFromOscarr = 0;
     let deletedFromService = 0;
 
     for (const [status, action] of Object.entries(actions)) {
-      if (!validStatuses.includes(status) || action === 'keep') continue;
+      if (!validStatuses.has(status) || action === 'keep') continue;
 
       if (action === 'remove_with_service') {
         const requests = await prisma.mediaRequest.findMany({

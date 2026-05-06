@@ -255,7 +255,7 @@ export default function FilterBar({ filters, onChange, sortOptions, title, subti
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
     <div>
       <label className="text-[10px] font-semibold text-ndp-text-dim uppercase tracking-wider mb-1.5 block">{label}</label>
@@ -264,7 +264,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function Chip({ active, onClick, children }: Readonly<{ active: boolean; onClick: () => void; children: React.ReactNode }>) {
   return (
     <button
       onClick={onClick}

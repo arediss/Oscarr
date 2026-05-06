@@ -36,7 +36,7 @@ const defaultFeatures: Features = {
 
 const FeaturesContext = createContext<FeaturesContextType | null>(null);
 
-export function FeaturesProvider({ children }: { children: ReactNode }) {
+export function FeaturesProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [features, setFeatures] = useState<Features>(defaultFeatures);
   const [loading, setLoading] = useState(true);
 

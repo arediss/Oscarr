@@ -4,7 +4,7 @@ import { parseId, parsePage } from '../../utils/params.js';
 import { REQUEST_STATUSES } from '@oscarr/shared';
 import { promoteStaleStatuses, resolveServiceContext } from '../../services/requestService.js';
 
-const VALID_STATUSES: string[] = [...REQUEST_STATUSES];
+const VALID_STATUSES = new Set<string>(REQUEST_STATUSES);
 
 /** Read-only request routes — paginated list with filters, aggregate stats, and an admin
  *  "resolve service context" preview that shows which service + root folder + quality a
@@ -40,7 +40,7 @@ export async function requestListRoutes(app: FastifyInstance) {
       const uid = parseId(userId);
       if (uid) where.userId = uid;
     }
-    if (status && VALID_STATUSES.includes(status)) where.status = status;
+    if (status && VALID_STATUSES.has(status)) where.status = status;
     if (mediaType && ['movie', 'tv'].includes(mediaType)) where.mediaType = mediaType;
     if (qualityOptionId) {
       const qid = parseId(qualityOptionId);

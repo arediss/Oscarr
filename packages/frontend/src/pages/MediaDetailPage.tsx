@@ -634,7 +634,7 @@ export default function MediaDetailPage({ type }: Readonly<Props>) {
 
 // ─── Cast Section ───────────────────────────────────────────────────
 
-function CastSection({ cast, title, director }: { cast: TmdbCast[]; title: string; director?: TmdbCrew }) {
+function CastSection({ cast, title, director }: Readonly<{ cast: TmdbCast[]; title: string; director?: TmdbCrew }>) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scroll = (direction: 'left' | 'right') => {

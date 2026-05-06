@@ -43,7 +43,7 @@ export function ServiceModal({ service, onClose, onSaved }: ServiceModalProps) {
   };
 
   const promptPassword = (): string | null => {
-    const pwd = window.prompt(t('admin.services.reveal_password_prompt'));
+    const pwd = globalThis.prompt(t('admin.services.reveal_password_prompt'));
     return pwd && pwd.length > 0 ? pwd : null;
   };
 

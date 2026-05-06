@@ -335,7 +335,7 @@ function LinkRow({ link, isFirst, isLast, onUpdate, onRemove, onMove }: Readonly
   );
 }
 
-function PositionPicker({ value, onChange }: { value: 'left' | 'right'; onChange: (p: 'left' | 'right') => void }) {
+function PositionPicker({ value, onChange }: Readonly<{ value: 'left' | 'right'; onChange: (p: 'left' | 'right') => void }>) {
   const { t } = useTranslation();
   return (
     <div className="inline-flex p-0.5 rounded-md bg-white/5">

@@ -205,7 +205,7 @@ export function RoutingRulesTab() {
   };
 
   const renderConditionRow = (cond: RuleCondition, i: number) => (
-    <div key={i} className="flex items-center gap-2">
+    <div key={`cond-${i}`} className="flex items-center gap-2">
       <select value={cond.field} onChange={(e) => updateConditionField(i, e.target.value)} className="input text-sm py-1.5 w-36">
         {CONDITION_FIELDS.map(f => (
           <option key={f} value={f}>{t(`admin.paths.${f}`)}</option>
@@ -272,7 +272,7 @@ export function RoutingRulesTab() {
                   </div>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {conds.map((c, i) => (
-                      <span key={i} className="text-xs text-ndp-text-dim">
+                      <span key={`tag-${i}`} className="text-xs text-ndp-text-dim">
                         {formatConditionLabel(c, users, roles)} {i < conds.length - 1 && ' +'}
                       </span>
                     ))}

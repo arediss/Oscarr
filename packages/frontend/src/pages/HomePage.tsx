@@ -54,7 +54,7 @@ const BUILTIN_TITLE_KEY: Record<string, string> = {
 /*  Sub-components for dynamic sections                               */
 /* ------------------------------------------------------------------ */
 
-function BuiltinSection({ builtinKey, title, size }: { builtinKey: string; title: string; size?: 'default' | 'large' }) {
+function BuiltinSection({ builtinKey, title, size }: Readonly<{ builtinKey: string; title: string; size?: 'default' | 'large' }>) {
   const { t } = useTranslation();
   const isRecent = builtinKey === 'recently_added';
   const endpoint = BUILTIN_ENDPOINTS[builtinKey] ?? null;
@@ -86,13 +86,13 @@ function BuiltinSection({ builtinKey, title, size }: { builtinKey: string; title
 // buildDiscoverUrl lives in @/utils/tmdbDiscoverQuery — shared shape with the backend's
 // preview endpoint. Imported where needed below.
 
-function CustomSection({ query, title, size }: { query: NonNullable<HomepageSection['query']>; title: string; size?: 'default' | 'large' }) {
+function CustomSection({ query, title, size }: Readonly<{ query: NonNullable<HomepageSection['query']>; title: string; size?: 'default' | 'large' }>) {
   const url = buildDiscoverUrl(query);
   const { data, loading } = useTmdbList<TmdbMedia>(url);
   return <MediaRow title={title} media={data} loading={loading} size={size} />;
 }
 
-function EndpointSection({ endpoint, title, size }: { endpoint: string; title: string; size?: 'default' | 'large' }) {
+function EndpointSection({ endpoint, title, size }: Readonly<{ endpoint: string; title: string; size?: 'default' | 'large' }>) {
   const { data, loading } = useTmdbList<TmdbMedia>(endpoint);
   return <MediaRow title={title} media={data} loading={loading} size={size} />;
 }
@@ -101,7 +101,7 @@ function EndpointSection({ endpoint, title, size }: { endpoint: string; title: s
 /*  Hero carousel — identical rendering to original                   */
 /* ------------------------------------------------------------------ */
 
-function HeroCarousel({ trending, loading }: { trending: TmdbMedia[]; loading: boolean }) {
+function HeroCarousel({ trending, loading }: Readonly<{ trending: TmdbMedia[]; loading: boolean }>) {
   const { t } = useTranslation();
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroVisible, setHeroVisible] = useState(true);
@@ -245,7 +245,7 @@ function HeroCarousel({ trending, loading }: { trending: TmdbMedia[]; loading: b
                 const active = i === heroIndex;
                 return (
                   <button
-                    key={i}
+                    key={`slide-${i}`}
                     onClick={() => changeHero(i)}
                     aria-label={t('home.goto_slide', { n: i + 1 })}
                     className={`relative h-1.5 rounded-full overflow-hidden transition-[width,background-color] duration-300 ease-out ${
@@ -282,7 +282,7 @@ function HeroSection() {
 /*  Dynamic layout renderer                                           */
 /* ------------------------------------------------------------------ */
 
-function DynamicHomePage({ sections }: { sections: HomepageSection[] }) {
+function DynamicHomePage({ sections }: Readonly<{ sections: HomepageSection[] }>) {
   const { t } = useTranslation();
   const enabledSections = sections.filter(s => s.enabled);
 

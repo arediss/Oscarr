@@ -11,7 +11,7 @@ interface Props {
   collection: { id: number; name: string; poster_path: string | null };
 }
 
-export default function CollectionSection({ collection }: Props) {
+export default function CollectionSection({ collection }: Readonly<Props>) {
   const { t } = useTranslation();
   const [parts, setParts] = useState<TmdbMedia[]>([]);
   const [statuses, setStatuses] = useState<Record<string, { status: string; requestStatus?: string }>>({});

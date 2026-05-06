@@ -20,9 +20,9 @@ import './index.css';
 // Expose React globally for plugin ESM modules (shim pattern). `react-dom/client` only carries
 // createRoot/hydrateRoot — plugins that import { createPortal, flushSync } from 'react-dom'
 // need the full namespace, so __OSCARR_REACT_DOM__ exposes that, not the client subpath.
-(window as any).__OSCARR_REACT__ = React;
-(window as any).__OSCARR_REACT_DOM__ = ReactDOM;
-(window as any).__OSCARR_JSX_RUNTIME__ = jsxRuntime;
+(globalThis as any).__OSCARR_REACT__ = React;
+(globalThis as any).__OSCARR_REACT_DOM__ = ReactDOM;
+(globalThis as any).__OSCARR_JSX_RUNTIME__ = jsxRuntime;
 
 // Auto-reload when a new service worker takes control of the page. Combined with workbox's
 // skipWaiting + clientsClaim, this means a deploy reaches every open tab without a hard
@@ -34,7 +34,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController || reloading) return;
     reloading = true;
-    window.location.reload();
+    globalThis.location.reload();
   });
 }
 

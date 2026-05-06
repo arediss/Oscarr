@@ -162,7 +162,7 @@ export function LogsTab() {
 /** Plain list — 50 rows per page, no virtualisation needed. The previous window-mode
  *  virtualizer was misaligned with the admin layout (admin scrolls inside <main>, not the
  *  window), which reserved ~3200px of placeholder height and produced a runaway scrollbar. */
-function LogList({ logs, t }: { logs: LogEntry[]; t: TFunction }) {
+function LogList({ logs, t }: Readonly<{ logs: LogEntry[]; t: TFunction }>) {
   return (
     <div className="space-y-2">
       {logs.map((log) => <LogRow key={log.id} log={log} t={t} />)}
@@ -170,7 +170,7 @@ function LogList({ logs, t }: { logs: LogEntry[]; t: TFunction }) {
   );
 }
 
-function LogRow({ log, t }: { log: LogEntry; t: TFunction }) {
+function LogRow({ log, t }: Readonly<{ log: LogEntry; t: TFunction }>) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [head, ...stackLines] = log.message.split('\n---\n');

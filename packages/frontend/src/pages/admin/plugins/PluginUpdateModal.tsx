@@ -17,7 +17,7 @@ interface Props {
 
 /** Update modal — fetches preflight on open, shows compat + permission diff, blocks apply
  *  when the new release is incompatible with the running Oscarr version. */
-export function PluginUpdateModal({ plugin, open, busy, onCancel, onConfirm }: Props) {
+export function PluginUpdateModal({ plugin, open, busy, onCancel, onConfirm }: Readonly<Props>) {
   const { t } = useTranslation();
   const { dialogRef, titleId } = useModal({ open: open && plugin !== null, onClose: onCancel });
   const [preflight, setPreflight] = useState<PluginUpdatePreflight | null>(null);
@@ -199,12 +199,12 @@ export function PluginUpdateModal({ plugin, open, busy, onCancel, onConfirm }: P
   );
 }
 
-function PermList({ items, kind }: { items: string[]; kind: 'added' | 'removed' }) {
+function PermList({ items, kind }: Readonly<{ items: string[]; kind: 'added' | 'removed' }>) {
   if (items.length === 0) return null;
   return <>{items.map((label) => <PermLine key={label} label={label} kind={kind} />)}</>;
 }
 
-function PermLine({ label, kind, hint }: { label: string; kind: 'added' | 'removed'; hint?: string }) {
+function PermLine({ label, kind, hint }: Readonly<{ label: string; kind: 'added' | 'removed'; hint?: string }>) {
   const Icon = kind === 'added' ? Plus : Minus;
   const colorClass = kind === 'added' ? 'text-ndp-accent' : 'text-ndp-text-dim';
   return (

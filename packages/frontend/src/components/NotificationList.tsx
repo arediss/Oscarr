@@ -113,7 +113,7 @@ export default function NotificationList({ actionsAlwaysVisible = false, onActio
   );
 }
 
-function FilterTab({ label, active, onClick, badge }: { label: string; active: boolean; onClick: () => void; badge?: number }) {
+function FilterTab({ label, active, onClick, badge }: Readonly<{ label: string; active: boolean; onClick: () => void; badge?: number }>) {
   return (
     <button
       onClick={onClick}
@@ -251,7 +251,7 @@ function NotifCard({ notif, t, markAsRead, dismiss, onAction, actionsAlwaysVisib
   );
 }
 
-function EmptyState({ filter, t }: { filter: 'all' | 'unread'; t: TFunction }) {
+function EmptyState({ filter, t }: Readonly<{ filter: 'all' | 'unread'; t: TFunction }>) {
   return (
     <div className="px-4 py-10 text-center">
       <Bell className="w-8 h-8 text-ndp-text-dim/40 mx-auto mb-3" />

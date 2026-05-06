@@ -23,7 +23,7 @@ interface Position {
 
 /** Hover-triggered tooltip rendered via a portal to document.body so it escapes any clipping
  *  ancestor (cards with overflow:hidden, transformed parents, stacking contexts). */
-export function Tooltip({ label, children, disabled, side = 'bottom', className, multiline = false }: TooltipProps) {
+export function Tooltip({ label, children, disabled, side = 'bottom', className, multiline = false }: Readonly<TooltipProps>) {
   const triggerRef = useRef<HTMLDivElement | null>(null);
   const tooltipRef = useRef<HTMLSpanElement | null>(null);
   const [open, setOpen] = useState(false);

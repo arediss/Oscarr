@@ -70,7 +70,7 @@ function MediaRow({ title, media, loading, href, size = 'default' }: Readonly<Me
         >
           {loading
             ? Array.from({ length: 8 }).map((_, i) => (
-                <MediaCardSkeleton key={i} className={SIZE_CLASSES[size]} />
+                <MediaCardSkeleton key={`skel-${i}`} className={SIZE_CLASSES[size]} />
               ))
             : media.map((item, i) => {
                 const type = item.media_type || (item.title ? 'movie' : 'tv');

@@ -15,7 +15,7 @@ interface MediaCardProps {
   index?: number;
 }
 
-export default function MediaCard({ media, className, availability, index = 0 }: MediaCardProps) {
+export default function MediaCard({ media, className, availability, index = 0 }: Readonly<MediaCardProps>) {
   const { t } = useTranslation();
   const { isNsfw } = useNsfwFilter();
   const [loaded, setLoaded] = useState(false);
@@ -215,7 +215,7 @@ function getAvailabilityBadge(availability?: { status: string; requestStatus?: s
   return null;
 }
 
-export function MediaCardSkeleton({ className }: { className?: string }) {
+export function MediaCardSkeleton({ className }: Readonly<{ className?: string }>) {
   return (
     <div className={clsx('flex-shrink-0 rounded-xl overflow-hidden', className || 'w-[140px] sm:w-[160px] lg:w-[180px]')}>
       <div className="aspect-[2/3] skeleton" />

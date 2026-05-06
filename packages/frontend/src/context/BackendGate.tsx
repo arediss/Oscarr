@@ -9,7 +9,7 @@ const BackendContext = createContext<BackendState | null>(null);
 
 /** Blocks rendering until the backend replies to `/setup/install-status`. Retries forever on
  *  network errors and Vite-proxy 5xx so downstream providers never see a transient failure. */
-export function BackendGate({ children, fallback }: { children: ReactNode; fallback: ReactNode }) {
+export function BackendGate({ children, fallback }: Readonly<{ children: ReactNode; fallback: ReactNode }>) {
   const [state, setState] = useState<BackendState | null>(null);
 
   useEffect(() => {

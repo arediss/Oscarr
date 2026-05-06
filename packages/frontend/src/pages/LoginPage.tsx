@@ -25,8 +25,8 @@ import { startPlexPinFlow, type PlexPinFlowHandle } from '@/providers/plex/pinFl
 function resolveSafeNext(raw: string | null): string | null {
   if (!raw) return null;
   try {
-    const u = new URL(raw, window.location.origin);
-    if (u.origin !== window.location.origin) return null;
+    const u = new URL(raw, globalThis.location.origin);
+    if (u.origin !== globalThis.location.origin) return null;
     return u.pathname + u.search + u.hash;
   } catch {
     return null;
@@ -85,7 +85,7 @@ export default function LoginPage() {
   const redirectAfterLogin = () => {
     const dest = resolveSafeNext(searchParams.get('next'));
     if (dest) {
-      window.location.assign(dest);
+      globalThis.location.assign(dest);
     } else {
       navigate('/', { replace: true });
     }
@@ -168,7 +168,7 @@ export default function LoginPage() {
     // sends the browser to discord.com, which redirects back to /api/auth/discord/callback
     // where the backend sets the cookie and redirects home.
     if (providerId === 'discord') {
-      window.location.href = '/api/auth/discord/authorize';
+      globalThis.location.href = '/api/auth/discord/authorize';
       return;
     }
     if (providerId === 'plex') {

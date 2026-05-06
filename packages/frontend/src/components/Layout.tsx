@@ -26,7 +26,7 @@ const ALL_NAV = [
   { path: '/support', labelKey: 'nav.support', icon: MessageSquare, feature: 'supportEnabled' as const },
 ];
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
   const { t } = useTranslation();
   const { user, hasPermission } = useAuth();
   const location = useLocation();

@@ -28,7 +28,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { AdminJumpButton } from '@/components/nav/AdminJumpButton';
 import SetupChecklistMenu from '@/components/nav/SetupChecklistMenu';
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const { t } = useTranslation();
   const { hasPermission } = useAuth();
   const { features } = useFeatures();
@@ -158,8 +158,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         input.select();
       }
     };
-    window.addEventListener('keydown', onKey, { capture: true });
-    return () => window.removeEventListener('keydown', onKey, { capture: true });
+    globalThis.addEventListener('keydown', onKey, { capture: true });
+    return () => globalThis.removeEventListener('keydown', onKey, { capture: true });
   }, []);
 
   // Redirect non-admins in an effect — calling navigate() during render triggers a React warning

@@ -19,7 +19,7 @@ export function usePushNotifications() {
   // Check initial state
   useEffect(() => {
     async function check() {
-      const supported = 'PushManager' in window && 'serviceWorker' in navigator;
+      const supported = 'PushManager' in globalThis && 'serviceWorker' in navigator;
       if (!supported) {
         setState({ supported: false, permission: 'unsupported', subscribed: false, loading: false });
         return;
@@ -105,6 +105,6 @@ export function usePushNotifications() {
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replaceAll(/-/g, '+').replaceAll(/_/g, '/');
-  const rawData = window.atob(base64);
+  const rawData = globalThis.atob(base64);
   return Uint8Array.from(rawData, (char) => char.charCodeAt(0));
 }

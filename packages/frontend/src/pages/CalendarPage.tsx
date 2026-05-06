@@ -171,7 +171,7 @@ function GridView({ columns, grouped, lang, t }: {
                 </div>
               ) : (
                 dayItems.map((item, i) => (
-                  <CompactCard key={i} item={item} />
+                  <CompactCard key={`${item.type}-${item.tmdbId ?? item.tvdbId ?? 0}-${item.season ?? 0}-${item.episode ?? 0}`} item={item} />
                 ))
               )}
             </div>
@@ -214,7 +214,7 @@ function ListView({ days, grouped, todayKey, t }: {
 
             <div className="flex gap-3 overflow-x-auto py-4 -my-4" style={{ scrollbarWidth: 'none', overflowY: 'visible', clipPath: 'inset(-100px 0)' }}>
               {dayItems.map((item, i) => (
-                <PosterCard key={i} item={item} />
+                <PosterCard key={`${item.type}-${item.tmdbId ?? item.tvdbId ?? 0}-${item.season ?? 0}-${item.episode ?? 0}`} item={item} />
               ))}
             </div>
           </section>

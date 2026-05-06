@@ -88,7 +88,7 @@ export type {
 } from '@oscarr/shared';
 import type { TmdbMovie, TmdbTv, TmdbMediaResult, TmdbPerson, TmdbCollection } from '@oscarr/shared';
 
-const ANIME_COUNTRIES = ['JP', 'KR', 'CN', 'TW'];
+const ANIME_COUNTRIES = new Set(['JP', 'KR', 'CN', 'TW']);
 const ANIMATION_GENRE_ID = 16;
 
 export function isAnime(tv: TmdbTv): boolean {
@@ -96,7 +96,7 @@ export function isAnime(tv: TmdbTv): boolean {
     || tv.genre_ids?.includes(ANIMATION_GENRE_ID)
     || false;
 
-  const isAsianOrigin = tv.origin_country?.some(c => ANIME_COUNTRIES.includes(c))
+  const isAsianOrigin = tv.origin_country?.some(c => ANIME_COUNTRIES.has(c))
     || (tv.original_language ? ['ja', 'ko', 'zh'].includes(tv.original_language) : false);
 
   return isAnimation && isAsianOrigin;

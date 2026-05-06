@@ -172,8 +172,8 @@ export default function AvatarEditor({ initialSeed, initialOptions, onCancel, on
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !saving) onCancel(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    globalThis.addEventListener('keydown', onKey);
+    return () => globalThis.removeEventListener('keydown', onKey);
   }, [onCancel, saving]);
 
   const shuffle = () => {
@@ -361,7 +361,7 @@ export default function AvatarEditor({ initialSeed, initialOptions, onCancel, on
   );
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Row({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
   return (
     <div className="flex items-center gap-3">
       <p className="text-[10px] uppercase tracking-wider font-semibold text-ndp-text-dim w-24 flex-shrink-0">{label}</p>

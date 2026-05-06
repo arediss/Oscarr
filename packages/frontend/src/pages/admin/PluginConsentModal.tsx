@@ -215,7 +215,7 @@ function CapabilityRow({
  * keeps the "right-edge-aligned, below the trigger" anchor of the original, and
  * clamps horizontally so tiny viewports don't push it off-screen.
  */
-function HoverTooltip({ trigger, children }: { trigger: ReactNode; children: ReactNode }) {
+function HoverTooltip({ trigger, children }: Readonly<{ trigger: ReactNode; children: ReactNode }>) {
   const ref = useRef<HTMLSpanElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 

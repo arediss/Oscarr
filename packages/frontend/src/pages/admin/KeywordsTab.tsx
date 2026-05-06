@@ -33,7 +33,7 @@ function getTagColor(tag: string, index: number): string {
 }
 
 /** Inline autocomplete tag input for a single keyword row */
-function TagCell({ keyword, allTags, onUpdate }: { keyword: Keyword; allTags: string[]; onUpdate: (tmdbId: number, tag: string | null) => void }) {
+function TagCell({ keyword, allTags, onUpdate }: Readonly<{ keyword: Keyword; allTags: string[]; onUpdate: (tmdbId: number, tag: string | null) => void }>) {
   const { t } = useTranslation();
   // All hooks MUST run unconditionally on every render. Previously inputRef / dropPos /
   // useEffect lived below the "display tag" early return, so the render after setting a tag

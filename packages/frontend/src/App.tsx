@@ -24,7 +24,7 @@ import CalendarPage from '@/pages/CalendarPage';
 import { PluginPage } from '@/plugins/PluginPage';
 import { NsfwFilterContext, useNsfwFilterProvider } from '@/hooks/useNsfwFilter';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
   const { user, loading } = useAuth();
   const nsfwFilter = useNsfwFilterProvider();
   if (loading) return <LoadingScreen />;
@@ -36,21 +36,21 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   );
 }
 
-function RequireAccess({ children }: { children: React.ReactNode }) {
+function RequireAccess({ children }: Readonly<{ children: React.ReactNode }>) {
   const { hasAccess, user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   if (!hasAccess) return <NoAccessPage />;
   return <>{children}</>;
 }
 
-function RequireFeature({ feature, children }: { feature: string; children: React.ReactNode }) {
+function RequireFeature({ feature, children }: Readonly<{ feature: string; children: React.ReactNode }>) {
   const { features, loading } = useFeatures();
   if (loading) return null;
   if (!features[feature]) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
-function PageTransition({ children }: { children: React.ReactNode }) {
+function PageTransition({ children }: Readonly<{ children: React.ReactNode }>) {
   const location = useLocation();
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });

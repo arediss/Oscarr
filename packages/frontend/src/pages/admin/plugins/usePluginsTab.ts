@@ -151,7 +151,7 @@ export function usePluginsTab() {
       await new Promise((r) => setTimeout(r, 1000));
       try {
         await api.get('/app/features');
-        window.location.reload();
+        globalThis.location.reload();
         return;
       } catch { /* still down */ }
     }

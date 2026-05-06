@@ -2,7 +2,7 @@
  *  non-secure origins like LAN IPs in dev. Fall back to the legacy execCommand path so the
  *  copy still works there. */
 export async function copyToClipboard(text: string): Promise<boolean> {
-  if (navigator.clipboard && window.isSecureContext) {
+  if (navigator.clipboard && globalThis.isSecureContext) {
     try {
       await navigator.clipboard.writeText(text);
       return true;

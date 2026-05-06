@@ -164,8 +164,8 @@ export function SectionEditor({ section, onSave, onClose }: Readonly<SectionEdit
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    globalThis.addEventListener('keydown', handleKey);
+    return () => globalThis.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
   return (

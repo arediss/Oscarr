@@ -46,7 +46,7 @@ export function useModal({ open, onClose, disableFocusTrap = false }: UseModalOp
     triggerRef.current = (document.activeElement as HTMLElement) || null;
 
     // One-tick delay so portals/animations mount before we query focusables.
-    const focusTimer = window.setTimeout(() => {
+    const focusTimer = globalThis.setTimeout(() => {
       const root = dialogRef.current;
       if (!root) return;
       const [first] = getFocusable(root);
@@ -82,7 +82,7 @@ export function useModal({ open, onClose, disableFocusTrap = false }: UseModalOp
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      window.clearTimeout(focusTimer);
+      globalThis.clearTimeout(focusTimer);
       const trigger = triggerRef.current;
       if (trigger && document.body.contains(trigger)) {
         trigger.focus();

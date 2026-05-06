@@ -122,8 +122,8 @@ export default function InstallPage() {
   // ─── Step 2: Services ──────────────────────────────────────────────
 
   const addService = () => {
-    const existing = services.map(s => s.type);
-    const nextType = !existing.includes('sonarr') ? 'sonarr' : !existing.includes('radarr') ? 'radarr' : 'sonarr';
+    const existing = new Set(services.map(s => s.type));
+    const nextType = !existing.has('sonarr') ? 'sonarr' : !existing.has('radarr') ? 'radarr' : 'sonarr';
     const schema = SERVICE_SCHEMAS[nextType];
     const emptyConfig: Record<string, string> = {};
     schema?.fields.forEach(f => { emptyConfig[f.key] = ''; });
@@ -274,7 +274,7 @@ export default function InstallPage() {
       // A full reload re-probes /setup/install-status (now reporting installed:true) and
       // remounts the app on the normal routes instead of looping back to /install.
       setApiSetupSecret(null);
-      window.location.href = '/';
+      globalThis.location.href = '/';
       return;
     }
     const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
