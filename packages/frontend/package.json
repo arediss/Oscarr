@@ -39,7 +39,7 @@
     "rolldown": "^1.0.0-rc.13",
     "tailwindcss": "^3.4.17",
     "typescript": "^6.0.2",
-    "vite": "^8.0.6",
+    "vite": "^8.0.16",
     "vite-plugin-pwa": "^1.2.0"
   }
 }
